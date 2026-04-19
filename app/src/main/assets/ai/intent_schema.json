@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "title": "BudgetAssistantResponse",
+  "type": "object",
+  "required": ["intent", "args", "reason"],
+  "properties": {
+    "intent": {
+      "type": "string",
+      "enum": [
+        "GET_CATEGORY_REMAINING",
+        "GET_TOP_SPENDER",
+        "GET_SPEND_BY_MEMBER",
+        "GET_WALLET_BALANCE",
+        "GET_INSTALLMENT_STATUS",
+        "PROJECT_SAVINGS_IF",
+        "COMPARE_QUINCENAS",
+        "EXPLAIN_VARIANCE",
+        "LIST_UPCOMING_INSTALLMENTS",
+        "SUMMARIZE_QUINCENA",
+        "UNKNOWN"
+      ]
+    },
+    "args": {
+      "type": "object",
+      "properties": {
+        "category_code":   { "type": "string" },
+        "member_alias":    { "type": "string" },
+        "wallet_name":     { "type": "string" },
+        "plan_name":       { "type": "string" },
+        "hypothetical_cut_category": { "type": "string" },
+        "baseline_quincenas": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "from_date":       { "type": "string", "format": "date" },
+        "to_date":         { "type": "string", "format": "date" }
+      },
+      "additionalProperties": false
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 240,
+      "description": "Breve justificación en español de por qué se eligió esta intent."
+    }
+  },
+  "additionalProperties": false
+}
