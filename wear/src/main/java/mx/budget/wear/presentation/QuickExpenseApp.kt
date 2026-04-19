@@ -19,16 +19,19 @@ import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.dialog.Confirmation
 import androidx.wear.compose.material.dialog.Dialog
 import com.google.android.horologist.compose.layout.ScalingLazyColumn
-import com.google.android.horologist.compose.layout.ScalingLazyColumnDefaults
+import com.google.android.horologist.compose.layout.ScalingLazyColumnState
 import kotlinx.coroutines.launch
 import mx.budget.wear.data.ExpenseSender
 
 /**
  * Pantalla principal en el Reloj (Wear OS).
  * Permite inserción veloz de presets sobre un flujo UI unimanual para smartwatch (Pixel Watch).
+ * @param columnState Inyecta el estado de scroll desde tu Horologist Scaffold Padre.
  */
 @Composable
-fun QuickExpenseApp() {
+fun QuickExpenseApp(
+    columnState: ScalingLazyColumnState 
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sender = remember { ExpenseSender(context) }
@@ -43,8 +46,10 @@ fun QuickExpenseApp() {
     )
 
     MaterialTheme {
+        // Usa el estado proporcionado por el MainActivity para asegurar
+        // anclaje con el borde físico y compatibilidad con corona en Pixel Watch
         ScalingLazyColumn(
-            columnState = ScalingLazyColumnDefaults.responsive().create()
+            columnState = columnState
         ) {
             item {
                 Text(
