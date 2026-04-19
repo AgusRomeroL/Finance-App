@@ -31,21 +31,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.Backspace
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Payments
-import androidx.compose.material.icons.filled.Savings
-import androidx.compose.material.icons.filled.Wallet
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -221,7 +220,7 @@ fun CaptureBottomSheet(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
                 // ── 5. NumPad ────────────────────────────────────────────────
                 NumPadSection(
@@ -574,7 +573,7 @@ private fun AttributionSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Group,
+                            imageVector = Icons.Filled.Person,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp)
                         )
@@ -666,7 +665,7 @@ private fun NumPadKey(
     ) {
         if (key == "DEL") {
             Icon(
-                imageVector = Icons.Filled.Backspace,
+                imageVector = Icons.Filled.Clear,
                 contentDescription = "Borrar",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(24.dp)
@@ -728,7 +727,7 @@ private fun RegistrarButton(
             )
         } else {
             Icon(
-                imageVector = Icons.Filled.CheckCircle,
+                imageVector = Icons.Filled.Check,
                 contentDescription = null,
                 modifier = Modifier
                     .size(20.dp)
@@ -749,14 +748,14 @@ private fun RegistrarButton(
 
 /** Mapea el tipo de wallet (kind) a un ícono de Material Icons. */
 private fun walletKindIcon(kind: String): ImageVector = when (kind) {
-    "DEBIT_ACCOUNT"          -> Icons.Filled.AccountBalance
-    "CREDIT_CARD"            -> Icons.Filled.CreditCard
-    "DEPARTMENT_STORE_CARD"  -> Icons.Filled.CreditCard
-    "BNPL_INSTALLMENT"       -> Icons.Filled.Payments
-    "DIGITAL_WALLET"         -> Icons.Filled.Wallet
-    "CASH"                   -> Icons.Filled.Payments
-    "EMPLOYER_SAVINGS_FUND"  -> Icons.Filled.Savings
-    else                     -> Icons.Filled.AccountBalance
+    "DEBIT_ACCOUNT"          -> Icons.Filled.AccountCircle
+    "CREDIT_CARD"            -> Icons.Filled.ShoppingCart
+    "DEPARTMENT_STORE_CARD"  -> Icons.Filled.ShoppingCart
+    "BNPL_INSTALLMENT"       -> Icons.Filled.Info
+    "DIGITAL_WALLET"         -> Icons.Filled.Star
+    "CASH"                   -> Icons.Filled.Info
+    "EMPLOYER_SAVINGS_FUND"  -> Icons.Filled.Star
+    else                     -> Icons.Filled.AccountCircle
 }
 
 /** Etiqueta legible del tipo de wallet para el subtítulo del WalletCard. */

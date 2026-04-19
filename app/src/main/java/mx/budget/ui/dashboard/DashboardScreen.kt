@@ -27,17 +27,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Analytics
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Wallet
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -113,10 +114,10 @@ private data class NavDrawerItem(
 )
 
 private val drawerItems = listOf(
-    NavDrawerItem("Dashboard", Icons.Filled.Dashboard, "dashboard"),
-    NavDrawerItem("Libro Mayor", Icons.Filled.List, "ledger"),
-    NavDrawerItem("Cuentas", Icons.Filled.Wallet, "wallets"),
-    NavDrawerItem("Analíticas", Icons.Filled.Analytics, "analytics"),
+    NavDrawerItem("Dashboard", Icons.Filled.Home, "dashboard"),
+    NavDrawerItem("Libro Mayor", Icons.AutoMirrored.Filled.List, "ledger"),
+    NavDrawerItem("Cuentas", Icons.Filled.AccountCircle, "wallets"),
+    NavDrawerItem("Analíticas", Icons.Filled.Star, "analytics"),
     NavDrawerItem("Perfil", Icons.Filled.Person, "profile")
 )
 
@@ -211,7 +212,7 @@ fun DashboardScreen(
                                     .fillMaxHeight()
                             )
 
-                            Divider(
+                            VerticalDivider(
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .width(1.dp),
@@ -593,11 +594,14 @@ private fun TransactionCard(
     }
 
     // Color del ícono de categoría
-    val categoryBg = try {
-        expense.categoryColorHex?.let { Color(android.graphics.Color.parseColor(it)) }
-            ?: MaterialTheme.colorScheme.primaryContainer
-    } catch (e: Exception) {
-        MaterialTheme.colorScheme.primaryContainer
+    val defaultIconColor = MaterialTheme.colorScheme.primaryContainer
+    val categoryBg = remember(expense.categoryColorHex) {
+        try {
+            expense.categoryColorHex?.let { Color(android.graphics.Color.parseColor(it)) }
+                ?: defaultIconColor
+        } catch (e: Exception) {
+            defaultIconColor
+        }
     }
 
     Card(

@@ -24,7 +24,6 @@ class AiCoreManager(private val context: Context) {
 
     sealed class Readiness {
         object Available : Readiness()
-        object Downloading : Readiness()
         object UnsupportedDevice : Readiness()
         data class TemporaryError(val reason: Int) : Readiness() // errorCode from GenerativeAIException
     }
@@ -44,26 +43,12 @@ class AiCoreManager(private val context: Context) {
             val generationConfig = generationConfig {
                 temperature = 0.05f 
                 topK = 16 
-                topP = 0.90f
                 maxOutputTokens = 240 
                 candidateCount = 1
-                stopSequences = listOf("\n\n## END")
             }
 
             val newModel = GenerativeModel(
-                generationConfig = generationConfig,
-                downloadCallback = object : DownloadCallback {
-                    override fun onDownloadStarted(bytesToDownload: Long) {
-                        _readiness.value = Readiness.Downloading
-                    }
-                    override fun onDownloadProgress(totalBytesDownloaded: Long) {}
-                    override fun onDownloadCompleted() {
-                        _readiness.value = Readiness.Available
-                    }
-                    override fun onDownloadFailed(failureStatus: DownloadCallback.DownloadFailureStatus) {
-                        _readiness.value = Readiness.TemporaryError(-1) // Custom indicator for download fail
-                    }
-                }
+                generationConfig = generationConfig
             )
 
             newModel.prepareInferenceEngine()

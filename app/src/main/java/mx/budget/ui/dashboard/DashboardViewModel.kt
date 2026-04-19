@@ -199,7 +199,7 @@ class DashboardViewModel(
             plannedTotal = planned,
             balance = balance,
             memberDistribution = members
-        )
+        ) as DashboardUiState
     }
         .catch { e ->
             emit(DashboardUiState.Error(e.message ?: "Error desconocido al cargar el dashboard"))

@@ -31,8 +31,8 @@ class AliasResolver(
         val needle = alias.lowercase().unaccent()
         return categories.firstOrNull { c ->
             c.code.lowercase().unaccent() == needle ||
-            c.name.lowercase().unaccent() == needle ||
-            c.name.lowercase().unaccent().contains(needle)
+            c.displayName.lowercase().unaccent() == needle ||
+            c.displayName.lowercase().unaccent().contains(needle)
         }
     }
 

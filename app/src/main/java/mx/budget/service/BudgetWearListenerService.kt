@@ -43,7 +43,7 @@ class BudgetWearListenerService : WearableListenerService() {
         val database = app.database
 
         // Obtiene la quincena activa vigente
-        val activeQuincena = database.quincenaDao().currentActive("default_household") ?: return
+        val activeQuincena = database.quincenaDao().getActive("default_household") ?: return
         
         // Creación del registro (Utilizando defaults preestablecidos para el flujo express de reloj)
         val expense = ExpenseEntity(

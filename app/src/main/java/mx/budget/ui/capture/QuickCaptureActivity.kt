@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import mx.budget.ui.theme.AppTheme
+import mx.budget.ui.theme.BudgetAppTheme
 
 /**
  * Ventana transparente optimizada para ser llamada desde un App Shortcut o Quick Tap.
@@ -21,7 +21,7 @@ class QuickCaptureActivity : ComponentActivity() {
         
         // Define Theme.Transparent in Manifest to map purely the overlay
         setContent {
-            AppTheme {
+            BudgetAppTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = androidx.compose.ui.graphics.Color.Transparent
