@@ -1,0 +1,12 @@
+sdk.zip
+temp_jdk/
+temp_sdk/
+wrapper/
+gradle/
+build/
+app/build/
+.gradle/
+build_log.txt
+Copy of presupuesto 2.5.xlsx
+create_fake_excel.py
+local.properties

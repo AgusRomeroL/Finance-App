@@ -104,8 +104,7 @@ HOUSEHOLD_NAME = "Familia"
 HOUSEHOLD_TZ = "America/Mexico_City"
 
 # Placeholder: debe reemplazarse con el hash real del schema JSON emitido por
-# Room durante la compilación (ubicado en `app/schemas/.../1.json`).
-ROOM_IDENTITY_HASH = "0000000000000000000000000000000000000000000000000000000000000000"
+ROOM_IDENTITY_HASH = "9b889298fe2edb27e8865dc8239ef354"
 
 # Epoch millis fijo para las filas "nacidas" por el ETL. Se elige el instante
 # en el que se generó la base de datos, en UTC.
