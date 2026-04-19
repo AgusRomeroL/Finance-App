@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Quick Capture - Focus Action</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300;400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "secondary-fixed": "#b5ffc3",
+                      "on-tertiary-fixed": "#432900",
+                      "tertiary-fixed": "#febd63",
+                      "primary": "#016e3e",
+                      "on-surface-variant": "#5c6060",
+                      "on-error-container": "#65000b",
+                      "on-secondary-fixed-variant": "#2a6f41",
+                      "inverse-surface": "#0c0f0f",
+                      "surface-container-highest": "#e0e3e4",
+                      "error-container": "#f56965",
+                      "primary-container": "#9cf6b9",
+                      "on-primary-fixed": "#004a27",
+                      "secondary-fixed-dim": "#a8f0b6",
+                      "primary-dim": "#006035",
+                      "tertiary-fixed-dim": "#efb057",
+                      "on-secondary-container": "#1e6538",
+                      "secondary-dim": "#175f33",
+                      "on-surface": "#2f3334",
+                      "on-secondary-fixed": "#005227",
+                      "tertiary-dim": "#744a00",
+                      "background": "#f9f9f9",
+                      "outline": "#777b7c",
+                      "on-secondary": "#e8ffe8",
+                      "on-background": "#2f3334",
+                      "surface-dim": "#d7dbdb",
+                      "surface-bright": "#f9f9f9",
+                      "tertiary-container": "#febd63",
+                      "surface-container-lowest": "#ffffff",
+                      "surface": "#f9f9f9",
+                      "surface-tint": "#016e3e",
+                      "outline-variant": "#afb2b3",
+                      "secondary-container": "#b5ffc3",
+                      "primary-fixed-dim": "#8ee7ab",
+                      "primary-fixed": "#9cf6b9",
+                      "on-tertiary-fixed-variant": "#694300",
+                      "on-primary-container": "#005f34",
+                      "surface-container-low": "#f3f4f4",
+                      "on-error": "#fff7f6",
+                      "inverse-on-surface": "#9c9d9d",
+                      "surface-container-high": "#e6e8e9",
+                      "error-dim": "#70030f",
+                      "inverse-primary": "#a4ffc1",
+                      "tertiary": "#845500",
+                      "on-primary": "#e7ffea",
+                      "error": "#ac3434",
+                      "on-tertiary": "#fff7f3",
+                      "secondary": "#266c3e",
+                      "on-primary-fixed-variant": "#006a3b",
+                      "on-tertiary-container": "#5d3b00",
+                      "surface-variant": "#e0e3e4",
+                      "surface-container": "#edeeee"
+              },
+              "borderRadius": {
+                      "DEFAULT": "1rem",
+                      "lg": "2rem",
+                      "xl": "3rem",
+                      "full": "9999px"
+              },
+              "fontFamily": {
+                      "headline": ["Roboto Flex"],
+                      "body": ["Roboto Flex"],
+                      "label": ["Roboto Flex"],
+                      "display": ["Roboto Flex"]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        body { font-family: 'Roboto Flex', sans-serif; }
+        
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col justify-between font-body antialiased">
+<!-- Top AppBar (Simplified for Modal/Capture feel) -->
+<header class="flex justify-between items-center w-full px-6 py-4 bg-surface-container-low/70 backdrop-blur-xl sticky top-0 z-40">
+<button class="w-12 h-12 flex items-center justify-center rounded-full bg-surface-container-highest text-on-surface hover:bg-surface-variant transition-transform active:scale-95">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">close</span>
+</button>
+<span class="font-headline font-semibold text-lg text-primary tracking-wide">Quick Capture</span>
+<div class="w-12 h-12"></div> <!-- Spacer for centering -->
+</header>
+<!-- Main Content Area -->
+<main class="flex-grow flex flex-col px-6 pt-4 pb-8 max-w-lg mx-auto w-full space-y-8">
+<!-- Large Numeric Input -->
+<section class="flex flex-col items-center justify-center py-8">
+<div class="text-on-surface-variant font-label text-[10px] uppercase tracking-[0.05rem] font-bold mb-2">Amount</div>
+<div class="flex items-baseline space-x-2">
+<span class="text-primary font-display font-light text-5xl">$</span>
+<input class="bg-transparent text-primary font-display font-light text-6xl text-center w-48 focus:outline-none placeholder-primary/30" placeholder="0.00" readonly="" type="text" value="0.00"/>
+</div>
+<div class="mt-4 px-4 py-2 bg-surface-container-highest rounded-t-DEFAULT border-b-2 border-primary w-48 text-center text-sm text-on-surface focus-within:outline-none">
+<span class="opacity-70">Concept:</span> Dinner
+            </div>
+</section>
+<!-- Source Horizontal Scroll -->
+<section>
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-label text-[10px] uppercase tracking-[0.05rem] font-bold text-on-surface-variant">Source</h3>
+</div>
+<div class="flex space-x-4 overflow-x-auto no-scrollbar pb-2 snap-x">
+<!-- Active Card -->
+<button class="snap-start flex-shrink-0 w-32 p-4 rounded-lg bg-surface-container-lowest border-2 border-primary/20 shadow-[0_12px_40px_rgba(0,0,0,0.04)] text-left transition-transform active:scale-95 flex flex-col justify-between h-28 relative overflow-hidden">
+<div class="absolute inset-0 bg-primary/5"></div>
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">account_balance</span>
+<div>
+<div class="font-semibold text-sm text-on-surface">Banamex</div>
+<div class="text-xs text-on-surface-variant mt-1">Debit</div>
+</div>
+</button>
+<!-- Inactive Cards -->
+<button class="snap-start flex-shrink-0 w-32 p-4 rounded-lg bg-surface-container-low text-left transition-transform hover:bg-surface-container-highest active:scale-95 flex flex-col justify-between h-28">
+<span class="material-symbols-outlined text-on-surface-variant" style="font-variation-settings: 'FILL' 0;">credit_card</span>
+<div>
+<div class="font-semibold text-sm text-on-surface">BBVA</div>
+<div class="text-xs text-on-surface-variant mt-1">Credit</div>
+</div>
+</button>
+<button class="snap-start flex-shrink-0 w-32 p-4 rounded-lg bg-surface-container-low text-left transition-transform hover:bg-surface-container-highest active:scale-95 flex flex-col justify-between h-28">
+<span class="material-symbols-outlined text-on-surface-variant" style="font-variation-settings: 'FILL' 0;">payments</span>
+<div>
+<div class="font-semibold text-sm text-on-surface">Cash</div>
+<div class="text-xs text-on-surface-variant mt-1">Wallet</div>
+</div>
+</button>
+<button class="snap-start flex-shrink-0 w-32 p-4 rounded-lg bg-surface-container-low text-left transition-transform hover:bg-surface-container-highest active:scale-95 flex flex-col justify-between h-28">
+<span class="material-symbols-outlined text-on-surface-variant" style="font-variation-settings: 'FILL' 0;">account_balance_wallet</span>
+<div>
+<div class="font-semibold text-sm text-on-surface">Mercado Pago</div>
+<div class="text-xs text-on-surface-variant mt-1">Digital</div>
+</div>
+</button>
+</div>
+</section>
+<!-- Attribution Filter Chips -->
+<section>
+<h3 class="font-label text-[10px] uppercase tracking-[0.05rem] font-bold text-on-surface-variant mb-4">Attribution</h3>
+<div class="flex flex-wrap gap-2">
+<!-- Active Chip -->
+<button class="px-5 py-2 rounded-full bg-primary text-on-primary font-semibold text-sm shadow-[0_4px_12px_rgba(1,110,62,0.2)] transition-transform active:scale-95">
+                    Me
+                </button>
+<!-- Inactive Chips -->
+<button class="px-5 py-2 rounded-full bg-surface-container-high text-on-surface font-medium text-sm hover:bg-surface-variant transition-transform active:scale-95">
+                    Sarah
+                </button>
+<button class="px-5 py-2 rounded-full bg-surface-container-high text-on-surface font-medium text-sm hover:bg-surface-variant transition-transform active:scale-95">
+                    Joint
+                </button>
+<button class="px-5 py-2 rounded-full bg-surface-container-high text-on-surface font-medium text-sm hover:bg-surface-variant transition-transform active:scale-95">
+                    Leo
+                </button>
+<button class="px-5 py-2 rounded-full bg-surface-container-high text-on-surface font-medium text-sm hover:bg-surface-variant transition-transform active:scale-95">
+                    Mia
+                </button>
+<!-- Special Action Chip -->
+<button class="px-4 py-2 rounded-full bg-surface-container-lowest border border-outline-variant/30 text-primary font-semibold text-sm hover:bg-surface-container-low transition-transform active:scale-95 flex items-center space-x-1 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+<span class="material-symbols-outlined text-[18px]">group</span>
+<span>All / Family</span>
+</button>
+</div>
+</section>
+</main>
+<!-- Bottom Section: Numpad & Action -->
+<footer class="bg-surface-container-lowest rounded-t-xl shadow-[0_-12px_40px_rgba(0,0,0,0.04)] px-6 py-6 pb-8 max-w-lg mx-auto w-full mt-auto">
+<!-- Integrated Number Pad -->
+<div class="grid grid-cols-3 gap-y-4 gap-x-6 mb-6 px-4">
+<!-- Row 1 -->
+<button class="h-14 rounded-full flex items-center justify-center text-2xl font-display font-light text-on-surface hover:bg-surface-container-low active:bg-surface-variant transition-colors">1</button>
+<button class="h-14 rounded-full flex items-center justify-center text-2xl font-display font-light text-on-surface hover:bg-surface-container-low active:bg-surface-variant transition-colors">2</button>
+<button class="h-14 rounded-full flex items-center justify-center text-2xl font-display font-light text-on-surface hover:bg-surface-container-low active:bg-surface-variant transition-colors">3</button>
+<!-- Row 2 -->
+<button class="h-14 rounded-full flex items-center justify-center text-2xl font-display font-light text-on-surface hover:bg-surface-container-low active:bg-surface-variant transition-colors">4</button>
+<button class="h-14 rounded-full flex items-center justify-center text-2xl font-display font-light text-on-surface hover:bg-surface-container-low active:bg-surface-variant transition-colors">5</button>
+<button class="h-14 rounded-full flex items-center justify-center text-2xl font-display font-light text-on-surface hover:bg-surface-container-low active:bg-surface-variant transition-colors">6</button>
+<!-- Row 3 -->
+<button class="h-14 rounded-full flex items-center justify-center text-2xl font-display font-light text-on-surface hover:bg-surface-container-low active:bg-surface-variant transition-colors">7</button>
+<button class="h-14 rounded-full flex items-center justify-center text-2xl font-display font-light text-on-surface hover:bg-surface-container-low active:bg-surface-variant transition-colors">8</button>
+<button class="h-14 rounded-full flex items-center justify-center text-2xl font-display font-light text-on-surface hover:bg-surface-container-low active:bg-surface-variant transition-colors">9</button>
+<!-- Row 4 -->
+<button class="h-14 rounded-full flex items-center justify-center text-xl font-display font-light text-on-surface hover:bg-surface-container-low active:bg-surface-variant transition-colors">.</button>
+<button class="h-14 rounded-full flex items-center justify-center text-2xl font-display font-light text-on-surface hover:bg-surface-container-low active:bg-surface-variant transition-colors">0</button>
+<button class="h-14 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low active:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined">backspace</span>
+</button>
+</div>
+<!-- Primary Action Button -->
+<button class="w-full py-4 rounded-lg bg-gradient-to-br from-primary to-primary-dim text-on-primary font-semibold text-lg flex items-center justify-center space-x-2 shadow-[0_8px_24px_rgba(1,110,62,0.15)] transition-transform active:scale-98">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span>Registrar</span>
+</button>
+</footer>
+</body></html>
