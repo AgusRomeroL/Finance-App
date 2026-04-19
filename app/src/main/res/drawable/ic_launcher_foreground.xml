@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Foreground del ícono: símbolo de peso/dinero simplificado -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20 C35.2,20 20,35.2 20,54 C20,72.8 35.2,88 54,88 C72.8,88 88,72.8 88,54 C88,35.2 72.8,20 54,20Z
+                          M58,72 L50,72 L50,68 C46.7,67.3 44,65.5 44,62 C44,58 47.5,56.5 52,55.5 L52,50.2 C50.3,50.6 49,51.4 49,52.5 L44,52.5 C44,48.5 47.5,45.8 52,45.2 L52,40 L56,40 L56,45 C59.5,45.6 62,47.5 62,51 C62,55 58.5,56.5 56,57.3 L56,62.8 C57.8,62.3 59,61.3 59,60 L64,60 C64,64.2 61,67 58,67.8 L58,72Z" />
+</vector>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Excluir la base de datos de backups automáticos para evitar conflictos con Room -->
+    <exclude domain="database" path="budget.db" />
+    <exclude domain="database" path="budget.db-shm" />
+    <exclude domain="database" path="budget.db-wal" />
+</full-backup-content>
