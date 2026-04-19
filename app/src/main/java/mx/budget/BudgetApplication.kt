@@ -27,9 +27,9 @@ class BudgetApplication : Application() {
         database = Room.databaseBuilder(
             this,
             BudgetDatabase::class.java,
-            "budget-database"
+            "budget.db"
         )
-        // .createFromAsset("database/budget.db") // Asumiendo que el ETL popule los datos iniciales
+        .createFromAsset("budget_database.db")
         .build()
         
         // Aquí se instanciarían los repositorios concretos inyectando logicamente

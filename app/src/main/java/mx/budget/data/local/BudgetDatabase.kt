@@ -84,7 +84,7 @@ abstract class BudgetDatabase : RoomDatabase() {
             )
                 // Habilita exportación de schema para versionamiento y migraciones.
                 // Los schemas se guardan en app/schemas/ para referencia.
-                .fallbackToDestructiveMigration()
+                .createFromAsset("budget_database.db")
                 .build()
         }
     }
