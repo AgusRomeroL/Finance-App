@@ -176,7 +176,7 @@ interface AnalyticsDao {
     @Query("""
         SELECT 
             pm.id AS paymentMethodId,
-            pm.display_name AS paymentMethodName,
+            pm.display_name AS displayName,
             pm.kind,
             pm.current_balance_mxn AS balance,
             pm.credit_limit_mxn AS creditLimit,
