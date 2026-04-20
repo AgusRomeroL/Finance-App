@@ -3,6 +3,7 @@ package mx.budget
 import android.app.Application
 import androidx.room.Room
 import mx.budget.data.local.BudgetDatabase
+import mx.budget.data.local.DatabaseSeedCallback
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
@@ -42,6 +43,7 @@ class BudgetApplication : Application() {
             BudgetDatabase::class.java,
             "budget.db"
         )
+        .createFromAsset("budget_database.db")
         .fallbackToDestructiveMigration()
         .build()
 
