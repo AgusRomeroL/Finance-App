@@ -6,22 +6,22 @@ import mx.budget.data.local.BudgetDatabase
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
+import mx.budget.data.repository.WalletRepository
 import mx.budget.data.repository.impl.ExpenseRepositoryImpl
 import mx.budget.data.repository.impl.MemberRepositoryImpl
 import mx.budget.data.repository.impl.QuincenaRepositoryImpl
+import mx.budget.data.repository.impl.WalletRepositoryImpl
 
 /**
  * Aplicación base — contenedor manual de dependencias (sin Hilt).
  * Expone los repositorios concretos para que MainActivity pueda
- * construir su DashboardViewModelFactory.
+ * construir sus ViewModelFactories.
  */
 class BudgetApplication : Application() {
 
-    // Instancia única de la base de datos Room
     lateinit var database: BudgetDatabase
         private set
 
-    // Repositorios concretos listos para inyección manual
     lateinit var quincenaRepository: QuincenaRepository
         private set
 
@@ -29,6 +29,9 @@ class BudgetApplication : Application() {
         private set
 
     lateinit var memberRepository: MemberRepository
+        private set
+
+    lateinit var walletRepository: WalletRepository
         private set
 
     override fun onCreate() {
@@ -39,12 +42,12 @@ class BudgetApplication : Application() {
             BudgetDatabase::class.java,
             "budget.db"
         )
-        .createFromAsset("budget_database.db")
+        .fallbackToDestructiveMigration()
         .build()
 
-        // Instanciar repositorios concretos (ROM injection)
         quincenaRepository = QuincenaRepositoryImpl(database.quincenaDao())
         expenseRepository  = ExpenseRepositoryImpl(database.expenseDao())
         memberRepository   = MemberRepositoryImpl(database.memberDao())
+        walletRepository   = WalletRepositoryImpl(database.paymentMethodDao())
     }
 }

@@ -84,6 +84,7 @@ import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.ui.capture.CaptureBottomSheet
+import mx.budget.ui.capture.CaptureViewModel
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -147,6 +148,7 @@ private val drawerItems = listOf(
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
+    captureViewModel: CaptureViewModel? = null,
     windowWidthDp: Dp = 360.dp,
     onOpenCapture: (() -> Unit)? = null
 ) {
@@ -161,6 +163,7 @@ fun DashboardScreen(
     // NavigationBar tape el contenido del sheet en pantallas compactas.
     if (showCapture) {
         CaptureBottomSheet(
+            viewModel = captureViewModel,
             onDismiss = { showCapture = false }
         )
     }
