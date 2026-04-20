@@ -3,12 +3,17 @@ package mx.budget
 import android.app.Application
 import androidx.room.Room
 import mx.budget.data.local.BudgetDatabase
+import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.repository.MemberRepository
+import mx.budget.data.repository.QuincenaRepository
+import mx.budget.data.repository.impl.ExpenseRepositoryImpl
+import mx.budget.data.repository.impl.MemberRepositoryImpl
+import mx.budget.data.repository.impl.QuincenaRepositoryImpl
 
 /**
- * Aplicación base para inicializar componentes globales y
- * proveer inyección de dependencias manual.
- * 
- * TODO para el usuario: Añadir android:name=".BudgetApplication" en el tag <application> del AndroidManifest.xml.
+ * Aplicación base — contenedor manual de dependencias (sin Hilt).
+ * Expone los repositorios concretos para que MainActivity pueda
+ * construir su DashboardViewModelFactory.
  */
 class BudgetApplication : Application() {
 
@@ -16,14 +21,19 @@ class BudgetApplication : Application() {
     lateinit var database: BudgetDatabase
         private set
 
-    // Expuestos para los Services (ej. WearableListenerService) e inyección manual
-    // Normalmente usarías abstracciones como Repository, pero para el prototipo
-    // permitiremos el acceso al DAO directamente si el Repository no está instanciado aquí.
-    
+    // Repositorios concretos listos para inyección manual
+    lateinit var quincenaRepository: QuincenaRepository
+        private set
+
+    lateinit var expenseRepository: ExpenseRepository
+        private set
+
+    lateinit var memberRepository: MemberRepository
+        private set
+
     override fun onCreate() {
         super.onCreate()
-        
-        // Inicialización de la persistencia real (Cero Mocking)
+
         database = Room.databaseBuilder(
             this,
             BudgetDatabase::class.java,
@@ -31,8 +41,10 @@ class BudgetApplication : Application() {
         )
         .createFromAsset("budget_database.db")
         .build()
-        
-        // Aquí se instanciarían los repositorios concretos inyectando logicamente
-        // los DAOs extraídos de `database`
+
+        // Instanciar repositorios concretos (ROM injection)
+        quincenaRepository = QuincenaRepositoryImpl(database.quincenaDao())
+        expenseRepository  = ExpenseRepositoryImpl(database.expenseDao())
+        memberRepository   = MemberRepositoryImpl(database.memberDao())
     }
 }
