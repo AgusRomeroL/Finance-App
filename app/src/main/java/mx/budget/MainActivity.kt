@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
@@ -31,7 +32,8 @@ class MainActivity : ComponentActivity() {
             app.expenseRepository,
             app.quincenaRepository,
             app.walletRepository,
-            app.memberRepository
+            app.memberRepository,
+            app.categoryRepository
         ))[CaptureViewModel::class.java]
     }
 
@@ -74,6 +76,7 @@ class CaptureViewModelFactory(
     private val quincenaRepository: QuincenaRepository,
     private val walletRepository: WalletRepository,
     private val memberRepository: MemberRepository,
+    private val categoryRepository: CategoryRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -82,6 +85,7 @@ class CaptureViewModelFactory(
             quincenaRepository = quincenaRepository,
             walletRepository = walletRepository,
             memberRepository = memberRepository,
+            categoryRepository = categoryRepository,
         ) as T
     }
 }

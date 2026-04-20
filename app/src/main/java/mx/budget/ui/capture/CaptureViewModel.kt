@@ -7,13 +7,16 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
@@ -73,6 +76,7 @@ sealed class CaptureOperationState {
  * @param quincenaRepository Repositorio para obtener la quincena activa.
  * @param walletRepository   Repositorio para listar fuentes de pago.
  * @param memberRepository   Repositorio para listar miembros del hogar.
+ * @param categoryRepository Repositorio para listar categorías.
  * @param householdId        ID del hogar activo.
  */
 class CaptureViewModel(
@@ -80,6 +84,7 @@ class CaptureViewModel(
     private val quincenaRepository: QuincenaRepository,
     private val walletRepository: WalletRepository,
     private val memberRepository: MemberRepository,
+    private val categoryRepository: CategoryRepository,
     private val householdId: String = "default_household"
 ) : ViewModel() {
 
@@ -109,6 +114,16 @@ class CaptureViewModel(
      * Truncada a 64 chars en el commit (contrato de ExpenseEntity).
      */
     val concept: StateFlow<String> = _concept.asStateFlow()
+
+    // ── Categorías ─────────────────────────────────────────────────────────
+
+    val categories: StateFlow<List<CategoryEntity>> = categoryRepository
+        .observeAll(householdId)
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _selectedCategoryId = MutableStateFlow<String?>(null)
+    val selectedCategoryId: StateFlow<String?> = _selectedCategoryId.asStateFlow()
 
     // ── Wallets (fuentes de pago) ──────────────────────────────────────────
 
@@ -141,6 +156,7 @@ class CaptureViewModel(
      */
     val members: StateFlow<List<MemberEntity>> = memberRepository
         .observeActiveMembers(householdId)
+        .map { list -> list.filter { !it.role.startsWith("EXTERNAL_") } }
         .catch { emit(emptyList()) }
         .stateIn(
             scope = viewModelScope,
@@ -174,13 +190,14 @@ class CaptureViewModel(
      * - Importe > 0
      * - Concepto no vacío
      * - Wallet seleccionado
+     * - Categoría seleccionada
      * - Al menos un beneficiario seleccionado
      */
     val canRegister: StateFlow<Boolean> = combine(
-        _rawAmount, _concept, _selectedWalletId, _selectedMemberIds
-    ) { amount, concept, walletId, memberIds ->
+        _rawAmount, _concept, _selectedWalletId, _selectedCategoryId, _selectedMemberIds
+    ) { amount, concept, walletId, categoryId, memberIds ->
         val amountNum = amount.replace(",", "").toDoubleOrNull() ?: 0.0
-        amountNum > 0 && concept.isNotBlank() && walletId != null && memberIds.isNotEmpty()
+        amountNum > 0 && concept.isNotBlank() && walletId != null && categoryId != null && memberIds.isNotEmpty()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -237,6 +254,11 @@ class CaptureViewModel(
         _selectedWalletId.value = walletId
     }
 
+    /** Selecciona una categoría. */
+    fun onCategorySelected(categoryId: String) {
+        _selectedCategoryId.value = categoryId
+    }
+
     /**
      * Alterna la selección de un miembro como beneficiario.
      * Multi-select: al pulsar sobre un chip ya seleccionado, se deselecciona.
@@ -286,11 +308,15 @@ class CaptureViewModel(
                 val walletId = _selectedWalletId.value
                     ?: throw IllegalStateException("Selecciona un método de pago.")
 
-                // 3. Monto
+                // 3. Categoría seleccionada
+                val categoryId = _selectedCategoryId.value
+                    ?: throw IllegalStateException("Selecciona una categoría.")
+
+                // 4. Monto
                 val amount = parsedAmount
                 if (amount <= 0) throw IllegalArgumentException("El importe debe ser mayor a $0.")
 
-                // 4. Construir ExpenseEntity
+                // 5. Construir ExpenseEntity
                 val expenseId = UUID.randomUUID().toString()
                 val nowEpoch = System.currentTimeMillis()
 
@@ -299,9 +325,7 @@ class CaptureViewModel(
                     householdId = householdId,
                     occurredAt = nowEpoch,
                     quincenaId = quincena.id,
-                    // Se usa la primera categoría disponible como placeholder.
-                    // TODO: Agregar sección de selección de categoría al modal en Sprint 3.
-                    categoryId = "default_category",
+                    categoryId = categoryId,
                     concept = _concept.value.trim().take(64),
                     amountMxn = amount,
                     paymentMethodId = walletId,
@@ -309,7 +333,7 @@ class CaptureViewModel(
                     createdAt = nowEpoch
                 )
 
-                // 5. Construir atribuciones BENEFICIARY
+                // 6. Construir atribuciones BENEFICIARY
                 val beneficiaryIds = _selectedMemberIds.value.toList()
                 if (beneficiaryIds.isEmpty()) {
                     throw IllegalArgumentException("Selecciona al menos un beneficiario.")
@@ -334,7 +358,7 @@ class CaptureViewModel(
                     )
                 }
 
-                // 6. Construir atribución PAYER desde el ownerMemberId del wallet
+                // 7. Construir atribución PAYER desde el ownerMemberId del wallet
                 val wallet = walletRepository.getById(walletId)
                 val payerMemberId = wallet?.ownerMemberId
                     ?: memberRepository
@@ -383,16 +407,18 @@ class CaptureViewModel(
         _rawAmount.value = "0"
         _concept.value = ""
         _selectedWalletId.value = null
+        _selectedCategoryId.value = null
         _selectedMemberIds.value = emptySet()
         _operationState.value = CaptureOperationState.Idle
     }
 
-    // ── Extensión privada para combine con 4 flows ────────────────────────────
-    private fun <T1, T2, T3, T4, R> combine(
+    // ── Extensión privada para combine con 5 flows ────────────────────────────
+    private fun <T1, T2, T3, T4, T5, R> combine(
         flow1: StateFlow<T1>,
         flow2: StateFlow<T2>,
         flow3: StateFlow<T3>,
         flow4: StateFlow<T4>,
-        transform: suspend (T1, T2, T3, T4) -> R
-    ) = kotlinx.coroutines.flow.combine(flow1, flow2, flow3, flow4, transform)
+        flow5: StateFlow<T5>,
+        transform: suspend (T1, T2, T3, T4, T5) -> R
+    ) = kotlinx.coroutines.flow.combine(flow1, flow2, flow3, flow4, flow5, transform)
 }

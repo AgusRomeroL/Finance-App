@@ -150,13 +150,13 @@ fun DashboardScreen(
     viewModel: DashboardViewModel,
     captureViewModel: CaptureViewModel? = null,
     windowWidthDp: Dp = 360.dp,
-    onOpenCapture: (() -> Unit)? = null
+    currentRoute: String = "dashboard",
+    onNavigate: ((String) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isExpandedScreen = windowWidthDp >= 600.dp
 
     var showCapture by remember { mutableStateOf(false) }
-    var selectedRoute by remember { mutableStateOf("dashboard") }
 
     // ── CaptureBottomSheet overlay ────────────────────────────────────────────
     // Se renderiza al nivel del árbol del Scaffold para evitar que la
@@ -177,8 +177,8 @@ fun DashboardScreen(
                     drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
                     BudgetNavigationDrawerContent(
-                        selectedRoute = selectedRoute,
-                        onRouteSelected = { selectedRoute = it }
+                        selectedRoute = currentRoute,
+                        onRouteSelected = { onNavigate?.invoke(it) }
                     )
                 }
             }
@@ -246,8 +246,8 @@ fun DashboardScreen(
             },
             bottomBar = {
                 BudgetBottomNav(
-                    selectedRoute = selectedRoute,
-                    onRouteSelected = { selectedRoute = it }
+                    selectedRoute = currentRoute,
+                    onRouteSelected = { onNavigate?.invoke(it) }
                 )
             },
             floatingActionButton = {
@@ -316,21 +316,8 @@ private fun BudgetTopAppBar(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
         ),
         navigationIcon = {
-            Box(
-                modifier = Modifier
-                    .padding(start = 8.dp)
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                    .clickable { },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Search,
-                    contentDescription = "Buscar",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
+            // Búsqueda — deshabilitada hasta Sprint futuro
+            Spacer(modifier = Modifier.size(8.dp))
         },
         title = {
             if (isExpandedScreen) {
@@ -359,29 +346,15 @@ private fun BudgetTopAppBar(
                 )
             } else {
                 Text(
-                    text = "The Ledger",
+                    text = "Presupuesto Familiar",
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
                     color = MaterialTheme.colorScheme.primary
                 )
             }
         },
         actions = {
-            // Avatar de usuario
-            Box(
-                modifier = Modifier
-                    .padding(end = 8.dp)
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .clickable { },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "AI",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
+            // Espacio reservado para futuro botón de perfil/AI
+            Spacer(modifier = Modifier.size(8.dp))
         }
     )
 }
@@ -413,19 +386,19 @@ private fun BudgetNavigationDrawerContent(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "FL",
+                    text = "PF",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Financial Ledger",
+                text = "Presupuesto Familiar",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "Premium Account",
+                text = "Abril-Esparza",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -779,6 +752,33 @@ fun HealthPane(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+        } else {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Distribución por Miembro",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Registra gastos para ver la distribución entre miembros del hogar.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -832,7 +832,7 @@ private fun SummaryCard(
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = amount.toMxn(),
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

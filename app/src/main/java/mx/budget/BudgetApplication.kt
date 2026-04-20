@@ -4,10 +4,12 @@ import android.app.Application
 import androidx.room.Room
 import mx.budget.data.local.BudgetDatabase
 import mx.budget.data.local.DatabaseSeedCallback
+import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.WalletRepository
+import mx.budget.data.repository.impl.CategoryRepositoryImpl
 import mx.budget.data.repository.impl.ExpenseRepositoryImpl
 import mx.budget.data.repository.impl.MemberRepositoryImpl
 import mx.budget.data.repository.impl.QuincenaRepositoryImpl
@@ -35,6 +37,9 @@ class BudgetApplication : Application() {
     lateinit var walletRepository: WalletRepository
         private set
 
+    lateinit var categoryRepository: CategoryRepository
+        private set
+
     override fun onCreate() {
         super.onCreate()
 
@@ -51,5 +56,6 @@ class BudgetApplication : Application() {
         expenseRepository  = ExpenseRepositoryImpl(database.expenseDao())
         memberRepository   = MemberRepositoryImpl(database.memberDao())
         walletRepository   = WalletRepositoryImpl(database.paymentMethodDao())
+        categoryRepository = CategoryRepositoryImpl(database.categoryDao())
     }
 }

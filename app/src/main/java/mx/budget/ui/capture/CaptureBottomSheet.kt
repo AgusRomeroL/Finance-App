@@ -78,6 +78,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 
@@ -125,6 +126,10 @@ fun CaptureBottomSheet(
     val wallets by (viewModel?.wallets ?: dummyStateFlow(emptyList<PaymentMethodEntity>()))
         .collectAsState()
     val selectedWalletId by (viewModel?.selectedWalletId ?: dummyStateFlow<String?>(null))
+        .collectAsState()
+    val categories by (viewModel?.categories ?: dummyStateFlow(emptyList<CategoryEntity>()))
+        .collectAsState()
+    val selectedCategoryId by (viewModel?.selectedCategoryId ?: dummyStateFlow<String?>(null))
         .collectAsState()
     val members by (viewModel?.members ?: dummyStateFlow(emptyList<MemberEntity>()))
         .collectAsState()
@@ -210,7 +215,16 @@ fun CaptureBottomSheet(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // ── 4. Attribution FilterChips (miembros) ─────────────────────
+                // ── 4. Category Selector ───────────────────────────────────────
+                CategorySection(
+                    categories = categories,
+                    selectedCategoryId = selectedCategoryId,
+                    onCategorySelected = { viewModel?.onCategorySelected(it) }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // ── 5. Attribution FilterChips (miembros) ─────────────────────
                 AttributionSection(
                     members = members,
                     selectedMemberIds = selectedMemberIds,
@@ -596,6 +610,76 @@ private fun AttributionSection(
                     borderWidth = 1.dp
                 )
             )
+        }
+    }
+}
+
+/**
+ * Sección de selección de categoría.
+ *
+ * Muestra las categorías hoja (con padre) como FilterChips compactos
+ * en un FlowRow. Solo muestra hojas (parent_id != null) para evitar
+ * seleccionar categorías raíz genéricas.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CategorySection(
+    categories: List<CategoryEntity>,
+    selectedCategoryId: String?,
+    onCategorySelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Solo mostrar categorías hoja (tienen padre)
+    val leafCategories = categories.filter { it.parentId != null }
+
+    Column(modifier = modifier.padding(horizontal = 16.dp)) {
+        Text(
+            text = "CATEGORÍA",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            letterSpacing = 0.8.sp
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (leafCategories.isEmpty()) {
+            Text(
+                text = "Sin categorías disponibles.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                leafCategories.forEach { category ->
+                    val isSelected = category.id == selectedCategoryId
+
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { onCategorySelected(category.id) },
+                        label = {
+                            Text(
+                                text = category.displayName,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            labelColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = isSelected,
+                            selectedBorderWidth = 0.dp,
+                            borderWidth = 0.dp
+                        )
+                    )
+                }
+            }
         }
     }
 }
