@@ -1,0 +1,661 @@
+{
+  "_doc": "Reglas de clasificación generadas a partir del cuestionario del usuario (2026-04-21). Cada regla se aplica por match de concepto normalizado. Las reglas se evalúan en orden: la primera que matchea gana.",
+  "rules": [
+    {
+      "_comment": "=== HOUSING — Teléfonos → OTHER.TELEFONO ===",
+      "id": "tel_norma",
+      "concept_pattern": "TELEFONO NORMA",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER.TELEFONO",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "tel_pau_david",
+      "concept_pattern": "TELEFONO PAU",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER.TELEFONO",
+      "override_beneficiaries": ["pau", "david"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "tel_santi",
+      "concept_pattern": "TELEFONO SANTI",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER.TELEFONO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "tel_benji",
+      "concept_pattern": "TELEFONO BENJI",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER.TELEFONO",
+      "override_beneficiaries": ["benjamin"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "tel_movistar",
+      "concept_pattern": "TELEFONO MOVISTAR",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER.TELEFONO",
+      "override_beneficiaries": ["david", "norma", "pau", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "housing_david_solo",
+      "_comment": "Concepto 'David' suelto en HOUSING = teléfono David",
+      "concept_pattern": "DAVID",
+      "match_type": "exact_normalized",
+      "section_filter": "HOUSING",
+      "override_category": "OTHER.TELEFONO",
+      "override_beneficiaries": ["david"],
+      "override_payment_method": "efectivo"
+    },
+
+    {
+      "_comment": "=== HOUSING — servicios del hogar → beneficiarios = todos ===",
+      "id": "agua",
+      "concept_pattern": "AGUA",
+      "match_type": "exact_normalized",
+      "section_filter": "HOUSING",
+      "override_category": "HOUSING.AGUA",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "electricidad",
+      "concept_pattern": "ELECTRICIDAD",
+      "match_type": "exact_normalized",
+      "section_filter": "HOUSING",
+      "override_category": "HOUSING.ELECTRICIDAD",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "internet",
+      "concept_pattern": "INTERNET",
+      "match_type": "exact_normalized",
+      "section_filter": "HOUSING",
+      "override_category": "HOUSING.INTERNET",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "hipoteca",
+      "concept_pattern": "HIPOTECA",
+      "match_type": "contains",
+      "section_filter": "HOUSING",
+      "override_category": "HOUSING.HIPOTECA",
+      "override_beneficiaries": ["benjamin", "norma"],
+      "override_payment_method": null
+    },
+
+    {
+      "_comment": "=== TRANSPORTATION — gasolinas ===",
+      "id": "gasolina_camioneta",
+      "concept_pattern": "GASOLINA CAMIONETA",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "TRANSPORTATION.GASOLINA",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "gasolina_chochecito",
+      "concept_pattern": "GASOLINA CHOCHECITO",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "TRANSPORTATION.GASOLINA",
+      "override_beneficiaries": ["agustin", "david", "pau"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "cochecito_solo",
+      "_comment": "Variante sin 'Gasolina' delante",
+      "concept_pattern": "COCHECITO",
+      "match_type": "contains",
+      "section_filter": "TRANSPORTATION",
+      "override_category": "TRANSPORTATION.GASOLINA",
+      "override_beneficiaries": ["agustin", "david", "pau"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "gasolina_generica",
+      "_comment": "Gasolina genérica = Camioneta = Norma",
+      "concept_pattern": "GASOLINA",
+      "match_type": "exact_normalized",
+      "section_filter": "TRANSPORTATION",
+      "override_category": "TRANSPORTATION.GASOLINA",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+
+    {
+      "_comment": "=== SEGUROS MEDICOS — solo Benji es seguro real, el resto son mesadas ===",
+      "id": "seguro_benji",
+      "concept_pattern": "BENJI",
+      "match_type": "contains",
+      "section_filter": "SEGUROS_MEDICOS",
+      "override_category": "SEGUROS_MEDICOS.BENJI",
+      "override_beneficiaries": ["benjamin"],
+      "override_payment_method": null
+    },
+    {
+      "id": "seguro_norma_es_mesada",
+      "_comment": "Concepto 'Norma' en sección PERSONAL = mesada Norma",
+      "concept_pattern": "NORMA",
+      "match_type": "exact_normalized",
+      "section_filter": "SEGUROS_MEDICOS",
+      "override_category": "TRANSFERENCIAS_FAMILIARES.NORMA",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": null
+    },
+    {
+      "id": "seguro_hijos_es_mesada",
+      "_comment": "Pau, David, Agus = 3 mesadas de $1,000 c/u",
+      "concept_pattern": "PAU",
+      "match_type": "contains",
+      "section_filter": "SEGUROS_MEDICOS",
+      "override_category": "TRANSFERENCIAS_FAMILIARES",
+      "override_beneficiaries": ["pau", "david", "agustin"],
+      "override_payment_method": null,
+      "_note": "Se divide equitativamente entre los 3 hijos"
+    },
+    {
+      "id": "seguro_santi_es_mesada",
+      "_comment": "Santi en sección PERSONAL = mesada Santiago",
+      "concept_pattern": "SANTI",
+      "match_type": "contains",
+      "section_filter": "SEGUROS_MEDICOS",
+      "override_category": "TRANSFERENCIAS_FAMILIARES.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": null
+    },
+
+    {
+      "_comment": "=== FOOD — beneficiarios = todos ===",
+      "id": "comida",
+      "concept_pattern": "COMIDA",
+      "match_type": "exact_normalized",
+      "section_filter": "FOOD",
+      "override_category": "FOOD.COMIDA",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "despensa",
+      "concept_pattern": "DESPENSA",
+      "match_type": "exact_normalized",
+      "section_filter": "FOOD",
+      "override_category": "FOOD.DESPENSA",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "limpieza",
+      "concept_pattern": "LIMPIEZA",
+      "match_type": "exact_normalized",
+      "section_filter": "FOOD",
+      "override_category": "FOOD.LIMPIEZA",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+
+    {
+      "_comment": "=== PETS — beneficiarios = todos ===",
+      "id": "comida_gatas",
+      "concept_pattern": "COMIDA GATAS",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "PETS.COMIDA",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "psicologa_pets",
+      "_comment": "Psicóloga en sección PETS = error, es salud de Norma",
+      "concept_pattern": "PSICOLOGA",
+      "match_type": "contains",
+      "section_filter": "PETS",
+      "override_category": "OTHER.SALUD",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+
+    {
+      "_comment": "=== ENTERTAINMENT ===",
+      "id": "diversion",
+      "concept_pattern": "DIVERSION",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ENTERTAINMENT.DIVERSION",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "hbo",
+      "concept_pattern": "HBO",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ENTERTAINMENT.HBO",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "suscripcion_nivel6",
+      "_comment": "Meli+ de Mercado Libre",
+      "concept_pattern": "SUSCRIPCION NIVEL",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ENTERTAINMENT.MELI_PLUS",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "netflix",
+      "concept_pattern": "NETFLIX",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ENTERTAINMENT.NETFLIX",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "prime",
+      "concept_pattern": "PRIME",
+      "match_type": "exact_normalized",
+      "section_filter": "ENTERTAINMENT",
+      "override_category": "ENTERTAINMENT.PRIME",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "adobe",
+      "concept_pattern": "ADOBE",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER.ADOBE",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "google_one",
+      "_comment": "Google = Google One storage",
+      "concept_pattern": "GOOGLE",
+      "match_type": "exact_normalized",
+      "section_filter": "ENTERTAINMENT",
+      "override_category": "OTHER.GOOGLE_ONE",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "google_nest",
+      "concept_pattern": "GOOGLE NEST",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER.GOOGLE_HOME",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "hawaiano_entertainment",
+      "concept_pattern": "HAWAIANO",
+      "match_type": "contains",
+      "section_filter": "ENTERTAINMENT",
+      "override_category": "OTHER.HAWAIANO",
+      "override_beneficiaries": ["pau"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "hawaiano_other",
+      "concept_pattern": "HAWAIANO",
+      "match_type": "contains",
+      "section_filter": "OTHER",
+      "override_category": "OTHER.HAWAIANO",
+      "override_beneficiaries": ["pau"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "hawainano_typo",
+      "_comment": "Typo en sección LOANS",
+      "concept_pattern": "HAWAINANO",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER.HAWAIANO",
+      "override_beneficiaries": ["pau"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "kigo",
+      "concept_pattern": "KIGO",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER.KIGO",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "spotify",
+      "concept_pattern": "SPOTIFY",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ENTERTAINMENT.SPOTIFY",
+      "override_beneficiaries": ["benjamin"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "coursera",
+      "_comment": "User wrote OTHER.SPOTIFY but context says Coursera → keeping as OTHER.COURSERA",
+      "concept_pattern": "COURSERA",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER.COURSERA",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "didi_tarjeta_ent",
+      "_comment": "Didi tarjeta en ENTERTAINMENT = LOANS",
+      "concept_pattern": "DIDI TARJETA",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "LOANS.DIDI",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "youtube",
+      "concept_pattern": "YOUTUBE",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ENTERTAINMENT.YOUTUBE_PREMIUM",
+      "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
+      "override_payment_method": "efectivo"
+    },
+
+    {
+      "_comment": "=== LOANS ===",
+      "id": "didi_loans",
+      "concept_pattern": "DIDI",
+      "match_type": "exact_normalized",
+      "section_filter": "LOANS",
+      "override_category": "LOANS.DIDI",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "didi_card",
+      "concept_pattern": "DIDI CARD",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "LOANS.DIDI",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "liverpool",
+      "concept_pattern": "LIVERPOOL",
+      "match_type": "contains",
+      "section_filter": "LOANS",
+      "override_category": "LOANS.LIVERPOOL",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "banamex_clasica",
+      "concept_pattern": "BANAMEX CLASICA",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "LOANS.BANAMEX_CC",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "sears",
+      "concept_pattern": "SEARS",
+      "match_type": "contains",
+      "section_filter": "LOANS",
+      "override_category": "LOANS.SEARS",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "walmart",
+      "concept_pattern": "WALMART",
+      "match_type": "contains",
+      "section_filter": "LOANS",
+      "override_category": "LOANS.WALMART",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "mercado_pago",
+      "concept_pattern": "MERCADO PAGO",
+      "match_type": "contains",
+      "section_filter": "LOANS",
+      "override_category": "LOANS.MERCADO_PAGO",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "coppel",
+      "concept_pattern": "COPPEL",
+      "match_type": "contains",
+      "section_filter": "LOANS",
+      "override_category": "LOANS.COPPEL",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "mercado_libre",
+      "concept_pattern": "MERCADO LIBRE",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "LOANS.MERCADO_LIBRE",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "mary",
+      "_comment": "Una conocida de Norma",
+      "concept_pattern": "MARY",
+      "match_type": "exact_normalized",
+      "section_filter": "LOANS",
+      "override_category": "OTHER.MARY",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "buro_credito",
+      "concept_pattern": "BURO",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "LOANS.BURO",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "prestamo_omar",
+      "concept_pattern": "PRESTAMO OMAR",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "LOANS.OMAR",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "prestamo_omar_alt1",
+      "concept_pattern": "PRESTAMO 1 OMAR",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "LOANS.OMAR",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "prestamo_omar_alt2",
+      "concept_pattern": "PRESTAMO 2 (OMAR)",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "LOANS.OMAR",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+
+    {
+      "_comment": "=== TRANSFERENCIAS FAMILIARES / ESCUELA ===",
+      "id": "david_escuela_abril",
+      "concept_pattern": "DAVID ABRIL",
+      "match_type": "contains",
+      "section_filter": "TRANSFERENCIAS_FAMILIARES",
+      "override_category": "ESCUELA.DAVID",
+      "override_beneficiaries": ["david"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "david_escuela_febrero",
+      "concept_pattern": "DAVID FEBRERO",
+      "match_type": "contains",
+      "section_filter": "TRANSFERENCIAS_FAMILIARES",
+      "override_category": "ESCUELA.DAVID",
+      "override_beneficiaries": ["david"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "david_escuela_marzo",
+      "concept_pattern": "DAVID MARZO",
+      "match_type": "contains",
+      "section_filter": "TRANSFERENCIAS_FAMILIARES",
+      "override_category": "ESCUELA.DAVID",
+      "override_beneficiaries": ["david"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "david_escuela_mayo",
+      "concept_pattern": "DAVID MAYO",
+      "match_type": "contains",
+      "section_filter": "TRANSFERENCIAS_FAMILIARES",
+      "override_category": "ESCUELA.DAVID",
+      "override_beneficiaries": ["david"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "david_transferencia",
+      "_comment": "David suelto en TAXES/SCHOOL = colegiatura",
+      "concept_pattern": "DAVID",
+      "match_type": "exact_normalized",
+      "section_filter": "TRANSFERENCIAS_FAMILIARES",
+      "override_category": "ESCUELA.DAVID",
+      "override_beneficiaries": ["david"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "santiago_inscripcion",
+      "concept_pattern": "INSCRIPCION SANTI",
+      "match_type": "contains",
+      "section_filter": "TRANSFERENCIAS_FAMILIARES",
+      "override_category": "ESCUELA.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "santiago_inscripcion2",
+      "concept_pattern": "SANTIAGO INSCRIPCION",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ESCUELA.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "santiago_abril",
+      "concept_pattern": "SANTIAGO ABRIL",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ESCUELA.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "santiago_febrero",
+      "concept_pattern": "SANTIAGO FEBRERO",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ESCUELA.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "santiago_marzo",
+      "concept_pattern": "SANTIAGO MARZO",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ESCUELA.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "santiago_mayo",
+      "concept_pattern": "SANTIAGO MAYO",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ESCUELA.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "santiago_transferencia",
+      "concept_pattern": "SANTIAGO",
+      "match_type": "exact_normalized",
+      "section_filter": "TRANSFERENCIAS_FAMILIARES",
+      "override_category": "ESCUELA.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "pau_transferencia",
+      "concept_pattern": "PAU",
+      "match_type": "exact_normalized",
+      "section_filter": "TRANSFERENCIAS_FAMILIARES",
+      "override_category": "ESCUELA.PAU",
+      "override_beneficiaries": ["pau"],
+      "override_payment_method": "efectivo"
+    },
+
+    {
+      "_comment": "=== OTHERS — reclasificaciones ===",
+      "id": "psicologa_otros",
+      "concept_pattern": "PSICOLOGA",
+      "match_type": "contains",
+      "section_filter": "OTHER",
+      "override_category": "OTHER.SALUD",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "inscripcion_santi_otros",
+      "concept_pattern": "INSCRIPCION SANTI",
+      "match_type": "contains",
+      "section_filter": "OTHER",
+      "override_category": "ESCUELA.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "pau_otros",
+      "_comment": "Pau suelto en OTHER = mesada",
+      "concept_pattern": "PAU",
+      "match_type": "exact_normalized",
+      "section_filter": "OTHER",
+      "override_category": "TRANSFERENCIAS_FAMILIARES.PAU",
+      "override_beneficiaries": ["pau"],
+      "override_payment_method": "efectivo"
+    }
+  ]
+}

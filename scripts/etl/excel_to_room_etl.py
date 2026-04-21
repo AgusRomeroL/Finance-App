@@ -67,6 +67,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import json
 import logging
 import re
 import sqlite3
@@ -217,6 +218,7 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("ENTERTAINMENT",         "Entretenimiento",          None, "EXPENSE_VARIABLE",  None,   60),
     CategorySeed("LOANS",                 "Tarjetas y préstamos",     None, "EXPENSE_INSTALLMENT", None, 70),
     CategorySeed("TRANSFERENCIAS_FAMILIARES", "Transferencias familiares", None, "TRANSFER_INTRA_HOUSEHOLD", None, 80),
+    CategorySeed("ESCUELA",               "Escuela / Colegiaturas",   None, "EXPENSE_FIXED",     None,   85),
     CategorySeed("SAVINGS",               "Ahorros e inversiones",    None, "SAVINGS",           None,   90),
     CategorySeed("GIFTS",                 "Regalos y donaciones",     None, "EXPENSE_VARIABLE",  None,  100),
     CategorySeed("LEGAL",                 "Legal",                    None, "EXPENSE_VARIABLE",  None,  110),
@@ -246,6 +248,8 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("ENTERTAINMENT.SPOTIFY",    "Spotify",          "ENTERTAINMENT",  "EXPENSE_FIXED",     179.0),
     CategorySeed("ENTERTAINMENT.HAWAIANO",   "Hawaiano",         "ENTERTAINMENT",  "EXPENSE_VARIABLE",  None),
     CategorySeed("ENTERTAINMENT.DIVERSION",  "Diversión",        "ENTERTAINMENT",  "EXPENSE_VARIABLE",  None),
+    CategorySeed("ENTERTAINMENT.MELI_PLUS",  "Meli+",            "ENTERTAINMENT",  "EXPENSE_FIXED",     130.0),
+    CategorySeed("ENTERTAINMENT.YOUTUBE_PREMIUM", "YouTube Premium", "ENTERTAINMENT", "EXPENSE_FIXED",  179.0),
 
     CategorySeed("FOOD.COMIDA",              "Comida",           "FOOD",           "EXPENSE_VARIABLE", 3000.0),
     CategorySeed("FOOD.DESPENSA",            "Despensa",         "FOOD",           "EXPENSE_VARIABLE", 1500.0),
@@ -263,17 +267,25 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("LOANS.MERCADO_LIBRE",      "Mercado Libre",    "LOANS",          "EXPENSE_INSTALLMENT", None),
     CategorySeed("LOANS.MERCADO_PAGO",       "Mercado Pago",     "LOANS",          "EXPENSE_INSTALLMENT", None),
     CategorySeed("LOANS.OMAR",               "Préstamo Omar",    "LOANS",          "EXPENSE_INSTALLMENT", None),
+    CategorySeed("LOANS.DIDI",               "Didi Card",        "LOANS",          "EXPENSE_INSTALLMENT", None),
+    CategorySeed("LOANS.BURO",               "Buró de crédito",  "LOANS",          "EXPENSE_INSTALLMENT", None),
 
     CategorySeed("SEGUROS_MEDICOS.BENJI",    "Seguro Benji",     "SEGUROS_MEDICOS","EXPENSE_FIXED",     None),
     CategorySeed("SEGUROS_MEDICOS.NORMA",    "Seguro Norma",     "SEGUROS_MEDICOS","EXPENSE_FIXED",     None),
     CategorySeed("SEGUROS_MEDICOS.HIJOS",    "Seguro hijos",     "SEGUROS_MEDICOS","EXPENSE_FIXED",     None),
     CategorySeed("SEGUROS_MEDICOS.SANTI",    "Seguro Santi",     "SEGUROS_MEDICOS","EXPENSE_FIXED",     None),
 
-    CategorySeed("TRANSFERENCIAS_FAMILIARES.DAVID", "Transferencia David", "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
-    CategorySeed("TRANSFERENCIAS_FAMILIARES.PAU",   "Transferencia Pau",   "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
-    CategorySeed("TRANSFERENCIAS_FAMILIARES.SANTIAGO", "Transferencia Santi", "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
-    CategorySeed("TRANSFERENCIAS_FAMILIARES.COCHE", "Transferencia coche", "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
+    CategorySeed("TRANSFERENCIAS_FAMILIARES.DAVID",    "Mesada David",    "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
+    CategorySeed("TRANSFERENCIAS_FAMILIARES.PAU",      "Mesada Pau",      "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
+    CategorySeed("TRANSFERENCIAS_FAMILIARES.SANTIAGO", "Mesada Santiago", "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
+    CategorySeed("TRANSFERENCIAS_FAMILIARES.NORMA",    "Mesada Norma",    "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
+    CategorySeed("TRANSFERENCIAS_FAMILIARES.AGUSTIN",  "Mesada Agustín",  "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
+    CategorySeed("TRANSFERENCIAS_FAMILIARES.COCHE",    "Transferencia coche", "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
     CategorySeed("TRANSFERENCIAS_FAMILIARES.INSCRIPCIONES", "Inscripciones", "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
+
+    CategorySeed("ESCUELA.DAVID",            "Colegiatura David",    "ESCUELA",    "EXPENSE_FIXED",     None),
+    CategorySeed("ESCUELA.PAU",              "Colegiatura Pau",      "ESCUELA",    "EXPENSE_FIXED",     None),
+    CategorySeed("ESCUELA.SANTIAGO",          "Colegiatura Santiago", "ESCUELA",    "EXPENSE_FIXED",     None),
 
     CategorySeed("SAVINGS.EMPRESA",          "Ahorro Empresa",   "SAVINGS",        "SAVINGS",           None),
     CategorySeed("SAVINGS.TARJETA",          "Tarjeta de ahorro","SAVINGS",        "SAVINGS",           None),
@@ -283,6 +295,16 @@ CATEGORIES: tuple[CategorySeed, ...] = (
 
     CategorySeed("SERVICIOS_EXTERNOS.ARACELI","Araceli",         "SERVICIOS_EXTERNOS", "EXPENSE_FIXED",  None),
     CategorySeed("SERVICIOS_EXTERNOS.PSICOLOGA","Psicóloga",     "SERVICIOS_EXTERNOS", "EXPENSE_FIXED",  None),
+
+    CategorySeed("OTHER.TELEFONO",           "Teléfono celular", "OTHER",          "EXPENSE_FIXED",     None),
+    CategorySeed("OTHER.SALUD",              "Salud (psicóloga)","OTHER",          "EXPENSE_FIXED",     900.0),
+    CategorySeed("OTHER.HAWAIANO",           "Clases hawaiano", "OTHER",          "EXPENSE_VARIABLE",  None),
+    CategorySeed("OTHER.ADOBE",              "Adobe Creative",  "OTHER",          "EXPENSE_FIXED",     249.0),
+    CategorySeed("OTHER.GOOGLE_ONE",         "Google One",       "OTHER",          "EXPENSE_FIXED",      39.0),
+    CategorySeed("OTHER.GOOGLE_HOME",        "Google Nest/Home", "OTHER",          "EXPENSE_FIXED",     200.0),
+    CategorySeed("OTHER.KIGO",               "Kigo",             "OTHER",          "EXPENSE_FIXED",     100.0),
+    CategorySeed("OTHER.COURSERA",           "Coursera",         "OTHER",          "EXPENSE_FIXED",     288.0),
+    CategorySeed("OTHER.MARY",               "Mary",             "OTHER",          "EXPENSE_VARIABLE",  None),
 
     CategorySeed("INGRESOS.SUELDO",          "Sueldo",           "INGRESOS",       "INCOME",            None),
 )
@@ -925,61 +947,119 @@ def extract_budget_lines(ws: Worksheet) -> list[BudgetLine]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  BLOQUE 6 · RESOLVERS SEMÁNTICOS (concepto → entidades de dominio)
+#  BLOQUE 6 · MOTOR DE REGLAS + RESOLVERS SEMÁNTICOS
 # ══════════════════════════════════════════════════════════════════════════════
+
+# ── 6.0 Cargador de reglas de atribución ─────────────────────────────────────
+
+@dataclass(frozen=True)
+class AttributionRule:
+    """Una regla de override cargada desde attribution_rules.json."""
+    rule_id: str
+    concept_pattern: str           # Patrón normalizado (UPPER, sin tildes)
+    match_type: str                # 'contains' | 'exact_normalized'
+    section_filter: Optional[str]  # None = aplica a cualquier sección
+    override_category: Optional[str]
+    override_beneficiaries: Optional[list[str]]  # member keys
+    override_payment_method: Optional[str]       # payment_method key or None
+
+
+def load_attribution_rules(rules_path: Path) -> list[AttributionRule]:
+    """Lee attribution_rules.json y devuelve las reglas en orden de prioridad."""
+    if not rules_path.exists():
+        LOG.warning("No se encontro archivo de reglas: %s — usando heuristicas puras.", rules_path)
+        return []
+    with open(rules_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    rules = []
+    for r in data.get("rules", []):
+        rules.append(AttributionRule(
+            rule_id=r.get("id", "unknown"),
+            concept_pattern=r["concept_pattern"],
+            match_type=r.get("match_type", "contains"),
+            section_filter=r.get("section_filter"),
+            override_category=r.get("override_category"),
+            override_beneficiaries=r.get("override_beneficiaries"),
+            override_payment_method=r.get("override_payment_method"),
+        ))
+    LOG.info("Cargadas %d reglas de atribucion desde %s", len(rules), rules_path)
+    return rules
+
+
+def match_rule(line: BudgetLine, rules: list[AttributionRule]) -> Optional[AttributionRule]:
+    """
+    Evalua las reglas en orden y devuelve la primera que matchea.
+    Retorna None si ninguna aplica (se usa el fallback heuristico).
+    """
+    concept_norm = _normalize(line.concept)
+    for rule in rules:
+        # Filtro de seccion
+        if rule.section_filter is not None and rule.section_filter != line.section_code:
+            continue
+        # Match de concepto
+        if rule.match_type == "exact_normalized":
+            if concept_norm != rule.concept_pattern:
+                continue
+        elif rule.match_type == "contains":
+            if rule.concept_pattern not in concept_norm:
+                continue
+        else:
+            continue  # tipo desconocido
+        return rule
+    return None
+
+
+# Variable global que se inicializa en EtlPipeline.run()
+_ATTRIBUTION_RULES: list[AttributionRule] = []
+
+
+# ── 6.1 Resolvers con soporte de reglas ──────────────────────────────────────
 
 def resolve_category(line: BudgetLine) -> str:
     """
-    Devuelve el ``id`` de la categoría más específica posible. Se intenta
-    matchear contra las hojas hijas conocidas; si no hay coincidencia, se
-    usa la raíz de la sección.
+    Devuelve el ``id`` de la categoria. Prioridad:
+      1. Regla explicita de attribution_rules.json
+      2. Matching heuristico contra hojas hijas
+      3. Fallback: raiz de la seccion
     """
-    concept_norm = _normalize(line.concept)
+    # 1. Regla explicita
+    rule = match_rule(line, _ATTRIBUTION_RULES)
+    if rule and rule.override_category:
+        code = rule.override_category
+        if code in CATEGORIES_BY_CODE:
+            return CATEGORIES_BY_CODE[code].id
+        # Si la regla referencia una categoria que no existe, log y fallback
+        LOG.warning("Regla '%s' referencia categoria inexistente '%s'", rule.rule_id, code)
 
-    # Matching contra códigos hijos: "HOUSING.TELEFONO" matchea "TELEFONO".
+    # 2. Matching heuristico contra hojas hijas
+    concept_norm = _normalize(line.concept)
     for cat in CATEGORIES:
         if cat.parent_code != line.section_code:
             continue
-        leaf = cat.code.rsplit(".", 1)[-1]  # "TELEFONO" de "HOUSING.TELEFONO"
+        leaf = cat.code.rsplit(".", 1)[-1]
         leaf_display = _normalize(cat.display_name)
         if leaf in concept_norm or leaf_display in concept_norm:
             return cat.id
 
-    # Casos especiales por concepto explícito.
-    special_map = {
-        "BENJI": "SEGUROS_MEDICOS.BENJI" if line.section_code == "SEGUROS_MEDICOS" else None,
-        "NORMA": "SEGUROS_MEDICOS.NORMA" if line.section_code == "SEGUROS_MEDICOS" else None,
-        "SANTI": "SEGUROS_MEDICOS.SANTI" if line.section_code == "SEGUROS_MEDICOS" else None,
-        "DAVID": "TRANSFERENCIAS_FAMILIARES.DAVID" if line.section_code == "TRANSFERENCIAS_FAMILIARES" else None,
-        "PAU":   "TRANSFERENCIAS_FAMILIARES.PAU" if line.section_code == "TRANSFERENCIAS_FAMILIARES" else None,
-        "COCHE": "TRANSFERENCIAS_FAMILIARES.COCHE" if line.section_code == "TRANSFERENCIAS_FAMILIARES" else None,
-    }
-    for needle, code in special_map.items():
-        if code and needle in concept_norm and code in CATEGORIES_BY_CODE:
-            return CATEGORIES_BY_CODE[code].id
-
-    # "Pau, David, Agus" → se queda como SEGUROS_MEDICOS.HIJOS
-    if ("PAU" in concept_norm and "DAVID" in concept_norm
-            and line.section_code == "SEGUROS_MEDICOS"):
-        return CATEGORIES_BY_CODE["SEGUROS_MEDICOS.HIJOS"].id
-
-    # Fallback: raíz de la sección.
+    # 3. Fallback: raiz de la seccion.
     return CATEGORIES_BY_CODE[line.section_code].id
 
 
 def resolve_payment_method(line: BudgetLine) -> str:
     """
-    Reglas heurísticas para inferir qué wallet pagó:
-      1. Si el concepto menciona explícitamente un método (Coppel, Liverpool,
-         Sears, Walmart, Banamex Clásica, Mercado Libre/Pago) → ese método.
-      2. Si la sección es LOANS y el concepto no matchea ninguno → efectivo.
-      3. Si Norma es la única pagadora → BBVA (cuenta principal de Norma).
-      4. Si Benjamin es el único pagador → Efectivo.
-      5. Default: Efectivo.
+    Resuelve el metodo de pago. Prioridad:
+      1. Regla explicita de attribution_rules.json
+      2. Heuristica basada en concepto y columnas Norma/Benjamin
     """
-    concept_norm = _normalize(line.concept)
-    section = line.section_code
+    # 1. Regla explicita
+    rule = match_rule(line, _ATTRIBUTION_RULES)
+    if rule and rule.override_payment_method:
+        pm_key = rule.override_payment_method
+        if pm_key in PAYMENT_METHODS_BY_KEY:
+            return PAYMENT_METHODS_BY_KEY[pm_key].id
 
+    # 2. Heuristica basada en concepto
+    concept_norm = _normalize(line.concept)
     wallet_keywords: list[tuple[str, str]] = [
         ("BANAMEX CLASICA", "banamex_cc"),
         ("BANAMEX DEBITO",  "banamex_deb"),
@@ -997,24 +1077,30 @@ def resolve_payment_method(line: BudgetLine) -> str:
         if needle in concept_norm:
             return PAYMENT_METHODS_BY_KEY[key].id
 
-    # Quien paga determina el default.
-    n = line.paid_by_norma or 0
-    b = line.paid_by_benjamin or 0
-    if section == "HOUSING" and n > b:
-        return PAYMENT_METHODS_BY_KEY["bbva"].id
-    if n > 0 and b == 0:
-        return PAYMENT_METHODS_BY_KEY["bbva"].id
-    if b > 0 and n == 0:
-        return PAYMENT_METHODS_BY_KEY["efectivo"].id
+    # Quien paga determina el default — la mayoria paga con efectivo
     return PAYMENT_METHODS_BY_KEY["efectivo"].id
 
 
 def resolve_beneficiaries(line: BudgetLine) -> list[str]:
     """
-    Devuelve la lista de ``member.id`` beneficiarios detectados en el concepto.
-    Si no se identifica a ningún miembro concreto, se asume que los beneficiarios
-    son los dos adultos PAYER (Norma y Benjamín) — interpretación conservadora.
+    Devuelve la lista de ``member.id`` beneficiarios. Prioridad:
+      1. Regla explicita de attribution_rules.json
+      2. Heuristica por alias en el concepto
+      3. Fallback: adultos
     """
+    # 1. Regla explicita
+    rule = match_rule(line, _ATTRIBUTION_RULES)
+    if rule and rule.override_beneficiaries:
+        ids = []
+        for key in rule.override_beneficiaries:
+            if key in MEMBERS_BY_KEY:
+                ids.append(MEMBERS_BY_KEY[key].id)
+            else:
+                LOG.warning("Regla '%s' referencia miembro inexistente '%s'", rule.rule_id, key)
+        if ids:
+            return ids
+
+    # 2. Heuristica por alias
     concept_norm = _normalize(line.concept)
     hits: list[str] = []
     for m in MEMBERS:
@@ -1032,7 +1118,7 @@ def resolve_beneficiaries(line: BudgetLine) -> list[str]:
     if uniq:
         return uniq
 
-    # Fallback: gasto del hogar — adultos como beneficiarios.
+    # 3. Fallback: adultos como beneficiarios.
     return [MEMBERS_BY_KEY["norma"].id, MEMBERS_BY_KEY["benjamin"].id]
 
 
@@ -1073,14 +1159,25 @@ class EtlPipeline:
         >>> EtlPipeline(excel_path, db_path).run()
     """
 
-    def __init__(self, excel_path: Path, db_path: Path):
+    def __init__(self, excel_path: Path, db_path: Path, rules_path: Optional[Path] = None):
         self.excel_path = excel_path
         self.db_path = db_path
+        self.rules_path = rules_path
         self.stats = EtlStats()
 
     # ── punto de entrada ─────────────────────────────────────────────────────
 
     def run(self) -> EtlStats:
+        global _ATTRIBUTION_RULES
+
+        # Cargar reglas de atribucion si se proporcionaron
+        if self.rules_path:
+            _ATTRIBUTION_RULES = load_attribution_rules(self.rules_path)
+        else:
+            # Intentar cargar desde el directorio del script
+            default_rules = Path(__file__).parent / "attribution_rules.json"
+            _ATTRIBUTION_RULES = load_attribution_rules(default_rules)
+
         LOG.info("Abriendo Excel: %s", self.excel_path)
         wb = load_workbook(self.excel_path, data_only=True, read_only=False)
 
@@ -1454,7 +1551,7 @@ class EtlPipeline:
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="ETL Excel quincenal → Room SQLite (mx.budget).",
+        description="ETL Excel quincenal -> Room SQLite (mx.budget).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--excel", type=Path,
@@ -1463,6 +1560,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     parser.add_argument("--output", type=Path,
                         default=Path("budget_database.db"),
                         help="Ruta del SQLite de salida.")
+    parser.add_argument("--rules", type=Path,
+                        default=None,
+                        help="Ruta al archivo attribution_rules.json (default: junto al script).")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Activa logging DEBUG (incluye filas descartadas).")
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -1477,21 +1577,22 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         LOG.error("Archivo Excel no encontrado: %s", args.excel)
         return 2
 
-    stats = EtlPipeline(args.excel, args.output).run()
+    stats = EtlPipeline(args.excel, args.output, args.rules).run()
 
     # Reporte final al stdout.
     print()
-    print("═" * 70)
+    print("=" * 70)
     print(f"  Base generada: {args.output}")
-    print("─" * 70)
+    print("-" * 70)
     print(f"  Hojas procesadas:      {stats.sheets_parsed} / 33")
     print(f"  Quincenas creadas:     {stats.quincenas_written}")
     print(f"  Ingresos creados:      {stats.incomes_written}")
     print(f"  Gastos creados:        {stats.expenses_written}")
     print(f"  Atribuciones creadas:  {stats.attributions_written}")
+    print(f"  Reglas aplicadas:      {len(_ATTRIBUTION_RULES)}")
     if stats.skipped_sheets:
         print(f"  Hojas saltadas:        {stats.skipped_sheets}")
-    print("═" * 70)
+    print("=" * 70)
     return 0
 
 

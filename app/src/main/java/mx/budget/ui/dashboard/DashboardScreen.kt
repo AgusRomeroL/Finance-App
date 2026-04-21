@@ -95,7 +95,9 @@ import kotlin.math.max
 // Utilidades de formato
 // ─────────────────────────────────────────────────────────────────────────────
 
-private val mxnFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "MX"))
+private val mxnFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "MX")).apply {
+    maximumFractionDigits = 0 // Remove cents to save space and avoid truncation
+}
 
 private fun Double.toMxn(): String = mxnFormat.format(this)
 
@@ -269,7 +271,7 @@ fun DashboardScreen(
                             .fillMaxSize()
                             .padding(innerPadding)
                     ) {
-                        // En pantalla compacta, el HealthPane va primero (KPIs visibles)
+                        // En pantalla compacta, el HealthPane toma solo lo necesario, sin weight(1f)
                         HealthPane(
                             quincena = state.quincena,
                             postedTotal = state.postedTotal,
@@ -278,7 +280,7 @@ fun DashboardScreen(
                             memberDistribution = state.memberDistribution,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight(1f)
+                                // Removed weight(1f) to prevent blank space, letting it wrap its content
                         )
                         LedgerPane(
                             quincena = state.quincena,
@@ -308,53 +310,17 @@ private fun BudgetTopAppBar(
     isExpandedScreen: Boolean,
     modifier: Modifier = Modifier
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-
     TopAppBar(
         modifier = modifier,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
         ),
-        navigationIcon = {
-            // Búsqueda — deshabilitada hasta Sprint futuro
-            Spacer(modifier = Modifier.size(8.dp))
-        },
         title = {
-            if (isExpandedScreen) {
-                // Barra de búsqueda central tipo "Ask Gemini"
-                TextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = {
-                        Text(
-                            text = "Pregunta a Gemini sobre tu quincena...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                        unfocusedIndicatorColor = Color.Transparent
-                    ),
-                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                )
-            } else {
-                Text(
-                    text = "Presupuesto Familiar",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        },
-        actions = {
-            // Espacio reservado para futuro botón de perfil/AI
-            Spacer(modifier = Modifier.size(8.dp))
+            Text(
+                text = "Presupuesto Familiar",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     )
 }
@@ -396,11 +362,6 @@ private fun BudgetNavigationDrawerContent(
                 text = "Presupuesto Familiar",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "Abril-Esparza",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -832,7 +793,8 @@ private fun SummaryCard(
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = amount.toMxn(),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                // Usamos titleSmall o lo forzamos más pequeño si se necesita para pantallas compactas
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
