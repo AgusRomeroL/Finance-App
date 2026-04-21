@@ -1,7 +1,12 @@
 package mx.budget.ui.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -76,43 +81,47 @@ fun BudgetNavGraph(
         }
 
         composable(route = BudgetDestinations.LEDGER) {
-            DashboardScreen(
-                viewModel = dashboardViewModel,
-                captureViewModel = captureViewModel,
-                windowWidthDp = windowWidthDp.dp,
-                currentRoute = currentRoute,
-                onNavigate = onNavigate
-            )
+            PlaceholderScreen("Libro Mayor", onNavigate)
         }
 
         composable(route = BudgetDestinations.WALLETS) {
-            DashboardScreen(
-                viewModel = dashboardViewModel,
-                captureViewModel = captureViewModel,
-                windowWidthDp = windowWidthDp.dp,
-                currentRoute = currentRoute,
-                onNavigate = onNavigate
-            )
+            PlaceholderScreen("Cuentas y Wallets", onNavigate)
         }
 
         composable(route = BudgetDestinations.ANALYTICS) {
-            DashboardScreen(
-                viewModel = dashboardViewModel,
-                captureViewModel = captureViewModel,
-                windowWidthDp = windowWidthDp.dp,
-                currentRoute = currentRoute,
-                onNavigate = onNavigate
-            )
+            PlaceholderScreen("Analíticas e IA", onNavigate)
         }
 
         composable(route = BudgetDestinations.PROFILE) {
-            DashboardScreen(
-                viewModel = dashboardViewModel,
-                captureViewModel = captureViewModel,
-                windowWidthDp = windowWidthDp.dp,
-                currentRoute = currentRoute,
-                onNavigate = onNavigate
+            PlaceholderScreen("Perfil de Usuario", onNavigate)
+        }
+    }
+}
+
+@Composable
+private fun PlaceholderScreen(title: String, onNavigate: (String) -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Esta pantalla está programada para la siguiente fase.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(onClick = { onNavigate(BudgetDestinations.DASHBOARD) }) {
+                Text("Volver al Dashboard")
+            }
         }
     }
 }
