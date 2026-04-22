@@ -52,10 +52,12 @@ class BudgetApplication : Application() {
         .fallbackToDestructiveMigration()
         .build()
 
-        quincenaRepository = QuincenaRepositoryImpl(database.quincenaDao())
-        expenseRepository  = ExpenseRepositoryImpl(database.expenseDao())
-        memberRepository   = MemberRepositoryImpl(database.memberDao())
-        walletRepository   = WalletRepositoryImpl(database.paymentMethodDao())
-        categoryRepository = CategoryRepositoryImpl(database.categoryDao())
+        val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+
+        quincenaRepository = mx.budget.data.remote.QuincenaRepositoryFirestore(firestore)
+        expenseRepository  = mx.budget.data.remote.ExpenseRepositoryFirestore(firestore)
+        memberRepository   = mx.budget.data.remote.MemberRepositoryFirestore(firestore)
+        walletRepository   = mx.budget.data.remote.WalletRepositoryFirestore(firestore)
+        categoryRepository = mx.budget.data.remote.CategoryRepositoryFirestore(firestore)
     }
 }

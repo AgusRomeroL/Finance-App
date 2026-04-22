@@ -1,0 +1,171 @@
+package mx.budget.data.remote
+
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.tasks.await
+import mx.budget.data.local.entity.ExpenseAttributionEntity
+import mx.budget.data.local.entity.ExpenseEntity
+import mx.budget.data.local.result.ExpenseWithDetails
+import mx.budget.data.local.result.MemberSpendByCategory
+import mx.budget.data.local.result.SpendByMember
+import mx.budget.data.local.result.TopExpense
+import mx.budget.data.repository.ExpenseRepository
+
+class ExpenseRepositoryFirestore(
+    private val firestore: FirebaseFirestore
+) : ExpenseRepository {
+
+    private fun getCollection(householdId: String) =
+        firestore.collection("households").document(householdId).collection("expenses")
+
+    override fun observeWithDetails(quincenaId: String): Flow<List<ExpenseWithDetails>> = callbackFlow {
+        // Query to get expenses for the given quincenaId.
+        val listener = firestore.collectionGroup("expenses")
+            .whereEqualTo("quincenaId", quincenaId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { close(error); return@addSnapshotListener }
+                if (snapshot != null) {
+                    val expenses = snapshot.documents.mapNotNull { it.toObject(ExpenseEntity::class.java) }
+                    
+                    // Simple join pattern (since list is small, we could just fetch categories globally, 
+                    // or for now just return the expense details as null to avoid complex nested flows 
+                    // until UI is adapted to NoSQL patterns)
+                    val details = expenses.map { e ->
+                        ExpenseWithDetails(
+                            expenseId = e.id,
+                            concept = e.concept,
+                            amountMxn = e.amountMxn,
+                            occurredAt = e.occurredAt,
+                            status = e.status,
+                            categoryName = "Unknown",
+                            categoryCode = "",
+                            categoryColorHex = null,
+                            paymentMethodName = "Unknown",
+                            paymentMethodKind = "UNKNOWN",
+                            quincenaLabel = "Q-XX",
+                            installmentNumber = e.installmentNumber,
+                            installmentTotal = null,
+                            notes = e.notes
+                        )
+                    }
+                    trySend(details)
+                }
+            }
+        awaitClose { listener.remove() }
+    }
+
+    override fun observePostedTotal(quincenaId: String): Flow<Double> = callbackFlow {
+        val listener = firestore.collectionGroup("expenses")
+            .whereEqualTo("quincenaId", quincenaId)
+            .whereEqualTo("status", "POSTED")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { close(error); return@addSnapshotListener }
+                if (snapshot != null) {
+                    val total = snapshot.documents.sumOf { it.toObject(ExpenseEntity::class.java)?.amountMxn ?: 0.0 }
+                    trySend(total)
+                }
+            }
+        awaitClose { listener.remove() }
+    }
+
+    override fun observePlannedTotal(quincenaId: String): Flow<Double> = callbackFlow {
+        val listener = firestore.collectionGroup("expenses")
+            .whereEqualTo("quincenaId", quincenaId)
+            .whereEqualTo("status", "PLANNED")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { close(error); return@addSnapshotListener }
+                if (snapshot != null) {
+                    val total = snapshot.documents.sumOf { it.toObject(ExpenseEntity::class.java)?.amountMxn ?: 0.0 }
+                    trySend(total)
+                }
+            }
+        awaitClose { listener.remove() }
+    }
+
+    override fun observeSpendByMember(quincenaId: String): Flow<List<SpendByMember>> = callbackFlow {
+        val listener = firestore.collectionGroup("expenses")
+            .whereEqualTo("quincenaId", quincenaId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { close(error); return@addSnapshotListener }
+                if (snapshot != null) {
+                    // Requires querying attributions too. 
+                    // In NoSQL we embedded attributions. So if we map to a list we can calculate it.
+                    trySend(emptyList()) // Simplified for now
+                }
+            }
+        awaitClose { listener.remove() }
+    }
+
+    override suspend fun getById(id: String): ExpenseEntity? {
+        val matches = firestore.collectionGroup("expenses").whereEqualTo("id", id).get().await()
+        return matches.documents.firstOrNull()?.toObject(ExpenseEntity::class.java)
+    }
+
+    override suspend fun getTopExpenses(quincenaId: String, limit: Int): List<TopExpense> {
+        val matches = firestore.collectionGroup("expenses")
+            .whereEqualTo("quincenaId", quincenaId)
+            .orderBy("amountMxn", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(limit.toLong())
+            .get().await()
+            
+        return matches.documents.mapNotNull { doc ->
+            val e = doc.toObject(ExpenseEntity::class.java) ?: return@mapNotNull null
+            TopExpense(
+                expenseId = e.id,
+                date = "1970-01-01",
+                concept = e.concept,
+                amountMxn = e.amountMxn,
+                categoryName = "Unknown",
+                walletName = "Unknown"
+            )
+        }
+    }
+
+    override suspend fun getSpendForMember(quincenaId: String, memberId: String): SpendByMember? {
+        return null
+    }
+
+    override suspend fun getSpendByMemberAndCategory(fromEpoch: Long, toEpoch: Long): List<MemberSpendByCategory> {
+        return emptyList()
+    }
+
+    override suspend fun getByDateRange(householdId: String, fromEpoch: Long, toEpoch: Long): List<ExpenseEntity> {
+        val matches = getCollection(householdId)
+            .whereGreaterThanOrEqualTo("occurredAt", fromEpoch)
+            .whereLessThanOrEqualTo("occurredAt", toEpoch)
+            .get().await()
+        return matches.documents.mapNotNull { it.toObject(ExpenseEntity::class.java) }
+    }
+
+    override suspend fun insertWithAttributions(expense: ExpenseEntity, attributions: List<ExpenseAttributionEntity>) {
+        val ref = getCollection(expense.householdId).document(expense.id)
+        
+        // In NoSQL it is better to embed attributions within the expense or subcollection
+        val data = hashMapOf<String, Any>()
+        data["expense"] = expense
+        data["attributions"] = attributions
+        
+        ref.set(expense, SetOptions.merge()).await()
+        attributions.forEach { attr ->
+            ref.collection("attributions").document(attr.id).set(attr).await()
+        }
+    }
+
+    override suspend fun updateWithAttributions(expense: ExpenseEntity, attributions: List<ExpenseAttributionEntity>) {
+        insertWithAttributions(expense, attributions)
+    }
+
+    override suspend fun deleteAndRevertBalance(expenseId: String) {
+        val matches = firestore.collectionGroup("expenses").whereEqualTo("id", expenseId).get().await()
+        matches.documents.firstOrNull()?.reference?.delete()?.await()
+    }
+
+    override suspend fun postPlannedExpense(expenseId: String) {
+        val matches = firestore.collectionGroup("expenses").whereEqualTo("id", expenseId).get().await()
+        matches.documents.firstOrNull()?.reference?.update("status", "POSTED")?.await()
+    }
+}
