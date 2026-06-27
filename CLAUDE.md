@@ -85,4 +85,4 @@ Es un proyecto **a medio construir** detrás de contratos bien diseñados. Antes
 
 ## Seguridad
 
-`service-account.json` (clave privada de Firebase Admin) y `app/google-services.json` están en el repo (privado). El service-account ya está **untracked** y en `.gitignore`, pero **sigue en el historial de git** — ver `SECURITY_REMEDIATION.md`. No re-añadas secretos ni los commitees; el ETL/seed los leen desde el disco local.
+`service-account.json` (clave privada de Firebase Admin) y `app/google-services.json` están en el disco local (el primero gitignored, untracked). El historial de git **ya fue purgado** de `service-account.json` (y de `*.hprof`, `etl_output.log`, `budget_database.db` raíz) con `git filter-repo`, y `origin/main` está limpio — el secreto nunca llegó al árbol remoto. Detalles en `SECURITY_REMEDIATION.md`. No re-añadas secretos ni los commitees; el ETL/seed los leen desde el disco local. Nota: `app/src/main/assets/budget_database.db` SÍ está trackeada a propósito (es la DB semilla) — no la confundas con la `budget_database.db` de la raíz que fue purgada.

@@ -4,7 +4,20 @@
 > Proyecto Firebase afectado: `finance-app-abdf9`
 > Remoto git: `https://github.com/AgusRomeroL/Finance-App.git` (origin)
 
-Este documento describe las acciones de remediación. **Las acciones ya ejecutadas** son seguras y reversibles (cambios staged en git, sin commit). **Las acciones pendientes** requieren intervención manual tuya y, en algunos casos, son irreversibles (rotación de claves, reescritura de historial). Léelo completo antes de actuar.
+Este documento describe las acciones de remediación.
+
+---
+
+## ESTADO ACTUAL (actualizado 2026-06-27)
+
+- ✅ **Untrack + `.gitignore` reforzado** — commiteado (`chore(security): untrack secrets and build artifacts`).
+- ✅ **Historial purgado** — `service-account.json`, `budget_database.db` (raíz), `etl_output.log` y los `java_pid*.hprof` se eliminaron de **todos** los commits con `git filter-repo`. Verificado: no aparecen en ningún commit.
+- ✅ **Push limpio a GitHub** — el historial reescrito (limpio) se subió con `git push --force-with-lease`. **El secreto nunca llegó a estar presente en el árbol remoto de GitHub** (origin estaba 11 commits atrás del commit que lo añadió; se purgó antes del primer push del trabajo nuevo). Verificado sobre `origin/main`.
+- ✅ **Backup** del historial previo en `%LOCALAPPDATA%\Temp\finance-backup-d738dc5.bundle` (restaurable con `git clone`).
+- ⬜ **Rotación de la private key** — **decisión del propietario: NO rotar** (repo privado y la clave nunca se publicó en GitHub). La recomendación de la sección 1 se conserva por si cambia el contexto (p.ej. si el repo se hace público o se comparte).
+- ⬜ **Restringir la API key** de `google-services.json` (sección 3) — pendiente, recomendado.
+
+> Las secciones 1, 2 y 4 quedan como **referencia histórica** del procedimiento ya ejecutado.
 
 ---
 
@@ -118,9 +131,8 @@ git commit -m "chore(security): dejar de trackear secretos y artefactos; reforza
 
 ## Checklist de cierre
 
-- [ ] **(URGENTE)** Revocar la private key vieja en GCP IAM y crear una nueva (sección 1).
-- [ ] Revisar logs de auditoría por uso indebido de la clave.
-- [ ] Commitear los cambios staged (sección 4).
-- [ ] Backup del repo y purga del historial con `filter-repo`/BFG + `push --force` (sección 2).
+- [~] Revocar la private key vieja en GCP IAM — **descartado por decisión del propietario** (repo privado, clave nunca publicada). Reactivar si el contexto cambia.
+- [x] Commitear los cambios de untrack (sección 4).
+- [x] Backup del repo y purga del historial con `filter-repo` + `push --force-with-lease` (sección 2).
 - [ ] Restringir la API key de `google-services.json` por SHA-1 + `mx.budget` (sección 3).
-- [ ] Borrar este archivo o moverlo a un lugar privado una vez completado.
+- [ ] Borrar este archivo o moverlo a un lugar privado una vez completado lo pendiente.
