@@ -1,16 +1,11 @@
 package mx.budget.ui.dashboard
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,60 +17,49 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.VerticalDivider
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.NavigationDrawerItemDefaults
-import androidx.compose.material3.PermanentDrawerSheet
-import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -85,68 +69,110 @@ import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.ui.capture.CaptureBottomSheet
 import mx.budget.ui.capture.CaptureViewModel
+import mx.budget.ui.theme.FinancialTone
+import mx.budget.ui.theme.amountSemantic
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.Locale
-import kotlin.math.max
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Utilidades de formato
+// Formato y utilidades
 // ─────────────────────────────────────────────────────────────────────────────
 
-private val mxnFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "MX")).apply {
-    maximumFractionDigits = 0 // Remove cents to save space and avoid truncation
+private val mxnInt: NumberFormat = NumberFormat.getIntegerInstance(Locale("es", "MX"))
+
+/** "24,380" (sin símbolo, sin centavos) — para el KPI héroe con "$" y "MXN" aparte. */
+private fun Double.toGrouped(): String = mxnInt.format(this.toLong())
+
+/** "$24,380" — para montos en línea. */
+private fun Double.toMxn(): String = "$" + this.toGrouped()
+
+private val isoDate: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+private val shortMonth = SimpleMonth()
+
+private class SimpleMonth {
+    private val fmt = java.text.SimpleDateFormat("d MMM", Locale("es", "MX"))
+    fun format(epochMillis: Long): String = fmt.format(Date(epochMillis))
 }
 
-private fun Double.toMxn(): String = mxnFormat.format(this)
+private fun Long.toShortDate(): String = shortMonth.format(this)
 
-private fun Long.toShortDate(): String {
-    val sdf = SimpleDateFormat("d MMM", Locale("es", "MX"))
-    return sdf.format(Date(this))
+/** Parsea ISO yyyy-MM-dd de forma segura; null si falla. */
+private fun parseIso(s: String?): LocalDate? =
+    runCatching { LocalDate.parse(s, isoDate) }.getOrNull()
+
+/** Rango "16 — 30 jun" a partir de las fechas ISO de la quincena. */
+private fun quincenaRange(q: QuincenaEntity?): String {
+    val start = parseIso(q?.startDate) ?: return ""
+    val end = parseIso(q?.endDate) ?: return ""
+    val mFmt = DateTimeFormatter.ofPattern("MMM", Locale("es", "MX"))
+    val endMonth = end.format(mFmt).replace(".", "")
+    return "${start.dayOfMonth} — ${end.dayOfMonth} $endMonth"
+}
+
+/** Estado calculado del progreso de la quincena (día actual, fracción, días restantes). */
+private data class QuincenaProgress(
+    val dayIndex: Int,
+    val totalDays: Int,
+    val fraction: Float,
+    val daysRemaining: Int
+)
+
+private fun computeProgress(q: QuincenaEntity?): QuincenaProgress {
+    val start = parseIso(q?.startDate)
+    val end = parseIso(q?.endDate)
+    if (start == null || end == null) return QuincenaProgress(1, 15, 0f, 0)
+    val total = (ChronoUnit.DAYS.between(start, end) + 1).toInt().coerceAtLeast(1)
+    val today = LocalDate.now()
+    val rawDay = (ChronoUnit.DAYS.between(start, today) + 1).toInt()
+    val day = rawDay.coerceIn(1, total)
+    val remaining = (ChronoUnit.DAYS.between(today, end)).toInt().coerceIn(0, total)
+    return QuincenaProgress(day, total, day.toFloat() / total, remaining)
+}
+
+/** Ramp monocromático verde (matiz de marca) derivado del primary dinámico. */
+@Composable
+private fun memberColors(count: Int): List<Color> {
+    val primary = MaterialTheme.colorScheme.primary
+    val target = Color(0xFF8C968A) // neutral verdoso para aclarar sin salir de la familia
+    return (0 until count).map { i ->
+        val f = (i * 0.15f).coerceAtMost(0.62f)
+        lerp(primary, target, f)
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Modelo de navegación lateral
+// Modelo de navegación
 // ─────────────────────────────────────────────────────────────────────────────
 
-private data class NavDrawerItem(
-    val label: String,
-    val icon: ImageVector,
-    val route: String
-)
+private data class NavItem(val route: String, val icon: ImageVector, val label: String)
 
-private val drawerItems = listOf(
-    NavDrawerItem("Dashboard", Icons.Filled.Home, "dashboard"),
-    NavDrawerItem("Libro Mayor", Icons.AutoMirrored.Filled.List, "ledger"),
-    NavDrawerItem("Cuentas", Icons.Filled.AccountCircle, "wallets"),
-    NavDrawerItem("Analíticas", Icons.Filled.Star, "analytics"),
-    NavDrawerItem("Perfil", Icons.Filled.Person, "profile")
+private val navItems = listOf(
+    NavItem("dashboard", Icons.Filled.Dashboard, "Inicio"),
+    NavItem("ledger", Icons.AutoMirrored.Filled.ReceiptLong, "Libro"),
+    NavItem("wallets", Icons.Filled.AccountBalanceWallet, "Cuentas"),
+    NavItem("analytics", Icons.Filled.Insights, "Analíticas"),
+    NavItem("profile", Icons.Filled.Person, "Perfil")
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DashboardScreen — Pantalla principal
+// DashboardScreen — punto de entrada adaptativo
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Pantalla principal del presupuesto quincenal.
+ * Pantalla principal del presupuesto quincenal, rediseñada según el sistema
+ * "The Architectural Ledger" (ver `ui_reference/claude_design/`).
  *
- * Transpila `ui_reference/quincenal_dashboard_fold_inner/code.html` a
- * Jetpack Compose con Material 3 Expressive.
+ * - **Expandido (Fold abierto, ≥ 600dp):** rail de iconos custom + Bento 62/38
+ *   (salud financiera | transacciones), KPI héroe "Disponible para gastar".
+ * - **Compacto (Fold cerrado, < 600dp):** bottom nav + columna única scrollable.
  *
- * **Layout adaptativo (foldable-aware)**:
- * - Pantallas < 600dp: columna única + BottomNavigationBar + FAB
- * - Pantallas ≥ 600dp: [PermanentNavigationDrawer] + layout de dos paneles
- *   - Panel izquierdo 40%: [LedgerPane] (libro mayor de transacciones)
- *   - Panel derecho 60%: [HealthPane] (KPIs + distribución por miembro)
- *
- * @param viewModel   ViewModel que provee los StateFlows del dashboard.
- * @param windowWidthDp Ancho disponible en dp — se usa para detectar el
- *                      breakpoint del layout de dos paneles (600dp).
- *                      En producción, obtener con `LocalConfiguration.current.screenWidthDp`.
- * @param onOpenCapture Callback que abre [CaptureBottomSheet].
+ * Toda la jerarquía recae en capas tonales y espacio (regla No-Line); cero
+ * divisores de 1px. Los colores provienen del tema (dinámico o verde fallback).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
@@ -156,13 +182,9 @@ fun DashboardScreen(
     onNavigate: ((String) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val isExpandedScreen = windowWidthDp >= 600.dp
-
+    val isExpanded = windowWidthDp >= 600.dp
     var showCapture by remember { mutableStateOf(false) }
 
-    // ── CaptureBottomSheet overlay ────────────────────────────────────────────
-    // Se renderiza al nivel del árbol del Scaffold para evitar que la
-    // NavigationBar tape el contenido del sheet en pantallas compactas.
     if (showCapture) {
         CaptureBottomSheet(
             viewModel = captureViewModel,
@@ -170,126 +192,77 @@ fun DashboardScreen(
         )
     }
 
-    if (isExpandedScreen) {
-        // ── Layout expandido: NavigationDrawer docked + dual pane ────────────
-        PermanentNavigationDrawer(
-            drawerContent = {
-                PermanentDrawerSheet(
-                    modifier = Modifier.width(256.dp),
-                    drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ) {
-                    BudgetNavigationDrawerContent(
-                        selectedRoute = currentRoute,
-                        onRouteSelected = { onNavigate?.invoke(it) }
-                    )
-                }
-            }
-        ) {
-            Scaffold(
-                topBar = {
-                    BudgetTopAppBar(isExpandedScreen = true)
-                },
-                floatingActionButton = {
-                    BudgetFAB(onClick = { showCapture = true })
-                },
-                containerColor = MaterialTheme.colorScheme.surfaceContainer
-            ) { innerPadding ->
-                when (val state = uiState) {
-                    is DashboardUiState.Loading -> LoadingContent(
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                    is DashboardUiState.Error -> ErrorContent(
-                        message = state.message,
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                    is DashboardUiState.Success -> {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(innerPadding)
-                        ) {
-                            // Panel izquierdo: 40%
-                            LedgerPane(
-                                quincena = state.quincena,
-                                transactions = state.transactions,
-                                modifier = Modifier
-                                    .weight(0.4f)
-                                    .fillMaxHeight()
-                            )
-
-                            VerticalDivider(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .width(1.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f)
-                            )
-
-                            // Panel derecho: 60%
-                            HealthPane(
-                                quincena = state.quincena,
-                                postedTotal = state.postedTotal,
-                                plannedTotal = state.plannedTotal,
-                                balance = state.balance,
-                                memberDistribution = state.memberDistribution,
-                                modifier = Modifier
-                                    .weight(0.6f)
-                                    .fillMaxHeight()
-                            )
-                        }
-                    }
-                }
-            }
-        }
+    if (isExpanded) {
+        ExpandedDashboard(
+            state = uiState,
+            currentRoute = currentRoute,
+            onNavigate = onNavigate,
+            onCapture = { showCapture = true }
+        )
     } else {
-        // ── Layout compacto: sin drawer, columna única ─────────────────────────
-        Scaffold(
-            topBar = {
-                BudgetTopAppBar(isExpandedScreen = false)
-            },
-            bottomBar = {
-                BudgetBottomNav(
-                    selectedRoute = currentRoute,
-                    onRouteSelected = { onNavigate?.invoke(it) }
-                )
-            },
-            floatingActionButton = {
-                BudgetFAB(onClick = { showCapture = true })
-            },
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        ) { innerPadding ->
-            when (val state = uiState) {
-                is DashboardUiState.Loading -> LoadingContent(
-                    modifier = Modifier.padding(innerPadding)
-                )
-                is DashboardUiState.Error -> ErrorContent(
-                    message = state.message,
-                    modifier = Modifier.padding(innerPadding)
-                )
+        CompactDashboard(
+            state = uiState,
+            currentRoute = currentRoute,
+            onNavigate = onNavigate,
+            onCapture = { showCapture = true }
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Layout expandido (Fold interno)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ExpandedDashboard(
+    state: DashboardUiState,
+    currentRoute: String,
+    onNavigate: ((String) -> Unit)?,
+    onCapture: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .statusBarsPadding()
+    ) {
+        NavigationRailCustom(currentRoute = currentRoute, onNavigate = onNavigate)
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (state) {
+                is DashboardUiState.Loading -> LoadingContent()
+                is DashboardUiState.Error -> ErrorContent(state.message)
                 is DashboardUiState.Success -> {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
+                            .padding(start = 30.dp, top = 22.dp, end = 32.dp, bottom = 24.dp)
                     ) {
-                        // En pantalla compacta, el HealthPane toma solo lo necesario, sin weight(1f)
-                        HealthPane(
-                            quincena = state.quincena,
-                            postedTotal = state.postedTotal,
-                            plannedTotal = state.plannedTotal,
-                            balance = state.balance,
-                            memberDistribution = state.memberDistribution,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                // Removed weight(1f) to prevent blank space, letting it wrap its content
-                        )
-                        LedgerPane(
-                            quincena = state.quincena,
-                            transactions = state.transactions,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                        )
+                        DashboardHeader(quincena = state.quincena, expanded = true)
+                        Spacer(Modifier.height(22.dp))
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            MainHealthPane(
+                                state = state,
+                                modifier = Modifier
+                                    .weight(0.62f)
+                                    .fillMaxHeight()
+                            )
+                            Spacer(Modifier.width(24.dp))
+                            TransactionsPane(
+                                transactions = state.transactions,
+                                modifier = Modifier
+                                    .weight(0.38f)
+                                    .fillMaxHeight()
+                            )
+                        }
                     }
+                    // FAB extendido
+                    ExtendedCaptureFab(
+                        onClick = onCapture,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 32.dp, bottom = 30.dp)
+                    )
                 }
             }
         }
@@ -297,671 +270,943 @@ fun DashboardScreen(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SubComponentes de la pantalla
+// Layout compacto (Fold externo)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun CompactDashboard(
+    state: DashboardUiState,
+    currentRoute: String,
+    onNavigate: ((String) -> Unit)?,
+    onCapture: () -> Unit
+) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
+        bottomBar = { BottomNavCustom(currentRoute = currentRoute, onNavigate = onNavigate) }
+    ) { inner ->
+        Box(modifier = Modifier.fillMaxSize().padding(inner)) {
+            when (state) {
+                is DashboardUiState.Loading -> LoadingContent()
+                is DashboardUiState.Error -> ErrorContent(state.message)
+                is DashboardUiState.Success -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        item { DashboardHeader(quincena = state.quincena, expanded = false) }
+                        item { CollapsedHealthCard(state = state) }
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Eyebrow("Transacciones recientes")
+                                Text(
+                                    "Ver todo",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                        items(state.transactions.take(8), key = { it.expenseId }) { tx ->
+                            TransactionRow(tx)
+                        }
+                    }
+                    CircularCaptureFab(
+                        onClick = onCapture,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 20.dp, bottom = 20.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Navegación: rail custom (expandido) + bottom nav (compacto)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * TopAppBar con buscador central y avatar de usuario.
- * Transpila el `<header>` del prototipo HTML.
+ * Rail de iconos de 80dp. Mitigación de descubribilidad (brief D1):
+ * el item ACTIVO muestra etiqueta de texto bajo el icono; todos llevan
+ * `contentDescription`. Glifo de marca arriba, avatar de perfil abajo.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BudgetTopAppBar(
-    isExpandedScreen: Boolean,
-    modifier: Modifier = Modifier
+private fun NavigationRailCustom(
+    currentRoute: String,
+    onNavigate: ((String) -> Unit)?
 ) {
-    TopAppBar(
-        modifier = modifier,
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-        ),
-        title = {
-            Text(
-                text = "Presupuesto Familiar",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
-                color = MaterialTheme.colorScheme.primary
+    Column(
+        modifier = Modifier
+            .width(80.dp)
+            .fillMaxHeight()
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Logo de marca (cuadrado redondeado + icono → claramente "app", no cuenta)
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Filled.AccountBalance,
+                contentDescription = "Presupuesto del hogar",
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(22.dp)
             )
         }
+        Spacer(Modifier.height(24.dp))
+
+        navItems.dropLast(1).forEach { item ->
+            RailItem(
+                item = item,
+                selected = currentRoute == item.route,
+                onClick = { onNavigate?.invoke(item.route) }
+            )
+        }
+
+        Spacer(Modifier.weight(1f))
+
+        // Avatar de perfil (anclado abajo)
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .clickable { onNavigate?.invoke("profile") },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "AS",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 56.dp, height = 32.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = item.icon,
+                contentDescription = item.label,
+                tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        if (selected) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = item.label.uppercase(),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                letterSpacing = 1.2.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun BottomNavCustom(currentRoute: String, onNavigate: ((String) -> Unit)?) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .navigationBarsPadding()
+            .padding(top = 10.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.Top
+    ) {
+        navItems.forEach { item ->
+            val selected = currentRoute == item.route
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onNavigate?.invoke(item.route) }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 56.dp, height = 30.dp)
+                        .clip(RoundedCornerShape(15.dp))
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        item.icon,
+                        contentDescription = item.label,
+                        tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    item.label,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+                    ),
+                    color = if (selected) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Header
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun DashboardHeader(quincena: QuincenaEntity?, expanded: Boolean) {
+    val eyebrow = buildString {
+        append(quincena?.label ?: "Sin quincena activa")
+        val range = quincenaRange(quincena)
+        if (expanded && range.isNotEmpty()) append(" · ").append(range)
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        Column {
+            Eyebrow(eyebrow)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Salud financiera",
+                style = MaterialTheme.typography.displaySmall.copy(
+                    fontWeight = FontWeight.Light,
+                    fontSize = if (expanded) 36.sp else 26.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        if (expanded) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                HeaderIconButton(Icons.Filled.Search, "Buscar")
+                HeaderIconButton(Icons.Filled.Tune, "Filtros")
+            }
+        } else {
+            HeaderIconButton(Icons.Filled.Tune, "Filtros")
+        }
+    }
+}
+
+@Composable
+private fun HeaderIconButton(icon: ImageVector, description: String) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, description, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun Eyebrow(
+    text: String,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    maxLines: Int = Int.MAX_VALUE
+) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+        color = color,
+        letterSpacing = 1.4.sp,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis
     )
 }
 
-/**
- * Contenido del NavigationDrawer docked (pantallas ≥ 600dp).
- * Transpila el `<nav>` del prototipo HTML con los items de menú.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// Panel principal: salud financiera (KPI héroe + ritmo + barras por miembro)
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun BudgetNavigationDrawerContent(
-    selectedRoute: String,
-    onRouteSelected: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
+private fun MainHealthPane(state: DashboardUiState.Success, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
-            .fillMaxHeight()
-            .padding(vertical = 24.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(36.dp)
     ) {
-        // Logo / avatar del hogar
-        Column(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+        HeroKpi(state = state)
+        Spacer(Modifier.height(24.dp))
+        MemberDistributionSection(
+            beneficiary = state.beneficiaryDistribution,
+            payer = state.payerDistribution,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun HeroKpi(state: DashboardUiState.Success) {
+    val q = state.quincena
+    val income = (q?.projectedIncomeMxn?.takeIf { it > 0.0 } ?: q?.actualIncomeMxn ?: 0.0)
+    val spent = state.postedTotal
+    val available = income - spent
+    val progress = remember(q?.id) { computeProgress(q) }
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Eyebrow("Disponible para gastar")
+            Eyebrow(q?.label ?: "")
+        }
+        Spacer(Modifier.height(12.dp))
+        // Cifra héroe: $ + número grande + MXN
+        Row(verticalAlignment = Alignment.Top) {
+            Text(
+                "$",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                available.toGrouped(),
+                style = MaterialTheme.typography.displayLarge.copy(
+                    fontWeight = FontWeight.Light,
+                    fontSize = 76.sp,
+                    letterSpacing = (-1).sp
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "MXN",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 18.dp)
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        // Fórmula: Ingresos − Gastos · periodo
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val incomeC = amountSemantic(FinancialTone.INCOME)
+            val expenseC = amountSemantic(FinancialTone.EXPENSE)
+            Text(
+                "Ingresos ${income.toMxn()}",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = incomeC.color
+            )
+            Text("  −  ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Gastos ${spent.toMxn()}",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = expenseC.color
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        QuincenaRhythm(progress = progress)
+    }
+}
+
+@Composable
+private fun QuincenaRhythm(progress: QuincenaProgress) {
+    val pct = (progress.fraction * 100).toInt()
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Text(
+                "Día ${progress.dayIndex} de ${progress.totalDays} · $pct %",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1, softWrap = false,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "Quedan ${progress.daysRemaining} días",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, softWrap = false
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        // Barra de progreso con marcador "hoy"
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "PF",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "Presupuesto Familiar",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary
+                    .fillMaxWidth(progress.fraction)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(MaterialTheme.colorScheme.primary)
             )
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Items de navegación
-        drawerItems.forEach { item ->
-            NavigationDrawerItem(
-                icon = { Icon(imageVector = item.icon, contentDescription = item.label) },
-                label = { Text(text = item.label, style = MaterialTheme.typography.labelLarge) },
-                selected = selectedRoute == item.route,
-                onClick = { onRouteSelected(item.route) },
-                modifier = Modifier.padding(horizontal = 12.dp),
-                colors = NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    selectedIconColor = MaterialTheme.colorScheme.primary
-                )
-            )
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Text(
-            text = "v2.4.0",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outlineVariant,
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp)
-        )
-    }
-}
-
-/**
- * BottomNavigationBar para layout compacto (< 600dp).
- * Transpila el `<nav>` del final del prototipo HTML.
- */
-@Composable
-private fun BudgetBottomNav(
-    selectedRoute: String,
-    onRouteSelected: (String) -> Unit
-) {
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.9f),
-        tonalElevation = 0.dp
-    ) {
-        drawerItems.take(4).forEach { item ->
-            NavigationBarItem(
-                icon = { Icon(imageVector = item.icon, contentDescription = item.label) },
-                label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
-                selected = selectedRoute == item.route,
-                onClick = { onRouteSelected(item.route) }
-            )
-        }
-    }
-}
-
-/**
- * FAB flotante que abre el modal de captura rápida.
- * Transpila el `<button class="absolute bottom-8 right-8...">` del prototipo.
- */
-@Composable
-private fun BudgetFAB(onClick: () -> Unit) {
-    FloatingActionButton(
-        onClick = onClick,
-        shape = RoundedCornerShape(28.dp),
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Add,
-            contentDescription = "Registrar gasto",
-            modifier = Modifier.size(28.dp)
-        )
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LedgerPane — Panel izquierdo (40%)
+// Distribución por miembro: barras horizontales ordenadas + toggle
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Panel que contiene el libro mayor de transacciones recientes.
- *
- * Transpila la `<section class="w-full md:w-[40%]...">` del prototipo HTML.
- * Muestra la lista scrolleable de [TransactionCard] con animación de entrada.
- *
- * @param quincena     Quincena activa para el subtítulo de período.
- * @param transactions Lista de gastos con detalles (JOIN result).
- */
 @Composable
-fun LedgerPane(
-    quincena: QuincenaEntity?,
-    transactions: List<ExpenseWithDetails>,
+private fun MemberDistributionSection(
+    beneficiary: List<SpendByMember>,
+    payer: List<SpendByMember>,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .padding(horizontal = 20.dp, vertical = 24.dp)
-    ) {
-        // Encabezado
-        Text(
-            text = "Transacciones Recientes",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = quincena?.label ?: "Sin quincena activa",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    var showPayer by rememberSaveable { mutableStateOf(false) }
+    val data = if (showPayer) payer else beneficiary
+    val total = data.sumOf { it.totalMxn }.let { if (it == 0.0) 1.0 else it }
+    val colors = memberColors(data.size.coerceAtLeast(1))
 
-        Spacer(modifier = Modifier.height(24.dp))
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Eyebrow("Gasto por miembro", maxLines = 1)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${data.sumOf { it.totalMxn }.toMxn()} · ${data.size} miembros",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            }
+            SegmentedToggle(
+                options = listOf("Beneficiario", "Pagador"),
+                selectedIndex = if (showPayer) 1 else 0,
+                onSelect = { showPayer = it == 1 }
+            )
+        }
+        Spacer(Modifier.height(22.dp))
 
-        if (transactions.isEmpty()) {
+        if (data.isEmpty()) {
+            Text(
+                "Aún no hay gastos atribuidos en esta quincena.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                data.take(5).forEachIndexed { i, m ->
+                    MemberBarRow(
+                        member = m,
+                        fraction = (m.totalMxn / total).toFloat().coerceIn(0f, 1f),
+                        color = colors[i.coerceIn(0, colors.lastIndex)]
+                    )
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 22.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Ordenado de mayor a menor consumo en la quincena",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Ver desglose",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1, softWrap = false
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward, null,
+                        tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemberBarRow(member: SpendByMember, fraction: Float, color: Color) {
+    val share = (fraction * 100).toInt()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        // Avatar + nombre (flexible)
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(color),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                member.memberName.take(1).uppercase(),
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1.1f)) {
+            Text(
+                member.memberName,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                "${member.expenseCount} mov.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        // Barra (flexible)
+        Box(
+            modifier = Modifier
+                .weight(1.3f)
+                .height(14.dp)
+                .clip(RoundedCornerShape(7.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+        ) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxWidth(fraction.coerceAtLeast(0.02f))
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(color)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        // Monto + % (ajustado al contenido)
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                member.totalMxn.toMxn(),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Normal),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1, softWrap = false
+            )
+            Text(
+                "$share %",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 1.2.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun SegmentedToggle(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        options.forEachIndexed { i, label ->
+            val selected = i == selectedIndex
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                    .clickable { onSelect(i) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Sin gastos registrados.",
+                    label,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+                    ),
+                    color = if (selected) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Panel lateral: transacciones recientes (sin líneas, capas tonales alternas)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 16.dp, vertical = 28.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Column {
+                Eyebrow("Transacciones recientes")
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Últimos movimientos",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.FilterList, "Filtrar", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+
+        if (transactions.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    "Sin gastos registrados.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         } else {
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                state = rememberLazyListState(),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                contentPadding = PaddingValues(bottom = 88.dp) // espacio para que el FAB no tape la última fila
             ) {
-                items(
-                    items = transactions,
-                    key = { it.expenseId }
-                ) { expense ->
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }
-                    ) {
-                        TransactionCard(expense = expense)
-                    }
+                itemsIndexed(transactions, key = { _, it -> it.expenseId }) { index, tx ->
+                    TransactionRow(tx, alternate = index % 2 == 1)
                 }
             }
         }
     }
 }
 
-/**
- * Tarjeta de transacción individual.
- *
- * Transpila el bloque `<div class="bg-surface-container-lowest rounded-lg p-5...">` del HTML.
- * Muestra ícono de categoría (color derivado de categoryColorHex), concepto,
- * wallet como badge, monto y fecha.
- *
- * @param expense Datos del gasto con JOIN resuelto.
- */
 @Composable
-private fun TransactionCard(
-    expense: ExpenseWithDetails,
-    modifier: Modifier = Modifier
-) {
-    // Clase de color basada en el status del gasto
-    val amountColor = when (expense.status) {
-        "PLANNED" -> MaterialTheme.colorScheme.onSurfaceVariant
-        "RECONCILED" -> MaterialTheme.colorScheme.secondary
-        else -> MaterialTheme.colorScheme.onSurface
+private fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) {
+    val tone = if (tx.status == "PLANNED") FinancialTone.NEUTRAL else FinancialTone.EXPENSE
+    val sem = amountSemantic(tone)
+    val rowBg = if (alternate) MaterialTheme.colorScheme.surfaceContainerHighest
+    else MaterialTheme.colorScheme.surfaceContainer
+    val avatarBg = remember(tx.categoryColorHex) {
+        runCatching { tx.categoryColorHex?.let { Color(android.graphics.Color.parseColor(it)) } }
+            .getOrNull()
     }
 
-    // Color del ícono de categoría
-    val defaultIconColor = MaterialTheme.colorScheme.primaryContainer
-    val categoryBg = remember(expense.categoryColorHex) {
-        try {
-            expense.categoryColorHex?.let { Color(android.graphics.Color.parseColor(it)) }
-                ?: defaultIconColor
-        } catch (e: Exception) {
-            defaultIconColor
-        }
-    }
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(rowBg)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Fila superior: ícono + concepto + monto
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Ícono de categoría
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(categoryBg.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = expense.categoryCode.take(2).uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = categoryBg
-                        )
-                    }
-
-                    Column {
-                        Text(
-                            text = expense.concept,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = expense.paymentMethodName.uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            letterSpacing = 0.8.sp
-                        )
-                    }
-                }
-
-                Text(
-                    text = expense.amountMxn.toMxn(),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = amountColor
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Fila inferior: chip de categoría + fecha
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Badge de categoría (transpila chip redondeado del HTML)
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    modifier = Modifier
-                ) {
-                    Text(
-                        text = expense.categoryName,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                    )
-                }
-
-                Text(
-                    text = expense.occurredAt.toShortDate(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HealthPane — Panel derecho (60%)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Panel de salud financiera con KPIs y gráfico de distribución por miembro.
- *
- * Transpila la `<section class="w-full md:w-[60%]...">` del prototipo HTML.
- *
- * @param quincena           Quincena activa (para projectedIncomeMxn).
- * @param postedTotal        Total ejecutado (POSTED) en MXN — "Total Spent".
- * @param plannedTotal       Total presupuestado (PLANNED) — "Total Budget".
- * @param balance            = projectedIncome - postedTotal — "Remaining".
- * @param memberDistribution Lista de gastos por miembro para el gráfico.
- */
-@Composable
-fun HealthPane(
-    quincena: QuincenaEntity?,
-    postedTotal: Double,
-    plannedTotal: Double,
-    balance: Double,
-    memberDistribution: List<SpendByMember>,
-    modifier: Modifier = Modifier
-) {
-    val totalBudget = quincena?.projectedIncomeMxn ?: (postedTotal + balance)
-    val spentPct = if (totalBudget > 0) (postedTotal / totalBudget).coerceIn(0.0, 1.0) else 0.0
-
-    LazyColumn(
-        modifier = modifier
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        item {
-            Text(
-                text = "Salud Financiera",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        // ── SummaryCards Grid ─────────────────────────────────────────────────
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SummaryCard(
-                    label = "Presupuesto",
-                    amount = totalBudget,
-                    progress = 1.0f,
-                    labelColor = MaterialTheme.colorScheme.primary,
-                    progressColor = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f)
-                )
-                SummaryCard(
-                    label = "Gastado",
-                    amount = postedTotal,
-                    progress = spentPct.toFloat(),
-                    labelColor = MaterialTheme.colorScheme.error,
-                    progressColor = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.weight(1f)
-                )
-                SummaryCard(
-                    label = "Disponible",
-                    amount = balance,
-                    progress = (1f - spentPct).toFloat(),
-                    labelColor = MaterialTheme.colorScheme.secondary,
-                    progressColor = MaterialTheme.colorScheme.secondaryContainer,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // ── Gráfico de distribución por miembro ───────────────────────────────
-        if (memberDistribution.isNotEmpty()) {
-            item {
-                MemberDistributionChart(
-                    members = memberDistribution,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        } else {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "Distribución por Miembro",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Registra gastos para ver la distribución entre miembros del hogar.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Tarjeta de KPI individual — transpila los 3 cards del prototipo HTML.
- *
- * Contiene:
- * - Etiqueta uppercase (labelSmall)
- * - Monto principal (headlineLarge)
- * - LinearProgressIndicator con elevación dinámica
- *
- * @param label         Etiqueta del KPI ("Presupuesto", "Gastado", "Disponible").
- * @param amount        Valor monetario en MXN.
- * @param progress      Fracción 0f-1f para el indicador de progreso.
- * @param labelColor    Color de la etiqueta (varía por rol semántico).
- * @param progressColor Color de la barra de progreso.
- */
-@Composable
-private fun SummaryCard(
-    label: String,
-    amount: Double,
-    progress: Float,
-    labelColor: Color,
-    progressColor: Color,
-    modifier: Modifier = Modifier
-) {
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 800),
-        label = "progress_$label"
-    )
-
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(avatarBg ?: MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center
         ) {
             Text(
-                text = label.uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = labelColor,
-                letterSpacing = 0.8.sp
+                tx.categoryCode.take(1).uppercase(),
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White
             )
-            Spacer(modifier = Modifier.height(8.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = amount.toMxn(),
-                // Usamos titleSmall o lo forzamos más pequeño si se necesita para pantallas compactas
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                tx.concept,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                maxLines = 1, overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            LinearProgressIndicator(
-                progress = { animatedProgress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp)),
-                color = progressColor,
-                trackColor = MaterialTheme.colorScheme.surfaceContainer,
-                strokeCap = StrokeCap.Round
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "${tx.categoryName} · ${tx.occurredAt.toShortDate()}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.semantics { contentDescription = sem.description }
+        ) {
+            sem.icon?.let {
+                Icon(it, null, tint = sem.color, modifier = Modifier.size(13.dp))
+                Spacer(Modifier.width(2.dp))
+            }
+            Text(
+                "${sem.sign}${tx.amountMxn.toMxn()}",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                color = if (tone == FinancialTone.NEUTRAL) MaterialTheme.colorScheme.onSurface else sem.color,
+                maxLines = 1, softWrap = false
             )
         }
     }
 }
 
-/**
- * Gráfico de barras verticales de distribución por miembro.
- *
- * Transpila el bloque `<!-- Member Distribution Chart Area -->` del HTML,
- * implementado con el Canvas de Compose en lugar de una librería externa.
- *
- * Paleta de colores por posición (rota si hay más de 4 miembros):
- * - 0: TertiaryContainer (ámbar) — "David 40%"
- * - 1: PrimaryContainer (verde) — "Norma 30%"
- * - 2: SecondaryContainer (verde claro) — "Pau 15%"
- * - 3: SurfaceContainerHigh (gris) — "Compartido 15%"
- *
- * @param members Lista de gastos por miembro (memberId, memberName, totalMxn).
- */
-@Composable
-fun MemberDistributionChart(
-    members: List<SpendByMember>,
-    modifier: Modifier = Modifier
-) {
-    val barColors = listOf(
-        TertiaryContainer, PrimaryContainer, SecondaryContainer, SurfaceContainerHigh
-    )
+// ─────────────────────────────────────────────────────────────────────────────
+// Tarjeta de salud colapsada (compacto)
+// ─────────────────────────────────────────────────────────────────────────────
 
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+@Composable
+private fun CollapsedHealthCard(state: DashboardUiState.Success) {
+    val q = state.quincena
+    val income = (q?.projectedIncomeMxn?.takeIf { it > 0.0 } ?: q?.actualIncomeMxn ?: 0.0)
+    val spent = state.postedTotal
+    val available = income - spent
+    val progress = remember(q?.id) { computeProgress(q) }
+    val pct = (progress.fraction * 100).toInt()
+    val incomeC = amountSemantic(FinancialTone.INCOME)
+    val expenseC = amountSemantic(FinancialTone.EXPENSE)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(22.dp)
     ) {
-        Column(modifier = Modifier.padding(24.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Eyebrow("Disponible para gastar")
+            Text(
+                quincenaRange(q),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.Top) {
+            Text(
+                "$",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Light),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                available.toGrouped(),
+                style = MaterialTheme.typography.displayMedium.copy(
+                    fontWeight = FontWeight.Light, fontSize = 52.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurface, maxLines = 1
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "MXN",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row {
+            Text(
+                "${incomeC.sign} ${income.toMxn()}",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = incomeC.color
+            )
+            Text("   ", style = MaterialTheme.typography.bodySmall)
+            Text(
+                "${expenseC.sign} ${spent.toMxn()}",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = expenseC.color
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress.fraction)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                "Día ${progress.dayIndex} de ${progress.totalDays} · $pct %",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                "${progress.daysRemaining} días restantes",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        // Ritmo
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(incomeC.container),
+                contentAlignment = Alignment.Center
             ) {
+                Icon(Icons.AutoMirrored.Filled.TrendingUp, "Ritmo", tint = incomeC.color, modifier = Modifier.size(18.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Eyebrow("Ritmo")
+                Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "Distribución por Miembro",
-                    style = MaterialTheme.typography.titleMedium,
+                    "Te quedan ${(available / progress.daysRemaining.coerceAtLeast(1)).toMxn()} por día",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            val totalMxn = members.sumOf { it.totalMxn }.let { if (it == 0.0) 1.0 else it }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                members.take(6).forEachIndexed { index, member ->
-                    val fraction = (member.totalMxn / totalMxn).toFloat().coerceIn(0f, 1f)
-                    val pctDisplay = (fraction * 100).toInt()
-                    val barColor = barColors.getOrElse(index) { barColors.last() }
-                    val animatedFraction by animateFloatAsState(
-                        targetValue = fraction,
-                        animationSpec = tween(durationMillis = 800 + index * 100),
-                        label = "bar_$index"
-                    )
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Bottom,
-                        modifier = Modifier.fillMaxHeight()
-                    ) {
-                        Text(
-                            text = member.totalMxn.toMxn(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .width(56.dp)
-                                .weight(animatedFraction.coerceAtLeast(0.02f))
-                                .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
-                                .background(barColor),
-                            contentAlignment = Alignment.BottomCenter
-                        ) {
-                            Text(
-                                text = "$pctDisplay%",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = member.memberName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Estados auxiliares de UI
+// FABs
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ExtendedCaptureFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .height(64.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.primary)
+            .clickable(onClick = onClick)
+            .padding(start = 22.dp, end = 26.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Filled.Add, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(
+            "Capturar gasto",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onPrimary
+        )
+    }
+}
+
+@Composable
+private fun CircularCaptureFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(56.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.primary)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(Icons.Filled.Add, "Capturar gasto", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Estados auxiliares
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun LoadingContent(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
     }
 }
 
 @Composable
 private fun ErrorContent(message: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "Error al cargar",
+                "Error al cargar",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.error
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
-                text = message,
+                message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
             )
         }
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Alias de color locales para el gráfico de barras
-// (evitar importación directa de Color.kt en el composable)
-// ─────────────────────────────────────────────────────────────────────────────
-
-private val TertiaryContainer = Color(0xFFFEBD63)
-private val PrimaryContainer = Color(0xFF9CF6B9)
-private val SecondaryContainer = Color(0xFFB5FFC3)
-private val SurfaceContainerHigh = Color(0xFFE6E8E9)

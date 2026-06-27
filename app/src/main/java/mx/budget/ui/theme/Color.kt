@@ -2,72 +2,76 @@ package mx.budget.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ── Material 3 Expressive — Paleta extraída del sistema de diseño CSS ────────
-// Fuente: ui_reference/quincenal_dashboard_fold_inner/code.html (Tailwind config)
-// Todos los tokens corresponden a la escala tonal generada por Material Theme Builder
-// con semilla #016E3E (verde esmeralda institucional del hogar).
+// ── Paleta estática "The Architectural Ledger" (fallback de marca) ────────────
+// Fuente: ui_reference/claude_design/Presupuesto Hogar.dc.html (diseño aprobado).
+// Tonos cálidos "papel fino" derivados de la semilla verde #016E3E.
+//
+// Esta es la paleta de RESPALDO: aplica cuando el color dinámico (Material You)
+// está desactivado o no disponible. Con dinámico ON, los roles M3 vienen del
+// wallpaper del usuario (ver Theme.kt). Los semánticos financieros NO viven aquí
+// — están en FinanceColors.kt, fuera del ColorScheme.
 
-// ── Primary (Verde esmeralda) ────────────────────────────────────────────────
-val Primary = Color(0xFF016E3E)
-val OnPrimary = Color(0xFFE7FFEA)
-val PrimaryContainer = Color(0xFF9CF6B9)
-val OnPrimaryContainer = Color(0xFF005F34)
-val PrimaryDim = Color(0xFF006035)
-val PrimaryFixed = Color(0xFF9CF6B9)
-val PrimaryFixedDim = Color(0xFF8EE7AB)
-val OnPrimaryFixed = Color(0xFF004A27)
-val OnPrimaryFixedVariant = Color(0xFF006A3B)
-val InversePrimary = Color(0xFFA4FFC1)
+// ── Primary (Verde contable) ─────────────────────────────────────────────────
+val Primary = Color(0xFF006C44)
+val OnPrimary = Color(0xFFFFFFFF)
+val PrimaryContainer = Color(0xFF92F7B4)
+val OnPrimaryContainer = Color(0xFF002111)
+val PrimaryDim = Color(0xFF005233)
+val PrimaryFixed = Color(0xFF92F7B4)
+val PrimaryFixedDim = Color(0xFF77DA9A)
+val OnPrimaryFixed = Color(0xFF002111)
+val OnPrimaryFixedVariant = Color(0xFF005233)
+val InversePrimary = Color(0xFF77DA9A)
 
-// ── Secondary (Verde secundario) ─────────────────────────────────────────────
-val Secondary = Color(0xFF266C3E)
-val OnSecondary = Color(0xFFE8FFE8)
-val SecondaryContainer = Color(0xFFB5FFC3)
-val OnSecondaryContainer = Color(0xFF1E6538)
-val SecondaryDim = Color(0xFF175F33)
-val SecondaryFixed = Color(0xFFB5FFC3)
-val SecondaryFixedDim = Color(0xFFA8F0B6)
-val OnSecondaryFixed = Color(0xFF005227)
-val OnSecondaryFixedVariant = Color(0xFF2A6F41)
+// ── Secondary (Verde apagado) ────────────────────────────────────────────────
+val Secondary = Color(0xFF3F6A4D)
+val OnSecondary = Color(0xFFFFFFFF)
+val SecondaryContainer = Color(0xFFC2EBCF)
+val OnSecondaryContainer = Color(0xFF00210F)
+val SecondaryDim = Color(0xFF2C5239)
+val SecondaryFixed = Color(0xFFC2EBCF)
+val SecondaryFixedDim = Color(0xFFA6CFB3)
+val OnSecondaryFixed = Color(0xFF00210F)
+val OnSecondaryFixedVariant = Color(0xFF275139)
 
-// ── Tertiary (Ámbar) ──────────────────────────────────────────────────────────
-val Tertiary = Color(0xFF845500)
-val OnTertiary = Color(0xFFFFF7F3)
-val TertiaryContainer = Color(0xFFFEBD63)
-val OnTertiaryContainer = Color(0xFF5D3B00)
-val TertiaryDim = Color(0xFF744A00)
-val TertiaryFixed = Color(0xFFFEBD63)
-val TertiaryFixedDim = Color(0xFFEFB057)
-val OnTertiaryFixed = Color(0xFF432900)
-val OnTertiaryFixedVariant = Color(0xFF694300)
+// ── Tertiary (Ámbar editorial) ───────────────────────────────────────────────
+val Tertiary = Color(0xFF7A5900)
+val OnTertiary = Color(0xFFFFFFFF)
+val TertiaryContainer = Color(0xFFFFDEA6)
+val OnTertiaryContainer = Color(0xFF271900)
+val TertiaryDim = Color(0xFF614600)
+val TertiaryFixed = Color(0xFFFFDEA6)
+val TertiaryFixedDim = Color(0xFFEFC885)
+val OnTertiaryFixed = Color(0xFF271900)
+val OnTertiaryFixedVariant = Color(0xFF5C4200)
 
-// ── Error ─────────────────────────────────────────────────────────────────────
-val Error = Color(0xFFAC3434)
-val OnError = Color(0xFFFFF7F6)
-val ErrorContainer = Color(0xFFF56965)
-val OnErrorContainer = Color(0xFF65000B)
-val ErrorDim = Color(0xFF70030F)
+// ── Error (alineado con el semántico de gasto #BA1A1A) ────────────────────────
+val Error = Color(0xFFBA1A1A)
+val OnError = Color(0xFFFFFFFF)
+val ErrorContainer = Color(0xFFFFDAD6)
+val OnErrorContainer = Color(0xFF410002)
+val ErrorDim = Color(0xFF93000A)
 
-// ── Surface / Background ──────────────────────────────────────────────────────
-val Background = Color(0xFFF9F9F9)
-val OnBackground = Color(0xFF2F3334)
-val Surface = Color(0xFFF9F9F9)
-val SurfaceBright = Color(0xFFF9F9F9)
-val SurfaceDim = Color(0xFFD7DBDB)
-val OnSurface = Color(0xFF2F3334)
-val SurfaceVariant = Color(0xFFE0E3E4)
-val OnSurfaceVariant = Color(0xFF5C6060)
-val InverseSurface = Color(0xFF0C0F0F)
-val InverseOnSurface = Color(0xFF9C9D9D)
-val SurfaceTint = Color(0xFF016E3E)
+// ── Surface / Background (ramp cálido "papel fino") ───────────────────────────
+val Background = Color(0xFFFAF8F3)
+val OnBackground = Color(0xFF1B1C18)
+val Surface = Color(0xFFFAF8F3)
+val SurfaceBright = Color(0xFFFAF8F3)
+val SurfaceDim = Color(0xFFDED8CB)
+val OnSurface = Color(0xFF1B1C18)
+val SurfaceVariant = Color(0xFFE6DFCC)
+val OnSurfaceVariant = Color(0xFF44483D)
+val InverseSurface = Color(0xFF303129)
+val InverseOnSurface = Color(0xFFF2F0E9)
+val SurfaceTint = Color(0xFF006C44)
 
-// ── Surface containers (jerarquía de elevación) ───────────────────────────────
+// ── Surface containers (jerarquía tonal por capas, NO por líneas) ─────────────
 val SurfaceContainerLowest = Color(0xFFFFFFFF)
-val SurfaceContainerLow = Color(0xFFF3F4F4)
-val SurfaceContainer = Color(0xFFEDEEEE)
-val SurfaceContainerHigh = Color(0xFFE6E8E9)
-val SurfaceContainerHighest = Color(0xFFE0E3E4)
+val SurfaceContainerLow = Color(0xFFF4EFE4)
+val SurfaceContainer = Color(0xFFF1ECE0)
+val SurfaceContainerHigh = Color(0xFFEAE4D4)
+val SurfaceContainerHighest = Color(0xFFE6DFCC)
 
 // ── Outline ───────────────────────────────────────────────────────────────────
-val Outline = Color(0xFF777B7C)
-val OutlineVariant = Color(0xFFAFB2B3)
+val Outline = Color(0xFF79786A)
+val OutlineVariant = Color(0xFFCBC6B4)

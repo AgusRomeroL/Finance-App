@@ -45,7 +45,10 @@ class MainActivity : ComponentActivity() {
             (it.widthPixels / it.density).toInt()
         }
         setContent {
-            BudgetAppTheme {
+            // Material You por default (brief §2.1): los roles M3 se derivan del
+            // wallpaper. El verde sembrado #016E3E queda como fallback (toggle off,
+            // pendiente de exponer en Perfil + persistir en DataStore).
+            BudgetAppTheme(dynamicColor = true) {
                 BudgetNavGraph(
                     dashboardViewModel = dashboardViewModel,
                     captureViewModel = captureViewModel,

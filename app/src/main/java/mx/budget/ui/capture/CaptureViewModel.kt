@@ -186,18 +186,20 @@ class CaptureViewModel(
     // ── Validación ─────────────────────────────────────────────────────────
 
     /**
-     * `true` si el formulario es válido para registrar:
+     * `true` si el formulario es válido para registrar (brief C11 — campos mínimos):
      * - Importe > 0
-     * - Concepto no vacío
      * - Wallet seleccionado
      * - Categoría seleccionada
      * - Al menos un beneficiario seleccionado
+     *
+     * El concepto es OPCIONAL (vive bajo "Más"); si se omite, se usa el nombre
+     * de la categoría como default en [onRegisterExpense].
      */
     val canRegister: StateFlow<Boolean> = combine(
         _rawAmount, _concept, _selectedWalletId, _selectedCategoryId, _selectedMemberIds
-    ) { amount, concept, walletId, categoryId, memberIds ->
+    ) { amount, _, walletId, categoryId, memberIds ->
         val amountNum = amount.replace(",", "").toDoubleOrNull() ?: 0.0
-        amountNum > 0 && concept.isNotBlank() && walletId != null && categoryId != null && memberIds.isNotEmpty()
+        amountNum > 0 && walletId != null && categoryId != null && memberIds.isNotEmpty()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -269,9 +271,14 @@ class CaptureViewModel(
         }
     }
 
-    /** Selecciona todos los miembros activos a la vez (botón "All / Family"). */
+    /** Selecciona todos los miembros activos a la vez (chip "Todos"). */
     fun onSelectAllMembers() {
         _selectedMemberIds.value = members.value.map { it.id }.toSet()
+    }
+
+    /** Limpia la selección de beneficiarios (para alternar el chip "Todos"). */
+    fun onClearMembers() {
+        _selectedMemberIds.value = emptySet()
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -316,9 +323,11 @@ class CaptureViewModel(
                 val amount = parsedAmount
                 if (amount <= 0) throw IllegalArgumentException("El importe debe ser mayor a $0.")
 
-                // 5. Construir ExpenseEntity
+                // 5. Construir ExpenseEntity (concepto opcional → default = nombre de categoría)
                 val expenseId = UUID.randomUUID().toString()
                 val nowEpoch = System.currentTimeMillis()
+                val categoryName = categories.value.firstOrNull { it.id == categoryId }?.displayName
+                val conceptValue = _concept.value.trim().ifBlank { categoryName ?: "Gasto" }.take(64)
 
                 val expense = ExpenseEntity(
                     id = expenseId,
@@ -326,7 +335,7 @@ class CaptureViewModel(
                     occurredAt = nowEpoch,
                     quincenaId = quincena.id,
                     categoryId = categoryId,
-                    concept = _concept.value.trim().take(64),
+                    concept = conceptValue,
                     amountMxn = amount,
                     paymentMethodId = walletId,
                     status = "POSTED",

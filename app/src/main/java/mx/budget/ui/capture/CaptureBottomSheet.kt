@@ -1,14 +1,7 @@
 package mx.budget.ui.capture
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,39 +10,39 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.PriorityHigh
+import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -63,17 +56,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,34 +74,24 @@ import kotlinx.coroutines.launch
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.ui.theme.FinancialTone
+import mx.budget.ui.theme.amountSemantic
+import mx.budget.ui.theme.financeColors
+import java.text.NumberFormat
+import java.util.Locale
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CaptureBottomSheet — Modal expansible de captura de gasto
+// CaptureBottomSheet — rediseño "Architectural Ledger" (frame 03)
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// Hoja acotada a 640dp centrada en pantallas grandes (brief D2), con:
+//  · Monto + keypad
+//  · Categoría = recientes + búsqueda + acordeón de grupos (brief C10)
+//  · Atribución en dos dimensiones: "Beneficia a" / "Pagó" (brief C12)
+//  · Footer con resumen vivo + CTA Guardar
+// Stateless: el CaptureViewModel es el único dueño del estado.
 
-/**
- * Modal expansible de captura rápida de gasto.
- *
- * Transpila `ui_reference/focus_action_hybrid_layout_a/code.html` a
- * Jetpack Compose con Material 3 Expressive.
- *
- * **Estructura vertical** (de arriba a abajo):
- * 1. **Header** — título "Quick Capture" + botón close (IconButton)
- * 2. **AmountDisplay** — importe grande + campo de concepto underlined
- * 3. **SourceCarousel** — [LazyRow] de [WalletCard] snap-scrolleables
- * 4. **AttributionChips** — [FlowRow] de [FilterChip] para beneficiarios
- * 5. **NumPad** — Grid 3×4 de teclas numéricas
- * 6. **RegistrarButton** — CTA full-width con gradiente esmeralda
- *
- * El [CaptureViewModel] es el único propietario del estado; este Composable
- * es completamente stateless (todos los valores vienen como parámetros o del VM).
- *
- * @param viewModel  ViewModel con el estado del formulario e inserción atómica.
- *                   Por defecto usa una instancia dummy para preview.
- * @param onDismiss  Callback invocado cuando el usuario cierra el sheet
- *                   (botón close, gesto de swipe o registro exitoso).
- */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CaptureBottomSheet(
     viewModel: CaptureViewModel? = null,
@@ -118,42 +101,25 @@ fun CaptureBottomSheet(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // ── Observación de estado del ViewModel ───────────────────────────────────
-    val displayAmount by (viewModel?.displayAmount ?: dummyStateFlow("0.00"))
-        .collectAsState()
-    val concept by (viewModel?.concept ?: dummyStateFlow(""))
-        .collectAsState()
-    val wallets by (viewModel?.wallets ?: dummyStateFlow(emptyList<PaymentMethodEntity>()))
-        .collectAsState()
-    val selectedWalletId by (viewModel?.selectedWalletId ?: dummyStateFlow<String?>(null))
-        .collectAsState()
-    val categories by (viewModel?.categories ?: dummyStateFlow(emptyList<CategoryEntity>()))
-        .collectAsState()
-    val selectedCategoryId by (viewModel?.selectedCategoryId ?: dummyStateFlow<String?>(null))
-        .collectAsState()
-    val members by (viewModel?.members ?: dummyStateFlow(emptyList<MemberEntity>()))
-        .collectAsState()
-    val selectedMemberIds by (viewModel?.selectedMemberIds ?: dummyStateFlow(emptySet<String>()))
-        .collectAsState()
-    val canRegister by (viewModel?.canRegister ?: dummyStateFlow(true))
-        .collectAsState()
+    val displayAmount by (viewModel?.displayAmount ?: dummyStateFlow("0.00")).collectAsState()
+    val concept by (viewModel?.concept ?: dummyStateFlow("")).collectAsState()
+    val wallets by (viewModel?.wallets ?: dummyStateFlow(emptyList<PaymentMethodEntity>())).collectAsState()
+    val selectedWalletId by (viewModel?.selectedWalletId ?: dummyStateFlow<String?>(null)).collectAsState()
+    val categories by (viewModel?.categories ?: dummyStateFlow(emptyList<CategoryEntity>())).collectAsState()
+    val selectedCategoryId by (viewModel?.selectedCategoryId ?: dummyStateFlow<String?>(null)).collectAsState()
+    val members by (viewModel?.members ?: dummyStateFlow(emptyList<MemberEntity>())).collectAsState()
+    val selectedMemberIds by (viewModel?.selectedMemberIds ?: dummyStateFlow(emptySet<String>())).collectAsState()
+    val canRegister by (viewModel?.canRegister ?: dummyStateFlow(false)).collectAsState()
     val operationState by (viewModel?.operationState
-        ?: dummyStateFlow<CaptureOperationState>(CaptureOperationState.Idle))
-        .collectAsState()
+        ?: dummyStateFlow<CaptureOperationState>(CaptureOperationState.Idle)).collectAsState()
 
-    // ── Efectos secundarios de operationState ─────────────────────────────────
     LaunchedEffect(operationState) {
-        when (val state = operationState) {
+        when (val s = operationState) {
             is CaptureOperationState.Success -> {
-                // Cerrar el sheet tras un registro exitoso
-                sheetState.hide()
-                viewModel?.onOperationStateConsumed()
-                onDismiss()
+                sheetState.hide(); viewModel?.onOperationStateConsumed(); onDismiss()
             }
             is CaptureOperationState.Error -> {
-                scope.launch {
-                    snackbarHostState.showSnackbar(state.message)
-                }
+                scope.launch { snackbarHostState.showSnackbar(s.message) }
                 viewModel?.onOperationStateConsumed()
             }
             else -> Unit
@@ -161,273 +127,381 @@ fun CaptureBottomSheet(
     }
 
     ModalBottomSheet(
-        onDismissRequest = {
-            viewModel?.onDismiss()
-            onDismiss()
-        },
+        onDismissRequest = { viewModel?.onDismiss(); onDismiss() },
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        sheetMaxWidth = 640.dp, // acota y centra en el Fold interno (brief D2)
+        containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
         dragHandle = {
-            // Drag handle personalizado — pill pill esmeralda
             Box(
                 modifier = Modifier
                     .padding(vertical = 12.dp)
                     .size(width = 40.dp, height = 4.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
             )
         }
     ) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             containerColor = Color.Transparent
-        ) { innerPadding ->
+        ) { inner ->
             Column(
                 modifier = Modifier
-                    .padding(innerPadding)
-                    .navigationBarsPadding()
-                    .verticalScroll(rememberScrollState())
+                    .padding(inner)
+                    .imePadding()
             ) {
-                // ── 1. Header ─────────────────────────────────────────────────
-                CaptureHeader(
-                    onClose = {
-                        viewModel?.onDismiss()
-                        onDismiss()
-                    }
-                )
+                CaptureHeader(onClose = { viewModel?.onDismiss(); onDismiss() })
 
-                // ── 2. Display de importe + concepto ──────────────────────────
-                AmountSection(
-                    displayAmount = displayAmount,
-                    concept = concept,
-                    onConceptChange = { viewModel?.onConceptChange(it) }
-                )
+                // Contenido scrollable
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp)
+                ) {
+                    AmountCard(
+                        displayAmount = displayAmount,
+                        onKey = { viewModel?.onNumpadKey(it) },
+                        onRegister = { viewModel?.onRegisterExpense() },
+                        canRegister = canRegister
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    CategoryCard(
+                        categories = categories,
+                        selectedCategoryId = selectedCategoryId,
+                        onSelect = { viewModel?.onCategorySelected(it) }
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    WalletsCard(
+                        wallets = wallets,
+                        selectedWalletId = selectedWalletId,
+                        onSelect = { viewModel?.onWalletSelected(it) }
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    AttributionCard(
+                        members = members,
+                        selectedMemberIds = selectedMemberIds,
+                        wallets = wallets,
+                        selectedWalletId = selectedWalletId,
+                        onMemberToggled = { viewModel?.onMemberToggled(it) },
+                        onSelectAll = { viewModel?.onSelectAllMembers() },
+                        onClearAll = { viewModel?.onClearMembers() }
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    MoreSection(
+                        concept = concept,
+                        onConceptChange = { viewModel?.onConceptChange(it) }
+                    )
+                    Spacer(Modifier.height(16.dp))
+                }
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // ── 3. SourceCarousel (wallets) ───────────────────────────────
-                SourceSection(
-                    wallets = wallets,
-                    selectedWalletId = selectedWalletId,
-                    onWalletSelected = { viewModel?.onWalletSelected(it) }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // ── 4. Category Selector ───────────────────────────────────────
-                CategorySection(
+                CaptureFooter(
                     categories = categories,
                     selectedCategoryId = selectedCategoryId,
-                    onCategorySelected = { viewModel?.onCategorySelected(it) }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // ── 5. Attribution FilterChips (miembros) ─────────────────────
-                AttributionSection(
+                    displayAmount = displayAmount,
                     members = members,
                     selectedMemberIds = selectedMemberIds,
-                    onMemberToggled = { viewModel?.onMemberToggled(it) },
-                    onSelectAll = { viewModel?.onSelectAllMembers() }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-                // ── 5. NumPad ────────────────────────────────────────────────
-                NumPadSection(
-                    onKey = { key -> viewModel?.onNumpadKey(key) }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // ── 6. Botón Registrar ────────────────────────────────────────
-                RegistrarButton(
                     enabled = canRegister,
                     isLoading = operationState is CaptureOperationState.Loading,
-                    onClick = { viewModel?.onRegisterExpense() }
+                    onRegister = { viewModel?.onRegisterExpense() }
                 )
-
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sub-composables privados del modal
+// Header
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Header del modal: título centrado + botón close.
- * Transpila el `<header>` del focus_action_hybrid_layout_a.
- */
 @Composable
 private fun CaptureHeader(onClose: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(
-            onClick = onClose,
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = "Cerrar",
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        Text(
-            text = "Quick Capture",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        // Spacer simétrico para centrar el título
-        Box(modifier = Modifier.size(48.dp))
-    }
-}
-
-/**
- * Display del importe y campo de concepto.
- *
- * Transpila la `<section>` de Amount del prototipo HTML:
- * - Símbolo `$` en color primary grande (displayLarge)
- * - Importe en texto gigante readonly (displayLarge)
- * - Campo concepto tipo underline (InputDecorationBox con border-bottom)
- */
-@Composable
-private fun AmountSection(
-    displayAmount: String,
-    concept: String,
-    onConceptChange: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Etiqueta "AMOUNT"
-        Text(
-            text = "MONTO",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            letterSpacing = 0.8.sp
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Importe grande con símbolo
-        Row(
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = "$",
-                style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Light),
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = formatAmount(displayAmount),
-                style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Light),
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Campo de concepto — decoración tipo underline del HTML
-        OutlinedTextField(
-            value = concept,
-            onValueChange = onConceptChange,
-            placeholder = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .clickable(onClick = onClose),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.Close, "Cerrar", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column {
+                CapLabel("Nuevo movimiento")
                 Text(
-                    text = "Concepto",
+                    "Capturar gasto",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+        // Segmentado Gasto/Ingreso (visual; el VM registra gastos)
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(22.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 14.dp, vertical = 7.dp)
+            ) {
+                Text(
+                    "Gasto",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.financeColors.expense
+                )
+            }
+            Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)) {
+                Text(
+                    "Ingreso",
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            ),
-            shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
-            modifier = Modifier
-                .width(220.dp)
-                .border(
-                    width = 2.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(Color.Transparent, MaterialTheme.colorScheme.primary)
-                    ),
-                    shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
-                )
-        )
+            }
+        }
     }
 }
 
-/**
- * Carrusel horizontal de wallets (fuentes de pago).
- *
- * Transpila el `<!-- Source Horizontal Scroll -->` del HTML:
- * - [LazyRow] con snap scroll
- * - Íconos por tipo de wallet (DEBIT_ACCOUNT, CREDIT_CARD, CASH, etc.)
- * - Estado activo: borde primary + fondo tintado
- * - Estado inactivo: fondo surfaceContainerLow
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// Monto + keypad
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun SourceSection(
-    wallets: List<PaymentMethodEntity>,
-    selectedWalletId: String?,
-    onWalletSelected: (String) -> Unit,
-    modifier: Modifier = Modifier
+private fun AmountCard(
+    displayAmount: String,
+    onKey: (String) -> Unit,
+    onRegister: () -> Unit,
+    canRegister: Boolean
 ) {
-    Column(modifier = modifier.padding(horizontal = 16.dp)) {
-        Text(
-            text = "FUENTE",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            letterSpacing = 0.8.sp
+    Card {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CapLabel("Monto")
+            CapLabel("MXN")
+        }
+        Spacer(Modifier.height(8.dp))
+        // Cifra: entero en onSurface, decimales atenuados
+        val (intPart, decPart) = splitAmount(displayAmount)
+        Row(verticalAlignment = Alignment.Top) {
+            Text(
+                "$",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                intPart,
+                style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Light, fontSize = 64.sp, letterSpacing = (-1).sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+            Text(
+                decPart,
+                style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Light, fontSize = 64.sp, letterSpacing = (-1).sp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+                maxLines = 1
+            )
+        }
+        Spacer(Modifier.height(18.dp))
+        Keypad(onKey = onKey, onRegister = onRegister, canRegister = canRegister)
+    }
+}
+
+@Composable
+private fun Keypad(onKey: (String) -> Unit, onRegister: () -> Unit, canRegister: Boolean) {
+    val rows = listOf(
+        listOf("1", "2", "3", "DEL"),
+        listOf("4", "5", "6", "."),
+        listOf("7", "8", "9", "000")
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        rows.forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                row.forEach { key ->
+                    KeypadKey(key, Modifier.weight(1f)) {
+                        if (key == "000") repeat(3) { onKey("0") } else onKey(key)
+                    }
+                }
+            }
+        }
+        // Última fila: 0 ancho + ✓ confirmar
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            KeypadKey("0", Modifier.weight(3f)) { onKey("0") }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(
+                        if (canRegister) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceContainerHighest
+                    )
+                    .clickable(enabled = canRegister, onClick = onRegister),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Filled.Check, "Registrar",
+                    tint = if (canRegister) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun KeypadKey(key: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .height(52.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (key == "DEL") {
+            Icon(Icons.AutoMirrored.Filled.Backspace, "Borrar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+        } else {
+            Text(
+                key,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Normal),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Categoría: recientes + búsqueda + acordeón
+// ─────────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CategoryCard(
+    categories: List<CategoryEntity>,
+    selectedCategoryId: String?,
+    onSelect: (String) -> Unit
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var expandedGroup by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val leaves = remember(categories) { categories.filter { it.parentId != null } }
+    val parentsById = remember(categories) { categories.filter { it.parentId == null }.associateBy { it.id } }
+    val groups = remember(leaves) { leaves.groupBy { it.parentId } }
+    val recents = remember(leaves) { leaves.sortedBy { it.sortOrder }.take(5) }
+    val selected = leaves.firstOrNull { it.id == selectedCategoryId }
+
+    val normalizedQuery = query.trim().lowercase()
+    val matches = if (normalizedQuery.isBlank()) emptyList()
+    else leaves.filter { it.displayName.lowercase().contains(normalizedQuery) }.take(8)
+
+    Card {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                CapLabel("Categoría")
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    "Empieza por las recientes o busca",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (selected != null) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        selected.displayName,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1, softWrap = false
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        // Recientes
+        if (recents.isNotEmpty()) {
+            CapMicroLabel("Recientes")
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                recents.forEach { cat -> CategoryChip(cat.displayName, cat.id == selectedCategoryId) { onSelect(cat.id) } }
+            }
+            Spacer(Modifier.height(14.dp))
+        }
+
+        // Búsqueda
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Buscar categoría…", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            leadingIcon = { Icon(Icons.Filled.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            singleLine = true,
+            shape = RoundedCornerShape(18.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface
+            )
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(Modifier.height(12.dp))
 
-        if (wallets.isEmpty()) {
-            Text(
-                text = "Sin métodos de pago registrados.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        if (normalizedQuery.isNotBlank()) {
+            // Resultados de búsqueda
+            if (matches.isEmpty()) {
+                Text("Sin coincidencias", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    matches.forEach { cat -> CategoryChip(cat.displayName, cat.id == selectedCategoryId) { onSelect(cat.id) } }
+                }
+            }
         } else {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(
-                    items = wallets,
-                    key = { it.id }
-                ) { wallet ->
-                    WalletCard(
-                        wallet = wallet,
-                        isSelected = wallet.id == selectedWalletId,
-                        onClick = { onWalletSelected(wallet.id) }
+            // Acordeón de grupos
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                groups.forEach { (parentId, children) ->
+                    val parentName = parentsById[parentId]?.displayName ?: "Otros"
+                    val isOpen = expandedGroup == parentId
+                    AccordionGroup(
+                        title = parentName,
+                        count = children.size,
+                        open = isOpen,
+                        onToggle = { expandedGroup = if (isOpen) null else parentId },
+                        children = children,
+                        selectedId = selectedCategoryId,
+                        onSelect = onSelect
                     )
                 }
             }
@@ -435,72 +509,244 @@ private fun SourceSection(
     }
 }
 
-/**
- * Tarjeta de método de pago seleccionable en el carrusel.
- *
- * Transpila el `<button class="snap-start flex-shrink-0 w-32 p-4...">` del HTML.
- * El ícono se mapea desde el campo `kind` de [PaymentMethodEntity].
- *
- * @param wallet     Entidad del método de pago.
- * @param isSelected Si `true`, aplica borde primary y tinte de fondo.
- * @param onClick    Callback de selección.
- */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WalletCard(
-    wallet: PaymentMethodEntity,
-    isSelected: Boolean,
-    onClick: () -> Unit
+private fun AccordionGroup(
+    title: String,
+    count: Int,
+    open: Boolean,
+    onToggle: () -> Unit,
+    children: List<CategoryEntity>,
+    selectedId: String?,
+    onSelect: (String) -> Unit
 ) {
-    val elevation by animateDpAsState(
-        targetValue = if (isSelected) 4.dp else 0.dp,
-        animationSpec = spring(),
-        label = "wallet_elevation"
-    )
-
-    Card(
+    Column(
         modifier = Modifier
-            .size(width = 120.dp, height = 110.dp)
-            .shadow(elevation, shape = RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            }
-        ),
-        border = if (isSelected) {
-            androidx.compose.foundation.BorderStroke(
-                2.dp,
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-            )
-        } else null
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onToggle)
+            .padding(14.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = walletKindIcon(wallet.kind),
-                contentDescription = wallet.displayName,
-                tint = if (isSelected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
-            )
-
-            Column {
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = wallet.displayName,
-                    style = MaterialTheme.typography.labelLarge,
+                    title,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    text = walletKindLabel(wallet.kind),
+                    count.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
+            Icon(
+                if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)
+            )
+        }
+        AnimatedVisibility(visible = open) {
+            Column {
+                Spacer(Modifier.height(12.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    children.forEach { cat -> CategoryChip(cat.displayName, cat.id == selectedId) { onSelect(cat.id) } }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wallets (fuente de pago)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WalletsCard(
+    wallets: List<PaymentMethodEntity>,
+    selectedWalletId: String?,
+    onSelect: (String) -> Unit
+) {
+    Card {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CapLabel("Fuente de pago")
+            CapLabel("Saldo")
+        }
+        Spacer(Modifier.height(12.dp))
+        if (wallets.isEmpty()) {
+            Text("Sin métodos de pago.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                wallets.take(6).forEach { w ->
+                    WalletCard(w, w.id == selectedWalletId) { onSelect(w.id) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WalletCard(wallet: PaymentMethodEntity, selected: Boolean, onClick: () -> Unit) {
+    val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val sub = if (selected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+    Column(
+        modifier = Modifier
+            .width(132.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(14.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Icon(walletKindIcon(wallet.kind), null, tint = fg, modifier = Modifier.size(20.dp))
+            if (selected) Icon(Icons.Filled.CheckCircle, "Seleccionado", tint = fg, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(walletKindLabel(wallet.kind).uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = sub, letterSpacing = 1.2.sp, maxLines = 1)
+        Text(wallet.displayName, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium), color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("$" + wallet.currentBalanceMxn.toGrouped(), style = MaterialTheme.typography.bodySmall, color = sub, maxLines = 1)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Atribución: Beneficia a · Pagó
+// ─────────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AttributionCard(
+    members: List<MemberEntity>,
+    selectedMemberIds: Set<String>,
+    wallets: List<PaymentMethodEntity>,
+    selectedWalletId: String?,
+    onMemberToggled: (String) -> Unit,
+    onSelectAll: () -> Unit,
+    onClearAll: () -> Unit
+) {
+    val nSelected = selectedMemberIds.size
+    val sharePct = if (nSelected > 0) 100 / nSelected else 0
+    val complete = nSelected > 0
+    val allSelected = members.isNotEmpty() && nSelected == members.size
+    // Pagador: derivado del dueño del wallet (modelo actual)
+    val payerMember = remember(selectedWalletId, wallets, members) {
+        val ownerId = wallets.firstOrNull { it.id == selectedWalletId }?.ownerMemberId
+        members.firstOrNull { it.id == ownerId }
+    }
+
+    Card {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                CapLabel("Atribución")
+                Spacer(Modifier.height(3.dp))
+                Text("Quién se beneficia y quién paga", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            // Chip de estado (redundancia: color + icono + texto)
+            val warn = amountSemantic(FinancialTone.WARNING)
+            val inc = amountSemantic(FinancialTone.INCOME)
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (complete) inc.container else warn.container)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    if (complete) Icons.Filled.Check else Icons.Filled.PriorityHigh, null,
+                    tint = if (complete) inc.onContainer else warn.onContainer, modifier = Modifier.size(15.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    if (complete) "100 % asignado" else "Falta asignar",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (complete) inc.onContainer else warn.onContainer,
+                    maxLines = 1, softWrap = false
+                )
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+
+        // Beneficia a · consume
+        AttributionRowHeader(
+            icon = Icons.Filled.Favorite,
+            iconTint = MaterialTheme.financeColors.income,
+            iconBg = MaterialTheme.financeColors.incomeContainer,
+            title = "Beneficia a · consume",
+            trailing = if (complete) "$sharePct % c/u" else "Selecciona"
+        )
+        Spacer(Modifier.height(10.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Chip "Todos" — selecciona/limpia a todo el hogar (reparto equitativo)
+            AllBeneficiariesChip(
+                selected = allSelected,
+                onClick = { if (allSelected) onClearAll() else onSelectAll() }
+            )
+            members.forEach { m ->
+                MemberChip(
+                    name = m.displayName,
+                    selected = m.id in selectedMemberIds,
+                    sharePct = if (m.id in selectedMemberIds) sharePct else null,
+                    onClick = { onMemberToggled(m.id) }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+
+        // Pagó · adelantó
+        AttributionRowHeader(
+            icon = Icons.Filled.Payments,
+            iconTint = MaterialTheme.colorScheme.onSurface,
+            iconBg = MaterialTheme.colorScheme.surfaceContainerHighest,
+            title = "Pagó · adelantó",
+            trailing = if (payerMember != null) "100 %" else "Según la cuenta"
+        )
+        Spacer(Modifier.height(10.dp))
+        Row {
+            if (payerMember != null) {
+                MemberChip(name = payerMember.displayName, selected = true, sharePct = 100, onClick = {})
+            } else {
+                Text(
+                    "Se toma del dueño de la cuenta seleccionada.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -509,367 +755,288 @@ private fun WalletCard(
     }
 }
 
-/**
- * Sección de atribución con FilterChips por miembro.
- *
- * Transpila el bloque `<!-- Attribution Filter Chips -->` del HTML.
- * Usa [FlowRow] para envolver automáticamente los chips cuando no caben
- * en una sola línea (muchos miembros).
- *
- * Los chips activos usan `bg-primary text-on-primary`;
- * los inactivos usan `bg-surface-container-high text-on-surface`.
- *
- * @param members          Lista de miembros activos del hogar.
- * @param selectedMemberIds Set de IDs actualmente marcados como beneficiarios.
- * @param onMemberToggled  Callback al pulsar un chip individual.
- * @param onSelectAll      Callback para el chip "Todos / Familia".
- */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AttributionSection(
-    members: List<MemberEntity>,
-    selectedMemberIds: Set<String>,
-    onMemberToggled: (String) -> Unit,
-    onSelectAll: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier.padding(horizontal = 16.dp)) {
-        Text(
-            text = "ATRIBUCIÓN",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            letterSpacing = 0.8.sp
+private fun AttributionRowHeader(icon: ImageVector, iconTint: Color, iconBg: Color, title: String, trailing: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(26.dp).clip(CircleShape).background(iconBg),
+                contentAlignment = Alignment.Center
+            ) { Icon(icon, null, tint = iconTint, modifier = Modifier.size(15.dp)) }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                title.uppercase(),
+                style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.5.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                letterSpacing = 1.4.sp
+            )
+        }
+        Text(trailing, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+    }
+}
+
+@Composable
+private fun AllBeneficiariesChip(selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(start = 10.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            if (selected) Icons.Filled.Check else Icons.Filled.Groups,
+            null,
+            tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(if (selected) 16.dp else 18.dp)
         )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "Todos",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1
+        )
+    }
+}
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Chip individual por cada miembro activo
-            members.forEach { member ->
-                val isSelected = member.id in selectedMemberIds
-
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { onMemberToggled(member.id) },
-                    label = {
-                        Text(
-                            text = member.displayName,
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    },
-                    colors = FilterChipDefaults.filterChipColors(
-                        // Activo: fondo primary + texto on-primary (transpila el HTML)
-                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                        // Inactivo: fondo surfaceContainerHigh + texto on-surface
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        labelColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = isSelected,
-                        selectedBorderWidth = 0.dp,
-                        borderWidth = 0.dp
-                    )
-                )
+@Composable
+private fun MemberChip(name: String, selected: Boolean, sharePct: Int?, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(start = 10.dp, end = if (selected) 8.dp else 14.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (selected) {
+            Box(
+                modifier = Modifier.size(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(name.take(1).uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onPrimary)
             }
-
-            // Chip especial "All / Family" — transpila el botón con ícono de grupo
-            FilterChip(
-                selected = members.isNotEmpty() && selectedMemberIds.size == members.size,
-                onClick = onSelectAll,
-                label = {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "Todos",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    labelColor = MaterialTheme.colorScheme.primary
-                ),
-                border = FilterChipDefaults.filterChipBorder(
-                    enabled = true,
-                    selected = false,
-                    borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                    borderWidth = 1.dp
-                )
+        } else {
+            Icon(Icons.Filled.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            name,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1
+        )
+        if (selected && sharePct != null) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "$sharePct %",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .padding(horizontal = 7.dp, vertical = 2.dp)
             )
         }
     }
 }
 
-/**
- * Sección de selección de categoría.
- *
- * Muestra las categorías hoja (con padre) como FilterChips compactos
- * en un FlowRow. Solo muestra hojas (parent_id != null) para evitar
- * seleccionar categorías raíz genéricas.
- */
-@OptIn(ExperimentalLayoutApi::class)
+// ─────────────────────────────────────────────────────────────────────────────
+// "Más" (concepto, fecha, notas — divulgación progresiva)
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun CategorySection(
+private fun MoreSection(concept: String, onConceptChange: (String) -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .clickable { open = !open }
+                .padding(horizontal = 4.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Más", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.width(8.dp))
+                Text("Concepto, fecha, notas", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+        }
+        AnimatedVisibility(visible = open) {
+            Column {
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = concept,
+                    onValueChange = onConceptChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Concepto (opcional)", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions.Default,
+                    shape = RoundedCornerShape(18.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                    )
+                )
+                Spacer(Modifier.height(6.dp))
+                Text("Fecha y notas: próximamente.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Footer: resumen vivo + Guardar
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun CaptureFooter(
     categories: List<CategoryEntity>,
     selectedCategoryId: String?,
-    onCategorySelected: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Solo mostrar categorías hoja (tienen padre)
-    val leafCategories = categories.filter { it.parentId != null }
-
-    Column(modifier = modifier.padding(horizontal = 16.dp)) {
-        Text(
-            text = "CATEGORÍA",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            letterSpacing = 0.8.sp
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (leafCategories.isEmpty()) {
-            Text(
-                text = "Sin categorías disponibles.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                leafCategories.forEach { category ->
-                    val isSelected = category.id == selectedCategoryId
-
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { onCategorySelected(category.id) },
-                        label = {
-                            Text(
-                                text = category.displayName,
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            labelColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = isSelected,
-                            selectedBorderWidth = 0.dp,
-                            borderWidth = 0.dp
-                        )
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Teclado numérico integrado 3×4.
- *
- * Transpila el `<!-- Integrated Number Pad -->` del HTML.
- * Envía eventos de tecla como Strings al ViewModel:
- * - "0"-"9" → dígito
- * - "."     → separador decimal
- * - "DEL"   → borrar último carácter
- *
- * @param onKey Callback que recibe el carácter pulsado.
- */
-@Composable
-private fun NumPadSection(
-    onKey: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val rows = listOf(
-        listOf("1", "2", "3"),
-        listOf("4", "5", "6"),
-        listOf("7", "8", "9"),
-        listOf(".", "0", "DEL")
-    )
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        rows.forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                row.forEach { key ->
-                    NumPadKey(
-                        key = key,
-                        onClick = { onKey(key) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Tecla individual del teclado numérico.
- * "DEL" muestra el ícono de Backspace en lugar de texto.
- */
-@Composable
-private fun NumPadKey(
-    key: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .height(56.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        if (key == "DEL") {
-            Icon(
-                imageVector = Icons.Filled.Clear,
-                contentDescription = "Borrar",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
-            )
-        } else {
-            Text(
-                text = key,
-                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Light),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
-
-/**
- * Botón de acción primaria "Registrar".
- *
- * Transpila el `<!-- Primary Action Button -->` del HTML:
- * `bg-gradient-to-br from-primary to-primary-dim text-on-primary`
- *
- * Cuando [isLoading] es `true`, muestra [CircularProgressIndicator]
- * en lugar del texto del botón.
- *
- * @param enabled   Si `false`, el botón está desactivado (formulario incompleto).
- * @param isLoading Si `true`, muestra el spinner de inserción en curso.
- * @param onClick   Callback que dispara la inserción atómica en el ViewModel.
- */
-@Composable
-private fun RegistrarButton(
+    displayAmount: String,
+    members: List<MemberEntity>,
+    selectedMemberIds: Set<String>,
     enabled: Boolean,
     isLoading: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onRegister: () -> Unit
 ) {
-    Button(
-        onClick = onClick,
-        enabled = enabled && !isLoading,
-        modifier = modifier
+    val catName = categories.firstOrNull { it.id == selectedCategoryId }?.displayName
+    val beneficiaries = members.filter { it.id in selectedMemberIds }.joinToString(", ") { it.displayName }
+    val summary = buildString {
+        append(catName ?: "Elige categoría")
+        if (displayAmount != "0.00" && displayAmount != "0") append(" · $").append(displayAmount)
+        if (beneficiaries.isNotEmpty()) append(" · ").append(beneficiaries)
+    }
+
+    Row(
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .height(56.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = 4.dp,
-            pressedElevation = 1.dp
-        )
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
-                color = MaterialTheme.colorScheme.onPrimary,
-                strokeWidth = 2.dp
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Filled.Check,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(20.dp)
-                    .padding(end = 4.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            CapMicroLabel("Resumen")
+            Spacer(Modifier.height(2.dp))
             Text(
-                text = "Registrar",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                summary,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2, overflow = TextOverflow.Ellipsis
             )
+        }
+        Box(
+            modifier = Modifier
+                .height(52.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest)
+                .clickable(enabled = enabled && !isLoading, onClick = onRegister)
+                .padding(horizontal = 28.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(22.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+            } else {
+                Text(
+                    "Guardar",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Utilidades privadas
+// Helpers de UI
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Mapea el tipo de wallet (kind) a un ícono de Material Icons. */
+/** Tarjeta-sección con superficie tonal y radio 28dp (regla No-Line). */
+@Composable
+private fun Card(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(22.dp),
+        content = content
+    )
+}
+
+@Composable
+private fun CapLabel(text: String) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        letterSpacing = 1.6.sp
+    )
+}
+
+@Composable
+private fun CapMicroLabel(text: String) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        letterSpacing = 1.4.sp
+    )
+}
+
+private val grouping: NumberFormat = NumberFormat.getIntegerInstance(Locale("es", "MX"))
+private fun Double.toGrouped(): String = grouping.format(this.toLong())
+
+/** Separa "1,840.00" → ("1,840", ".00"). */
+private fun splitAmount(display: String): Pair<String, String> {
+    val raw = display.replace(",", "")
+    val dot = raw.indexOf('.')
+    val intRaw = if (dot >= 0) raw.substring(0, dot) else raw
+    val decRaw = if (dot >= 0) raw.substring(dot) else ""
+    val intGrouped = intRaw.toLongOrNull()?.let { grouping.format(it) } ?: intRaw
+    val dec = when {
+        decRaw.isEmpty() -> ""
+        decRaw == "." -> "."
+        else -> decRaw
+    }
+    return intGrouped to dec
+}
+
 private fun walletKindIcon(kind: String): ImageVector = when (kind) {
-    "DEBIT_ACCOUNT"          -> Icons.Filled.AccountCircle
-    "CREDIT_CARD"            -> Icons.Filled.ShoppingCart
-    "DEPARTMENT_STORE_CARD"  -> Icons.Filled.ShoppingCart
-    "BNPL_INSTALLMENT"       -> Icons.Filled.Info
-    "DIGITAL_WALLET"         -> Icons.Filled.Star
-    "CASH"                   -> Icons.Filled.Info
-    "EMPLOYER_SAVINGS_FUND"  -> Icons.Filled.Star
-    else                     -> Icons.Filled.AccountCircle
+    "DEBIT_ACCOUNT" -> Icons.Filled.AccountBalanceWallet
+    "CREDIT_CARD", "DEPARTMENT_STORE_CARD" -> Icons.Filled.CreditCard
+    "BNPL_INSTALLMENT" -> Icons.Filled.SwapHoriz
+    "DIGITAL_WALLET" -> Icons.Filled.AccountBalanceWallet
+    "CASH" -> Icons.Filled.Payments
+    "EMPLOYER_SAVINGS_FUND" -> Icons.Filled.Savings
+    else -> Icons.Filled.AccountBalanceWallet
 }
 
-/** Etiqueta legible del tipo de wallet para el subtítulo del WalletCard. */
 private fun walletKindLabel(kind: String): String = when (kind) {
-    "DEBIT_ACCOUNT"          -> "Débito"
-    "CREDIT_CARD"            -> "Crédito"
-    "DEPARTMENT_STORE_CARD"  -> "Tienda"
-    "BNPL_INSTALLMENT"       -> "A plazos"
-    "DIGITAL_WALLET"         -> "Digital"
-    "CASH"                   -> "Efectivo"
-    "EMPLOYER_SAVINGS_FUND"  -> "Ahorro"
-    else                     -> kind
+    "DEBIT_ACCOUNT" -> "Débito"
+    "CREDIT_CARD" -> "Crédito"
+    "DEPARTMENT_STORE_CARD" -> "Tienda"
+    "BNPL_INSTALLMENT" -> "A plazos"
+    "DIGITAL_WALLET" -> "Digital"
+    "CASH" -> "Efectivo"
+    "EMPLOYER_SAVINGS_FUND" -> "Ahorro"
+    else -> kind
 }
 
-/**
- * Formatea el raw amount string del ViewModel para el display grande.
- * Ej: "1234" → "1,234" | "1234.5" → "1,234.5" | "0" → "0.00"
- */
-private fun formatAmount(raw: String): String {
-    if (raw == "0") return "0.00"
-    val parts = raw.split(".")
-    val intPart = parts[0].toLongOrNull()?.let {
-        String.format("%,d", it)
-    } ?: parts[0]
-    return if (parts.size > 1) "$intPart.${parts[1]}" else intPart
-}
-
-/**
- * Crea un [kotlinx.coroutines.flow.StateFlow] constante para uso en
- * previews y en el constructor sin ViewModel concreto.
- */
 private fun <T> dummyStateFlow(value: T): kotlinx.coroutines.flow.StateFlow<T> =
     kotlinx.coroutines.flow.MutableStateFlow(value)

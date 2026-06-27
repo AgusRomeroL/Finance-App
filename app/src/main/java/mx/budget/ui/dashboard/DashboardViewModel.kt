@@ -52,12 +52,24 @@ sealed class DashboardUiState {
         val postedTotal: Double,
         val plannedTotal: Double,
         val balance: Double,
-        val memberDistribution: List<SpendByMember>
+        /** Gasto por miembro BENEFICIARY (quién consume) — toggle "Beneficiario". */
+        val beneficiaryDistribution: List<SpendByMember>,
+        /** Gasto por miembro PAYER (quién paga) — toggle "Pagador". */
+        val payerDistribution: List<SpendByMember>
     ) : DashboardUiState()
 
     /** Estado de error con mensaje recuperable. */
     data class Error(val message: String) : DashboardUiState()
 }
+
+/**
+ * Par de distribuciones por miembro (las dos dimensiones de atribución).
+ * @param beneficiary quién consume (BENEFICIARY); @param payer quién paga (PAYER).
+ */
+data class MemberDistributions(
+    val beneficiary: List<SpendByMember>,
+    val payer: List<SpendByMember>
+)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardViewModel
@@ -155,18 +167,26 @@ class DashboardViewModel(
         )
 
     /**
-     * Distribución de gasto por beneficiario en la quincena activa.
-     * Alimenta el gráfico de barras verticales "Member Distribution".
+     * Distribuciones de gasto por miembro (beneficiario + pagador) en la quincena.
+     * Alimentan las barras horizontales del dashboard y su toggle. Se combinan en
+     * un solo holder para no exceder el `combine` de 5 flujos del estado.
      */
-    val memberDistribution: StateFlow<List<SpendByMember>> = activeQuincena
+    val memberDistributions: StateFlow<MemberDistributions> = activeQuincena
         .flatMapLatest { quincena ->
-            quincena?.let { expenseRepository.observeSpendByMember(it.id) } ?: flowOf(emptyList())
+            if (quincena == null) {
+                flowOf(MemberDistributions(emptyList(), emptyList()))
+            } else {
+                combine(
+                    expenseRepository.observeSpendByMember(quincena.id),
+                    expenseRepository.observePaidByMember(quincena.id)
+                ) { beneficiary, payer -> MemberDistributions(beneficiary, payer) }
+            }
         }
-        .catch { emit(emptyList()) }
+        .catch { emit(MemberDistributions(emptyList(), emptyList())) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = emptyList()
+            initialValue = MemberDistributions(emptyList(), emptyList())
         )
 
     // ── Estado compuesto ──────────────────────────────────────────────────────
@@ -185,7 +205,7 @@ class DashboardViewModel(
         transactions,
         postedTotal,
         plannedTotal,
-        memberDistribution
+        memberDistributions
     ) { quincena, txList, posted, planned, members ->
         val balance = if (quincena != null) {
             quincena.projectedIncomeMxn - quincena.actualExpensesMxn
@@ -198,7 +218,8 @@ class DashboardViewModel(
             postedTotal = posted,
             plannedTotal = planned,
             balance = balance,
-            memberDistribution = members
+            beneficiaryDistribution = members.beneficiary,
+            payerDistribution = members.payer
         ) as DashboardUiState
     }
         .catch { e ->

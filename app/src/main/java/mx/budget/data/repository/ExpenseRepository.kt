@@ -28,8 +28,11 @@ interface ExpenseRepository {
     /** Total planeado (PLANNED) pendiente — indicador "falta gastar". */
     fun observePlannedTotal(quincenaId: String): Flow<Double>
 
-    /** Gasto por miembro (BENEFICIARY) en la quincena activa. */
+    /** Gasto por miembro (BENEFICIARY = quién consume) en la quincena activa. */
     fun observeSpendByMember(quincenaId: String): Flow<List<SpendByMember>>
+
+    /** Gasto por miembro (PAYER = quién paga) en la quincena activa. */
+    fun observePaidByMember(quincenaId: String): Flow<List<SpendByMember>>
 
     // ── Lectura ─────────────────────────────────────────────────
 

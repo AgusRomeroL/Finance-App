@@ -100,6 +100,18 @@ class ExpenseRepositoryFirestore(
         awaitClose { listener.remove() }
     }
 
+    // El dashboard lee SIEMPRE de Room (fuente de verdad); este lado nube es solo
+    // para sync. Stub consistente con observeSpendByMember de arriba.
+    override fun observePaidByMember(quincenaId: String): Flow<List<SpendByMember>> = callbackFlow {
+        val listener = firestore.collectionGroup("expenses")
+            .whereEqualTo("quincenaId", quincenaId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { close(error); return@addSnapshotListener }
+                if (snapshot != null) trySend(emptyList())
+            }
+        awaitClose { listener.remove() }
+    }
+
     override suspend fun getById(id: String): ExpenseEntity? {
         val matches = firestore.collectionGroup("expenses").whereEqualTo("id", id).get().await()
         return matches.documents.firstOrNull()?.toObject(ExpenseEntity::class.java)
