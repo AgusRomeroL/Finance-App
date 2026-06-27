@@ -10,3 +10,21 @@ build_log.txt
 Copy of presupuesto 2.5.xlsx
 create_fake_excel.py
 local.properties
+
+# Secrets / credentials (NEVER commit)
+service-account.json
+*-service-account.json
+serviceAccountKey.json
+*.pem
+*.p12
+*.keystore
+*.jks
+
+# Heap dumps
+*.hprof
+
+# Root-level generated DB (the canonical seed DB lives in app/src/main/assets/)
+/budget_database.db
+
+# ETL artifacts
+etl_output.log
