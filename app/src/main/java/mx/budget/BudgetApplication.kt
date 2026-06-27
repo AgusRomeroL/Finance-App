@@ -17,8 +17,10 @@ import mx.budget.data.repository.impl.ExpenseRepositoryImpl
 import mx.budget.data.repository.impl.MemberRepositoryImpl
 import mx.budget.data.repository.impl.QuincenaRepositoryImpl
 import mx.budget.data.repository.impl.WalletRepositoryImpl
+import mx.budget.data.settings.SettingsRepository
 import mx.budget.data.sync.RemotePullSync
 import mx.budget.data.sync.SyncManager
+import kotlinx.coroutines.flow.first
 
 /**
  * Aplicación base — contenedor manual de dependencias (sin Hilt).
@@ -69,6 +71,14 @@ class BudgetApplication : Application() {
     lateinit var householdId: String
         private set
 
+    /** Preferencias de usuario (toggle de color dinámico, etc.). */
+    lateinit var settingsRepository: SettingsRepository
+        private set
+
+    /** Valor inicial del toggle de color dinámico, leído una vez al arrancar. */
+    var initialDynamicColor: Boolean = true
+        private set
+
     /** Scope de larga vida para tareas de sincronización en background. */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -92,6 +102,11 @@ class BudgetApplication : Application() {
         // por si la DB aún no tuviera datos sembrados.
         householdId = runBlocking { database.householdDao().getSingleId() }
             ?: "default_household"
+
+        // Preferencias persistidas + lectura inicial síncrona (una sola vez, antes
+        // de cualquier Activity) para que el tema arranque sin parpadeo.
+        settingsRepository = SettingsRepository(this)
+        initialDynamicColor = runBlocking { settingsRepository.dynamicColor.first() }
 
         // DAOs de la fuente de verdad local.
         val expenseDao = database.expenseDao()

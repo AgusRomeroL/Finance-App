@@ -21,6 +21,7 @@ import androidx.navigation.compose.rememberNavController
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardScreen
 import mx.budget.ui.dashboard.DashboardViewModel
+import mx.budget.ui.profile.ProfileScreen
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Destinos de navegación
@@ -47,7 +48,9 @@ object BudgetDestinations {
 fun BudgetNavGraph(
     dashboardViewModel: DashboardViewModel,
     captureViewModel: CaptureViewModel,
-    windowWidthDp: Int = 360
+    windowWidthDp: Int = 360,
+    dynamicColor: Boolean = true,
+    onDynamicColorChange: (Boolean) -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -93,7 +96,11 @@ fun BudgetNavGraph(
         }
 
         composable(route = BudgetDestinations.PROFILE) {
-            PlaceholderScreen("Perfil de Usuario", onNavigate)
+            ProfileScreen(
+                dynamicColor = dynamicColor,
+                onDynamicColorChange = onDynamicColorChange,
+                onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
+            )
         }
     }
 }
