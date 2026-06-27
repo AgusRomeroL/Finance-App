@@ -1,18 +1,34 @@
 package mx.budget.data.repository.impl
 
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import mx.budget.data.local.BudgetDatabase
+import mx.budget.data.local.dao.ExpenseAttributionDao
 import mx.budget.data.local.dao.ExpenseDao
+import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
+import mx.budget.data.local.entity.SyncQueueEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.MemberSpendByCategory
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.local.result.TopExpense
 import mx.budget.data.repository.ExpenseRepository
 
+/**
+ * Implementación Room (fuente de verdad) del [ExpenseRepository].
+ *
+ * Cada escritura del ledger se persiste localmente y encola una fila en
+ * `sync_queue` dentro de la MISMA transacción, garantizando que nunca se
+ * pierda un push. El drenado hacia Firestore lo realiza el
+ * [mx.budget.data.sync.SyncManager] de forma asíncrona por conectividad.
+ */
 class ExpenseRepositoryImpl(
-    private val dao: ExpenseDao
+    private val dao: ExpenseDao,
+    private val attributionDao: ExpenseAttributionDao,
+    private val syncQueueDao: SyncQueueDao,
+    private val db: BudgetDatabase
 ) : ExpenseRepository {
 
     override fun observeWithDetails(quincenaId: String): Flow<List<ExpenseWithDetails>> =
@@ -52,20 +68,43 @@ class ExpenseRepositoryImpl(
         expense: ExpenseEntity,
         attributions: List<ExpenseAttributionEntity>
     ) {
-        dao.insert(expense)
-        // TODO: insertar atribuciones en transacción atómica
+        db.withTransaction {
+            dao.insert(expense)
+            attributionDao.deleteByExpenseId(expense.id)
+            attributionDao.insertAll(attributions)
+            enqueueSync(expense.id, "UPSERT")
+        }
     }
 
     override suspend fun updateWithAttributions(
         expense: ExpenseEntity,
         attributions: List<ExpenseAttributionEntity>
     ) {
-        dao.update(expense)
+        db.withTransaction {
+            dao.update(expense)
+            attributionDao.deleteByExpenseId(expense.id)
+            attributionDao.insertAll(attributions)
+            enqueueSync(expense.id, "UPSERT")
+        }
     }
 
     override suspend fun deleteAndRevertBalance(expenseId: String) {
-        val expense = dao.getById(expenseId) ?: return
-        dao.delete(expense)
+        db.withTransaction {
+            val expense = dao.getById(expenseId) ?: return@withTransaction
+            dao.delete(expense)
+            enqueueSync(expenseId, "DELETE")
+        }
+    }
+
+    private suspend fun enqueueSync(expenseId: String, operation: String) {
+        syncQueueDao.enqueue(
+            SyncQueueEntity(
+                entityType = "EXPENSE",
+                entityId = expenseId,
+                operation = operation,
+                createdAt = System.currentTimeMillis()
+            )
+        )
     }
 
     override suspend fun postPlannedExpense(expenseId: String) {

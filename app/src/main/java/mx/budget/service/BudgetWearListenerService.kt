@@ -43,7 +43,7 @@ class BudgetWearListenerService : WearableListenerService() {
         val database = app.database
 
         // Obtiene la quincena activa vigente
-        val activeQuincena = database.quincenaDao().getActive("default_household") ?: return
+        val activeQuincena = database.quincenaDao().getActive(app.householdId) ?: return
         
         // Creación del registro (Utilizando defaults preestablecidos para el flujo express de reloj)
         val expense = ExpenseEntity(
@@ -59,8 +59,9 @@ class BudgetWearListenerService : WearableListenerService() {
             createdAt = System.currentTimeMillis()
         )
 
-        // Se inserta atómicamente la entidad en el ledger
-        database.expenseDao().insert(expense)
+        // Se inserta vía el repositorio (Room + encolado de sync) en lugar de
+        // tocar el DAO directo, para que el push offline-first también ocurra.
+        app.expenseRepository.insertWithAttributions(expense, emptyList())
         
         // Actualiza heurísticamente la quincena actual (Actualización de proyecciones)
         val updatedActualExpenses = activeQuincena.actualExpensesMxn + amount

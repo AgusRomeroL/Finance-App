@@ -22,7 +22,8 @@ class MainActivity : ComponentActivity() {
         ViewModelProvider(this, DashboardViewModelFactory(
             app.quincenaRepository,
             app.expenseRepository,
-            app.memberRepository
+            app.memberRepository,
+            app.householdId
         ))[DashboardViewModel::class.java]
     }
 
@@ -33,7 +34,8 @@ class MainActivity : ComponentActivity() {
             app.quincenaRepository,
             app.walletRepository,
             app.memberRepository,
-            app.categoryRepository
+            app.categoryRepository,
+            app.householdId
         ))[CaptureViewModel::class.java]
     }
 
@@ -59,6 +61,7 @@ class DashboardViewModelFactory(
     private val quincenaRepository: QuincenaRepository,
     private val expenseRepository: ExpenseRepository,
     private val memberRepository: MemberRepository,
+    private val householdId: String,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -66,6 +69,7 @@ class DashboardViewModelFactory(
             quincenaRepository = quincenaRepository,
             expenseRepository = expenseRepository,
             memberRepository = memberRepository,
+            householdId = householdId,
         ) as T
     }
 }
@@ -77,6 +81,7 @@ class CaptureViewModelFactory(
     private val walletRepository: WalletRepository,
     private val memberRepository: MemberRepository,
     private val categoryRepository: CategoryRepository,
+    private val householdId: String,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -86,6 +91,7 @@ class CaptureViewModelFactory(
             walletRepository = walletRepository,
             memberRepository = memberRepository,
             categoryRepository = categoryRepository,
+            householdId = householdId,
         ) as T
     }
 }

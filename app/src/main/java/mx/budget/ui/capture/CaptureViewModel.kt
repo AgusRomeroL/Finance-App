@@ -85,7 +85,7 @@ class CaptureViewModel(
     private val walletRepository: WalletRepository,
     private val memberRepository: MemberRepository,
     private val categoryRepository: CategoryRepository,
-    private val householdId: String = "default_household"
+    private val householdId: String
 ) : ViewModel() {
 
     // ── Importe ingresado desde el numpad ──────────────────────────────────

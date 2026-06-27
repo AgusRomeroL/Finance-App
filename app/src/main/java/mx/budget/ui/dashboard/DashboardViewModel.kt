@@ -81,14 +81,14 @@ sealed class DashboardUiState {
  * @param expenseRepository   Repositorio de gastos y atribuciones.
  * @param memberRepository    Repositorio de miembros (no usado en Dashboard,
  *                            pero disponible para extensión futura).
- * @param householdId         ID del hogar activo. Provisional = "default_household".
+ * @param householdId         ID del hogar activo, resuelto dinámicamente e inyectado.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DashboardViewModel(
     private val quincenaRepository: QuincenaRepository,
     private val expenseRepository: ExpenseRepository,
     private val memberRepository: MemberRepository,
-    private val householdId: String = "default_household"
+    private val householdId: String
 ) : ViewModel() {
 
     // ── Quincena activa ───────────────────────────────────────────────────────

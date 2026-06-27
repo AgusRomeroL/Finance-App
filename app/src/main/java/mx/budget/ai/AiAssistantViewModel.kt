@@ -21,7 +21,7 @@ class AiAssistantViewModel(
     private val aiCoreManager: AiCoreManager,
     private val ledgerRagUseCase: LedgerRagUseCase,
     private val dispatcher: IntentDispatcher,
-    private val defaultHouseholdId: String = "default_household"
+    private val defaultHouseholdId: String
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AiAssistantUiState>(AiAssistantUiState.Idle)
