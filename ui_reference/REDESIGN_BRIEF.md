@@ -34,7 +34,8 @@ App Android de **presupuesto familiar quincenal** de un hogar mexicano (un solo 
 
 ## 2. Sistema de diseño a respetar (resumen; el detalle vive en DESIGN.md)
 
-- **Color base:** `primary #016e3e` (verde contable), `primary_dim #006035`. Semánticos: ingreso `#0F5A2E`, gasto/error `#BA1A1A`, warning `#8B5A00`.
+- **Color base — DINÁMICO (Material You), no fijo (decisión nueva, ver §2.1):** los roles cromáticos M3 (`primary/secondary/tertiary` + containers, superficies, `outline`) se derivan del **wallpaper/colores del usuario** como las apps de Google. El verde `#016e3e` deja de ser el primario fijo y pasa a ser la **semilla de respaldo** (cuando no hay color dinámico). Semánticos protegidos: ingreso `#0F5A2E`, gasto/error `#BA1A1A`, warning `#8B5A00`.
+- **Para los mockups:** Claude Design debe **renderizar con la paleta verde sembrada** (la de respaldo, para que se vea concreta y de marca), pero **anotar qué roles son dinámicos** (cambiarían con el wallpaper) vs fijos. No "hardcodees" el verde como única verdad; es el estado fallback.
 - **Superficies (jerarquía por capas, NO por líneas):** `surface #f9f9f9` → `surface_container_low #f3f4f4` (zonas estructurales/nav) → `surface_container #edeeee` → `surface_container_lowest #ffffff` (tarjetas de datos) → `surface_container_highest #e0e3e4` (overlays). Esta decisión de separar por capas tonales en lugar de líneas de 1 px está **alineada con la dirección oficial de M3** (surface container roles, tone-based surfaces) (F3, mío).
 - **Regla "No-Line":** prohibido bordes/divisores sólidos de 1 px. Separar con cambios tonales de superficie y espacio en blanco (gutters ≥ 24 dp; ítems de lista separados con 8–16 dp). Con No-Line, **la jerarquía visual recae enteramente en el espaciado** (F5): respétalo religiosamente.
 - **Tipografía Roboto Flex variable:** balances grandes en `display-lg` (~3.5rem) `wght 300`; títulos de sección `headline-sm` (1.5rem) `wght 600`; datos `body-lg` 1rem `wght 400`; etiquetas tipo ledger `label-md` 0.75rem `wght 700`, MAYÚSCULAS, `+0.05rem` tracking. Nota técnica: Roboto Flex **aún no forma parte del typescale M3 por defecto** (F3); úsalo selectivamente y con ejes variables solo en cifras hero y encabezados, no en body/listas.
@@ -42,6 +43,17 @@ App Android de **presupuesto familiar quincenal** de un hogar mexicano (un solo 
 - **Profundidad:** tonal layering, NO sombras Material 2. Si algo "flota", sombra ultradifusa tintada (`0 12px 40px rgba(0,0,0,0.04)`).
 - **CTAs:** gradiente 135° `primary → primary_dim`. Elementos flotantes pueden usar glassmorphism (70% opacidad + blur 24px).
 - **Layout del Fold:** "Side-Car" de navegación a la izquierda + "Bento-Box" de datos a la derecha, asimétrico, con mucho espacio negativo.
+
+### 2.1 Color dinámico (Material You) — estrategia (research F6)
+
+Decisión: la app adopta **color dinámico estilo Material You** (la paleta se adapta al wallpaper/colores del usuario), conservando marca y semántica. Reglas para el diseño:
+
+- **Roles M3 estándar → dinámicos.** `primary/secondary/tertiary`, sus `container`, superficies y `outline` provienen del wallpaper (`dynamicLightColorScheme`/`dynamicDarkColorScheme` en Compose). En el mockup, muéstralos con la semilla verde, pero entiende que en runtime cambian por usuario.
+- **Respaldo (Android 11− o toggle desactivado) → esquema estático sembrado del verde `#016e3e`** (Material Theme Builder / MaterialKolor `TonalSpot`). Un **toggle `dynamicColor`** persistido (DataStore), como las apps de Google.
+- **Semánticos financieros → FUERA del `ColorScheme`, estables.** Ingreso/gasto/alerta no son roles M3; van como colores custom (p.ej. `FinanceColors` vía `CompositionLocal`). En modo dinámico se **armonizan** hacia el primary (rota el hue en HCT sin sacar al color de su familia: rojo sigue rojo, verde sigue verde), **con tope de rotación bajo** o sin armonizar el par crítico, porque un wallpaper de hue lejano podría **acercar rojo y verde** y debilitar el contraste que carga el significado.
+- **Redundancia no-cromática OBLIGATORIA** (daltonismo rojo-verde): el significado financiero nunca depende solo del color → signo `+/−`, iconografía (flecha arriba/abajo), posición/columna y etiqueta textual. Esto **refuerza** C11 (estado por forma+posición, no solo color).
+- **Contraste:** respetar niveles Standard/Medium/High del usuario (Android 14+); las paletas tonales garantizan separación sobre cualquier wallpaper. Diseña los componentes para que toleren un primary de cualquier hue sin perder legibilidad de cifras.
+- **Implicación para el mockup:** entrega una variante "marca" (verde sembrado) y, si es viable, una segunda con un primary distinto (p.ej. azul/morado) para **probar que el layout y la semántica aguantan** un wallpaper arbitrario.
 
 ---
 
