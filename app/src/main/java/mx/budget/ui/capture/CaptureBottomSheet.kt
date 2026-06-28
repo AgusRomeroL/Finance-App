@@ -158,10 +158,13 @@ fun CaptureBottomSheet(
             ) {
                 CaptureHeader(onClose = { viewModel?.onDismiss(); onDismiss() })
 
-                // Contenido scrollable
+                // Contenido scrollable — weight(1f) (fill) acota el alto del scroll
+                // exactamente al espacio entre header y footer, alineando pintura y
+                // área táctil (con fill=false el scroll medía su alto intrínseco y
+                // creaba una zona muerta de touch en la parte baja del sheet).
                 Column(
                     modifier = Modifier
-                        .weight(1f, fill = false)
+                        .weight(1f)
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 24.dp)
                 ) {
