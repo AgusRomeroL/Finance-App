@@ -757,7 +757,7 @@ private fun DashboardHeader(
                     fontSize = if (expanded) 36.sp else 26.sp
                 ),
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
+                maxLines = 2, overflow = TextOverflow.Ellipsis
             )
         }
         Spacer(Modifier.width(10.dp))
