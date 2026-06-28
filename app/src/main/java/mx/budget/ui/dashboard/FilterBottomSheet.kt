@@ -33,12 +33,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import mx.budget.ai.proactive.CategoryEmojiFallback
 import mx.budget.data.local.entity.CategoryEntity
-import mx.budget.ui.components.MonochromeEmoji
 
 /**
  * Bottom sheet de selección de filtros (estilo Pixel "Filter screenshots"): lista
@@ -52,9 +51,7 @@ fun FilterBottomSheet(
     selected: Set<String>,
     onSave: (Set<String>) -> Unit,
     onDismiss: () -> Unit,
-    emojiFor: (CategoryEntity) -> String = {
-        it.suggestedEmoji?.takeIf { e -> e.isNotBlank() } ?: CategoryEmojiFallback.forCode(it.code)
-    }
+    iconFor: (CategoryEntity) -> ImageVector = { iconForCategory(it.code) }
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var local by remember { mutableStateOf(selected) }
@@ -90,7 +87,7 @@ fun FilterBottomSheet(
                 groups.forEach { group ->
                     val checked = group.id in local
                     FilterSheetRow(
-                        emoji = emojiFor(group),
+                        icon = iconFor(group),
                         label = group.displayName,
                         checked = checked,
                         onToggle = {
@@ -138,7 +135,7 @@ fun FilterBottomSheet(
 }
 
 @Composable
-private fun FilterSheetRow(emoji: String, label: String, checked: Boolean, onToggle: () -> Unit) {
+private fun FilterSheetRow(icon: ImageVector, label: String, checked: Boolean, onToggle: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -151,7 +148,11 @@ private fun FilterSheetRow(emoji: String, label: String, checked: Boolean, onTog
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MonochromeEmoji(emoji = emoji)
+        Icon(
+            icon, null,
+            tint = if (checked) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp)
+        )
         Spacer(Modifier.width(14.dp))
         Text(
             label,

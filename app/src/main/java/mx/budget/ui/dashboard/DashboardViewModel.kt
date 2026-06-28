@@ -9,14 +9,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import mx.budget.ai.proactive.EmojiSuggester
 import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.ai.proactive.ProactiveSuggestionEngine
 import mx.budget.data.capture.BankCaptureManager
@@ -116,18 +114,8 @@ class DashboardViewModel(
     private val expenseDao: ExpenseDao,
     private val pendingBankCaptureDao: PendingBankCaptureDao,
     private val bankCaptureManager: BankCaptureManager,
-    private val categoryDao: CategoryDao,
-    private val emojiSuggester: EmojiSuggester
+    private val categoryDao: CategoryDao
 ) : ViewModel() {
-
-    init {
-        // Calcula (lazy, una vez) el emoji monocromo de cada grupo para los pills.
-        viewModelScope.launch {
-            runCatching {
-                emojiSuggester.ensureEmojis(categoryDao.observeRootCategories(householdId).first())
-            }
-        }
-    }
 
     // ── Capturas bancarias pendientes (Feature D, §F.6) ─────────────────────────
 

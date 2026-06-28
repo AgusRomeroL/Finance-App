@@ -777,10 +777,8 @@ private fun DashboardHeader(
             if (pendingReviewCount > 0) {
                 ReviewBadge(count = pendingReviewCount, onClick = onOpenReview, compact = !expanded)
             }
-            if (expanded) {
-                HeaderIconButton(Icons.Filled.Search, "Buscar")
-                HeaderIconButton(Icons.Filled.Tune, "Filtros")
-            }
+            // Los íconos de búsqueda/filtros del header se quitaron: la búsqueda vive en
+            // la barra inferior y los filtros en su propia sección de pills.
         }
     }
 }

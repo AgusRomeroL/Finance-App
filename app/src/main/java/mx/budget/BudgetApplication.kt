@@ -111,13 +111,6 @@ class BudgetApplication : Application() {
     lateinit var bankCaptureManager: BankCaptureManager
         private set
 
-    /**
-     * Sugeridor de emoji por grupo de categoría (filtros del dashboard). Usa IA
-     * on-device (AICore) con fallback determinista; cachea en `category.suggested_emoji`.
-     */
-    lateinit var emojiSuggester: mx.budget.ai.proactive.EmojiSuggester
-        private set
-
     /** Valor inicial del toggle de color dinámico, leído una vez al arrancar. */
     var initialDynamicColor: Boolean = true
         private set
@@ -202,12 +195,6 @@ class BudgetApplication : Application() {
             expenseRepository = expenseRepository,
             engine = retroAttributionEngine,
             householdId = householdId,
-        )
-
-        // Sugeridor de emoji de filtros (IA on-device con fallback determinista).
-        emojiSuggester = mx.budget.ai.proactive.EmojiSuggester(
-            aiCoreManager = mx.budget.ai.service.AiCoreManager(this),
-            categoryDao = database.categoryDao()
         )
 
         // Lado nube (Firestore) — usado únicamente por el SyncManager para push.
