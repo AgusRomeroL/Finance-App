@@ -13,10 +13,14 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.ai.proactive.ProactiveSuggestionEngine
+import mx.budget.data.capture.BankCaptureManager
 import mx.budget.data.local.dao.AttributionReviewDao
 import mx.budget.data.local.dao.ExpenseDao
+import mx.budget.data.local.dao.PendingBankCaptureDao
+import mx.budget.data.local.entity.PendingBankCaptureEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
@@ -101,8 +105,28 @@ class DashboardViewModel(
     private val memberRepository: MemberRepository,
     private val householdId: String,
     private val attributionReviewDao: AttributionReviewDao,
-    private val expenseDao: ExpenseDao
+    private val expenseDao: ExpenseDao,
+    private val pendingBankCaptureDao: PendingBankCaptureDao,
+    private val bankCaptureManager: BankCaptureManager
 ) : ViewModel() {
+
+    // ── Capturas bancarias pendientes (Feature D, §F.6) ─────────────────────────
+
+    /** Propuestas de gasto detectadas en notificaciones bancarias, por confirmar. */
+    val pendingBankCaptures: StateFlow<List<PendingBankCaptureEntity>> = pendingBankCaptureDao
+        .observePending()
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Confirma la captura → inserta el gasto POSTED con atribución inferida. */
+    fun confirmBankCapture(id: String) {
+        viewModelScope.launch { bankCaptureManager.confirm(id) }
+    }
+
+    /** Descarta la captura (señal negativa implícita). */
+    fun dismissBankCapture(id: String) {
+        viewModelScope.launch { bankCaptureManager.dismiss(id) }
+    }
 
     /**
      * Conteo de atribuciones pendientes de revisar (Feature B). Alimenta el badge

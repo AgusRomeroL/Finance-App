@@ -27,6 +27,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -78,6 +80,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.ai.proactive.ProactiveSuggestion
+import mx.budget.data.local.entity.PendingBankCaptureEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
@@ -201,6 +204,7 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsState()
     val pendingReviewCount by viewModel.pendingReviewCount.collectAsState()
     val proactiveSuggestion by viewModel.proactiveSuggestion.collectAsState()
+    val bankCaptures by viewModel.pendingBankCaptures.collectAsState()
     val isExpanded = windowWidthDp >= 600.dp
     var showCapture by remember { mutableStateOf(false) }
 
@@ -236,7 +240,10 @@ fun DashboardScreen(
             quincenaNav = quincenaNav,
             proactiveSuggestion = proactiveSuggestion,
             onRegisterSuggestion = onRegisterSuggestion,
-            onDismissSuggestion = viewModel::dismissProactiveSuggestion
+            onDismissSuggestion = viewModel::dismissProactiveSuggestion,
+            bankCaptures = bankCaptures,
+            onConfirmCapture = viewModel::confirmBankCapture,
+            onDismissCapture = viewModel::dismissBankCapture
         )
     } else {
         CompactDashboard(
@@ -249,7 +256,10 @@ fun DashboardScreen(
             quincenaNav = quincenaNav,
             proactiveSuggestion = proactiveSuggestion,
             onRegisterSuggestion = onRegisterSuggestion,
-            onDismissSuggestion = viewModel::dismissProactiveSuggestion
+            onDismissSuggestion = viewModel::dismissProactiveSuggestion,
+            bankCaptures = bankCaptures,
+            onConfirmCapture = viewModel::confirmBankCapture,
+            onDismissCapture = viewModel::dismissBankCapture
         )
     }
 }
@@ -276,7 +286,10 @@ private fun ExpandedDashboard(
     quincenaNav: QuincenaNav,
     proactiveSuggestion: ProactiveSuggestion?,
     onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
-    onDismissSuggestion: () -> Unit
+    onDismissSuggestion: () -> Unit,
+    bankCaptures: List<PendingBankCaptureEntity>,
+    onConfirmCapture: (String) -> Unit,
+    onDismissCapture: (String) -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -306,12 +319,15 @@ private fun ExpandedDashboard(
                             viewingActive = state.viewingActive,
                             quincenaNav = quincenaNav
                         )
-                        if (proactiveSuggestion != null && state.viewingActive) {
+                        if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestion != null)) {
                             Spacer(Modifier.height(18.dp))
-                            ProactiveSuggestionChip(
-                                suggestion = proactiveSuggestion,
-                                onRegister = { onRegisterSuggestion(proactiveSuggestion) },
-                                onDismiss = onDismissSuggestion
+                            SmartSuggestionsCarousel(
+                                bankCaptures = bankCaptures,
+                                proactiveSuggestion = proactiveSuggestion,
+                                onConfirmCapture = onConfirmCapture,
+                                onDismissCapture = onDismissCapture,
+                                onRegisterSuggestion = onRegisterSuggestion,
+                                onDismissSuggestion = onDismissSuggestion
                             )
                         }
                         Spacer(Modifier.height(22.dp))
@@ -396,7 +412,10 @@ private fun CompactDashboard(
     quincenaNav: QuincenaNav,
     proactiveSuggestion: ProactiveSuggestion?,
     onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
-    onDismissSuggestion: () -> Unit
+    onDismissSuggestion: () -> Unit,
+    bankCaptures: List<PendingBankCaptureEntity>,
+    onConfirmCapture: (String) -> Unit,
+    onDismissCapture: (String) -> Unit
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -424,12 +443,15 @@ private fun CompactDashboard(
                                 quincenaNav = quincenaNav
                             )
                         }
-                        if (proactiveSuggestion != null && state.viewingActive) {
+                        if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestion != null)) {
                             item {
-                                ProactiveSuggestionChip(
-                                    suggestion = proactiveSuggestion,
-                                    onRegister = { onRegisterSuggestion(proactiveSuggestion) },
-                                    onDismiss = onDismissSuggestion
+                                SmartSuggestionsCarousel(
+                                    bankCaptures = bankCaptures,
+                                    proactiveSuggestion = proactiveSuggestion,
+                                    onConfirmCapture = onConfirmCapture,
+                                    onDismissCapture = onDismissCapture,
+                                    onRegisterSuggestion = onRegisterSuggestion,
+                                    onDismissSuggestion = onDismissSuggestion
                                 )
                             }
                         }
@@ -943,6 +965,173 @@ private fun QuincenaRhythm(progress: QuincenaProgress) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Sugerencias inteligentes — carrusel (Features C + D)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Sección única de "sugerencias inteligentes" que agrupa las capturas bancarias
+ * (Feature D) y la sugerencia proactiva (Feature C) en **un solo espacio vertical**
+ * que se desliza horizontalmente, imitando el carrusel de Media Controls de Android:
+ * con una sola tarjeta ocupa todo el ancho; con dos o más, la siguiente asoma como
+ * un "pilar" a la derecha (`contentPadding` + `pageSpacing`) y aparecen puntos.
+ *
+ * Las tarjetas comparten altura (subtítulo a 2 líneas fijas) para que el slot no
+ * salte al deslizar. Orden: capturas bancarias primero (más accionables), luego la
+ * sugerencia proactiva.
+ */
+@Composable
+private fun SmartSuggestionsCarousel(
+    bankCaptures: List<PendingBankCaptureEntity>,
+    proactiveSuggestion: ProactiveSuggestion?,
+    onConfirmCapture: (String) -> Unit,
+    onDismissCapture: (String) -> Unit,
+    onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
+    onDismissSuggestion: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val pages: List<@Composable () -> Unit> = buildList {
+        bankCaptures.forEach { capture ->
+            add {
+                BankCaptureChip(
+                    capture = capture,
+                    onConfirm = { onConfirmCapture(capture.id) },
+                    onDismiss = { onDismissCapture(capture.id) }
+                )
+            }
+        }
+        proactiveSuggestion?.let { suggestion ->
+            add {
+                ProactiveSuggestionChip(
+                    suggestion = suggestion,
+                    onRegister = { onRegisterSuggestion(suggestion) },
+                    onDismiss = onDismissSuggestion
+                )
+            }
+        }
+    }
+    if (pages.isEmpty()) return
+
+    // Una sola tarjeta: ancho completo, sin carrusel.
+    if (pages.size == 1) {
+        Box(modifier.fillMaxWidth()) { pages.first().invoke() }
+        return
+    }
+
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    Column(modifier.fillMaxWidth()) {
+        HorizontalPager(
+            state = pagerState,
+            // El padding derecho reduce el ancho de la página actual y deja asomar
+            // la siguiente como pilar; el spacing es el hueco al deslizar.
+            contentPadding = PaddingValues(end = 26.dp),
+            pageSpacing = 12.dp
+        ) { page ->
+            pages[page].invoke()
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            repeat(pages.size) { i ->
+                val selected = pagerState.currentPage == i
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 3.dp)
+                        .size(if (selected) 8.dp else 6.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        )
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Captura desde notificación bancaria (Feature D, §F.6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Banner de una captura bancaria detectada: "BBVA · $480 en OXXO · ¿Registrar?".
+ * Propose-then-confirm: [Registrar] inserta el gasto con atribución inferida;
+ * [Descartar] lo ignora. Redundancia color+texto+icono; vive en la app.
+ */
+@Composable
+private fun BankCaptureChip(
+    capture: PendingBankCaptureEntity,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(36.dp).clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Filled.AccountBalanceWallet, "Cargo bancario",
+                    tint = MaterialTheme.colorScheme.onTertiary, modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Eyebrow("${capture.bankName} · cargo detectado", color = MaterialTheme.colorScheme.onTertiaryContainer, maxLines = 1)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "${capture.amountMxn.toMxn()} en ${capture.merchant}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "¿Registrar este gasto?",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.78f),
+                    minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                "Registrar",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable(onClick = onConfirm)
+                    .padding(horizontal = 20.dp, vertical = 9.dp)
+            )
+            Text(
+                "Descartar",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable(onClick = onDismiss)
+                    .padding(horizontal = 16.dp, vertical = 9.dp)
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Sugerencia proactiva (Feature C, §F.5)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -992,7 +1181,7 @@ private fun ProactiveSuggestionChip(
                     suggestion.reason,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f),
-                    maxLines = 2, overflow = TextOverflow.Ellipsis
+                    minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis
                 )
             }
             Box(

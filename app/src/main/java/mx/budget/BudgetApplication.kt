@@ -11,8 +11,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import mx.budget.ai.proactive.BankNotificationParser
+import mx.budget.ai.proactive.BankTemplates
 import mx.budget.ai.proactive.ConceptCanonicalizer
 import mx.budget.ai.proactive.RetroAttributionEngine
+import mx.budget.data.capture.BankCaptureManager
 import mx.budget.data.local.BudgetDatabase
 import mx.budget.data.work.CanonicalizeConceptsWorker
 import mx.budget.data.work.RetroAttributionWorker
@@ -94,6 +97,20 @@ class BudgetApplication : Application() {
     lateinit var retroAttributionEngine: RetroAttributionEngine
         private set
 
+    /**
+     * Parser de notificaciones bancarias (Feature D, §F.6). `null` si el asset
+     * `bank_templates.json` no se pudo cargar (la feature queda inerte, no crashea).
+     */
+    var bankNotificationParser: BankNotificationParser? = null
+        private set
+
+    /**
+     * Orquestador de la captura bancaria (ingest/confirm/dismiss). Lo comparten el
+     * listener, la notificación propia y el dashboard.
+     */
+    lateinit var bankCaptureManager: BankCaptureManager
+        private set
+
     /** Valor inicial del toggle de color dinámico, leído una vez al arrancar. */
     var initialDynamicColor: Boolean = true
         private set
@@ -110,7 +127,11 @@ class BudgetApplication : Application() {
             "budget.db"
         )
             .createFromAsset("budget_database.db")
-            .addMigrations(BudgetDatabase.MIGRATION_1_2, BudgetDatabase.MIGRATION_2_3)
+            .addMigrations(
+                BudgetDatabase.MIGRATION_1_2,
+                BudgetDatabase.MIGRATION_2_3,
+                BudgetDatabase.MIGRATION_3_4
+            )
             .build()
 
         // Resolución del household activo (un solo household por instalación).
@@ -153,6 +174,26 @@ class BudgetApplication : Application() {
         retroAttributionEngine = RetroAttributionEngine(
             attributionDao = attributionDao,
             canonicalizer = ConceptCanonicalizer(activeMembers)
+        )
+
+        // Captura desde notificaciones bancarias (Feature D, §F.6). El parser lee la
+        // allowlist/plantillas del asset; si falla, queda null y la feature se desactiva.
+        bankNotificationParser = runCatching {
+            val json = assets.open("ai/bank_templates.json").bufferedReader().use { it.readText() }
+            BankNotificationParser(BankTemplates.fromJson(json))
+        }.getOrNull()
+        BankCaptureManager.ensureChannel(this)
+        bankCaptureManager = BankCaptureManager(
+            context = this,
+            pendingDao = database.pendingBankCaptureDao(),
+            paymentMethodDao = database.paymentMethodDao(),
+            categoryDao = database.categoryDao(),
+            expenseDao = expenseDao,
+            memberDao = database.memberDao(),
+            quincenaRepository = quincenaRepository,
+            expenseRepository = expenseRepository,
+            engine = retroAttributionEngine,
+            householdId = householdId,
         )
 
         // Lado nube (Firestore) — usado únicamente por el SyncManager para push.

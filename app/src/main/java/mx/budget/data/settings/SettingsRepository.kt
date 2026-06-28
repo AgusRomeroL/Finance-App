@@ -22,6 +22,7 @@ class SettingsRepository(private val context: Context) {
 
     private val dynamicColorKey = booleanPreferencesKey("dynamic_color")
     private val retroLabelingDoneKey = booleanPreferencesKey("retro_labeling_done")
+    private val bankCaptureEnabledKey = booleanPreferencesKey("bank_capture_enabled")
 
     /** Flujo del toggle de color dinámico. Default `true` (Material You). */
     val dynamicColor: Flow<Boolean> = context.dataStore.data
@@ -41,5 +42,17 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setRetroLabelingDone(done: Boolean) {
         context.dataStore.edit { prefs -> prefs[retroLabelingDoneKey] = done }
+    }
+
+    /**
+     * Opt-in de la **captura desde notificaciones bancarias** (Feature D, §F.6).
+     * Default `false`: aunque el SO conceda acceso a notificaciones, el listener no
+     * procesa nada hasta que el usuario activa esto explícitamente en Perfil.
+     */
+    val bankCaptureEnabled: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[bankCaptureEnabledKey] ?: false }
+
+    suspend fun setBankCaptureEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[bankCaptureEnabledKey] = enabled }
     }
 }

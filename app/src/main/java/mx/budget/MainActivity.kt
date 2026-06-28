@@ -10,6 +10,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import kotlinx.coroutines.launch
 import mx.budget.ai.proactive.RetroAttributionEngine
+import mx.budget.data.capture.BankCaptureManager
+import mx.budget.data.local.dao.PendingBankCaptureDao
 import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
@@ -33,7 +35,9 @@ class MainActivity : ComponentActivity() {
             app.memberRepository,
             app.householdId,
             app.database.attributionReviewDao(),
-            app.database.expenseDao()
+            app.database.expenseDao(),
+            app.database.pendingBankCaptureDao(),
+            app.bankCaptureManager
         ))[DashboardViewModel::class.java]
     }
 
@@ -73,6 +77,7 @@ class MainActivity : ComponentActivity() {
             // default; el verde sembrado #016E3E es el fallback (toggle off).
             // Valor inicial leído síncrono al arrancar → sin parpadeo de tema.
             val dynamicColor by settings.dynamicColor.collectAsState(initial = app.initialDynamicColor)
+            val bankCaptureEnabled by settings.bankCaptureEnabled.collectAsState(initial = false)
             val scope = rememberCoroutineScope()
             BudgetAppTheme(dynamicColor = dynamicColor) {
                 BudgetNavGraph(
@@ -82,7 +87,12 @@ class MainActivity : ComponentActivity() {
                     windowWidthDp = windowWidthDp,
                     dynamicColor = dynamicColor,
                     onDynamicColorChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } },
-                    onRenormalize = { app.enqueueRetroLabeling(replace = true) }
+                    onRenormalize = { app.enqueueRetroLabeling(replace = true) },
+                    bankCaptureEnabled = bankCaptureEnabled,
+                    onBankCaptureToggle = { enabled -> scope.launch { settings.setBankCaptureEnabled(enabled) } },
+                    onGrantNotificationAccess = {
+                        startActivity(android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+                    }
                 )
             }
         }
@@ -97,6 +107,8 @@ class DashboardViewModelFactory(
     private val householdId: String,
     private val attributionReviewDao: AttributionReviewDao,
     private val expenseDao: ExpenseDao,
+    private val pendingBankCaptureDao: PendingBankCaptureDao,
+    private val bankCaptureManager: BankCaptureManager,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -107,6 +119,8 @@ class DashboardViewModelFactory(
             householdId = householdId,
             attributionReviewDao = attributionReviewDao,
             expenseDao = expenseDao,
+            pendingBankCaptureDao = pendingBankCaptureDao,
+            bankCaptureManager = bankCaptureManager,
         ) as T
     }
 }

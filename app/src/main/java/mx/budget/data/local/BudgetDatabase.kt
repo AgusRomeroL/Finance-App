@@ -13,6 +13,7 @@ import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.HouseholdDao
 import mx.budget.data.local.dao.MemberDao
 import mx.budget.data.local.dao.PaymentMethodDao
+import mx.budget.data.local.dao.PendingBankCaptureDao
 import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.entity.AttributionReviewEntity
@@ -25,6 +26,7 @@ import mx.budget.data.local.entity.InstallmentPlanEntity
 import mx.budget.data.local.entity.LoanEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.data.local.entity.PendingBankCaptureEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
 import mx.budget.data.local.entity.SavingsGoalEntity
@@ -55,9 +57,10 @@ import mx.budget.data.local.entity.SyncQueueEntity
         SavingsGoalEntity::class,
         IncomeSourceEntity::class,
         SyncQueueEntity::class,
-        AttributionReviewEntity::class
+        AttributionReviewEntity::class,
+        PendingBankCaptureEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -80,6 +83,8 @@ abstract class BudgetDatabase : RoomDatabase() {
     abstract fun householdDao(): HouseholdDao
 
     abstract fun attributionReviewDao(): AttributionReviewDao
+
+    abstract fun pendingBankCaptureDao(): PendingBankCaptureDao
 
     companion object {
         /**
@@ -118,6 +123,21 @@ abstract class BudgetDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `attribution_review` (`id` TEXT NOT NULL, `expense_id` TEXT NOT NULL, `role` TEXT NOT NULL, `suggested_json` TEXT NOT NULL, `confidence` REAL NOT NULL, `sample_size` INTEGER NOT NULL, `concept_canonical` TEXT, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`expense_id`) REFERENCES `expense`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_attribution_review_status` ON `attribution_review` (`status`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_attribution_review_expense_id` ON `attribution_review` (`expense_id`)")
+            }
+        }
+
+        /**
+         * v3 → v4: captura desde notificaciones bancarias (Apéndice F.6, Feature D).
+         *
+         * Crea la tabla LOCAL-ONLY `pending_bank_capture` (cola de propuestas) + índice.
+         * El SQL se copió LITERAL del `createSql` que KSP genera en `app/schemas/4.json`;
+         * cualquier divergencia rompe el identityHash. Sin FK: la captura existe antes
+         * que el gasto.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `pending_bank_capture` (`id` TEXT NOT NULL, `bank_id` TEXT NOT NULL, `bank_name` TEXT NOT NULL, `bank_package` TEXT NOT NULL, `amount_mxn` REAL NOT NULL, `merchant` TEXT NOT NULL, `last4` TEXT, `occurred_at` INTEGER NOT NULL, `suggested_wallet_id` TEXT, `suggested_category_id` TEXT, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_pending_bank_capture_status` ON `pending_bank_capture` (`status`)")
             }
         }
     }

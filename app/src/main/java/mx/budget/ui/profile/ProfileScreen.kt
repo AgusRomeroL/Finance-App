@@ -19,7 +19,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Rule
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
@@ -52,7 +54,10 @@ fun ProfileScreen(
     onBack: () -> Unit,
     pendingReviewCount: Int = 0,
     onOpenReview: () -> Unit = {},
-    onRenormalize: () -> Unit = {}
+    onRenormalize: () -> Unit = {},
+    bankCaptureEnabled: Boolean = false,
+    onBankCaptureToggle: (Boolean) -> Unit = {},
+    onGrantNotificationAccess: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -184,6 +189,72 @@ fun ProfileScreen(
                     renormalized = true
                 }
             )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Card de automatización — captura desde notificaciones bancarias (Feature D)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(22.dp)
+        ) {
+            Text(
+                "AUTOMATIZACIÓN",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 1.6.sp
+            )
+            Spacer(Modifier.height(14.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable { onBankCaptureToggle(!bankCaptureEnabled) }
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Notifications, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Captura desde notificaciones",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "Detecta cargos en notificaciones de tus bancos y propone el gasto (lo confirmas tú). Todo on-device.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Switch(
+                    checked = bankCaptureEnabled,
+                    onCheckedChange = onBankCaptureToggle,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            }
+            if (bankCaptureEnabled) {
+                Spacer(Modifier.height(8.dp))
+                SettingRow(
+                    icon = Icons.AutoMirrored.Filled.OpenInNew,
+                    title = "Conceder acceso a notificaciones",
+                    subtitle = "Ábrelo en Ajustes del sistema y activa \"Presupuesto Familiar\"",
+                    trailingBadge = null,
+                    onClick = onGrantNotificationAccess
+                )
+            }
         }
 
         Spacer(Modifier.height(20.dp))

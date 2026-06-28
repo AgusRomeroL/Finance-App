@@ -56,7 +56,10 @@ fun BudgetNavGraph(
     windowWidthDp: Int = 360,
     dynamicColor: Boolean = true,
     onDynamicColorChange: (Boolean) -> Unit = {},
-    onRenormalize: () -> Unit = {}
+    onRenormalize: () -> Unit = {},
+    bankCaptureEnabled: Boolean = false,
+    onBankCaptureToggle: (Boolean) -> Unit = {},
+    onGrantNotificationAccess: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -117,7 +120,10 @@ fun BudgetNavGraph(
                 onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
                 pendingReviewCount = pendingReviewCount,
                 onOpenReview = { onNavigate(BudgetDestinations.ATTRIBUTION_REVIEW) },
-                onRenormalize = onRenormalize
+                onRenormalize = onRenormalize,
+                bankCaptureEnabled = bankCaptureEnabled,
+                onBankCaptureToggle = onBankCaptureToggle,
+                onGrantNotificationAccess = onGrantNotificationAccess
             )
         }
     }

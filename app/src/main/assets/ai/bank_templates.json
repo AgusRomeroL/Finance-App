@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "_comment": "Allowlist + plantillas de parsing de notificaciones bancarias (Feature D, ADENDA_IA_PROACTIVA §F.6). Los package names se verificaron en Play Store (jun-2026); pueden cambiar entre versiones de las apps. Cada banco hereda los patrones de 'default' salvo que defina los suyos. Parsing 100% on-device; cualquier notificación de un package fuera de esta lista se ignora y NUNCA se persiste.",
+  "default": {
+    "ignoreIfContains": [
+      "saldo", "tu saldo", "corte", "fecha l", "fecha de pago", "promoci", "puntos",
+      "codigo", "código", "otp", "token", "clave", "nip",
+      "deposito", "depósito", "abono", "recibido", "recibiste", "te depositaron",
+      "spei recibido", "transferencia recibida", "bienvenid", "estado de cuenta",
+      "factura", "domiciliaci", "recordatorio", "vencimiento"
+    ],
+    "amount": [
+      "por\\s+\\$?\\s?([\\d.,]+)",
+      "cargo\\s+(?:por\\s+)?\\$?\\s?([\\d.,]+)",
+      "compra\\s+(?:por\\s+)?\\$?\\s?([\\d.,]+)",
+      "\\$\\s?([\\d.,]+)\\s*(?:MXN|mxn)?",
+      "MXN\\s?\\$?\\s?([\\d.,]+)"
+    ],
+    "merchant": [
+      "en\\s+([\\p{L}0-9 .,&*'/\\-]{2,40}?)(?:\\s+por|\\s+con|\\s+el|\\s+por\\s|\\.|,|;|$)",
+      "comercio:?\\s+([\\p{L}0-9 .,&*'/\\-]{2,40})",
+      "establecimiento:?\\s+([\\p{L}0-9 .,&*'/\\-]{2,40})"
+    ],
+    "last4": [
+      "(?:terminaci[oó]n|termina(?:ci[oó]n)?\\s+en|final(?:iza)?(?:\\s+en)?|que termina en)\\s*[:#]?\\s*(\\d{4})",
+      "\\*{2,}\\s*(\\d{4})",
+      "(?:t\\.?\\s?d\\.?|t\\.?\\s?c\\.?|tarjeta)\\D{0,10}(\\d{4})"
+    ]
+  },
+  "banks": [
+    { "id": "bbva",        "name": "BBVA",         "packages": ["com.bancomer.mbanking"],                                  "issuerMatch": ["BBVA", "Bancomer"] },
+    { "id": "banamex",     "name": "Banamex",      "packages": ["com.citibanamex.banamexmobile"],                          "issuerMatch": ["Banamex", "Citibanamex"] },
+    { "id": "santander",   "name": "Santander",    "packages": ["mx.bancosantander.supermovil"],                           "issuerMatch": ["Santander"] },
+    { "id": "banorte",     "name": "Banorte",      "packages": ["org.microemu.android.model.common.VTUserApplicationBNRTMB"], "issuerMatch": ["Banorte"] },
+    { "id": "hsbc",        "name": "HSBC",         "packages": ["mx.hsbc.hsbcmexico"],                                     "issuerMatch": ["HSBC"] },
+    { "id": "scotiabank",  "name": "Scotiabank",   "packages": ["com.scotiabank.plato.digitaltoken"],                      "issuerMatch": ["Scotia", "Scotiabank"] },
+    { "id": "azteca",      "name": "Banco Azteca", "packages": ["mx.com.bancoazteca.bazdigitalmovil"],                     "issuerMatch": ["Azteca", "BAZ"] },
+    { "id": "nu",          "name": "Nu",           "packages": ["com.nu.production"],                                      "issuerMatch": ["Nu", "Nubank"] },
+    { "id": "klar",        "name": "Klar",         "packages": ["mx.klar.app"],                                            "issuerMatch": ["Klar"] },
+    { "id": "stori",       "name": "Stori",        "packages": ["ai.powerup.stori"],                                       "issuerMatch": ["Stori"] },
+    { "id": "mercadopago", "name": "Mercado Pago", "packages": ["com.mercadopago.wallet"],                                 "issuerMatch": ["Mercado Pago", "MercadoPago"] },
+    { "id": "spin",        "name": "Spin by OXXO", "packages": ["com.pagopopmobile"],                                      "issuerMatch": ["Spin", "OXXO"] },
+    { "id": "coppel",      "name": "Coppel",       "packages": ["com.coppel.coppelapp"],                                   "issuerMatch": ["Coppel"] },
+    { "id": "didi",        "name": "DiDi",         "packages": ["com.didiglobal.passenger", "com.didiglobal.cashloan"],    "issuerMatch": ["DiDi"] }
+  ]
+}

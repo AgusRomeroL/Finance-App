@@ -42,6 +42,10 @@ interface CategoryDao {
     @Query("SELECT * FROM category WHERE id = :id")
     suspend fun getById(id: String): CategoryEntity?
 
+    /** Todas las categorías del hogar (resolución de categoría en captura bancaria). */
+    @Query("SELECT * FROM category WHERE household_id = :householdId ORDER BY sort_order ASC")
+    suspend fun getAll(householdId: String): List<CategoryEntity>
+
     @Query("SELECT * FROM category WHERE household_id = :householdId AND code = :code")
     suspend fun getByCode(householdId: String, code: String): CategoryEntity?
 
