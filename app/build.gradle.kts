@@ -29,6 +29,9 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        // ML Kit GenAI (genai-prompt beta) viene compilado con Kotlin 2.2 metadata;
+        // el proyecto está en 2.0.21. Permite consumir su API sin subir el toolchain.
+        freeCompilerArgs += "-Xskip-metadata-version-check"
     }
 }
 
@@ -66,8 +69,10 @@ dependencies {
     // Wear OS Data Layer
     implementation("com.google.android.gms:play-services-wearable:18.1.0")
 
-    // AICore
-    implementation("com.google.ai.edge.aicore:aicore:0.0.1-exp01")
+    // Gemini Nano on-device: ML Kit GenAI Prompt API (vía GA, sin allowlist por-app;
+    // maneja descarga del modelo con checkStatus()/download()). Reemplaza al SDK
+    // experimental `aicore` (que daba PERMISSION_DENIED en el canal de terceros).
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
 
     // Compose Material 3 & Essentials
     implementation("androidx.compose.material3:material3")
