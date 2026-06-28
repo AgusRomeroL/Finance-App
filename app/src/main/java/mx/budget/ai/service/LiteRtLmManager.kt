@@ -55,15 +55,18 @@ class LiteRtLmManager(
                     val e = Engine(
                         EngineConfig(
                             modelPath = modelFile().absolutePath,
-                            // GPU para que un modelo de ~GB sea usable; si falla en
-                            // este dispositivo, el runCatching marca initFailed → SQL.
-                            backend = Backend.GPU(),
+                            // CPU: el más compatible (GPU daba INTERNAL al compilar el
+                            // modelo). Más lento pero la inferencia corre en background.
+                            backend = Backend.CPU(),
                             cacheDir = context.cacheDir.path,
                         )
                     )
                     e.initialize()
                     engine = e
-                }.onFailure { initFailed = true }
+                }.onFailure {
+                    initFailed = true
+                    android.util.Log.w("LiteRtLmManager", "init del engine Gemma falló → fallback SQL", it)
+                }
             }
         }
         return if (engine != null) LlmReadiness.Available else LlmReadiness.Pending("Cargando modelo Gemma")
