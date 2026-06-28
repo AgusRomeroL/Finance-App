@@ -15,6 +15,7 @@ import mx.budget.data.local.dao.MemberDao
 import mx.budget.data.local.dao.PaymentMethodDao
 import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.local.dao.QuincenaDao
+import mx.budget.data.local.dao.RecurrenceTemplateDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.entity.AttributionReviewEntity
 import mx.budget.data.local.entity.CategoryEntity
@@ -85,6 +86,8 @@ abstract class BudgetDatabase : RoomDatabase() {
     abstract fun attributionReviewDao(): AttributionReviewDao
 
     abstract fun pendingCaptureDao(): PendingCaptureDao
+
+    abstract fun recurrenceTemplateDao(): RecurrenceTemplateDao
 
     companion object {
         /**

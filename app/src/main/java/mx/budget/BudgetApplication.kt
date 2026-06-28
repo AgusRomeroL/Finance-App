@@ -25,11 +25,13 @@ import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
+import mx.budget.data.repository.RecurrenceRepository
 import mx.budget.data.repository.WalletRepository
 import mx.budget.data.repository.impl.CategoryRepositoryImpl
 import mx.budget.data.repository.impl.ExpenseRepositoryImpl
 import mx.budget.data.repository.impl.MemberRepositoryImpl
 import mx.budget.data.repository.impl.QuincenaRepositoryImpl
+import mx.budget.data.repository.impl.RecurrenceRepositoryImpl
 import mx.budget.data.repository.impl.WalletRepositoryImpl
 import mx.budget.data.settings.SettingsRepository
 import mx.budget.data.sync.RemotePullSync
@@ -62,6 +64,10 @@ class BudgetApplication : Application() {
         private set
 
     lateinit var categoryRepository: CategoryRepository
+        private set
+
+    /** Plantillas de gasto recurrente (Apéndice G.2, Fase 0). */
+    lateinit var recurrenceRepository: RecurrenceRepository
         private set
 
     /** Implementación Firestore del repositorio de gastos (solo para push). */
@@ -173,6 +179,7 @@ class BudgetApplication : Application() {
         memberRepository = MemberRepositoryImpl(database.memberDao())
         walletRepository = WalletRepositoryImpl(database.paymentMethodDao())
         categoryRepository = CategoryRepositoryImpl(database.categoryDao())
+        recurrenceRepository = RecurrenceRepositoryImpl(database.recurrenceTemplateDao())
         expenseRepository = ExpenseRepositoryImpl(
             dao = expenseDao,
             attributionDao = attributionDao,
