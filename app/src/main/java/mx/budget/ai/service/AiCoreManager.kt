@@ -41,9 +41,10 @@ class AiCoreManager(private val context: Context) {
 
         try {
             val generationConfig = generationConfig {
-                temperature = 0.05f 
-                topK = 16 
-                maxOutputTokens = 240 
+                context = this@AiCoreManager.context // AICore exige el Context aquí
+                temperature = 0.05f
+                topK = 16
+                maxOutputTokens = 240
                 candidateCount = 1
             }
 
