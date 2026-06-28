@@ -873,7 +873,8 @@ private fun ReviewBadge(count: Int, onClick: () -> Unit, compact: Boolean = fals
 private fun Eyebrow(
     text: String,
     color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    maxLines: Int = Int.MAX_VALUE
+    maxLines: Int = Int.MAX_VALUE,
+    modifier: Modifier = Modifier
 ) {
     Text(
         text = text.uppercase(),
@@ -881,7 +882,8 @@ private fun Eyebrow(
         color = color,
         letterSpacing = 1.4.sp,
         maxLines = maxLines,
-        overflow = TextOverflow.Ellipsis
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
     )
 }
 
@@ -916,14 +918,10 @@ private fun HeroKpi(state: DashboardUiState.Success) {
     val progress = remember(q?.id) { computeProgress(q) }
 
     Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Eyebrow("Disponible para gastar")
-            Eyebrow(q?.label ?: "")
-        }
+        // El mes/quincena NO se repite aquí: ya está en el header superior, en el
+        // chip de navegación y en "Día N de M" abajo. Repetirlo colisionaba con
+        // este eyebrow a fontScale alto ("GASTAR" + "JUNIO" encimados).
+        Eyebrow("Disponible para gastar")
         Spacer(Modifier.height(12.dp))
         // Cifra héroe: $ + número grande + MXN
         Row(verticalAlignment = Alignment.Top) {
@@ -1782,14 +1780,17 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Bottom
         ) {
-            Eyebrow("Disponible para gastar")
+            // weight(1f) en el eyebrow: el rango ya no puede empujarlo y encimarse
+            // a fontScale alto; si no caben, el eyebrow envuelve en su propio espacio.
+            Eyebrow("Disponible para gastar", modifier = Modifier.weight(1f))
             Text(
                 quincenaRange(q),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, softWrap = false
             )
         }
         Spacer(Modifier.height(8.dp))
