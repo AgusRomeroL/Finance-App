@@ -2,15 +2,21 @@ package mx.budget.ui.capture
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import mx.budget.ai.proactive.AttributionSuggestion
+import mx.budget.ai.proactive.RetroAttributionEngine
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
@@ -53,6 +59,22 @@ sealed class CaptureOperationState {
     data class Error(val message: String) : CaptureOperationState()
 }
 
+/**
+ * Sugerencia de atribución para la captura en vivo (Feature A, §F.4).
+ *
+ * Combina las dos dimensiones en una sola tarjeta, pero cada lado es
+ * **independiente**: solo se incluye el que superó el umbral de confianza
+ * ([CaptureViewModel.SUGGEST_THRESHOLD]). Así el caso mixto (un rol predecible,
+ * el otro ruidoso) muestra solo el lado fiable.
+ */
+data class CaptureSuggestion(
+    val beneficiary: AttributionSuggestion?,
+    val payer: AttributionSuggestion?,
+) {
+    /** `true` si al menos una dimensión superó el umbral (si no, no se muestra chip). */
+    val hasAny: Boolean get() = beneficiary != null || payer != null
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CaptureViewModel
 // ─────────────────────────────────────────────────────────────────────────────
@@ -77,6 +99,7 @@ sealed class CaptureOperationState {
  * @param walletRepository   Repositorio para listar fuentes de pago.
  * @param memberRepository   Repositorio para listar miembros del hogar.
  * @param categoryRepository Repositorio para listar categorías.
+ * @param retroAttributionEngine Motor de inferencia para la sugerencia en vivo (Feature A).
  * @param householdId        ID del hogar activo.
  */
 class CaptureViewModel(
@@ -85,6 +108,7 @@ class CaptureViewModel(
     private val walletRepository: WalletRepository,
     private val memberRepository: MemberRepository,
     private val categoryRepository: CategoryRepository,
+    private val retroAttributionEngine: RetroAttributionEngine,
     private val householdId: String
 ) : ViewModel() {
 
@@ -114,6 +138,37 @@ class CaptureViewModel(
      * Truncada a 64 chars en el commit (contrato de ExpenseEntity).
      */
     val concept: StateFlow<String> = _concept.asStateFlow()
+
+    // ── Sugerencia de atribución en vivo (Feature A, §F.4) ──────────────────
+    //
+    // Mientras el usuario teclea el concepto, el motor de B infiere la atribución
+    // aprendida del historial. Es propose-then-confirm: NUNCA auto-aplica; el chip
+    // es visible pero ignorable (no tocarlo = señal negativa implícita). Solo se
+    // muestra un lado (BENEFICIARY/PAYER) si supera el umbral de confianza.
+
+    /**
+     * Sugerencia combinada (BENEFICIARY/PAYER) para el chip de captura, o `null`
+     * si el concepto está en blanco o ninguna dimensión supera el umbral.
+     *
+     * `debounce(250)` evita una query por pulsación; `mapLatest` cancela la
+     * inferencia anterior al seguir tecleando; `catch` garantiza que un fallo del
+     * motor jamás tumbe la captura (el flujo manual queda intacto).
+     */
+    @OptIn(FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val attributionSuggestion: StateFlow<CaptureSuggestion?> = _concept
+        .debounce(250)
+        .map { it.trim() }
+        .distinctUntilChanged()
+        .mapLatest { concept ->
+            if (concept.isBlank()) return@mapLatest null
+            val benef = retroAttributionEngine.suggest(concept, "BENEFICIARY")
+                ?.takeIf { it.confidence >= SUGGEST_THRESHOLD }
+            val payer = retroAttributionEngine.suggest(concept, "PAYER")
+                ?.takeIf { it.confidence >= SUGGEST_THRESHOLD }
+            CaptureSuggestion(benef, payer).takeIf { it.hasAny }
+        }
+        .catch { emit(null) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // ── Categorías ─────────────────────────────────────────────────────────
 
@@ -175,6 +230,31 @@ class CaptureViewModel(
 
     /** PAYER: quién paga → porcentaje por miembro (default = dueño del wallet). */
     val payerShares: StateFlow<Map<String, Int>> = _payerShares.asStateFlow()
+
+    /**
+     * Aplica la sugerencia de atribución vigente (Feature A): rellena SOLO las
+     * dimensiones presentes en el chip (el caso mixto no pisa la dimensión que el
+     * usuario tendría que elegir a mano). Convierte bps→% con el mismo invariante
+     * que el commit (el último miembro absorbe el resto para sumar 100 exacto).
+     * No cierra el sheet ni registra nada: el usuario sigue editando/confirmando.
+     */
+    fun applySuggestion() {
+        val suggestion = attributionSuggestion.value ?: return
+        suggestion.beneficiary?.let { _beneficiaryShares.value = bpsToPercent(it.distribution) }
+        suggestion.payer?.let { _payerShares.value = bpsToPercent(it.distribution) }
+    }
+
+    /** Convierte un mapa memberId→bps (suma 10,000) a memberId→% (suma 100). */
+    private fun bpsToPercent(distribution: Map<String, Int>): Map<String, Int> {
+        val entries = distribution.entries.toList()
+        if (entries.isEmpty()) return emptyMap()
+        var assigned = 0
+        return entries.mapIndexed { i, (memberId, bps) ->
+            val pct = if (i == entries.lastIndex) 100 - assigned
+            else (bps / 100).also { assigned += it }
+            memberId to pct
+        }.toMap()
+    }
 
     /** Reparte 100% equitativamente entre [ids], con el resto en el último. */
     private fun equalSplit(ids: Collection<String>): Map<String, Int> {
@@ -453,6 +533,15 @@ class CaptureViewModel(
         _beneficiaryShares.value = emptyMap()
         _payerShares.value = emptyMap()
         _operationState.value = CaptureOperationState.Idle
+    }
+
+    companion object {
+        /**
+         * Umbral de confianza para MOSTRAR un lado de la sugerencia en el chip.
+         * Distinto del [RetroAttributionEngine.AUTO_APPLY_THRESHOLD] (0.7): aquí
+         * solo sugerimos, nunca aplicamos solos, así que el listón es más bajo.
+         */
+        const val SUGGEST_THRESHOLD = 0.5
     }
 
     // ── Extensión privada para combine con 5 flows ────────────────────────────

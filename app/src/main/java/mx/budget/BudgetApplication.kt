@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import mx.budget.ai.proactive.ConceptCanonicalizer
+import mx.budget.ai.proactive.RetroAttributionEngine
 import mx.budget.data.local.BudgetDatabase
 import mx.budget.data.work.CanonicalizeConceptsWorker
 import mx.budget.data.work.RetroAttributionWorker
@@ -82,6 +84,16 @@ class BudgetApplication : Application() {
     lateinit var settingsRepository: SettingsRepository
         private set
 
+    /**
+     * Motor de inferencia de atribución (Apéndice F.3.5), reutilizable. Lo
+     * construye el pipeline retroactivo (Feature B) dentro de su worker; aquí lo
+     * exponemos también para la captura en vivo (Feature A, §F.4): el
+     * [mx.budget.ui.capture.CaptureViewModel] lo consume para sugerir la
+     * atribución mientras el usuario teclea el concepto.
+     */
+    lateinit var retroAttributionEngine: RetroAttributionEngine
+        private set
+
     /** Valor inicial del toggle de color dinámico, leído una vez al arrancar. */
     var initialDynamicColor: Boolean = true
         private set
@@ -130,6 +142,17 @@ class BudgetApplication : Application() {
             attributionDao = attributionDao,
             syncQueueDao = syncQueueDao,
             db = database
+        )
+
+        // Motor de atribución para la captura en vivo (Feature A). Se construye
+        // igual que dentro del RetroAttributionWorker: el canonicalizer toma un
+        // snapshot de los miembros del hogar (estables en runtime). runBlocking es
+        // aceptable aquí por el mismo motivo que householdId: una sola query, antes
+        // de que exista cualquier ViewModel.
+        val activeMembers = runBlocking { database.memberDao().getActiveMembers(householdId) }
+        retroAttributionEngine = RetroAttributionEngine(
+            attributionDao = attributionDao,
+            canonicalizer = ConceptCanonicalizer(activeMembers)
         )
 
         // Lado nube (Firestore) — usado únicamente por el SyncManager para push.

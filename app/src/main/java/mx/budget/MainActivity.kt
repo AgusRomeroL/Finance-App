@@ -9,6 +9,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import kotlinx.coroutines.launch
+import mx.budget.ai.proactive.RetroAttributionEngine
 import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
@@ -54,6 +55,7 @@ class MainActivity : ComponentActivity() {
             app.walletRepository,
             app.memberRepository,
             app.categoryRepository,
+            app.retroAttributionEngine,
             app.householdId
         ))[CaptureViewModel::class.java]
     }
@@ -133,6 +135,7 @@ class CaptureViewModelFactory(
     private val walletRepository: WalletRepository,
     private val memberRepository: MemberRepository,
     private val categoryRepository: CategoryRepository,
+    private val retroAttributionEngine: RetroAttributionEngine,
     private val householdId: String,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -143,6 +146,7 @@ class CaptureViewModelFactory(
             walletRepository = walletRepository,
             memberRepository = memberRepository,
             categoryRepository = categoryRepository,
+            retroAttributionEngine = retroAttributionEngine,
             householdId = householdId,
         ) as T
     }

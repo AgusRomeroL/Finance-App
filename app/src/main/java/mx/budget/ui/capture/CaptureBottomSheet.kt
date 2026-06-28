@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -114,6 +115,8 @@ fun CaptureBottomSheet(
     val members by (viewModel?.members ?: dummyStateFlow(emptyList<MemberEntity>())).collectAsState()
     val beneficiaryShares by (viewModel?.beneficiaryShares ?: dummyStateFlow(emptyMap<String, Int>())).collectAsState()
     val payerShares by (viewModel?.payerShares ?: dummyStateFlow(emptyMap<String, Int>())).collectAsState()
+    val attributionSuggestion by (viewModel?.attributionSuggestion
+        ?: dummyStateFlow<CaptureSuggestion?>(null)).collectAsState()
     val canRegister by (viewModel?.canRegister ?: dummyStateFlow(false)).collectAsState()
     val operationState by (viewModel?.operationState
         ?: dummyStateFlow<CaptureOperationState>(CaptureOperationState.Idle)).collectAsState()
@@ -176,6 +179,21 @@ fun CaptureBottomSheet(
                         onRegister = { viewModel?.onRegisterExpense() },
                         canRegister = canRegister
                     )
+                    // Sugerencia de atribución aprendida del historial (Feature A,
+                    // §F.4): visible pero ignorable; "Aplicar" rellena los % sin
+                    // auto-confirmar. AnimatedVisibility evita saltos del sheet.
+                    AnimatedVisibility(visible = attributionSuggestion != null) {
+                        attributionSuggestion?.let { suggestion ->
+                            Column {
+                                Spacer(Modifier.height(14.dp))
+                                AttributionSuggestionChip(
+                                    suggestion = suggestion,
+                                    members = members,
+                                    onApply = { viewModel?.applySuggestion() }
+                                )
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(14.dp))
                     CategoryCard(
                         categories = categories,
@@ -895,6 +913,83 @@ private fun CaptureFooter(
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers de UI
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chip de sugerencia de atribución (Feature A, §F.4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Tarjeta tonal con la atribución inferida del historial. Combina BENEFICIARY y
+ * PAYER en una sola superficie, pero solo muestra el lado que superó el umbral
+ * (el otro puede ser `null` en el caso mixto). Redundancia no-cromática: icono
+ * de sugerencia + etiquetas textuales explícitas, no depende del color.
+ */
+@Composable
+private fun AttributionSuggestionChip(
+    suggestion: CaptureSuggestion,
+    members: List<MemberEntity>,
+    onApply: () -> Unit,
+) {
+    fun nameOf(id: String): String = members.firstOrNull { it.id == id }?.displayName ?: "—"
+
+    // "Santi" si un solo miembro al 100%; "Santi 60% · Norma 40%" si es repartido.
+    fun describe(distribution: Map<String, Int>): String {
+        val entries = distribution.entries.sortedByDescending { it.value }
+        return if (entries.size == 1) nameOf(entries.first().key)
+        else entries.joinToString(" · ") { "${nameOf(it.key)} ${it.value / 100}%" }
+    }
+
+    val parts = buildList {
+        suggestion.beneficiary?.let { add("Beneficia a ${describe(it.distribution)}") }
+        suggestion.payer?.let { add("Pagó ${describe(it.distribution)}") }
+    }
+    val basis = suggestion.beneficiary?.basis ?: suggestion.payer?.basis ?: ""
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Filled.AutoAwesome,
+            contentDescription = "Sugerencia",
+            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                parts.joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                fontWeight = FontWeight.SemiBold
+            )
+            if (basis.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    basis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f)
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "Aplicar",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.primary)
+                .clickable(onClick = onApply)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+    }
+}
 
 /** Tarjeta-sección con superficie tonal y radio 28dp (regla No-Line). */
 @Composable
