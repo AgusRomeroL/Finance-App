@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -407,11 +409,13 @@ private fun ExpandedDashboard(
  * Implementado con un handle custom (`draggable`) en vez de
  * `SupportingPaneScaffold`/`PaneExpansionState` por estabilidad (el brief D3/C7
  * marca esa API como inestable). La proporción sobrevive el plegado/recreación
- * vía `rememberSaveable` (brief C13). Anclada en 62/38, arrastrable en [0.45, 0.78].
+ * vía `rememberSaveable` (brief C13). Anclada en 55/45, arrastrable en [0.45, 0.78].
+ * (Default 55/45, no 62/38: a fontScale alto + bold del dispositivo real, 38% dejaba
+ * el panel de transacciones tan angosto que los conceptos se cortaban a "Com…".)
  */
 @Composable
 private fun BentoPanes(state: DashboardUiState.Success, modifier: Modifier = Modifier) {
-    var fraction by rememberSaveable { mutableStateOf(0.62f) }
+    var fraction by rememberSaveable { mutableStateOf(0.55f) }
     BoxWithConstraints(modifier = modifier) {
         val totalPx = constraints.maxWidth.toFloat()
         val dragState = rememberDraggableState { delta ->
@@ -909,6 +913,7 @@ private fun MainHealthPane(state: DashboardUiState.Success, modifier: Modifier =
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HeroKpi(state: DashboardUiState.Success) {
     val q = state.quincena
@@ -936,35 +941,39 @@ private fun HeroKpi(state: DashboardUiState.Success) {
                 available.toGrouped(),
                 style = MaterialTheme.typography.displayLarge.copy(
                     fontWeight = FontWeight.Light,
-                    fontSize = 76.sp,
+                    fontSize = 66.sp,
                     letterSpacing = (-1).sp
                 ),
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
+                maxLines = 1, softWrap = false
             )
             Spacer(Modifier.width(10.dp))
             Text(
                 "MXN",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, softWrap = false,
                 modifier = Modifier.padding(top = 18.dp)
             )
         }
         Spacer(Modifier.height(12.dp))
-        // Fórmula: Ingresos − Gastos · periodo
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // Fórmula: Ingresos − Gastos. FlowRow para que "Gastos $X" baje como unidad
+        // (no "Gastos"/"$X" partido) cuando no cabe a fontScale alto + panel angosto.
+        FlowRow(verticalArrangement = Arrangement.Center) {
             val incomeC = amountSemantic(FinancialTone.INCOME)
             val expenseC = amountSemantic(FinancialTone.EXPENSE)
             Text(
                 "Ingresos ${income.toMxn()}",
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = incomeC.color
+                color = incomeC.color,
+                maxLines = 1, softWrap = false
             )
             Text("  −  ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 "Gastos ${spent.toMxn()}",
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = expenseC.color
+                color = expenseC.color,
+                maxLines = 1, softWrap = false
             )
         }
         Spacer(Modifier.height(20.dp))
@@ -1417,7 +1426,7 @@ private fun RitmoCard(
                 msg,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 3, overflow = TextOverflow.Ellipsis
+                maxLines = 4, overflow = TextOverflow.Ellipsis
             )
         }
         Spacer(Modifier.width(10.dp))
@@ -1449,27 +1458,23 @@ private fun MemberDistributionSection(
     val colors = memberColors(data.size.coerceAtLeast(1))
 
     Column(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Eyebrow("Gasto por miembro", maxLines = 2)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "${data.sumOf { it.totalMxn }.toMxn()} · ${data.size} miembros",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis
-                )
-            }
-            SegmentedToggle(
-                options = listOf("Beneficiario", "Pagador"),
-                selectedIndex = if (showPayer) 1 else 0,
-                onSelect = { showPayer = it == 1 }
-            )
-        }
+        // Título + toggle APILADOS: a fontScale alto + bold del dispositivo real, el
+        // toggle "Beneficiario/Pagador" lado a lado con el título no cabe y recortaba
+        // el eyebrow a "GAST…". En su propia línea siempre cabe.
+        Eyebrow("Gasto por miembro", maxLines = 2)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "${data.sumOf { it.totalMxn }.toMxn()} · ${data.size} miembros",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1, overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.height(12.dp))
+        SegmentedToggle(
+            options = listOf("Beneficiario", "Pagador"),
+            selectedIndex = if (showPayer) 1 else 0,
+            onSelect = { showPayer = it == 1 }
+        )
         Spacer(Modifier.height(22.dp))
 
         if (data.isEmpty()) {
