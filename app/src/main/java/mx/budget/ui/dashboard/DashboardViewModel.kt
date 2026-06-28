@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import mx.budget.ai.proactive.ProactiveReasoner
 import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.ai.proactive.ProactiveSuggestionEngine
 import mx.budget.data.capture.BankCaptureManager
@@ -114,7 +115,8 @@ class DashboardViewModel(
     private val expenseDao: ExpenseDao,
     private val pendingBankCaptureDao: PendingBankCaptureDao,
     private val bankCaptureManager: BankCaptureManager,
-    private val categoryDao: CategoryDao
+    private val categoryDao: CategoryDao,
+    private val proactiveReasoner: ProactiveReasoner
 ) : ViewModel() {
 
     // ── Capturas bancarias pendientes (Feature D, §F.6) ─────────────────────────
@@ -174,17 +176,25 @@ class DashboardViewModel(
      * quincena). Determinista sobre el historial canonicalizado de B; sin tabla
      * persistente ni worker (pre-cómputo opcional en la spec). `null` si no hay
      * patrón fiable o si el usuario ya la descartó esta sesión.
+     *
+     * **Capa 3 (§F.8):** los candidatos del motor SQL pasan por
+     * [proactiveReasoner] (Gemini Nano), que los re-prioriza y reexplica en
+     * lenguaje natural SIN inventar gastos. Si AICore no está (emulador, chip sin
+     * Tensor) el reasoner devuelve los candidatos SQL intactos → comportamiento
+     * idéntico a Feature C. El filtro de descartados va ANTES del LLM para que
+     * nunca razone sobre algo que el usuario ya ignoró esta sesión.
      */
     val proactiveSuggestions: StateFlow<List<ProactiveSuggestion>> = combine(
         activeQuincena, dismissedSuggestions
     ) { quincena, dismissed -> quincena to dismissed }
         .flatMapLatest { (quincena, dismissed) ->
             flow {
+                val now = System.currentTimeMillis()
                 val history = runCatching { expenseDao.getAll(householdId) }.getOrDefault(emptyList())
-                val list = proactiveEngine
-                    .suggestMany(history, quincena, System.currentTimeMillis(), limit = MAX_PROACTIVE)
+                val candidates = proactiveEngine
+                    .suggestMany(history, quincena, now, limit = MAX_PROACTIVE)
                     .filter { it.canonicalKey !in dismissed }
-                emit(list)
+                emit(proactiveReasoner.reason(candidates, quincena, now))
             }
         }
         .catch { emit(emptyList()) }

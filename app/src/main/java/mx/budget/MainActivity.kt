@@ -39,7 +39,8 @@ class MainActivity : ComponentActivity() {
             app.database.expenseDao(),
             app.database.pendingBankCaptureDao(),
             app.bankCaptureManager,
-            app.database.categoryDao()
+            app.database.categoryDao(),
+            app.proactiveReasoner
         ))[DashboardViewModel::class.java]
     }
 
@@ -121,6 +122,7 @@ class DashboardViewModelFactory(
     private val pendingBankCaptureDao: PendingBankCaptureDao,
     private val bankCaptureManager: BankCaptureManager,
     private val categoryDao: mx.budget.data.local.dao.CategoryDao,
+    private val proactiveReasoner: mx.budget.ai.proactive.ProactiveReasoner,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -134,6 +136,7 @@ class DashboardViewModelFactory(
             pendingBankCaptureDao = pendingBankCaptureDao,
             bankCaptureManager = bankCaptureManager,
             categoryDao = categoryDao,
+            proactiveReasoner = proactiveReasoner,
         ) as T
     }
 }

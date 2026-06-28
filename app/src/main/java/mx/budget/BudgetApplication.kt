@@ -14,7 +14,9 @@ import kotlinx.coroutines.runBlocking
 import mx.budget.ai.proactive.BankNotificationParser
 import mx.budget.ai.proactive.BankTemplates
 import mx.budget.ai.proactive.ConceptCanonicalizer
+import mx.budget.ai.proactive.ProactiveReasoner
 import mx.budget.ai.proactive.RetroAttributionEngine
+import mx.budget.ai.service.AiCoreManager
 import mx.budget.data.capture.BankCaptureManager
 import mx.budget.data.local.BudgetDatabase
 import mx.budget.data.work.CanonicalizeConceptsWorker
@@ -111,6 +113,17 @@ class BudgetApplication : Application() {
     lateinit var bankCaptureManager: BankCaptureManager
         private set
 
+    /**
+     * Razonador proactivo con Gemini Nano on-device (Capa 3, §F.8). Envuelve el
+     * ranking SQL determinista de Feature C: el LLM re-prioriza y reexplica los
+     * candidatos sin inventar gastos. Si el dispositivo no expone Gemini Nano
+     * (emulador, chip sin Tensor, alpha no disponible) cae INTACTO al SQL. Lo
+     * consume el [mx.budget.ui.dashboard.DashboardViewModel] al abrir el dashboard
+     * (foreground-only: AICore bloquea inferencia en background).
+     */
+    lateinit var proactiveReasoner: ProactiveReasoner
+        private set
+
     /** Valor inicial del toggle de color dinámico, leído una vez al arrancar. */
     var initialDynamicColor: Boolean = true
         private set
@@ -183,6 +196,19 @@ class BudgetApplication : Application() {
             val json = assets.open("ai/bank_templates.json").bufferedReader().use { it.readText() }
             BankNotificationParser(BankTemplates.fromJson(json))
         }.getOrNull()
+        // Capa 3 (§F.8): razonamiento proactivo con Gemini Nano. AiCoreManager es
+        // el primer consumidor real de AICore en runtime. El reasoner razona
+        // SOBRE los candidatos del motor SQL (Feature C), nunca genera gastos; si
+        // AICore no está, el dashboard se comporta idéntico a Feature C. El prompt
+        // se carga del asset (fallback a "" → el reasoner igual cae al SQL).
+        val proactiveSystemPrompt = runCatching {
+            assets.open("ai/proactive_system_prompt.es.txt").bufferedReader().use { it.readText() }
+        }.getOrDefault("")
+        proactiveReasoner = ProactiveReasoner(
+            aiCore = AiCoreManager(this),
+            systemPrompt = proactiveSystemPrompt,
+        )
+
         BankCaptureManager.ensureChannel(this)
         bankCaptureManager = BankCaptureManager(
             context = this,
