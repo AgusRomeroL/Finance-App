@@ -37,6 +37,8 @@ import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Insights
@@ -75,6 +77,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
@@ -197,6 +200,7 @@ fun DashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val pendingReviewCount by viewModel.pendingReviewCount.collectAsState()
+    val proactiveSuggestion by viewModel.proactiveSuggestion.collectAsState()
     val isExpanded = windowWidthDp >= 600.dp
     var showCapture by remember { mutableStateOf(false) }
 
@@ -213,6 +217,14 @@ fun DashboardScreen(
         onReset = viewModel::resetToActiveQuincena
     )
 
+    // [Registrar] de la sugerencia: prefila concepto + categoría en la captura
+    // (el concepto dispara además el chip de atribución de Feature A) y abre el sheet.
+    val onRegisterSuggestion: (ProactiveSuggestion) -> Unit = { suggestion ->
+        captureViewModel?.onConceptChange(suggestion.concept)
+        captureViewModel?.onCategorySelected(suggestion.categoryId)
+        showCapture = true
+    }
+
     if (isExpanded) {
         ExpandedDashboard(
             state = uiState,
@@ -221,7 +233,10 @@ fun DashboardScreen(
             onCapture = { showCapture = true },
             pendingReviewCount = pendingReviewCount,
             onOpenReview = onOpenReview,
-            quincenaNav = quincenaNav
+            quincenaNav = quincenaNav,
+            proactiveSuggestion = proactiveSuggestion,
+            onRegisterSuggestion = onRegisterSuggestion,
+            onDismissSuggestion = viewModel::dismissProactiveSuggestion
         )
     } else {
         CompactDashboard(
@@ -231,7 +246,10 @@ fun DashboardScreen(
             onCapture = { showCapture = true },
             pendingReviewCount = pendingReviewCount,
             onOpenReview = onOpenReview,
-            quincenaNav = quincenaNav
+            quincenaNav = quincenaNav,
+            proactiveSuggestion = proactiveSuggestion,
+            onRegisterSuggestion = onRegisterSuggestion,
+            onDismissSuggestion = viewModel::dismissProactiveSuggestion
         )
     }
 }
@@ -255,7 +273,10 @@ private fun ExpandedDashboard(
     onCapture: () -> Unit,
     pendingReviewCount: Int,
     onOpenReview: () -> Unit,
-    quincenaNav: QuincenaNav
+    quincenaNav: QuincenaNav,
+    proactiveSuggestion: ProactiveSuggestion?,
+    onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
+    onDismissSuggestion: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -285,6 +306,14 @@ private fun ExpandedDashboard(
                             viewingActive = state.viewingActive,
                             quincenaNav = quincenaNav
                         )
+                        if (proactiveSuggestion != null && state.viewingActive) {
+                            Spacer(Modifier.height(18.dp))
+                            ProactiveSuggestionChip(
+                                suggestion = proactiveSuggestion,
+                                onRegister = { onRegisterSuggestion(proactiveSuggestion) },
+                                onDismiss = onDismissSuggestion
+                            )
+                        }
                         Spacer(Modifier.height(22.dp))
                         BentoPanes(state = state, modifier = Modifier.fillMaxSize())
                     }
@@ -364,7 +393,10 @@ private fun CompactDashboard(
     onCapture: () -> Unit,
     pendingReviewCount: Int,
     onOpenReview: () -> Unit,
-    quincenaNav: QuincenaNav
+    quincenaNav: QuincenaNav,
+    proactiveSuggestion: ProactiveSuggestion?,
+    onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
+    onDismissSuggestion: () -> Unit
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -391,6 +423,15 @@ private fun CompactDashboard(
                                 viewingActive = state.viewingActive,
                                 quincenaNav = quincenaNav
                             )
+                        }
+                        if (proactiveSuggestion != null && state.viewingActive) {
+                            item {
+                                ProactiveSuggestionChip(
+                                    suggestion = proactiveSuggestion,
+                                    onRegister = { onRegisterSuggestion(proactiveSuggestion) },
+                                    onDismiss = onDismissSuggestion
+                                )
+                            }
                         }
                         item { CollapsedHealthCard(state = state) }
                         item {
@@ -896,6 +937,97 @@ private fun QuincenaRhythm(progress: QuincenaProgress) {
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(5.dp))
                     .background(MaterialTheme.colorScheme.primary)
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sugerencia proactiva (Feature C, §F.5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Banner proactivo en el tope del dashboard: sugiere el gasto que el hogar suele
+ * registrar ahora (hora + día de semana + día de quincena). No invasivo: vive en
+ * la app (nunca push), descartable con "Ahora no" (señal negativa implícita).
+ * Redundancia no-cromática: icono + texto explican el motivo sin depender del color.
+ */
+@Composable
+private fun ProactiveSuggestionChip(
+    suggestion: ProactiveSuggestion,
+    onRegister: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(36.dp).clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Filled.AutoAwesome, "Sugerencia",
+                    tint = MaterialTheme.colorScheme.onSecondary, modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Eyebrow("Sugerencia", color = MaterialTheme.colorScheme.onSecondaryContainer, maxLines = 1)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "¿Registrar \"${suggestion.concept}\"?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    suggestion.reason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis
+                )
+            }
+            Box(
+                modifier = Modifier.size(32.dp).clip(CircleShape).clickable(onClick = onDismiss),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Filled.Close, "Ahora no",
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                "Registrar",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable(onClick = onRegister)
+                    .padding(horizontal = 20.dp, vertical = 9.dp)
+            )
+            Text(
+                "Ahora no",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable(onClick = onDismiss)
+                    .padding(horizontal = 16.dp, vertical = 9.dp)
             )
         }
     }

@@ -10,9 +10,13 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import mx.budget.ai.proactive.ProactiveSuggestion
+import mx.budget.ai.proactive.ProactiveSuggestionEngine
 import mx.budget.data.local.dao.AttributionReviewDao
+import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
@@ -96,7 +100,8 @@ class DashboardViewModel(
     private val expenseRepository: ExpenseRepository,
     private val memberRepository: MemberRepository,
     private val householdId: String,
-    private val attributionReviewDao: AttributionReviewDao
+    private val attributionReviewDao: AttributionReviewDao,
+    private val expenseDao: ExpenseDao
 ) : ViewModel() {
 
     /**
@@ -124,6 +129,40 @@ class DashboardViewModel(
 
     /** Quincena que el usuario eligió ver con el chip ‹ › (null = seguir la activa). */
     private val selectedQuincenaId = MutableStateFlow<String?>(null)
+
+    // ── Sugerencia proactiva al abrir la app (Feature C, §F.5) ──────────────────
+
+    private val proactiveEngine = ProactiveSuggestionEngine()
+
+    /** Claves canónicas descartadas con "Ahora no" en esta sesión (no persistente). */
+    private val dismissedSuggestions = MutableStateFlow<Set<String>>(emptySet())
+
+    /**
+     * Sugerencia proactiva calculada on-demand al abrir/cambiar de quincena: el
+     * gasto que el hogar suele registrar ahora (hora + día de semana + día de
+     * quincena). Determinista sobre el historial canonicalizado de B; sin tabla
+     * persistente ni worker (pre-cómputo opcional en la spec). `null` si no hay
+     * patrón fiable o si el usuario ya la descartó esta sesión.
+     */
+    val proactiveSuggestion: StateFlow<ProactiveSuggestion?> = combine(
+        activeQuincena, dismissedSuggestions
+    ) { quincena, dismissed -> quincena to dismissed }
+        .flatMapLatest { (quincena, dismissed) ->
+            flow {
+                val history = runCatching { expenseDao.getAll(householdId) }.getOrDefault(emptyList())
+                val suggestion = proactiveEngine.suggest(history, quincena, System.currentTimeMillis())
+                emit(suggestion?.takeIf { it.canonicalKey !in dismissed })
+            }
+        }
+        .catch { emit(null) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** "Ahora no" → señal negativa implícita: oculta la sugerencia esta sesión. */
+    fun dismissProactiveSuggestion() {
+        proactiveSuggestion.value?.let {
+            dismissedSuggestions.value = dismissedSuggestions.value + it.canonicalKey
+        }
+    }
 
     /** Contexto de la quincena mostrada + flags de navegación (valor inmutable). */
     private data class ViewContext(

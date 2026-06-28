@@ -32,7 +32,8 @@ class MainActivity : ComponentActivity() {
             app.expenseRepository,
             app.memberRepository,
             app.householdId,
-            app.database.attributionReviewDao()
+            app.database.attributionReviewDao(),
+            app.database.expenseDao()
         ))[DashboardViewModel::class.java]
     }
 
@@ -95,6 +96,7 @@ class DashboardViewModelFactory(
     private val memberRepository: MemberRepository,
     private val householdId: String,
     private val attributionReviewDao: AttributionReviewDao,
+    private val expenseDao: ExpenseDao,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -104,6 +106,7 @@ class DashboardViewModelFactory(
             memberRepository = memberRepository,
             householdId = householdId,
             attributionReviewDao = attributionReviewDao,
+            expenseDao = expenseDao,
         ) as T
     }
 }
