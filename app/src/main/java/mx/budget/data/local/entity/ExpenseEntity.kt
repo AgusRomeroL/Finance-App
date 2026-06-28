@@ -70,7 +70,8 @@ import androidx.room.PrimaryKey
         Index(value = ["payment_method_id"]),
         Index(value = ["recurrence_template_id"]),
         Index(value = ["installment_plan_id"]),
-        Index(value = ["created_by_member_id"])
+        Index(value = ["created_by_member_id"]),
+        Index(value = ["concept_canonical"])
     ]
 )
 data class ExpenseEntity(
@@ -135,6 +136,15 @@ data class ExpenseEntity(
     val status: String = "POSTED",
 
     val notes: String? = null,
+
+    /**
+     * Clave canónica del concepto, calculada por el pipeline de normalización
+     * retroactiva (Apéndice F.3.2). Agrupa variantes de escritura del mismo
+     * gasto ("Colegiatura Santi" ≡ "Santiago Colegiatura") para inferir y
+     * sugerir atribución. `null` mientras el canonicalizador no lo ha procesado.
+     */
+    @ColumnInfo(name = "concept_canonical")
+    val conceptCanonical: String? = null,
 
     @ColumnInfo(name = "created_at")
     val createdAt: Long,

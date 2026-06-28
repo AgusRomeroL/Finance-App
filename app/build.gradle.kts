@@ -42,6 +42,10 @@ dependencies {
     implementation("androidx.room:room-ktx:$room_version")
     ksp("androidx.room:room-compiler:$room_version")
 
+    // WorkManager — pipeline de normalización/atribución retroactiva en background
+    // (Apéndice F.3.4). Exento de las restricciones de background de Android 14.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")

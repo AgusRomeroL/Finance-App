@@ -144,3 +144,14 @@ data class IncomeByMember(
     val totalMxn: Double,
     val status: String
 )
+
+/**
+ * Fila plana de atribución para reconstruir la distribución de un gasto.
+ * Usada por el [mx.budget.ai.proactive.RetroAttributionEngine] para inferir
+ * la atribución histórica más probable de un concepto canónico (Apéndice F.3.5).
+ */
+data class AttributionRow(
+    val expenseId: String,
+    val memberId: String,
+    val shareBps: Int
+)

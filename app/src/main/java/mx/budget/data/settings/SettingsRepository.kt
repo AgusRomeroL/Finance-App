@@ -21,6 +21,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class SettingsRepository(private val context: Context) {
 
     private val dynamicColorKey = booleanPreferencesKey("dynamic_color")
+    private val retroLabelingDoneKey = booleanPreferencesKey("retro_labeling_done")
 
     /** Flujo del toggle de color dinámico. Default `true` (Material You). */
     val dynamicColor: Flow<Boolean> = context.dataStore.data
@@ -28,5 +29,17 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDynamicColor(enabled: Boolean) {
         context.dataStore.edit { prefs -> prefs[dynamicColorKey] = enabled }
+    }
+
+    /**
+     * `true` cuando el pipeline de normalización/atribución retroactiva (Apéndice F.3)
+     * ya se encoló al menos una vez. WorkManager persiste el trabajo encolado, así que
+     * marcar el flag justo tras encolar es seguro aunque el proceso muera.
+     */
+    val retroLabelingDone: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[retroLabelingDoneKey] ?: false }
+
+    suspend fun setRetroLabelingDone(done: Boolean) {
+        context.dataStore.edit { prefs -> prefs[retroLabelingDoneKey] = done }
     }
 }

@@ -185,9 +185,24 @@ class RemotePullSync(
                     }
 
                     db.withTransaction {
-                        expenseDao.upsert(expense)
-                        attributionDao.deleteByExpenseId(expense.id)
+                        // PRESERVAR concept_canonical local (Apéndice F.3): es una
+                        // columna calculada SOLO localmente por el pipeline retro. Los
+                        // docs remotos (seed o subidos antes de la columna) no la traen
+                        // y deserializan a null; un REPLACE ciego la borraría en cada
+                        // pull. Si el remoto no la trae, conservamos la que ya hay.
+                        val merged = if (expense.conceptCanonical == null) {
+                            val local = expenseDao.getById(expense.id)
+                            if (local?.conceptCanonical != null)
+                                expense.copy(conceptCanonical = local.conceptCanonical) else expense
+                        } else expense
+                        expenseDao.upsert(merged)
+
+                        // NO borrar atribuciones locales si el remoto no trae ninguna:
+                        // una lectura vacía (fallo de red o seed sin subcolección) NO
+                        // debe destruir la atribución local (incluida la inferida por el
+                        // worker retro). Solo se reemplaza cuando el remoto sí aporta.
                         if (attribs.isNotEmpty()) {
+                            attributionDao.deleteByExpenseId(expense.id)
                             attributionDao.insertAll(attribs)
                         }
                     }

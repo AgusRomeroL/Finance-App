@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import mx.budget.data.local.converter.Converters
+import mx.budget.data.local.dao.AttributionReviewDao
 import mx.budget.data.local.dao.CategoryDao
 import mx.budget.data.local.dao.ExpenseAttributionDao
 import mx.budget.data.local.dao.ExpenseDao
@@ -14,6 +15,7 @@ import mx.budget.data.local.dao.MemberDao
 import mx.budget.data.local.dao.PaymentMethodDao
 import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.local.dao.SyncQueueDao
+import mx.budget.data.local.entity.AttributionReviewEntity
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
@@ -52,9 +54,10 @@ import mx.budget.data.local.entity.SyncQueueEntity
         LoanEntity::class,
         SavingsGoalEntity::class,
         IncomeSourceEntity::class,
-        SyncQueueEntity::class
+        SyncQueueEntity::class,
+        AttributionReviewEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -76,6 +79,8 @@ abstract class BudgetDatabase : RoomDatabase() {
 
     abstract fun householdDao(): HouseholdDao
 
+    abstract fun attributionReviewDao(): AttributionReviewDao
+
     companion object {
         /**
          * v1 → v2: añade la tabla `sync_queue` (outbox de sincronización).
@@ -91,6 +96,28 @@ abstract class BudgetDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `sync_queue` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `entity_type` TEXT NOT NULL, `entity_id` TEXT NOT NULL, `operation` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `attempts` INTEGER NOT NULL)"
                 )
+            }
+        }
+
+        /**
+         * v2 → v3: capa de normalización/atribución retroactiva (Apéndice F.3).
+         *
+         * - Añade `expense.concept_canonical` (clave canónica del concepto) + índice.
+         * - Crea la tabla LOCAL-ONLY `attribution_review` (cola de revisión) + índices.
+         *
+         * El SQL de la tabla y sus índices se copió LITERAL del `createSql` que KSP
+         * genera en `app/schemas/3.json`; cualquier divergencia rompe el identityHash.
+         * El `ALTER TABLE ... ADD COLUMN` no aparece en el json (Room valida columnas
+         * por nombre/tipo, no por orden), por eso se escribe a mano con tipo `TEXT`
+         * nullable, coincidente con `ExpenseEntity.conceptCanonical`.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `expense` ADD COLUMN `concept_canonical` TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_expense_concept_canonical` ON `expense` (`concept_canonical`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `attribution_review` (`id` TEXT NOT NULL, `expense_id` TEXT NOT NULL, `role` TEXT NOT NULL, `suggested_json` TEXT NOT NULL, `confidence` REAL NOT NULL, `sample_size` INTEGER NOT NULL, `concept_canonical` TEXT, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`expense_id`) REFERENCES `expense`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_attribution_review_status` ON `attribution_review` (`status`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_attribution_review_expense_id` ON `attribution_review` (`expense_id`)")
             }
         }
     }

@@ -2,11 +2,18 @@ package mx.budget
 
 import android.app.Application
 import androidx.room.Room
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mx.budget.data.local.BudgetDatabase
+import mx.budget.data.work.CanonicalizeConceptsWorker
+import mx.budget.data.work.RetroAttributionWorker
 import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
@@ -91,7 +98,7 @@ class BudgetApplication : Application() {
             "budget.db"
         )
             .createFromAsset("budget_database.db")
-            .addMigrations(BudgetDatabase.MIGRATION_1_2)
+            .addMigrations(BudgetDatabase.MIGRATION_1_2, BudgetDatabase.MIGRATION_2_3)
             .build()
 
         // Resolución del household activo (un solo household por instalación).
@@ -152,5 +159,48 @@ class BudgetApplication : Application() {
             householdId = householdId
         )
         remotePullSync.start()
+
+        // Pipeline de normalización/atribución retroactiva (Apéndice F.3). Se encola
+        // una sola vez por instalación; WorkManager persiste el trabajo, así que el
+        // flag se marca tras encolar. Re-ejecutable manualmente desde Perfil.
+        scheduleRetroLabelingIfNeeded()
+    }
+
+    /**
+     * Encola la cadena de normalización retroactiva si aún no se ha hecho.
+     * `CanonicalizeConceptsWorker` (recalcula claves canónicas) → luego
+     * `RetroAttributionWorker` (infiere atribución faltante).
+     */
+    private fun scheduleRetroLabelingIfNeeded() {
+        appScope.launch {
+            val done = runCatching { settingsRepository.retroLabelingDone.first() }.getOrDefault(false)
+            if (done) return@launch
+            enqueueRetroLabeling(replace = false)
+            settingsRepository.setRetroLabelingDone(true)
+        }
+    }
+
+    /**
+     * Encola la cadena de normalización retroactiva. Expuesto para el botón
+     * "Re-normalizar historial" de Perfil.
+     *
+     * @param replace si `true`, reemplaza una corrida en curso (acción manual);
+     *  si `false`, respeta la existente (arranque automático).
+     */
+    fun enqueueRetroLabeling(replace: Boolean) {
+        val canonicalize = OneTimeWorkRequestBuilder<CanonicalizeConceptsWorker>().build()
+        val attribute = OneTimeWorkRequestBuilder<RetroAttributionWorker>()
+            // En re-normalización manual (replace) se revierten y recomputan los
+            // AUTO_APPLIED previos; el arranque automático (KEEP) los preserva.
+            .setInputData(workDataOf(RetroAttributionWorker.KEY_FORCE to replace))
+            .build()
+        WorkManager.getInstance(this)
+            .beginUniqueWork(
+                CanonicalizeConceptsWorker.UNIQUE_NAME,
+                if (replace) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
+                canonicalize
+            )
+            .then(attribute)
+            .enqueue()
     }
 }

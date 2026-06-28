@@ -70,6 +70,17 @@ interface ExpenseDao {
     @Query("SELECT * FROM expense WHERE id = :id")
     suspend fun getById(id: String): ExpenseEntity?
 
+    /**
+     * Todos los gastos del hogar — usado por el pipeline de canonicalización
+     * retroactiva (Apéndice F.3.4) para recalcular `concept_canonical` en lote.
+     */
+    @Query("SELECT * FROM expense WHERE household_id = :householdId")
+    suspend fun getAll(householdId: String): List<ExpenseEntity>
+
+    /** Persiste la clave canónica calculada para un gasto. */
+    @Query("UPDATE expense SET concept_canonical = :canonical WHERE id = :id")
+    suspend fun updateConceptCanonical(id: String, canonical: String?)
+
     @Query(
         """
         SELECT
