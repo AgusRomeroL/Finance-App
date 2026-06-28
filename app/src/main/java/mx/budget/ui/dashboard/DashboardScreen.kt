@@ -8,6 +8,9 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -63,7 +66,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -1021,24 +1026,57 @@ private fun SmartSuggestionsCarousel(
     var selected by rememberSaveable(items.map { it.key }.toString()) { mutableStateOf(0) }
     val active = selected.coerceIn(0, items.lastIndex)
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        items.forEachIndexed { i, item ->
-            if (i == active) {
-                Box(Modifier.weight(1f)) {
-                    SmartSuggestionCard(item, onConfirmCapture, onDismissCapture, onRegisterSuggestion, onDismissSuggestion)
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val gap = 8.dp
+        val wedgeW = 40.dp
+        // Ancho de la tarjeta activa = total − cuñas. Las anchuras de todos los ítems
+        // SUMAN exactamente el total en cada frame (la transición comparte reloj:
+        // lo que una pierde, otra lo gana), así que el Row nunca desborda al animar.
+        val cardW = (maxWidth - (wedgeW + gap) * (items.size - 1)).coerceAtLeast(160.dp)
+        val transition = updateTransition(active, label = "smartCarousel")
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(gap)
+        ) {
+            items.forEachIndexed { i, item ->
+                // Animación Material Expressive: resorte espacial con leve sobreimpulso.
+                val w by transition.animateDp(
+                    transitionSpec = { spring(dampingRatio = 0.8f, stiffness = 380f) },
+                    label = "w$i"
+                ) { sel -> if (i == sel) cardW else wedgeW }
+                val frac = ((w - wedgeW) / (cardW - wedgeW)).coerceIn(0f, 1f)
+                val isActive = i == active
+
+                Box(
+                    modifier = Modifier
+                        .width(w)
+                        .fillMaxHeight()
+                        .clipToBounds()
+                ) {
+                    // La tarjeta SIEMPRE se mide a `cardW` (altura constante → el slot
+                    // no salta); el contenedor la recorta a `w` y se desvanece al compactar.
+                    Box(
+                        modifier = Modifier
+                            .width(cardW)
+                            .fillMaxHeight()
+                            .alpha(frac)
+                    ) {
+                        SmartSuggestionCard(item, onConfirmCapture, onDismissCapture, onRegisterSuggestion, onDismissSuggestion)
+                    }
+                    // Cuña: ocupa el (pequeño) ancho compactado; clickable SOLO si no está
+                    // activa (cuando lo está, deja pasar los toques a los botones de la tarjeta).
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .alpha(1f - frac)
+                            .then(if (isActive) Modifier else Modifier.clickable { selected = i })
+                    ) {
+                        SmartSuggestionWedge(item)
+                    }
                 }
-            } else {
-                SmartSuggestionWedge(
-                    item = item,
-                    onClick = { selected = i },
-                    modifier = Modifier.fillMaxHeight()
-                )
             }
         }
     }
@@ -1067,11 +1105,13 @@ private fun SmartSuggestionCard(
     }
 }
 
-/** Cuña lateral: píldora vertical angosta con el color/icono del tipo; toca para activarla. */
+/**
+ * Cuña lateral compactada: llena el ancho que le da el carrusel (anima de tarjeta a
+ * píldora) con el color/icono del tipo. El click para activarla lo pone el carrusel.
+ */
 @Composable
 private fun SmartSuggestionWedge(
     item: SmartSuggestionItem,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val bg: Color
@@ -1091,13 +1131,68 @@ private fun SmartSuggestionWedge(
     }
     Box(
         modifier = modifier
-            .width(36.dp)
+            .fillMaxSize()
             .clip(RoundedCornerShape(18.dp))
-            .background(bg)
-            .clickable(onClick = onClick),
+            .background(bg),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, "Otra sugerencia", tint = fg, modifier = Modifier.size(20.dp))
+    }
+}
+
+/**
+ * Fila de acciones de una sugerencia: dos botones a **ancho igual** (`weight`) con
+ * texto centrado, para que SIEMPRE quepan y muestren su etiqueta aunque la tarjeta
+ * activa sea angosta (en el carrusel card-based ocupa solo parte del ancho). El
+ * primario es píldora rellena; el secundario, tonal sutil.
+ */
+@Composable
+private fun SuggestionActionRow(
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    secondaryLabel: String,
+    onSecondary: () -> Unit,
+    secondaryContentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.primary)
+                .clickable(onClick = onPrimary)
+                .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                primaryLabel,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary,
+                maxLines = 1, textAlign = TextAlign.Center
+            )
+        }
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(secondaryContentColor.copy(alpha = 0.12f))
+                .clickable(onClick = onSecondary)
+                .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                secondaryLabel,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                color = secondaryContentColor,
+                maxLines = 1, textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -1155,29 +1250,13 @@ private fun BankCaptureChip(
             }
         }
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                "Registrar",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable(onClick = onConfirm)
-                    .padding(horizontal = 20.dp, vertical = 9.dp)
-            )
-            Text(
-                "Descartar",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable(onClick = onDismiss)
-                    .padding(horizontal = 16.dp, vertical = 9.dp)
-            )
-        }
+        SuggestionActionRow(
+            primaryLabel = "Registrar",
+            onPrimary = onConfirm,
+            secondaryLabel = "Descartar",
+            onSecondary = onDismiss,
+            secondaryContentColor = MaterialTheme.colorScheme.onTertiaryContainer
+        )
     }
 }
 
@@ -1234,41 +1313,15 @@ private fun ProactiveSuggestionChip(
                     minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis
                 )
             }
-            Box(
-                modifier = Modifier.size(32.dp).clip(CircleShape).clickable(onClick = onDismiss),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Filled.Close, "Ahora no",
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
         }
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                "Registrar",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable(onClick = onRegister)
-                    .padding(horizontal = 20.dp, vertical = 9.dp)
-            )
-            Text(
-                "Ahora no",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable(onClick = onDismiss)
-                    .padding(horizontal = 16.dp, vertical = 9.dp)
-            )
-        }
+        SuggestionActionRow(
+            primaryLabel = "Registrar",
+            onPrimary = onRegister,
+            secondaryLabel = "Ahora no",
+            onSecondary = onDismiss,
+            secondaryContentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        )
     }
 }
 
