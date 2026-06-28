@@ -18,10 +18,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.runtime.collectAsState
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardScreen
 import mx.budget.ui.dashboard.DashboardViewModel
 import mx.budget.ui.profile.ProfileScreen
+import mx.budget.ui.review.AttributionReviewScreen
+import mx.budget.ui.review.AttributionReviewViewModel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Destinos de navegación
@@ -33,6 +36,7 @@ object BudgetDestinations {
     const val WALLETS = "wallets"
     const val ANALYTICS = "analytics"
     const val PROFILE = "profile"
+    const val ATTRIBUTION_REVIEW = "attribution_review"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,9 +52,11 @@ object BudgetDestinations {
 fun BudgetNavGraph(
     dashboardViewModel: DashboardViewModel,
     captureViewModel: CaptureViewModel,
+    attributionReviewViewModel: AttributionReviewViewModel,
     windowWidthDp: Int = 360,
     dynamicColor: Boolean = true,
-    onDynamicColorChange: (Boolean) -> Unit = {}
+    onDynamicColorChange: (Boolean) -> Unit = {},
+    onRenormalize: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -79,7 +85,15 @@ fun BudgetNavGraph(
                 captureViewModel = captureViewModel,
                 windowWidthDp = windowWidthDp.dp,
                 currentRoute = currentRoute,
-                onNavigate = onNavigate
+                onNavigate = onNavigate,
+                onOpenReview = { onNavigate(BudgetDestinations.ATTRIBUTION_REVIEW) }
+            )
+        }
+
+        composable(route = BudgetDestinations.ATTRIBUTION_REVIEW) {
+            AttributionReviewScreen(
+                viewModel = attributionReviewViewModel,
+                onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
             )
         }
 
@@ -96,10 +110,14 @@ fun BudgetNavGraph(
         }
 
         composable(route = BudgetDestinations.PROFILE) {
+            val pendingReviewCount by dashboardViewModel.pendingReviewCount.collectAsState()
             ProfileScreen(
                 dynamicColor = dynamicColor,
                 onDynamicColorChange = onDynamicColorChange,
-                onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
+                onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
+                pendingReviewCount = pendingReviewCount,
+                onOpenReview = { onNavigate(BudgetDestinations.ATTRIBUTION_REVIEW) },
+                onRenormalize = onRenormalize
             )
         }
     }

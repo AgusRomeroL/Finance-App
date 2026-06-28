@@ -33,6 +33,20 @@ interface AttributionReviewDao {
     @Query("SELECT COUNT(*) FROM attribution_review WHERE status = 'PENDING'")
     fun observePendingCount(): Flow<Int>
 
+    /**
+     * Atribuciones auto-aplicadas por la máquina (provenance). Alimentan el
+     * bloque "auto-aplicado · revertir" de la pantalla de revisión, para que el
+     * usuario vea y pueda deshacer lo que el worker aplicó solo (Apéndice F.3.6/F.3.7).
+     */
+    @Query(
+        """
+        SELECT * FROM attribution_review
+        WHERE status = 'AUTO_APPLIED'
+        ORDER BY confidence DESC, created_at DESC
+        """
+    )
+    fun observeAutoApplied(): Flow<List<AttributionReviewEntity>>
+
     @Query("SELECT * FROM attribution_review WHERE id = :id")
     suspend fun getById(id: String): AttributionReviewEntity?
 

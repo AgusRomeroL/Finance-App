@@ -86,6 +86,21 @@ interface ExpenseRepository {
     )
 
     /**
+     * Reemplaza la atribución de UNA dimensión ([role] = "BENEFICIARY" | "PAYER")
+     * de un gasto, preservando la dimensión opuesta. Recalcula `share_amount_mxn`
+     * desde el monto del gasto y encola un push de sync. Pasar [sharesBps] vacío
+     * **borra** esa dimensión (revertir una auto-aplicación).
+     *
+     * Lo usa la pantalla "Revisión de atribuciones" al confirmar/editar/revertir
+     * una sugerencia (Apéndice F.3.7). [sharesBps] debe sumar 10,000 si no es vacío.
+     */
+    suspend fun applyAttributionForRole(
+        expenseId: String,
+        role: String,
+        sharesBps: Map<String, Int>
+    )
+
+    /**
      * Elimina un gasto y revierte el ajuste de saldo del wallet.
      * Solo permitido si la quincena NO está CLOSED.
      */

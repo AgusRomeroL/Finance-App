@@ -89,6 +89,31 @@ class ExpenseRepositoryImpl(
         }
     }
 
+    override suspend fun applyAttributionForRole(
+        expenseId: String,
+        role: String,
+        sharesBps: Map<String, Int>
+    ) {
+        db.withTransaction {
+            val expense = dao.getById(expenseId) ?: return@withTransaction
+            attributionDao.deleteByExpenseIdAndRole(expenseId, role)
+            if (sharesBps.isNotEmpty()) {
+                val rows = sharesBps.map { (memberId, bps) ->
+                    ExpenseAttributionEntity(
+                        id = java.util.UUID.randomUUID().toString(),
+                        expenseId = expenseId,
+                        memberId = memberId,
+                        role = role,
+                        shareBps = bps,
+                        shareAmountMxn = expense.amountMxn * bps / 10_000.0
+                    )
+                }
+                attributionDao.insertAll(rows)
+            }
+            enqueueSync(expenseId, "UPSERT")
+        }
+    }
+
     override suspend fun deleteAndRevertBalance(expenseId: String) {
         db.withTransaction {
             val expense = dao.getById(expenseId) ?: return@withTransaction

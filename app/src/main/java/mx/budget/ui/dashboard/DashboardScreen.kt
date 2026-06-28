@@ -184,9 +184,11 @@ fun DashboardScreen(
     captureViewModel: CaptureViewModel? = null,
     windowWidthDp: Dp = 360.dp,
     currentRoute: String = "dashboard",
-    onNavigate: ((String) -> Unit)? = null
+    onNavigate: ((String) -> Unit)? = null,
+    onOpenReview: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val pendingReviewCount by viewModel.pendingReviewCount.collectAsState()
     val isExpanded = windowWidthDp >= 600.dp
     var showCapture by remember { mutableStateOf(false) }
 
@@ -202,14 +204,18 @@ fun DashboardScreen(
             state = uiState,
             currentRoute = currentRoute,
             onNavigate = onNavigate,
-            onCapture = { showCapture = true }
+            onCapture = { showCapture = true },
+            pendingReviewCount = pendingReviewCount,
+            onOpenReview = onOpenReview
         )
     } else {
         CompactDashboard(
             state = uiState,
             currentRoute = currentRoute,
             onNavigate = onNavigate,
-            onCapture = { showCapture = true }
+            onCapture = { showCapture = true },
+            pendingReviewCount = pendingReviewCount,
+            onOpenReview = onOpenReview
         )
     }
 }
@@ -223,7 +229,9 @@ private fun ExpandedDashboard(
     state: DashboardUiState,
     currentRoute: String,
     onNavigate: ((String) -> Unit)?,
-    onCapture: () -> Unit
+    onCapture: () -> Unit,
+    pendingReviewCount: Int,
+    onOpenReview: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -243,7 +251,12 @@ private fun ExpandedDashboard(
                             .fillMaxSize()
                             .padding(start = 30.dp, top = 22.dp, end = 32.dp, bottom = 24.dp)
                     ) {
-                        DashboardHeader(quincena = state.quincena, expanded = true)
+                        DashboardHeader(
+                            quincena = state.quincena,
+                            expanded = true,
+                            pendingReviewCount = pendingReviewCount,
+                            onOpenReview = onOpenReview
+                        )
                         Spacer(Modifier.height(22.dp))
                         BentoPanes(state = state, modifier = Modifier.fillMaxSize())
                     }
@@ -320,7 +333,9 @@ private fun CompactDashboard(
     state: DashboardUiState,
     currentRoute: String,
     onNavigate: ((String) -> Unit)?,
-    onCapture: () -> Unit
+    onCapture: () -> Unit,
+    pendingReviewCount: Int,
+    onOpenReview: () -> Unit
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -336,7 +351,14 @@ private fun CompactDashboard(
                         contentPadding = PaddingValues(20.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
-                        item { DashboardHeader(quincena = state.quincena, expanded = false) }
+                        item {
+                            DashboardHeader(
+                                quincena = state.quincena,
+                                expanded = false,
+                                pendingReviewCount = pendingReviewCount,
+                                onOpenReview = onOpenReview
+                            )
+                        }
                         item { CollapsedHealthCard(state = state) }
                         item {
                             Row(
@@ -530,7 +552,12 @@ private fun BottomNavCustom(currentRoute: String, onNavigate: ((String) -> Unit)
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun DashboardHeader(quincena: QuincenaEntity?, expanded: Boolean) {
+private fun DashboardHeader(
+    quincena: QuincenaEntity?,
+    expanded: Boolean,
+    pendingReviewCount: Int = 0,
+    onOpenReview: () -> Unit = {}
+) {
     val eyebrow = buildString {
         append(quincena?.label ?: "Sin quincena activa")
         val range = quincenaRange(quincena)
@@ -553,14 +580,41 @@ private fun DashboardHeader(quincena: QuincenaEntity?, expanded: Boolean) {
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
-        if (expanded) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                HeaderIconButton(Icons.Filled.Search, "Buscar")
-                HeaderIconButton(Icons.Filled.Tune, "Filtros")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (pendingReviewCount > 0) {
+                ReviewBadge(count = pendingReviewCount, onClick = onOpenReview)
             }
-        } else {
+            if (expanded) {
+                HeaderIconButton(Icons.Filled.Search, "Buscar")
+            }
             HeaderIconButton(Icons.Filled.Tune, "Filtros")
         }
+    }
+}
+
+/** Pastilla "N por revisar" → entra a la pantalla de revisión de atribuciones (Feature B). */
+@Composable
+private fun ReviewBadge(count: Int, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .clickable(onClick = onClick)
+            .padding(start = 12.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Filled.Insights, "Revisar atribuciones",
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            "$count por revisar",
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            maxLines = 1, softWrap = false
+        )
     }
 }
 

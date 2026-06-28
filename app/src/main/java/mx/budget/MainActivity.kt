@@ -14,9 +14,12 @@ import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.WalletRepository
+import mx.budget.data.local.dao.AttributionReviewDao
+import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardViewModel
 import mx.budget.ui.navigation.BudgetNavGraph
+import mx.budget.ui.review.AttributionReviewViewModel
 import mx.budget.ui.theme.BudgetAppTheme
 
 class MainActivity : ComponentActivity() {
@@ -27,8 +30,20 @@ class MainActivity : ComponentActivity() {
             app.quincenaRepository,
             app.expenseRepository,
             app.memberRepository,
-            app.householdId
+            app.householdId,
+            app.database.attributionReviewDao()
         ))[DashboardViewModel::class.java]
+    }
+
+    private val attributionReviewViewModel: AttributionReviewViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, AttributionReviewViewModelFactory(
+            app.database.attributionReviewDao(),
+            app.database.expenseDao(),
+            app.expenseRepository,
+            app.memberRepository,
+            app.householdId
+        ))[AttributionReviewViewModel::class.java]
     }
 
     private val captureViewModel: CaptureViewModel by lazy {
@@ -60,9 +75,11 @@ class MainActivity : ComponentActivity() {
                 BudgetNavGraph(
                     dashboardViewModel = dashboardViewModel,
                     captureViewModel = captureViewModel,
+                    attributionReviewViewModel = attributionReviewViewModel,
                     windowWidthDp = windowWidthDp,
                     dynamicColor = dynamicColor,
-                    onDynamicColorChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } }
+                    onDynamicColorChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } },
+                    onRenormalize = { app.enqueueRetroLabeling(replace = true) }
                 )
             }
         }
@@ -75,11 +92,33 @@ class DashboardViewModelFactory(
     private val expenseRepository: ExpenseRepository,
     private val memberRepository: MemberRepository,
     private val householdId: String,
+    private val attributionReviewDao: AttributionReviewDao,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return DashboardViewModel(
             quincenaRepository = quincenaRepository,
+            expenseRepository = expenseRepository,
+            memberRepository = memberRepository,
+            householdId = householdId,
+            attributionReviewDao = attributionReviewDao,
+        ) as T
+    }
+}
+
+/** Factory para AttributionReviewViewModel (Feature B). */
+class AttributionReviewViewModelFactory(
+    private val attributionReviewDao: AttributionReviewDao,
+    private val expenseDao: ExpenseDao,
+    private val expenseRepository: ExpenseRepository,
+    private val memberRepository: MemberRepository,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return AttributionReviewViewModel(
+            reviewDao = attributionReviewDao,
+            expenseDao = expenseDao,
             expenseRepository = expenseRepository,
             memberRepository = memberRepository,
             householdId = householdId,

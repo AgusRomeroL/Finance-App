@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revisión de atribuciones — The Architectural Ledger</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&display=swap" rel="stylesheet"/>
+<style>
+  body { font-family: 'Inter', sans-serif; margin: 0; background: #eef0ef; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
+</style>
+</head>
+<body>
+<!--
+  Mockup de referencia de la pantalla "Revisión de atribuciones" (Feature B,
+  Apéndice F.3.7 de ADENDA_IA_PROACTIVA.md). Sistema "The Architectural Ledger":
+  capas tonales (sin líneas de 1px), radios 28dp, paleta verde sembrada #016e3e
+  (fallback; en runtime los roles M3 son dinámicos). La confianza usa redundancia
+  no-cromática (icono + etiqueta + color). Implementado en:
+  app/src/main/java/mx/budget/ui/review/AttributionReviewScreen.kt
+-->
+<div style="padding:18px;">
+  <div style="max-width:480px;margin:0 auto;background:#f9f9f9;border-radius:28px;padding:22px 20px 26px;color:#2f3334;">
+
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px;">
+      <div style="width:40px;height:40px;border-radius:50%;background:#e0e3e4;display:flex;align-items:center;justify-content:center;">
+        <span class="material-symbols-outlined" style="font-size:20px;color:#2f3334;">arrow_back</span>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.6px;color:#5c6060;">INTELIGENCIA · NORMALIZACIÓN</div>
+        <div style="font-size:29px;font-weight:300;line-height:1.1;color:#2f3334;">Revisión de atribuciones</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:0 4px 16px;">
+      <span style="font-size:13px;color:#5c6060;">Agrupados por concepto similar</span>
+      <span style="font-size:12px;font-weight:700;color:#005f34;background:#9cf6b9;padding:4px 12px;border-radius:9999px;">3 por revisar</span>
+    </div>
+
+    <div style="background:#ffffff;border-radius:28px;padding:20px 20px 18px;margin-bottom:14px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div>
+          <div style="font-size:18px;font-weight:600;color:#2f3334;">Colegiatura Santiago</div>
+          <div style="font-size:12px;color:#5c6060;margin-top:2px;">12 gastos agrupados</div>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.4px;color:#6b4500;background:#ffe2a6;padding:5px 11px;border-radius:9999px;white-space:nowrap;">
+          <span class="material-symbols-outlined" style="font-size:15px;">help</span>MEDIA
+        </span>
+      </div>
+
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:1.4px;color:#5c6060;margin-bottom:7px;">BENEFICIARIO SUGERIDO</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-flex;align-items:center;gap:7px;background:#edeeee;padding:5px 12px 5px 5px;border-radius:9999px;">
+              <span style="width:24px;height:24px;border-radius:50%;background:#9cf6b9;color:#005f34;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;">S</span>
+              <span style="font-size:13px;font-weight:500;">Santiago</span>
+              <span style="font-size:13px;font-weight:700;color:#2f3334;">100%</span>
+            </span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:1.4px;color:#5c6060;margin-bottom:7px;">PAGADOR SUGERIDO</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="display:inline-flex;align-items:center;gap:7px;background:#edeeee;padding:5px 12px 5px 5px;border-radius:9999px;">
+              <span style="width:24px;height:24px;border-radius:50%;background:#9cf6b9;color:#005f34;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;">N</span>
+              <span style="font-size:13px;font-weight:500;">Norma</span>
+              <span style="font-size:13px;font-weight:700;color:#2f3334;">100%</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:6px;margin-top:15px;font-size:12px;color:#5c6060;">
+        <span class="material-symbols-outlined" style="font-size:15px;color:#5c6060;">insights</span>
+        Basado en 12 gastos · 83% de confianza
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-top:16px;">
+        <button style="flex:1;border:none;background:linear-gradient(135deg,#016e3e,#006035);color:#e7ffea;font-size:13px;font-weight:600;padding:11px 14px;border-radius:9999px;cursor:pointer;">Aplicar a 12</button>
+        <button style="border:none;background:#e6e8e9;color:#2f3334;font-size:13px;font-weight:600;padding:11px 18px;border-radius:9999px;cursor:pointer;">Editar</button>
+        <button style="border:none;background:transparent;color:#5c6060;font-size:13px;font-weight:600;padding:11px 12px;border-radius:9999px;cursor:pointer;">Ignorar</button>
+      </div>
+    </div>
+
+    <div style="background:#ffffff;border-radius:28px;padding:20px;margin-bottom:14px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div>
+          <div style="font-size:18px;font-weight:600;color:#2f3334;">Walmart</div>
+          <div style="font-size:12px;color:#5c6060;margin-top:2px;">8 gastos agrupados</div>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.4px;color:#5c6060;background:#e0e3e4;padding:5px 11px;border-radius:9999px;white-space:nowrap;">
+          <span class="material-symbols-outlined" style="font-size:15px;">remove</span>BAJA
+        </span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:13px;font-size:12px;color:#5c6060;">
+        <span class="material-symbols-outlined" style="font-size:15px;">search_off</span>
+        Sin patrón claro — asígnalo manualmente
+      </div>
+      <div style="margin-top:15px;display:flex;gap:10px;">
+        <button style="border:none;background:#e6e8e9;color:#2f3334;font-size:13px;font-weight:600;padding:11px 22px;border-radius:9999px;cursor:pointer;">Asignar</button>
+        <button style="border:none;background:transparent;color:#5c6060;font-size:13px;font-weight:600;padding:11px 12px;border-radius:9999px;cursor:pointer;">Ignorar</button>
+      </div>
+    </div>
+
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.6px;color:#5c6060;margin:18px 8px 8px;">APLICADOS AUTOMÁTICAMENTE</div>
+
+    <div style="background:#ffffff;border-radius:28px;padding:20px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div>
+          <div style="font-size:18px;font-weight:600;color:#2f3334;">Despensa</div>
+          <div style="font-size:12px;color:#5c6060;margin-top:2px;">34 gastos agrupados</div>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.4px;color:#0F5A2E;background:#c6f3d3;padding:5px 11px;border-radius:9999px;white-space:nowrap;">
+          <span class="material-symbols-outlined" style="font-size:15px;">check_circle</span>ALTA
+        </span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:14px;">
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#e0e3e4;padding:5px 11px 5px 5px;border-radius:9999px;font-size:12px;"><span style="width:22px;height:22px;border-radius:50%;background:#9cf6b9;color:#005f34;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;">B</span>Benjamín 50%</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#e0e3e4;padding:5px 11px 5px 5px;border-radius:9999px;font-size:12px;"><span style="width:22px;height:22px;border-radius:50%;background:#9cf6b9;color:#005f34;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;">N</span>Norma 50%</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;">
+        <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#0F5A2E;">
+          <span class="material-symbols-outlined" style="font-size:16px;">auto_awesome</span>Auto-aplicado · 91% de confianza
+        </span>
+        <button style="border:none;background:transparent;color:#5c6060;font-size:13px;font-weight:600;padding:8px 10px;border-radius:9999px;cursor:pointer;">Revertir</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body></html>

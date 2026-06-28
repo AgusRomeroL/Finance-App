@@ -18,13 +18,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,7 +49,10 @@ import androidx.compose.ui.unit.sp
 fun ProfileScreen(
     dynamicColor: Boolean,
     onDynamicColorChange: (Boolean) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    pendingReviewCount: Int = 0,
+    onOpenReview: () -> Unit = {},
+    onRenormalize: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -137,11 +147,107 @@ fun ProfileScreen(
         }
 
         Spacer(Modifier.height(20.dp))
+
+        // Card de inteligencia / normalización (Feature B)
+        var renormalized by remember { mutableStateOf(false) }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(22.dp)
+        ) {
+            Text(
+                "INTELIGENCIA",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 1.6.sp
+            )
+            Spacer(Modifier.height(14.dp))
+            SettingRow(
+                icon = Icons.AutoMirrored.Filled.Rule,
+                title = "Revisión de atribuciones",
+                subtitle = if (pendingReviewCount > 0) "$pendingReviewCount gastos por revisar"
+                else "Sin pendientes por ahora",
+                trailingBadge = pendingReviewCount.takeIf { it > 0 }?.toString(),
+                onClick = onOpenReview
+            )
+            Spacer(Modifier.height(8.dp))
+            SettingRow(
+                icon = Icons.Filled.Refresh,
+                title = "Re-normalizar historial",
+                subtitle = if (renormalized) "En proceso… revisa la cola en unos segundos"
+                else "Recalcula conceptos y re-infiere atribuciones",
+                trailingBadge = null,
+                onClick = {
+                    onRenormalize()
+                    renormalized = true
+                }
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
         Text(
             "Los colores de ingreso, gasto y alerta permanecen estables en ambos modos.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp)
         )
+    }
+}
+
+/** Fila de ajuste con icono, título, subtítulo y chevron (o badge numérico). */
+@Composable
+private fun SettingRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    trailingBadge: String?,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        if (trailingBadge != null) {
+            Text(
+                trailingBadge,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .padding(horizontal = 9.dp, vertical = 3.dp)
+            )
+        } else {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight, null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp)
+            )
+        }
     }
 }

@@ -3,18 +3,15 @@ package mx.budget.ui.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import mx.budget.data.local.dao.AttributionReviewDao
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
@@ -62,15 +59,6 @@ sealed class DashboardUiState {
     data class Error(val message: String) : DashboardUiState()
 }
 
-/**
- * Par de distribuciones por miembro (las dos dimensiones de atribución).
- * @param beneficiary quién consume (BENEFICIARY); @param payer quién paga (PAYER).
- */
-data class MemberDistributions(
-    val beneficiary: List<SpendByMember>,
-    val payer: List<SpendByMember>
-)
-
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardViewModel
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,128 +88,70 @@ class DashboardViewModel(
     private val quincenaRepository: QuincenaRepository,
     private val expenseRepository: ExpenseRepository,
     private val memberRepository: MemberRepository,
-    private val householdId: String
+    private val householdId: String,
+    private val attributionReviewDao: AttributionReviewDao
 ) : ViewModel() {
 
-    // ── Quincena activa ───────────────────────────────────────────────────────
+    /**
+     * Conteo de atribuciones pendientes de revisar (Feature B). Alimenta el badge
+     * "N por revisar" del dashboard, que entra a la pantalla de revisión.
+     */
+    val pendingReviewCount: StateFlow<Int> = attributionReviewDao
+        .observePendingCount()
+        .catch { emit(0) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    // ── Estado unificado del dashboard ─────────────────────────────────────────
 
     /**
-     * Flujo de la quincena activa. Emite `null` si no hay ninguna.
-     * Compartido con [WhileSubscribed] para evitar queries innecesarias
-     * cuando la UI está en background.
+     * Estado de UI del dashboard, derivado de la quincena activa.
+     *
+     * **Por qué un solo `flatMapLatest` + `combine` sobre flujos crudos:** todo lo
+     * dependiente de la quincena (transacciones, totales, distribución por miembro)
+     * se calcula DENTRO de un único `flatMapLatest`. Así el `combine` espera a que
+     * TODAS sus fuentes tengan su primer valor antes de emitir el primer `Success`
+     * de una quincena, y la UI nunca ve un frame "roto" (quincena cargada pero
+     * gastos en $0). La versión anterior combinaba 5 `StateFlow` independientes, cada
+     * uno con valor inicial vacío/0, lo que producía ese flash en el arranque en frío.
+     *
+     * Balance disponible = projectedIncomeMxn − actualExpensesMxn (snapshot de la quincena).
      */
-    val activeQuincena: StateFlow<QuincenaEntity?> = quincenaRepository
+    val uiState: StateFlow<DashboardUiState> = quincenaRepository
         .observeActive(householdId)
         .distinctUntilChanged()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = null
-        )
-
-    // ── Flujos derivados de la quincena activa ────────────────────────────────
-
-    /**
-     * Lista de transacciones con detalles (JOIN expense + category + wallet).
-     * Se actualiza automáticamente al cambiar la quincena activa.
-     */
-    val transactions: StateFlow<List<ExpenseWithDetails>> = activeQuincena
-        .flatMapLatest { quincena ->
-            quincena?.let { expenseRepository.observeWithDetails(it.id) } ?: flowOf(emptyList())
-        }
-        .catch { emit(emptyList()) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = emptyList()
-        )
-
-    /**
-     * Total ejecutado (POSTED) en MXN para la quincena activa.
-     * KPI principal — alimenta la SummaryCard "Total Spent".
-     */
-    val postedTotal: StateFlow<Double> = activeQuincena
-        .flatMapLatest { quincena ->
-            quincena?.let { expenseRepository.observePostedTotal(it.id) } ?: flowOf(0.0)
-        }
-        .catch { emit(0.0) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = 0.0
-        )
-
-    /**
-     * Total presupuestado pendiente (PLANNED) en MXN.
-     * Indicador "falta gastar" — alimenta la SummaryCard "Total Budget".
-     */
-    val plannedTotal: StateFlow<Double> = activeQuincena
-        .flatMapLatest { quincena ->
-            quincena?.let { expenseRepository.observePlannedTotal(it.id) } ?: flowOf(0.0)
-        }
-        .catch { emit(0.0) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = 0.0
-        )
-
-    /**
-     * Distribuciones de gasto por miembro (beneficiario + pagador) en la quincena.
-     * Alimentan las barras horizontales del dashboard y su toggle. Se combinan en
-     * un solo holder para no exceder el `combine` de 5 flujos del estado.
-     */
-    val memberDistributions: StateFlow<MemberDistributions> = activeQuincena
         .flatMapLatest { quincena ->
             if (quincena == null) {
-                flowOf(MemberDistributions(emptyList(), emptyList()))
+                flowOf<DashboardUiState>(
+                    DashboardUiState.Success(
+                        quincena = null,
+                        transactions = emptyList(),
+                        postedTotal = 0.0,
+                        plannedTotal = 0.0,
+                        balance = 0.0,
+                        beneficiaryDistribution = emptyList(),
+                        payerDistribution = emptyList()
+                    )
+                )
             } else {
                 combine(
+                    expenseRepository.observeWithDetails(quincena.id),
+                    expenseRepository.observePostedTotal(quincena.id),
+                    expenseRepository.observePlannedTotal(quincena.id),
                     expenseRepository.observeSpendByMember(quincena.id),
                     expenseRepository.observePaidByMember(quincena.id)
-                ) { beneficiary, payer -> MemberDistributions(beneficiary, payer) }
+                ) { tx, posted, planned, beneficiary, payer ->
+                    DashboardUiState.Success(
+                        quincena = quincena,
+                        transactions = tx,
+                        postedTotal = posted,
+                        plannedTotal = planned,
+                        balance = quincena.projectedIncomeMxn - quincena.actualExpensesMxn,
+                        beneficiaryDistribution = beneficiary,
+                        payerDistribution = payer
+                    ) as DashboardUiState
+                }
             }
         }
-        .catch { emit(MemberDistributions(emptyList(), emptyList())) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = MemberDistributions(emptyList(), emptyList())
-        )
-
-    // ── Estado compuesto ──────────────────────────────────────────────────────
-
-    /**
-     * Estado unificado de UI que combina todos los flujos anteriores.
-     *
-     * La UI solo necesita observar este StateFlow y hacer un `when` sobre
-     * el tipo para renderizar Loading / Success / Error.
-     *
-     * El balance disponible se calcula como:
-     *   projectedIncomeMxn - actualExpensesMxn (del snapshot de QuincenaEntity)
-     */
-    val uiState: StateFlow<DashboardUiState> = combine(
-        activeQuincena,
-        transactions,
-        postedTotal,
-        plannedTotal,
-        memberDistributions
-    ) { quincena, txList, posted, planned, members ->
-        val balance = if (quincena != null) {
-            quincena.projectedIncomeMxn - quincena.actualExpensesMxn
-        } else {
-            0.0
-        }
-        DashboardUiState.Success(
-            quincena = quincena,
-            transactions = txList,
-            postedTotal = posted,
-            plannedTotal = planned,
-            balance = balance,
-            beneficiaryDistribution = members.beneficiary,
-            payerDistribution = members.payer
-        ) as DashboardUiState
-    }
         .catch { e ->
             emit(DashboardUiState.Error(e.message ?: "Error desconocido al cargar el dashboard"))
         }

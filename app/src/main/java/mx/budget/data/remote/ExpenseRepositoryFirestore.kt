@@ -171,6 +171,16 @@ class ExpenseRepositoryFirestore(
         insertWithAttributions(expense, attributions)
     }
 
+    override suspend fun applyAttributionForRole(
+        expenseId: String,
+        role: String,
+        sharesBps: Map<String, Int>
+    ) {
+        // No-op en el lado nube: el push de sync sube el gasto completo vía
+        // insertWithAttributions (drenado por SyncManager), así que esta ruta
+        // por-rol nunca se invoca aquí. Existe solo para cumplir el contrato.
+    }
+
     override suspend fun deleteAndRevertBalance(expenseId: String) {
         val matches = firestore.collectionGroup("expenses").whereEqualTo("id", expenseId).get().await()
         matches.documents.firstOrNull()?.reference?.delete()?.await()
