@@ -9,6 +9,8 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.animation.core.animateDp
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -1029,16 +1031,26 @@ private fun SmartSuggestionsCarousel(
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val gap = 8.dp
         val wedgeW = 40.dp
-        // Ancho de la tarjeta activa = total − cuñas. Las anchuras de todos los ítems
-        // SUMAN exactamente el total en cada frame (la transición comparte reloj:
-        // lo que una pierde, otra lo gana), así que el Row nunca desborda al animar.
-        val cardW = (maxWidth - (wedgeW + gap) * (items.size - 1)).coerceAtLeast(160.dp)
+        val minCardW = 190.dp
+        val others = items.size - 1
+        // ¿Caben TODAS las cuñas dejando la tarjeta ≥ minCardW? Si no (4+ en pantallas
+        // angostas), el Row se vuelve scrollable en vez de desbordar/recortar.
+        val maxWedges = (((maxWidth - minCardW - gap) / (wedgeW + gap)).toInt()).coerceAtLeast(1)
+        val overflow = others > maxWedges
+
+        // Sin overflow: la tarjeta ocupa el resto y las anchuras SUMAN el total en cada
+        // frame (la transición comparte reloj → no desborda al animar).
+        // Con overflow: tarjeta fija (deja asomar 1 cuña) y el Row hace scroll horizontal.
+        val cardW = if (overflow) (maxWidth - wedgeW - gap).coerceAtLeast(minCardW)
+        else maxWidth - (wedgeW + gap) * others
         val transition = updateTransition(active, label = "smartCarousel")
 
+        val rowModifier = Modifier
+            .height(IntrinsicSize.Min)
+            .then(if (overflow) Modifier.horizontalScroll(rememberScrollState()) else Modifier.fillMaxWidth())
+
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min),
+            modifier = rowModifier,
             horizontalArrangement = Arrangement.spacedBy(gap)
         ) {
             items.forEachIndexed { i, item ->
