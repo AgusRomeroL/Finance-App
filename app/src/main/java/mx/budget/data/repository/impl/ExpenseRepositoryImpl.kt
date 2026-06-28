@@ -2,7 +2,6 @@ package mx.budget.data.repository.impl
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import mx.budget.data.local.BudgetDatabase
 import mx.budget.data.local.dao.ExpenseAttributionDao
 import mx.budget.data.local.dao.ExpenseDao
@@ -41,8 +40,7 @@ class ExpenseRepositoryImpl(
         dao.observePlannedTotal(quincenaId)
 
     override fun observeSpendByMember(quincenaId: String): Flow<List<SpendByMember>> =
-        // Derivado de los gastos con detalles — stub observacional
-        flow { emit(emptyList()) }
+        attributionDao.observeSpendByMember(quincenaId)
 
     override suspend fun getById(id: String): ExpenseEntity? =
         dao.getById(id)
