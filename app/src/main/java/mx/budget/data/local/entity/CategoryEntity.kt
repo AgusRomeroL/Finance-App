@@ -61,8 +61,9 @@ data class CategoryEntity(
     val icon: String? = null,
 
     /**
-     * Emoji monocromo sugerido (IA on-device / fallback) para los pills de filtro.
-     * Se cachea aquí; null = aún no calculado (la UI usa el fallback por código).
+     * Columna reservada (schema v5). Se introdujo para cachear un emoji sugerido por
+     * grupo, pero los filtros usan íconos Material deterministas (`CategoryIcons.kt`),
+     * así que hoy NO se escribe ni se lee. Se conserva para no forzar una migración v6.
      */
     @ColumnInfo(name = "suggested_emoji")
     val suggestedEmoji: String? = null,

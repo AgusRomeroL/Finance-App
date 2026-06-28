@@ -49,14 +49,6 @@ interface CategoryDao {
     @Query("SELECT * FROM category WHERE household_id = :householdId AND code = :code")
     suspend fun getByCode(householdId: String, code: String): CategoryEntity?
 
-    /**
-     * Persiste el emoji sugerido (IA on-device / fallback) de una categoría.
-     * Escritura directa por DAO (no encola en `sync_queue`), patrón anti-eco
-     * como [ExpenseDao.updateConceptCanonical].
-     */
-    @Query("UPDATE category SET suggested_emoji = :emoji WHERE id = :id")
-    suspend fun updateSuggestedEmoji(id: String, emoji: String?)
-
     @Query(
         """
         SELECT * FROM category

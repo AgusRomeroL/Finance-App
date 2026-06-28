@@ -8,17 +8,14 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.animation.core.animateDp
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,11 +45,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Insights
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,9 +63,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -804,7 +797,7 @@ private fun QuincenaNavChip(
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ChevronButton(Icons.Filled.KeyboardArrowLeft, "Quincena anterior", enabled = canViewOlder, tint = fg, onClick = nav.onOlder)
+        ChevronButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Quincena anterior", enabled = canViewOlder, tint = fg, onClick = nav.onOlder)
         Text(
             label,
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
@@ -815,7 +808,7 @@ private fun QuincenaNavChip(
                 .clickable(enabled = !viewingActive, onClick = nav.onReset)
                 .padding(horizontal = 6.dp, vertical = 4.dp)
         )
-        ChevronButton(Icons.Filled.KeyboardArrowRight, "Quincena siguiente", enabled = canViewNewer, tint = fg, onClick = nav.onNewer)
+        ChevronButton(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Quincena siguiente", enabled = canViewNewer, tint = fg, onClick = nav.onNewer)
     }
 }
 
@@ -873,19 +866,6 @@ private fun ReviewBadge(count: Int, onClick: () -> Unit, compact: Boolean = fals
             color = MaterialTheme.colorScheme.onPrimaryContainer,
             maxLines = 1, softWrap = false
         )
-    }
-}
-
-@Composable
-private fun HeaderIconButton(icon: ImageVector, description: String) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, description, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -1888,45 +1868,6 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
             postedTotal = state.postedTotal,
             viewingActive = state.viewingActive
         )
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FABs
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun ExtendedCaptureFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .height(64.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.primary)
-            .clickable(onClick = onClick)
-            .padding(start = 22.dp, end = 26.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Filled.Add, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(12.dp))
-        Text(
-            "Capturar gasto",
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-            color = MaterialTheme.colorScheme.onPrimary
-        )
-    }
-}
-
-@Composable
-private fun CircularCaptureFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .size(56.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.primary)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(Icons.Filled.Add, "Capturar gasto", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
     }
 }
 
