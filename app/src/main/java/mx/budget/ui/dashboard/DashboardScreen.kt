@@ -1419,7 +1419,7 @@ private fun RitmoCard(
                 msg,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2, overflow = TextOverflow.Ellipsis
+                maxLines = 3, overflow = TextOverflow.Ellipsis
             )
         }
         Spacer(Modifier.width(10.dp))
@@ -1457,13 +1457,13 @@ private fun MemberDistributionSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Eyebrow("Gasto por miembro", maxLines = 1)
+                Eyebrow("Gasto por miembro", maxLines = 2)
                 Spacer(Modifier.height(4.dp))
                 Text(
                     "${data.sumOf { it.totalMxn }.toMxn()} · ${data.size} miembros",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                    maxLines = 2, overflow = TextOverflow.Ellipsis
                 )
             }
             SegmentedToggle(
@@ -1729,7 +1729,7 @@ internal fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) 
                 tx.concept,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
+                maxLines = 2, overflow = TextOverflow.Ellipsis
             )
             Spacer(Modifier.height(2.dp))
             Text(
