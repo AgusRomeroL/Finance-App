@@ -194,4 +194,12 @@ class ExpenseRepositoryFirestore(
         val matches = firestore.collectionGroup("expenses").whereEqualTo("id", expenseId).get().await()
         matches.documents.firstOrNull()?.reference?.update("status", "POSTED")?.await()
     }
+
+    override suspend fun confirmPlanned(expenseId: String, actualAmountMxn: Double?) {
+        val matches = firestore.collectionGroup("expenses").whereEqualTo("id", expenseId).get().await()
+        val ref = matches.documents.firstOrNull()?.reference ?: return
+        val updates = mutableMapOf<String, Any>("status" to "POSTED")
+        if (actualAmountMxn != null) updates["amountMxn"] = actualAmountMxn
+        ref.update(updates).await()
+    }
 }

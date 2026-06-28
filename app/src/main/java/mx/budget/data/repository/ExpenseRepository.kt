@@ -117,4 +117,14 @@ interface ExpenseRepository {
      * Ajusta saldo del wallet y recalcula totales de quincena.
      */
     suspend fun postPlannedExpense(expenseId: String)
+
+    /**
+     * Confirma un gasto PLANNED (materializado desde una plantilla recurrente,
+     * Apéndice G.2 Fase 2): lo pasa a POSTED y, si [actualAmountMxn] difiere del
+     * monto previsto, lo actualiza y **re-escala** los `share_amount_mxn` de sus
+     * atribuciones al monto real (los `share_bps` NO cambian). Encola push de sync.
+     * No-op si el gasto no existe o ya no está PLANNED. [actualAmountMxn] = null
+     * confirma con el monto previsto tal cual.
+     */
+    suspend fun confirmPlanned(expenseId: String, actualAmountMxn: Double? = null)
 }

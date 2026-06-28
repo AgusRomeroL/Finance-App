@@ -136,8 +136,25 @@ class ExpenseRepositoryImpl(
         )
     }
 
-    override suspend fun postPlannedExpense(expenseId: String) {
-        val expense = dao.getById(expenseId) ?: return
-        dao.update(expense.copy(status = "POSTED"))
+    override suspend fun postPlannedExpense(expenseId: String) =
+        confirmPlanned(expenseId, actualAmountMxn = null)
+
+    override suspend fun confirmPlanned(expenseId: String, actualAmountMxn: Double?) {
+        db.withTransaction {
+            val expense = dao.getById(expenseId) ?: return@withTransaction
+            if (expense.status != "PLANNED") return@withTransaction
+
+            val newAmount = actualAmountMxn ?: expense.amountMxn
+            dao.update(expense.copy(status = "POSTED", amountMxn = newAmount))
+
+            // Re-escala las atribuciones al monto real (los bps no cambian). insertAll
+            // es REPLACE: conserva los ids y solo actualiza el share_amount_mxn.
+            if (newAmount != expense.amountMxn) {
+                val rescaled = attributionDao.getByExpenseId(expenseId)
+                    .map { it.copy(shareAmountMxn = newAmount * it.shareBps / 10_000.0) }
+                if (rescaled.isNotEmpty()) attributionDao.insertAll(rescaled)
+            }
+            enqueueSync(expenseId, "UPSERT")
+        }
     }
 }
