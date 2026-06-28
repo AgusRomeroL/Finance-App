@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -39,6 +40,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
@@ -63,9 +66,12 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -82,6 +88,8 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Formato y utilidades
@@ -199,6 +207,12 @@ fun DashboardScreen(
         )
     }
 
+    val quincenaNav = QuincenaNav(
+        onOlder = viewModel::viewOlderQuincena,
+        onNewer = viewModel::viewNewerQuincena,
+        onReset = viewModel::resetToActiveQuincena
+    )
+
     if (isExpanded) {
         ExpandedDashboard(
             state = uiState,
@@ -206,7 +220,8 @@ fun DashboardScreen(
             onNavigate = onNavigate,
             onCapture = { showCapture = true },
             pendingReviewCount = pendingReviewCount,
-            onOpenReview = onOpenReview
+            onOpenReview = onOpenReview,
+            quincenaNav = quincenaNav
         )
     } else {
         CompactDashboard(
@@ -215,10 +230,18 @@ fun DashboardScreen(
             onNavigate = onNavigate,
             onCapture = { showCapture = true },
             pendingReviewCount = pendingReviewCount,
-            onOpenReview = onOpenReview
+            onOpenReview = onOpenReview,
+            quincenaNav = quincenaNav
         )
     }
 }
+
+/** Callbacks del navegador de quincenas (chip ‹ etiqueta ›). */
+private data class QuincenaNav(
+    val onOlder: () -> Unit,
+    val onNewer: () -> Unit,
+    val onReset: () -> Unit
+)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout expandido (Fold interno)
@@ -231,7 +254,8 @@ private fun ExpandedDashboard(
     onNavigate: ((String) -> Unit)?,
     onCapture: () -> Unit,
     pendingReviewCount: Int,
-    onOpenReview: () -> Unit
+    onOpenReview: () -> Unit,
+    quincenaNav: QuincenaNav
 ) {
     Row(
         modifier = Modifier
@@ -255,7 +279,11 @@ private fun ExpandedDashboard(
                             quincena = state.quincena,
                             expanded = true,
                             pendingReviewCount = pendingReviewCount,
-                            onOpenReview = onOpenReview
+                            onOpenReview = onOpenReview,
+                            canViewOlder = state.canViewOlder,
+                            canViewNewer = state.canViewNewer,
+                            viewingActive = state.viewingActive,
+                            quincenaNav = quincenaNav
                         )
                         Spacer(Modifier.height(22.dp))
                         BentoPanes(state = state, modifier = Modifier.fillMaxSize())
@@ -335,7 +363,8 @@ private fun CompactDashboard(
     onNavigate: ((String) -> Unit)?,
     onCapture: () -> Unit,
     pendingReviewCount: Int,
-    onOpenReview: () -> Unit
+    onOpenReview: () -> Unit,
+    quincenaNav: QuincenaNav
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -356,7 +385,11 @@ private fun CompactDashboard(
                                 quincena = state.quincena,
                                 expanded = false,
                                 pendingReviewCount = pendingReviewCount,
-                                onOpenReview = onOpenReview
+                                onOpenReview = onOpenReview,
+                                canViewOlder = state.canViewOlder,
+                                canViewNewer = state.canViewNewer,
+                                viewingActive = state.viewingActive,
+                                quincenaNav = quincenaNav
                             )
                         }
                         item { CollapsedHealthCard(state = state) }
@@ -556,7 +589,11 @@ private fun DashboardHeader(
     quincena: QuincenaEntity?,
     expanded: Boolean,
     pendingReviewCount: Int = 0,
-    onOpenReview: () -> Unit = {}
+    onOpenReview: () -> Unit = {},
+    canViewOlder: Boolean = false,
+    canViewNewer: Boolean = false,
+    viewingActive: Boolean = true,
+    quincenaNav: QuincenaNav? = null
 ) {
     val eyebrow = buildString {
         append(quincena?.label ?: "Sin quincena activa")
@@ -568,8 +605,8 @@ private fun DashboardHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom
     ) {
-        Column {
-            Eyebrow(eyebrow)
+        Column(modifier = Modifier.weight(1f)) {
+            Eyebrow(eyebrow, maxLines = 1)
             Spacer(Modifier.height(8.dp))
             Text(
                 "Salud financiera",
@@ -577,30 +614,108 @@ private fun DashboardHeader(
                     fontWeight = FontWeight.Light,
                     fontSize = if (expanded) 36.sp else 26.sp
                 ),
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
+        Spacer(Modifier.width(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (quincenaNav != null) {
+                QuincenaNavChip(
+                    label = shortQuincenaLabel(quincena),
+                    canViewOlder = canViewOlder,
+                    canViewNewer = canViewNewer,
+                    viewingActive = viewingActive,
+                    nav = quincenaNav
+                )
+            }
             if (pendingReviewCount > 0) {
-                ReviewBadge(count = pendingReviewCount, onClick = onOpenReview)
+                ReviewBadge(count = pendingReviewCount, onClick = onOpenReview, compact = !expanded)
             }
             if (expanded) {
                 HeaderIconButton(Icons.Filled.Search, "Buscar")
+                HeaderIconButton(Icons.Filled.Tune, "Filtros")
             }
-            HeaderIconButton(Icons.Filled.Tune, "Filtros")
         }
     }
 }
 
-/** Pastilla "N por revisar" → entra a la pantalla de revisión de atribuciones (Feature B). */
+/** Navegador de quincenas: ‹ etiqueta › — ‹ va a la más antigua, › a la más reciente. */
 @Composable
-private fun ReviewBadge(count: Int, onClick: () -> Unit) {
+private fun QuincenaNavChip(
+    label: String,
+    canViewOlder: Boolean,
+    canViewNewer: Boolean,
+    viewingActive: Boolean,
+    nav: QuincenaNav
+) {
+    val bg = if (viewingActive) MaterialTheme.colorScheme.surfaceContainerHigh
+    else MaterialTheme.colorScheme.primaryContainer
+    val fg = if (viewingActive) MaterialTheme.colorScheme.onSurface
+    else MaterialTheme.colorScheme.onPrimaryContainer
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
+            .height(40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ChevronButton(Icons.Filled.KeyboardArrowLeft, "Quincena anterior", enabled = canViewOlder, tint = fg, onClick = nav.onOlder)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+            color = fg,
+            maxLines = 1, softWrap = false,
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(enabled = !viewingActive, onClick = nav.onReset)
+                .padding(horizontal = 6.dp, vertical = 4.dp)
+        )
+        ChevronButton(Icons.Filled.KeyboardArrowRight, "Quincena siguiente", enabled = canViewNewer, tint = fg, onClick = nav.onNewer)
+    }
+}
+
+@Composable
+private fun ChevronButton(icon: ImageVector, description: String, enabled: Boolean, tint: Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            icon, description,
+            tint = if (enabled) tint else tint.copy(alpha = 0.3f),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+/** Etiqueta corta de quincena para el chip: "Q2 Jun '26" (robusta al formato del label). */
+private fun shortQuincenaLabel(q: QuincenaEntity?): String {
+    if (q == null) return "Quincena"
+    val parts = q.label.split(" ")
+    val qn = parts.getOrNull(0).orEmpty()
+    val mon = parts.getOrNull(1)?.take(3).orEmpty()
+    val yy = parts.getOrNull(2)?.takeLast(2).orEmpty()
+    return listOf(qn, mon, if (yy.isNotBlank()) "'$yy" else "").filter { it.isNotBlank() }.joinToString(" ")
+}
+
+/**
+ * Pastilla de sugerencias por revisar (Feature B) → entra a la pantalla de revisión.
+ * En [compact] muestra solo el icono + número (ahorra ancho junto al chip de quincena).
+ */
+@Composable
+private fun ReviewBadge(count: Int, onClick: () -> Unit, compact: Boolean = false) {
+    Row(
+        modifier = Modifier
+            .height(40.dp)
+            .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.primaryContainer)
             .clickable(onClick = onClick)
-            .padding(start = 12.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+            .padding(horizontal = if (compact) 12.dp else 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
@@ -610,7 +725,7 @@ private fun ReviewBadge(count: Int, onClick: () -> Unit) {
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            "$count por revisar",
+            if (compact) "$count" else "$count por revisar",
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onPrimaryContainer,
             maxLines = 1, softWrap = false
@@ -733,6 +848,12 @@ private fun HeroKpi(state: DashboardUiState.Success) {
         }
         Spacer(Modifier.height(20.dp))
         QuincenaRhythm(progress = progress)
+        Spacer(Modifier.height(16.dp))
+        RitmoCard(
+            quincena = state.quincena,
+            postedTotal = state.postedTotal,
+            viewingActive = state.viewingActive
+        )
     }
 }
 
@@ -776,6 +897,84 @@ private fun QuincenaRhythm(progress: QuincenaProgress) {
                     .clip(RoundedCornerShape(5.dp))
                     .background(MaterialTheme.colorScheme.primary)
             )
+        }
+    }
+}
+
+/**
+ * Tarjeta de **Ritmo**: compara el gasto ejecutado con el ritmo lineal esperado
+ * por el tiempo transcurrido de la quincena, y muestra el gasto disponible por día.
+ *
+ * "% por debajo/encima del gasto previsto" = (gastado − presupuesto×fracción_tiempo)
+ * / (presupuesto×fracción_tiempo). El presupuesto es `projectedExpensesMxn` (con
+ * fallback al ingreso). Redundancia no-cromática: icono (flecha) + texto + color.
+ */
+@Composable
+private fun RitmoCard(
+    quincena: QuincenaEntity?,
+    postedTotal: Double,
+    viewingActive: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val income = (quincena?.projectedIncomeMxn?.takeIf { it > 0.0 } ?: quincena?.actualIncomeMxn ?: 0.0)
+    val budget = (quincena?.projectedExpensesMxn?.takeIf { it > 0.0 } ?: income)
+    val progress = remember(quincena?.id) { computeProgress(quincena) }
+    val available = income - postedTotal
+    val expectedByNow = budget * progress.fraction
+    val deviation = if (expectedByNow > 0.0) (postedTotal - expectedByNow) / expectedByNow else 0.0
+    val pct = (abs(deviation) * 100).roundToInt()
+    val onTrack = pct < 1
+    val below = deviation < 0
+    val good = onTrack || below
+    val showPerDay = viewingActive && progress.daysRemaining > 0
+    val perDay = if (progress.daysRemaining > 0) available / progress.daysRemaining else available
+
+    val sem = amountSemantic(if (good) FinancialTone.INCOME else FinancialTone.WARNING)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(34.dp).clip(CircleShape).background(sem.container),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                if (below) Icons.AutoMirrored.Filled.TrendingDown else Icons.AutoMirrored.Filled.TrendingUp,
+                "Ritmo de gasto", tint = sem.color, modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Eyebrow("Ritmo", maxLines = 1)
+            Spacer(Modifier.height(2.dp))
+            val msg = buildAnnotatedString {
+                append("Vas ")
+                withStyle(SpanStyle(color = sem.color, fontWeight = FontWeight.SemiBold)) {
+                    append(if (onTrack) "al ritmo" else "$pct % ${if (below) "por debajo" else "por encima"}")
+                }
+                append(" del gasto previsto")
+            }
+            Text(
+                msg,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2, overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                if (showPerDay) perDay.toMxn() else available.toMxn(),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1, softWrap = false
+            )
+            Eyebrow(if (showPerDay) "Por día" else "Disponible", maxLines = 1)
         }
     }
 }
@@ -1208,35 +1407,11 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
             )
         }
         Spacer(Modifier.height(14.dp))
-        // Ritmo
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(incomeC.container),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.AutoMirrored.Filled.TrendingUp, "Ritmo", tint = incomeC.color, modifier = Modifier.size(18.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Eyebrow("Ritmo")
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "Te quedan ${(available / progress.daysRemaining.coerceAtLeast(1)).toMxn()} por día",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
+        RitmoCard(
+            quincena = state.quincena,
+            postedTotal = state.postedTotal,
+            viewingActive = state.viewingActive
+        )
     }
 }
 

@@ -3,6 +3,7 @@ package mx.budget.ui.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -52,7 +53,13 @@ sealed class DashboardUiState {
         /** Gasto por miembro BENEFICIARY (quién consume) — toggle "Beneficiario". */
         val beneficiaryDistribution: List<SpendByMember>,
         /** Gasto por miembro PAYER (quién paga) — toggle "Pagador". */
-        val payerDistribution: List<SpendByMember>
+        val payerDistribution: List<SpendByMember>,
+        /** Hay una quincena más antigua a la que navegar (chevron ‹). */
+        val canViewOlder: Boolean = false,
+        /** Hay una quincena más reciente a la que navegar (chevron ›). */
+        val canViewNewer: Boolean = false,
+        /** La quincena mostrada es la ACTIVA (no se está viendo una histórica). */
+        val viewingActive: Boolean = true
     ) : DashboardUiState()
 
     /** Estado de error con mensaje recuperable. */
@@ -101,25 +108,64 @@ class DashboardViewModel(
         .catch { emit(0) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
+    // ── Navegación entre quincenas ──────────────────────────────────────────────
+
+    /** Todas las quincenas del hogar, ordenadas de más reciente a más antigua. */
+    private val allQuincenas: StateFlow<List<QuincenaEntity>> = quincenaRepository
+        .observeAll(householdId)
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Quincena activa (la que el ciclo marca como ACTIVE). */
+    private val activeQuincena: StateFlow<QuincenaEntity?> = quincenaRepository
+        .observeActive(householdId)
+        .catch { emit(null) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Quincena que el usuario eligió ver con el chip ‹ › (null = seguir la activa). */
+    private val selectedQuincenaId = MutableStateFlow<String?>(null)
+
+    /** Contexto de la quincena mostrada + flags de navegación (valor inmutable). */
+    private data class ViewContext(
+        val quincena: QuincenaEntity?,
+        val canViewOlder: Boolean,
+        val canViewNewer: Boolean,
+        val viewingActive: Boolean
+    )
+
+    private fun currentViewedId(): String? =
+        selectedQuincenaId.value ?: activeQuincena.value?.id
+
     // ── Estado unificado del dashboard ─────────────────────────────────────────
 
     /**
-     * Estado de UI del dashboard, derivado de la quincena activa.
+     * Estado de UI del dashboard, derivado de la quincena MOSTRADA (la activa por
+     * defecto, o la que el usuario eligió con el navegador ‹ ›).
      *
      * **Por qué un solo `flatMapLatest` + `combine` sobre flujos crudos:** todo lo
      * dependiente de la quincena (transacciones, totales, distribución por miembro)
      * se calcula DENTRO de un único `flatMapLatest`. Así el `combine` espera a que
-     * TODAS sus fuentes tengan su primer valor antes de emitir el primer `Success`
-     * de una quincena, y la UI nunca ve un frame "roto" (quincena cargada pero
-     * gastos en $0). La versión anterior combinaba 5 `StateFlow` independientes, cada
-     * uno con valor inicial vacío/0, lo que producía ese flash en el arranque en frío.
+     * TODAS sus fuentes tengan su primer valor antes de emitir el primer `Success`,
+     * y la UI nunca ve un frame "roto" (quincena cargada pero gastos en $0).
      *
      * Balance disponible = projectedIncomeMxn − actualExpensesMxn (snapshot de la quincena).
      */
-    val uiState: StateFlow<DashboardUiState> = quincenaRepository
-        .observeActive(householdId)
+    val uiState: StateFlow<DashboardUiState> = combine(
+        allQuincenas, activeQuincena, selectedQuincenaId
+    ) { all, active, selectedId ->
+        val viewed = selectedId?.let { id -> all.firstOrNull { it.id == id } } ?: active
+        val idx = all.indexOfFirst { it.id == viewed?.id }
+        ViewContext(
+            quincena = viewed,
+            // Orden DESC (recientes primero): "más antigua" = índice mayor.
+            canViewOlder = idx in 0 until (all.size - 1),
+            canViewNewer = idx > 0,
+            viewingActive = viewed?.id != null && viewed.id == active?.id
+        )
+    }
         .distinctUntilChanged()
-        .flatMapLatest { quincena ->
+        .flatMapLatest { ctx ->
+            val quincena = ctx.quincena
             if (quincena == null) {
                 flowOf<DashboardUiState>(
                     DashboardUiState.Success(
@@ -147,7 +193,10 @@ class DashboardViewModel(
                         plannedTotal = planned,
                         balance = quincena.projectedIncomeMxn - quincena.actualExpensesMxn,
                         beneficiaryDistribution = beneficiary,
-                        payerDistribution = payer
+                        payerDistribution = payer,
+                        canViewOlder = ctx.canViewOlder,
+                        canViewNewer = ctx.canViewNewer,
+                        viewingActive = ctx.viewingActive
                     ) as DashboardUiState
                 }
             }
@@ -160,4 +209,25 @@ class DashboardViewModel(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = DashboardUiState.Loading
         )
+
+    // ── Acciones del navegador de quincenas ─────────────────────────────────────
+
+    /** Ver la quincena inmediatamente más antigua (chevron ‹). */
+    fun viewOlderQuincena() {
+        val all = allQuincenas.value
+        val idx = all.indexOfFirst { it.id == currentViewedId() }
+        if (idx in 0 until all.lastIndex) selectedQuincenaId.value = all[idx + 1].id
+    }
+
+    /** Ver la quincena inmediatamente más reciente (chevron ›). */
+    fun viewNewerQuincena() {
+        val all = allQuincenas.value
+        val idx = all.indexOfFirst { it.id == currentViewedId() }
+        if (idx > 0) selectedQuincenaId.value = all[idx - 1].id
+    }
+
+    /** Volver a la quincena activa (tocar la etiqueta del navegador). */
+    fun resetToActiveQuincena() {
+        selectedQuincenaId.value = null
+    }
 }
