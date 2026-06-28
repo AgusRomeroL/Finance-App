@@ -13,7 +13,7 @@ Tres features nuevas pedidas por el usuario —**calendario de movimientos**, **
 ### Decisiones confirmadas con el usuario (2026-06-28)
 1. **Calendario:** in-app como fuente de verdad (Room) **+ espejo opcional de una vía** hacia Google Calendar (off por default; solo si el usuario lo activa).
 2. **Recurrentes al vencer:** **propose-then-confirm** (movimiento prefilado en la bandeja, monto esperado del historial) **+ recordatorios configurables por el usuario** — el usuario decide *cuánto antes* quiere el aviso, con presets (p. ej. mismo día, 1/2/3/7 días antes, **"al inicio de la quincena"**).
-3. **Ubicación:** opt-in, **foreground-only** (solo al capturar, NUNCA en background), coords + nombre de lugar reverse-geocoded **on-device**.
+3. **Ubicación:** señal oportunista (nunca obligatoria) con **tres niveles opt-in y permisos distintos** — *Completa/persistente* (background location), *Solo al usar* (while-in-use, **default recomendado**), *Ninguna*. Foreground real solo en captura in-app + **widget vía Activity trampolín**; las fuentes background (reloj/banco) obtienen ubicación al confirmar (salvo nivel persistente). Campo `location_source` para que el significado nunca sea ambiguo. Detalle en §G.4.2.
 4. **Orden de construcción:** **bandeja unificada primero**, luego colgar calendario / voz / señal de ubicación encima.
 
 ---
@@ -25,7 +25,7 @@ Tres features nuevas pedidas por el usuario —**calendario de movimientos**, **
 ### G.1.1 Modelo
 - Renombrar/extender `pending_bank_capture` → **`pending_capture`** (local-only, sin FK, sobrevive app cerrada).
 - Campo nuevo **`source`** enum: `BANK | CALENDAR | VOICE | WIDGET | WATCH`.
-- Campos comunes (los que ya tiene la bancaria): `id`, `amount_mxn`, `concept`, `category_id?`, `wallet_id?`, `occurred_at`, `status` (`PENDING | CONFIRMED | DISMISSED`), `created_at`, más metadata de origen (`raw_text?` para voz/banco, `recurrence_id?` para calendario).
+- Campos comunes (los que ya tiene la bancaria): `id`, `amount_mxn`, `concept`, `category_id?`, `wallet_id?`, `occurred_at`, `status` (`PENDING | CONFIRMED | DISMISSED`), `created_at`, más metadata de origen (`raw_text?` para voz/banco, `recurrence_id?` para calendario), y ubicación opcional `latitude?`/`longitude?`/`place_label?`/`location_source` (ver §G.4.2).
 - Migración Room **v5→v6** (zona de peligro): SQL literal EXACTO de `schemas/6.json` (compilar primero, copiar de ahí); añadir a `addMigrations`; **nunca** `fallbackToDestructiveMigration`; el asset se queda en v1 (no se toca). Ver el gotcha del `user_version` del asset en CLAUDE.md. **Sugerencia:** unir en esta misma v6 las columnas de ubicación de G.4 (una sola migración).
 
 ### G.1.2 Comportamiento
@@ -82,11 +82,33 @@ Voz/texto NL → Gemini Nano on-device (`AiCoreManager`, ya cableado por Capa 3)
 ### G.4.1 Hora
 Ya existe (`Expense.occurredAt`, epoch millis). Lo nuevo es **exponerla/editarla** mejor en el detalle y **usarla como señal** (el motor proactivo y la atribución ya usan hora/día).
 
-### G.4.2 Ubicación (decisión #3)
-- **Opt-in + foreground-only:** se captura **solo en el momento de registrar** (gesto del usuario), NUNCA en background. Esto evita la prohibición de Play Store sobre background location (§F.9 lo evitó a propósito; esta reversión es segura SOLO con esta restricción).
-- **Datos:** `latitude`, `longitude`, `place_label` (reverse-geocoded **on-device** vía `Geocoder`; si falla, solo coords). Migración Room **v5→v6** sobre `expense` (idealmente unida con G.1.1).
-- **Histórico:** los **793 gastos sembrados se quedan sin ubicación** (solo los nuevos la tienen). Aceptado.
-- **Privacidad/seguridad:** dato financiero + ubicación de Norma = sensible. Vive en Room, sincroniza solo a *su* Firestore (ya privado por household). Divulgación clara al pedir el permiso. Ver `SECURITY_REMEDIATION.md`.
+### G.4.2 Ubicación — el problema foreground vs las fuentes background (decisión #3, refinada 2026-06-28)
+
+**El choque (descubierto al madurar):** "foreground-only" NO funciona desde widget ni reloj, porque esas superficies son *background* por definición. En Android, la ubicación *while-in-use* solo se concede con una **Activity visible** o un **foreground service tipo `location`**. Un tap de widget dispara un `BroadcastReceiver` (sin Activity); el reloj delega al teléfono que recibe en un `WearableListenerService` (background); y la captura bancaria (D) corre en un `NotificationListenerService` (background). **De las 5 fuentes de la bandeja, solo la captura in-app está en foreground real.**
+
+**La ubicación es señal oportunista, NUNCA obligatoria** (columna nullable → degrada bien). Se resuelve con **tres niveles opt-in, con permisos distintos** (el usuario elige en Perfil; default = intermedio):
+
+| Nivel | Permiso | Qué obtiene |
+|---|---|---|
+| **Completa / persistente** | `ACCESS_FINE/COARSE` + `ACCESS_BACKGROUND_LOCATION` | Incluso capturas que nacen en background (reloj, banco) obtienen fix en su momento. El más pesado y vigilado por Play Store. |
+| **Solo al usar** *(default recomendado)* | `ACCESS_FINE/COARSE` *while-in-use* (sin background) | Foreground + widget-trampolín → fix fresco. Capturas background → ubicación al **confirmar** (que es foreground). |
+| **Ninguna** | — | Cero ubicación. |
+
+**Estrategia por fuente:**
+
+| Fuente | ¿Foreground? | Ubicación |
+|---|---|---|
+| **In-app** (sheet abierto) | Sí | Fix al momento. Caso común. |
+| **Widget** | No, pero → | **Activity trampolín** (translúcida/invisible): el tap abre una Activity que toma el fix y sigue. Cuenta como interacción de usuario → foreground. **Confirmado: sí vale la pena el trampolín.** |
+| **Reloj / Banco / Widget-silencioso** | No (imposible) | Nivel persistente → fix en su momento. Nivel "solo al usar" → ubicación al confirmar. |
+
+**Matiz honesto:** `getLastLocation()` desde background puro **sin** permiso persistente devuelve `null` en Android 10+. Por eso, en el nivel "solo al usar", las capturas de reloj/banco reciben su ubicación **al confirmar** (foreground), no al crearse. El nivel persistente es justo lo que habilita ubicación en el instante background.
+
+**`location_source`** (campo en `pending_capture`/`expense`): `CAPTURE | CONFIRM | MANUAL | NONE` — para que el significado nunca sea ambiguo. Al confirmar solo se **auto-adjunta** la ubicación si la confirmación cae dentro de una **ventana corta** (~15 min del evento); si no, queda `NONE` y el usuario puede tocar "añadir ubicación" (→ `MANUAL`). Evita la mentira de "ubicación del gasto = donde confirmaste horas después".
+
+- **Datos:** `latitude`, `longitude`, `place_label` (reverse-geocoded **on-device** vía `Geocoder`; si falla, solo coords), `location_source`. Migración Room **v5→v6** sobre `expense` (unida con G.1.1).
+- **Histórico:** los **793 gastos sembrados se quedan sin ubicación** (`location_source=NONE`). Aceptado.
+- **Privacidad/seguridad:** dato financiero + ubicación de Norma = sensible. Vive en Room, sincroniza solo a *su* Firestore (ya privado por household). Divulgación clara por nivel al pedir el permiso (el nivel persistente exige el flujo de Play para background location). Ver `SECURITY_REMEDIATION.md` y la reversión justificada de §F.9 (que evitó ubicación por la prohibición de *background* — los niveles in-app/while-in-use NO caen en esa prohibición).
 
 ### G.4.3 Doble valor (ambos pedidos por el usuario)
 1. **Señal de inferencia:** la ubicación junto a concepto/hora/día ayuda al LLM y a los engines a adivinar categoría/concepto ("OXXO cerca de casa" → Despensa). Potencia Feature D, la captura por voz (G.3) y el motor proactivo (C).
