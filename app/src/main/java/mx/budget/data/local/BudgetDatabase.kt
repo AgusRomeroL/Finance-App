@@ -60,7 +60,7 @@ import mx.budget.data.local.entity.SyncQueueEntity
         AttributionReviewEntity::class,
         PendingBankCaptureEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -138,6 +138,19 @@ abstract class BudgetDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `pending_bank_capture` (`id` TEXT NOT NULL, `bank_id` TEXT NOT NULL, `bank_name` TEXT NOT NULL, `bank_package` TEXT NOT NULL, `amount_mxn` REAL NOT NULL, `merchant` TEXT NOT NULL, `last4` TEXT, `occurred_at` INTEGER NOT NULL, `suggested_wallet_id` TEXT, `suggested_category_id` TEXT, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`))")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_pending_bank_capture_status` ON `pending_bank_capture` (`status`)")
+            }
+        }
+
+        /**
+         * v4 → v5: emoji monocromo sugerido por grupo de categoría (filtros del
+         * dashboard). Añade `category.suggested_emoji` (TEXT nullable). Columna nueva
+         * por `ALTER TABLE ADD COLUMN` (no aparece como CREATE en `app/schemas/5.json`;
+         * Room valida columnas por nombre/tipo, no por orden), coincidente con
+         * `CategoryEntity.suggestedEmoji`. Sin índice.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `category` ADD COLUMN `suggested_emoji` TEXT")
             }
         }
     }

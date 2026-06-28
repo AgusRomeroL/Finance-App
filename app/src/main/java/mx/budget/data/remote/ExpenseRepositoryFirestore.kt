@@ -41,6 +41,7 @@ class ExpenseRepositoryFirestore(
                             amountMxn = e.amountMxn,
                             occurredAt = e.occurredAt,
                             status = e.status,
+                            categoryId = e.categoryId,
                             categoryName = "Unknown",
                             categoryCode = "",
                             categoryColorHex = null,
@@ -57,6 +58,9 @@ class ExpenseRepositoryFirestore(
             }
         awaitClose { listener.remove() }
     }
+
+    override fun searchWithDetails(householdId: String, query: String): Flow<List<ExpenseWithDetails>> =
+        kotlinx.coroutines.flow.flowOf(emptyList())
 
     override fun observePostedTotal(quincenaId: String): Flow<Double> = callbackFlow {
         val listener = firestore.collectionGroup("expenses")

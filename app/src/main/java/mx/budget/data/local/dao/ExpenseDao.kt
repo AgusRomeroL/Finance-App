@@ -29,6 +29,7 @@ interface ExpenseDao {
             e.amount_mxn               AS amountMxn,
             e.occurred_at              AS occurredAt,
             e.status                   AS status,
+            e.category_id              AS categoryId,
             c.display_name             AS categoryName,
             c.code                     AS categoryCode,
             c.color_hex                AS categoryColorHex,
@@ -48,6 +49,43 @@ interface ExpenseDao {
         """
     )
     fun observeWithDetails(quincenaId: String): Flow<List<ExpenseWithDetails>>
+
+    /**
+     * Búsqueda de movimientos por texto (concepto o nombre de categoría), scope
+     * household (búsqueda global, patrón Pixel Screenshots). Alimenta la barra de
+     * búsqueda inferior. Mismas columnas/JOINs que [observeWithDetails].
+     */
+    @Query(
+        """
+        SELECT
+            e.id                       AS expenseId,
+            e.concept                  AS concept,
+            e.amount_mxn               AS amountMxn,
+            e.occurred_at              AS occurredAt,
+            e.status                   AS status,
+            e.category_id              AS categoryId,
+            c.display_name             AS categoryName,
+            c.code                     AS categoryCode,
+            c.color_hex                AS categoryColorHex,
+            pm.display_name            AS paymentMethodName,
+            pm.kind                    AS paymentMethodKind,
+            q.label                    AS quincenaLabel,
+            e.installment_number       AS installmentNumber,
+            ip.total_installments      AS installmentTotal,
+            e.notes                    AS notes
+        FROM expense e
+        INNER JOIN category c        ON c.id = e.category_id
+        INNER JOIN payment_method pm ON pm.id = e.payment_method_id
+        INNER JOIN quincena q        ON q.id = e.quincena_id
+        LEFT JOIN installment_plan ip ON ip.id = e.installment_plan_id
+        WHERE e.household_id = :householdId
+          AND (e.concept LIKE '%' || :q || '%' COLLATE NOCASE
+               OR c.display_name LIKE '%' || :q || '%' COLLATE NOCASE)
+        ORDER BY e.occurred_at DESC
+        LIMIT :limit
+        """
+    )
+    fun searchWithDetails(householdId: String, q: String, limit: Int = 100): Flow<List<ExpenseWithDetails>>
 
     @Query(
         """

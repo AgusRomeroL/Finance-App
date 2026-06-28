@@ -33,6 +33,9 @@ class ExpenseRepositoryImpl(
     override fun observeWithDetails(quincenaId: String): Flow<List<ExpenseWithDetails>> =
         dao.observeWithDetails(quincenaId)
 
+    override fun searchWithDetails(householdId: String, query: String): Flow<List<ExpenseWithDetails>> =
+        dao.searchWithDetails(householdId, query)
+
     override fun observePostedTotal(quincenaId: String): Flow<Double> =
         dao.observePostedTotal(quincenaId)
 

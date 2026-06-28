@@ -87,6 +87,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.data.local.entity.PendingBankCaptureEntity
+import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
@@ -205,14 +206,19 @@ fun DashboardScreen(
     windowWidthDp: Dp = 360.dp,
     currentRoute: String = "dashboard",
     onNavigate: ((String) -> Unit)? = null,
-    onOpenReview: () -> Unit = {}
+    onOpenReview: () -> Unit = {},
+    onOpenSearch: () -> Unit = {},
+    onOpenSuggestions: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val pendingReviewCount by viewModel.pendingReviewCount.collectAsState()
-    val proactiveSuggestion by viewModel.proactiveSuggestion.collectAsState()
+    val proactiveSuggestions by viewModel.proactiveSuggestions.collectAsState()
     val bankCaptures by viewModel.pendingBankCaptures.collectAsState()
+    val groups by viewModel.groups.collectAsState()
+    val selectedGroups by viewModel.selectedGroupIds.collectAsState()
     val isExpanded = windowWidthDp >= 600.dp
     var showCapture by remember { mutableStateOf(false) }
+    var showFilterSheet by remember { mutableStateOf(false) }
 
     if (showCapture) {
         CaptureBottomSheet(
@@ -221,10 +227,28 @@ fun DashboardScreen(
         )
     }
 
+    if (showFilterSheet) {
+        FilterBottomSheet(
+            groups = groups,
+            selected = selectedGroups,
+            onSave = { viewModel.setSelectedGroups(it); showFilterSheet = false },
+            onDismiss = { showFilterSheet = false }
+        )
+    }
+
     val quincenaNav = QuincenaNav(
         onOlder = viewModel::viewOlderQuincena,
         onNewer = viewModel::viewNewerQuincena,
         onReset = viewModel::resetToActiveQuincena
+    )
+
+    val filterUi = FilterUi(
+        groups = groups,
+        selected = selectedGroups,
+        onToggle = { id ->
+            viewModel.setSelectedGroups(if (id in selectedGroups) selectedGroups - id else selectedGroups + id)
+        },
+        onOpenSheet = { showFilterSheet = true }
     )
 
     // [Registrar] de la sugerencia: prefila concepto + categoría en la captura
@@ -241,12 +265,15 @@ fun DashboardScreen(
             currentRoute = currentRoute,
             onNavigate = onNavigate,
             onCapture = { showCapture = true },
+            onOpenSearch = onOpenSearch,
             pendingReviewCount = pendingReviewCount,
             onOpenReview = onOpenReview,
             quincenaNav = quincenaNav,
-            proactiveSuggestion = proactiveSuggestion,
+            filterUi = filterUi,
+            proactiveSuggestions = proactiveSuggestions,
             onRegisterSuggestion = onRegisterSuggestion,
             onDismissSuggestion = viewModel::dismissProactiveSuggestion,
+            onOpenSuggestions = onOpenSuggestions,
             bankCaptures = bankCaptures,
             onConfirmCapture = viewModel::confirmBankCapture,
             onDismissCapture = viewModel::dismissBankCapture
@@ -257,12 +284,15 @@ fun DashboardScreen(
             currentRoute = currentRoute,
             onNavigate = onNavigate,
             onCapture = { showCapture = true },
+            onOpenSearch = onOpenSearch,
             pendingReviewCount = pendingReviewCount,
             onOpenReview = onOpenReview,
             quincenaNav = quincenaNav,
-            proactiveSuggestion = proactiveSuggestion,
+            filterUi = filterUi,
+            proactiveSuggestions = proactiveSuggestions,
             onRegisterSuggestion = onRegisterSuggestion,
             onDismissSuggestion = viewModel::dismissProactiveSuggestion,
+            onOpenSuggestions = onOpenSuggestions,
             bankCaptures = bankCaptures,
             onConfirmCapture = viewModel::confirmBankCapture,
             onDismissCapture = viewModel::dismissBankCapture
@@ -277,6 +307,14 @@ private data class QuincenaNav(
     val onReset: () -> Unit
 )
 
+/** Estado + callbacks de los filtros por grupo (pills + bottom sheet). */
+private data class FilterUi(
+    val groups: List<CategoryEntity>,
+    val selected: Set<String>,
+    val onToggle: (String) -> Unit,
+    val onOpenSheet: () -> Unit
+)
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout expandido (Fold interno)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -287,12 +325,15 @@ private fun ExpandedDashboard(
     currentRoute: String,
     onNavigate: ((String) -> Unit)?,
     onCapture: () -> Unit,
+    onOpenSearch: () -> Unit,
     pendingReviewCount: Int,
     onOpenReview: () -> Unit,
     quincenaNav: QuincenaNav,
-    proactiveSuggestion: ProactiveSuggestion?,
+    filterUi: FilterUi,
+    proactiveSuggestions: List<ProactiveSuggestion>,
     onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
-    onDismissSuggestion: () -> Unit,
+    onDismissSuggestion: (String) -> Unit,
+    onOpenSuggestions: () -> Unit,
     bankCaptures: List<PendingBankCaptureEntity>,
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit
@@ -325,26 +366,41 @@ private fun ExpandedDashboard(
                             viewingActive = state.viewingActive,
                             quincenaNav = quincenaNav
                         )
-                        if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestion != null)) {
+                        if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestions.isNotEmpty())) {
                             Spacer(Modifier.height(18.dp))
-                            SmartSuggestionsCarousel(
+                            SuggestionsSection(
                                 bankCaptures = bankCaptures,
-                                proactiveSuggestion = proactiveSuggestion,
+                                proactiveSuggestions = proactiveSuggestions,
+                                isExpanded = true,
+                                onSeeMore = onOpenSuggestions,
                                 onConfirmCapture = onConfirmCapture,
                                 onDismissCapture = onDismissCapture,
                                 onRegisterSuggestion = onRegisterSuggestion,
                                 onDismissSuggestion = onDismissSuggestion
                             )
                         }
+                        if (state.viewingActive) {
+                            Spacer(Modifier.height(18.dp))
+                            FilterPillsRow(
+                                groups = filterUi.groups,
+                                selectedGroupIds = filterUi.selected,
+                                onToggle = filterUi.onToggle,
+                                onOpenSheet = filterUi.onOpenSheet
+                            )
+                        }
                         Spacer(Modifier.height(22.dp))
                         BentoPanes(state = state, modifier = Modifier.fillMaxSize())
                     }
-                    // FAB extendido
-                    ExtendedCaptureFab(
-                        onClick = onCapture,
+                    // Barra inferior: búsqueda + mic + "+" (reemplaza el FAB).
+                    BottomActionBar(
+                        query = "",
+                        onQueryChange = {},
+                        onPlus = onCapture,
+                        readOnly = true,
+                        onActivate = onOpenSearch,
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 32.dp, bottom = 30.dp)
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
                     )
                 }
             }
@@ -413,19 +469,33 @@ private fun CompactDashboard(
     currentRoute: String,
     onNavigate: ((String) -> Unit)?,
     onCapture: () -> Unit,
+    onOpenSearch: () -> Unit,
     pendingReviewCount: Int,
     onOpenReview: () -> Unit,
     quincenaNav: QuincenaNav,
-    proactiveSuggestion: ProactiveSuggestion?,
+    filterUi: FilterUi,
+    proactiveSuggestions: List<ProactiveSuggestion>,
     onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
-    onDismissSuggestion: () -> Unit,
+    onDismissSuggestion: (String) -> Unit,
+    onOpenSuggestions: () -> Unit,
     bankCaptures: List<PendingBankCaptureEntity>,
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
-        bottomBar = { BottomNavCustom(currentRoute = currentRoute, onNavigate = onNavigate) }
+        bottomBar = {
+            Column {
+                BottomActionBar(
+                    query = "",
+                    onQueryChange = {},
+                    onPlus = onCapture,
+                    readOnly = true,
+                    onActivate = onOpenSearch
+                )
+                BottomNavCustom(currentRoute = currentRoute, onNavigate = onNavigate)
+            }
+        }
     ) { inner ->
         Box(modifier = Modifier.fillMaxSize().padding(inner)) {
             when (state) {
@@ -449,11 +519,13 @@ private fun CompactDashboard(
                                 quincenaNav = quincenaNav
                             )
                         }
-                        if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestion != null)) {
+                        if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestions.isNotEmpty())) {
                             item {
-                                SmartSuggestionsCarousel(
+                                SuggestionsSection(
                                     bankCaptures = bankCaptures,
-                                    proactiveSuggestion = proactiveSuggestion,
+                                    proactiveSuggestions = proactiveSuggestions,
+                                    isExpanded = false,
+                                    onSeeMore = onOpenSuggestions,
                                     onConfirmCapture = onConfirmCapture,
                                     onDismissCapture = onDismissCapture,
                                     onRegisterSuggestion = onRegisterSuggestion,
@@ -462,6 +534,16 @@ private fun CompactDashboard(
                             }
                         }
                         item { CollapsedHealthCard(state = state) }
+                        if (state.viewingActive) {
+                            item {
+                                FilterPillsRow(
+                                    groups = filterUi.groups,
+                                    selectedGroupIds = filterUi.selected,
+                                    onToggle = filterUi.onToggle,
+                                    onOpenSheet = filterUi.onOpenSheet
+                                )
+                            }
+                        }
                         item {
                             Row(
                                 modifier = Modifier
@@ -482,12 +564,6 @@ private fun CompactDashboard(
                             TransactionRow(tx)
                         }
                     }
-                    CircularCaptureFab(
-                        onClick = onCapture,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 20.dp, bottom = 20.dp)
-                    )
                 }
             }
         }
@@ -974,8 +1050,8 @@ private fun QuincenaRhythm(progress: QuincenaProgress) {
 // Sugerencias inteligentes — carrusel (Features C + D)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Un ítem del carrusel de sugerencias: captura bancaria (D) o sugerencia proactiva (C). */
-private sealed interface SmartSuggestionItem {
+/** Un ítem de sugerencia: captura bancaria (D) o sugerencia proactiva (C). */
+internal sealed interface SmartSuggestionItem {
     val key: String
 
     data class Bank(val capture: PendingBankCaptureEntity) : SmartSuggestionItem {
@@ -987,121 +1063,122 @@ private sealed interface SmartSuggestionItem {
     }
 }
 
+/** Combina capturas (D, primero) + proactivas (C) en una sola lista de ítems. */
+internal fun buildSuggestionItems(
+    bankCaptures: List<PendingBankCaptureEntity>,
+    proactiveSuggestions: List<ProactiveSuggestion>
+): List<SmartSuggestionItem> = buildList {
+    bankCaptures.forEach { add(SmartSuggestionItem.Bank(it)) }
+    proactiveSuggestions.forEach { add(SmartSuggestionItem.Proactive(it)) }
+}
+
 /**
- * Sección única de "sugerencias inteligentes" que agrupa las capturas bancarias
- * (Feature D) y la sugerencia proactiva (Feature C), imitando el **rediseño
- * card-based del reproductor de Android 17 QPR1 Beta 3**: la sugerencia activa se
- * muestra como tarjeta grande con sus acciones, y las demás se **encogen en cuñas
- * (píldoras verticales) a izquierda/derecha** mostrando solo su icono. Se cambia
- * **tocando** la cuña lateral (no swipe). Con una sola sugerencia ocupa todo el
- * ancho, sin cuñas.
- *
- * Orden: capturas bancarias primero (más accionables), luego la proactiva. Altura
- * uniforme (subtítulos a 2 líneas) + `IntrinsicSize.Min` para que las cuñas igualen
- * la altura de la tarjeta.
+ * Sección "Sugerencias" (Features C + D), estilo Collections de Pixel Screenshots:
+ * encabezado con chevron ">" (→ pantalla "Todas las sugerencias") y una fila de
+ * tarjetas con conteo adaptable. Compacto muestra hasta 3 (si hay más: 2 + "Ver
+ * más"); Fold hasta 5 (si hay más: 4 + "Ver más"). El tile "Ver más" también navega.
  */
 @Composable
-private fun SmartSuggestionsCarousel(
+private fun SuggestionsSection(
     bankCaptures: List<PendingBankCaptureEntity>,
-    proactiveSuggestion: ProactiveSuggestion?,
+    proactiveSuggestions: List<ProactiveSuggestion>,
+    isExpanded: Boolean,
+    onSeeMore: () -> Unit,
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit,
     onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
-    onDismissSuggestion: () -> Unit,
+    onDismissSuggestion: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val items: List<SmartSuggestionItem> = buildList {
-        bankCaptures.forEach { add(SmartSuggestionItem.Bank(it)) }
-        proactiveSuggestion?.let { add(SmartSuggestionItem.Proactive(it)) }
-    }
+    val items = buildSuggestionItems(bankCaptures, proactiveSuggestions)
     if (items.isEmpty()) return
 
-    // Una sola sugerencia: tarjeta a ancho completo, sin cuñas.
-    if (items.size == 1) {
-        Box(modifier.fillMaxWidth()) {
-            SmartSuggestionCard(items.first(), onConfirmCapture, onDismissCapture, onRegisterSuggestion, onDismissSuggestion)
-        }
-        return
-    }
+    val cap = if (isExpanded) 5 else 3
+    val overflow = items.size > cap
+    val shown = if (overflow) items.take(cap - 1) else items
+    val cardW = 300.dp
 
-    // El índice activo se resetea si la lista cambia (al confirmar/descartar).
-    var selected by rememberSaveable(items.map { it.key }.toString()) { mutableStateOf(0) }
-    val active = selected.coerceIn(0, items.lastIndex)
-
-    BoxWithConstraints(modifier.fillMaxWidth()) {
-        val gap = 8.dp
-        val wedgeW = 40.dp
-        val minCardW = 190.dp
-        val others = items.size - 1
-        // ¿Caben TODAS las cuñas dejando la tarjeta ≥ minCardW? Si no (4+ en pantallas
-        // angostas), el Row se vuelve scrollable en vez de desbordar/recortar.
-        val maxWedges = (((maxWidth - minCardW - gap) / (wedgeW + gap)).toInt()).coerceAtLeast(1)
-        val overflow = others > maxWedges
-
-        // Sin overflow: la tarjeta ocupa el resto y las anchuras SUMAN el total en cada
-        // frame (la transición comparte reloj → no desborda al animar).
-        // Con overflow: tarjeta fija (deja asomar 1 cuña) y el Row hace scroll horizontal.
-        val cardW = if (overflow) (maxWidth - wedgeW - gap).coerceAtLeast(minCardW)
-        else maxWidth - (wedgeW + gap) * others
-        val transition = updateTransition(active, label = "smartCarousel")
-
-        val rowModifier = Modifier
-            .height(IntrinsicSize.Min)
-            .then(if (overflow) Modifier.horizontalScroll(rememberScrollState()) else Modifier.fillMaxWidth())
-
+    Column(modifier.fillMaxWidth()) {
         Row(
-            modifier = rowModifier,
-            horizontalArrangement = Arrangement.spacedBy(gap)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            items.forEachIndexed { i, item ->
-                // Animación Material Expressive: resorte espacial con leve sobreimpulso.
-                val w by transition.animateDp(
-                    transitionSpec = { spring(dampingRatio = 0.8f, stiffness = 380f) },
-                    label = "w$i"
-                ) { sel -> if (i == sel) cardW else wedgeW }
-                val frac = ((w - wedgeW) / (cardW - wedgeW)).coerceIn(0f, 1f)
-                val isActive = i == active
-
-                Box(
-                    modifier = Modifier
-                        .width(w)
-                        .fillMaxHeight()
-                        .clipToBounds()
-                ) {
-                    // La tarjeta SIEMPRE se mide a `cardW` (altura constante → el slot
-                    // no salta); el contenedor la recorta a `w` y se desvanece al compactar.
-                    Box(
-                        modifier = Modifier
-                            .width(cardW)
-                            .fillMaxHeight()
-                            .alpha(frac)
-                    ) {
-                        SmartSuggestionCard(item, onConfirmCapture, onDismissCapture, onRegisterSuggestion, onDismissSuggestion)
-                    }
-                    // Cuña: ocupa el (pequeño) ancho compactado; clickable SOLO si no está
-                    // activa (cuando lo está, deja pasar los toques a los botones de la tarjeta).
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .alpha(1f - frac)
-                            .then(if (isActive) Modifier else Modifier.clickable { selected = i })
-                    ) {
-                        SmartSuggestionWedge(item)
-                    }
+            Eyebrow("Sugerencias")
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .clickable(onClick = onSeeMore),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward, "Ver todas las sugerencias",
+                    tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            shown.forEach { item ->
+                Box(Modifier.width(cardW)) {
+                    SmartSuggestionCard(item, onConfirmCapture, onDismissCapture, onRegisterSuggestion, onDismissSuggestion)
                 }
+            }
+            if (overflow) {
+                SeeMoreTile(remaining = items.size - shown.size, onClick = onSeeMore)
             }
         }
     }
 }
 
-/** Renderiza la tarjeta completa (activa) según el tipo de sugerencia. */
+/** Tile final "Ver más" con el conteo restante; navega a la pantalla de sugerencias. */
 @Composable
-private fun SmartSuggestionCard(
+private fun SeeMoreTile(remaining: Int, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(132.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Filled.Add, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Ver más",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        if (remaining > 0) {
+            Text(
+                "+$remaining",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/** Renderiza la tarjeta completa según el tipo de sugerencia (reutilizada por la pantalla). */
+@Composable
+internal fun SmartSuggestionCard(
     item: SmartSuggestionItem,
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit,
     onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
-    onDismissSuggestion: () -> Unit
+    onDismissSuggestion: (String) -> Unit
 ) {
     when (item) {
         is SmartSuggestionItem.Bank -> BankCaptureChip(
@@ -1112,43 +1189,8 @@ private fun SmartSuggestionCard(
         is SmartSuggestionItem.Proactive -> ProactiveSuggestionChip(
             suggestion = item.suggestion,
             onRegister = { onRegisterSuggestion(item.suggestion) },
-            onDismiss = onDismissSuggestion
+            onDismiss = { onDismissSuggestion(item.suggestion.canonicalKey) }
         )
-    }
-}
-
-/**
- * Cuña lateral compactada: llena el ancho que le da el carrusel (anima de tarjeta a
- * píldora) con el color/icono del tipo. El click para activarla lo pone el carrusel.
- */
-@Composable
-private fun SmartSuggestionWedge(
-    item: SmartSuggestionItem,
-    modifier: Modifier = Modifier
-) {
-    val bg: Color
-    val fg: Color
-    val icon: ImageVector
-    when (item) {
-        is SmartSuggestionItem.Bank -> {
-            bg = MaterialTheme.colorScheme.tertiaryContainer
-            fg = MaterialTheme.colorScheme.onTertiaryContainer
-            icon = Icons.Filled.AccountBalanceWallet
-        }
-        is SmartSuggestionItem.Proactive -> {
-            bg = MaterialTheme.colorScheme.secondaryContainer
-            fg = MaterialTheme.colorScheme.onSecondaryContainer
-            icon = Icons.Filled.AutoAwesome
-        }
-    }
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(18.dp))
-            .background(bg),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, "Otra sugerencia", tint = fg, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -1672,7 +1714,7 @@ private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: M
 }
 
 @Composable
-private fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) {
+internal fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) {
     val tone = if (tx.status == "PLANNED") FinancialTone.NEUTRAL else FinancialTone.EXPENSE
     val sem = amountSemantic(tone)
     val rowBg = if (alternate) MaterialTheme.colorScheme.surfaceContainerHighest

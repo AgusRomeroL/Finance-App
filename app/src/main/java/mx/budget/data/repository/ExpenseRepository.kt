@@ -22,6 +22,12 @@ interface ExpenseRepository {
     /** Gastos de una quincena con detalles de categoría y wallet. */
     fun observeWithDetails(quincenaId: String): Flow<List<ExpenseWithDetails>>
 
+    /**
+     * Búsqueda de movimientos por texto (concepto o categoría), scope household.
+     * Alimenta la barra de búsqueda inferior del dashboard.
+     */
+    fun searchWithDetails(householdId: String, query: String): Flow<List<ExpenseWithDetails>>
+
     /** Total ejecutado (POSTED) en una quincena — KPI principal. */
     fun observePostedTotal(quincenaId: String): Flow<Double>
 

@@ -60,6 +60,13 @@ data class CategoryEntity(
     /** Clave del icono Material. */
     val icon: String? = null,
 
+    /**
+     * Emoji monocromo sugerido (IA on-device / fallback) para los pills de filtro.
+     * Se cachea aquí; null = aún no calculado (la UI usa el fallback por código).
+     */
+    @ColumnInfo(name = "suggested_emoji")
+    val suggestedEmoji: String? = null,
+
     @ColumnInfo(name = "color_hex")
     val colorHex: String? = null,
 

@@ -23,6 +23,7 @@ import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardViewModel
 import mx.budget.ui.navigation.BudgetNavGraph
 import mx.budget.ui.review.AttributionReviewViewModel
+import mx.budget.ui.search.SearchViewModel
 import mx.budget.ui.theme.BudgetAppTheme
 
 class MainActivity : ComponentActivity() {
@@ -37,7 +38,9 @@ class MainActivity : ComponentActivity() {
             app.database.attributionReviewDao(),
             app.database.expenseDao(),
             app.database.pendingBankCaptureDao(),
-            app.bankCaptureManager
+            app.bankCaptureManager,
+            app.database.categoryDao(),
+            app.emojiSuggester
         ))[DashboardViewModel::class.java]
     }
 
@@ -50,6 +53,14 @@ class MainActivity : ComponentActivity() {
             app.memberRepository,
             app.householdId
         ))[AttributionReviewViewModel::class.java]
+    }
+
+    private val searchViewModel: SearchViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, SearchViewModelFactory(
+            app.expenseRepository,
+            app.householdId
+        ))[SearchViewModel::class.java]
     }
 
     private val captureViewModel: CaptureViewModel by lazy {
@@ -84,6 +95,7 @@ class MainActivity : ComponentActivity() {
                     dashboardViewModel = dashboardViewModel,
                     captureViewModel = captureViewModel,
                     attributionReviewViewModel = attributionReviewViewModel,
+                    searchViewModel = searchViewModel,
                     windowWidthDp = windowWidthDp,
                     dynamicColor = dynamicColor,
                     onDynamicColorChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } },
@@ -109,6 +121,8 @@ class DashboardViewModelFactory(
     private val expenseDao: ExpenseDao,
     private val pendingBankCaptureDao: PendingBankCaptureDao,
     private val bankCaptureManager: BankCaptureManager,
+    private val categoryDao: mx.budget.data.local.dao.CategoryDao,
+    private val emojiSuggester: mx.budget.ai.proactive.EmojiSuggester,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -121,6 +135,8 @@ class DashboardViewModelFactory(
             expenseDao = expenseDao,
             pendingBankCaptureDao = pendingBankCaptureDao,
             bankCaptureManager = bankCaptureManager,
+            categoryDao = categoryDao,
+            emojiSuggester = emojiSuggester,
         ) as T
     }
 }
@@ -140,6 +156,20 @@ class AttributionReviewViewModelFactory(
             expenseDao = expenseDao,
             expenseRepository = expenseRepository,
             memberRepository = memberRepository,
+            householdId = householdId,
+        ) as T
+    }
+}
+
+/** Factory para SearchViewModel (búsqueda de movimientos). */
+class SearchViewModelFactory(
+    private val expenseRepository: ExpenseRepository,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return SearchViewModel(
+            expenseRepository = expenseRepository,
             householdId = householdId,
         ) as T
     }

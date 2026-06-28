@@ -9,17 +9,22 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import mx.budget.ai.proactive.EmojiSuggester
 import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.ai.proactive.ProactiveSuggestionEngine
 import mx.budget.data.capture.BankCaptureManager
 import mx.budget.data.local.dao.AttributionReviewDao
+import mx.budget.data.local.dao.CategoryDao
 import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.PendingBankCaptureDao
+import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.PendingBankCaptureEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
@@ -74,6 +79,9 @@ sealed class DashboardUiState {
     data class Error(val message: String) : DashboardUiState()
 }
 
+/** Tope de sugerencias proactivas calculadas (la sección y "Ver más" toman de aquí). */
+private const val MAX_PROACTIVE = 8
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardViewModel
 // ─────────────────────────────────────────────────────────────────────────────
@@ -107,8 +115,19 @@ class DashboardViewModel(
     private val attributionReviewDao: AttributionReviewDao,
     private val expenseDao: ExpenseDao,
     private val pendingBankCaptureDao: PendingBankCaptureDao,
-    private val bankCaptureManager: BankCaptureManager
+    private val bankCaptureManager: BankCaptureManager,
+    private val categoryDao: CategoryDao,
+    private val emojiSuggester: EmojiSuggester
 ) : ViewModel() {
+
+    init {
+        // Calcula (lazy, una vez) el emoji monocromo de cada grupo para los pills.
+        viewModelScope.launch {
+            runCatching {
+                emojiSuggester.ensureEmojis(categoryDao.observeRootCategories(householdId).first())
+            }
+        }
+    }
 
     // ── Capturas bancarias pendientes (Feature D, §F.6) ─────────────────────────
 
@@ -168,36 +187,85 @@ class DashboardViewModel(
      * persistente ni worker (pre-cómputo opcional en la spec). `null` si no hay
      * patrón fiable o si el usuario ya la descartó esta sesión.
      */
-    val proactiveSuggestion: StateFlow<ProactiveSuggestion?> = combine(
+    val proactiveSuggestions: StateFlow<List<ProactiveSuggestion>> = combine(
         activeQuincena, dismissedSuggestions
     ) { quincena, dismissed -> quincena to dismissed }
         .flatMapLatest { (quincena, dismissed) ->
             flow {
                 val history = runCatching { expenseDao.getAll(householdId) }.getOrDefault(emptyList())
-                val suggestion = proactiveEngine.suggest(history, quincena, System.currentTimeMillis())
-                emit(suggestion?.takeIf { it.canonicalKey !in dismissed })
+                val list = proactiveEngine
+                    .suggestMany(history, quincena, System.currentTimeMillis(), limit = MAX_PROACTIVE)
+                    .filter { it.canonicalKey !in dismissed }
+                emit(list)
             }
         }
-        .catch { emit(null) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** "Ahora no" → señal negativa implícita: oculta la sugerencia esta sesión. */
-    fun dismissProactiveSuggestion() {
-        proactiveSuggestion.value?.let {
-            dismissedSuggestions.value = dismissedSuggestions.value + it.canonicalKey
-        }
+    /** "Ahora no" → señal negativa implícita: oculta esa sugerencia esta sesión. */
+    fun dismissProactiveSuggestion(canonicalKey: String) {
+        dismissedSuggestions.value = dismissedSuggestions.value + canonicalKey
     }
 
-    /** Contexto de la quincena mostrada + flags de navegación (valor inmutable). */
+    /** Contexto de la quincena mostrada + flags de navegación + filtro (valor inmutable). */
     private data class ViewContext(
         val quincena: QuincenaEntity?,
         val canViewOlder: Boolean,
         val canViewNewer: Boolean,
-        val viewingActive: Boolean
+        val viewingActive: Boolean,
+        val selectedGroupIds: Set<String>,
+        val categoryToGroup: Map<String, String>
     )
 
     private fun currentViewedId(): String? =
         selectedQuincenaId.value ?: activeQuincena.value?.id
+
+    // ── Filtros por grupo de categoría (pills) ──────────────────────────────────
+
+    /** Grupos top-level (parentId==null) — alimentan los pills de filtro. */
+    val groups: StateFlow<List<CategoryEntity>> = categoryDao
+        .observeRootCategories(householdId)
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Mapa categoría(hoja)→grupo raíz, para filtrar movimientos por su grupo. */
+    private val categoryToGroup: StateFlow<Map<String, String>> = categoryDao
+        .observeAll(householdId)
+        .map { buildLeafToRoot(it) }
+        .catch { emit(emptyMap()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    private val _selectedGroupIds = MutableStateFlow<Set<String>>(emptySet())
+    /** Grupos seleccionados como filtro (vacío = sin filtro). Compartido con la búsqueda. */
+    val selectedGroupIds: StateFlow<Set<String>> = _selectedGroupIds
+
+    fun setSelectedGroups(ids: Set<String>) { _selectedGroupIds.value = ids }
+
+    /** Resuelve, para cada categoría, su ancestro raíz (grupo). Las raíces se mapean a sí mismas. */
+    private fun buildLeafToRoot(all: List<CategoryEntity>): Map<String, String> {
+        val byId = all.associateBy { it.id }
+        fun root(start: CategoryEntity): String {
+            var cur = start
+            var guard = 0
+            while (cur.parentId != null && guard < 16) {
+                cur = byId[cur.parentId] ?: break
+                guard++
+            }
+            return cur.id
+        }
+        return all.associate { it.id to root(it) }
+    }
+
+    /**
+     * Aplica el filtro de grupos a una lista de movimientos. Reutilizable por la
+     * pantalla de búsqueda (que comparte `selectedGroupIds`/`categoryToGroup`).
+     */
+    fun applyGroupFilter(list: List<ExpenseWithDetails>): List<ExpenseWithDetails> {
+        val selected = _selectedGroupIds.value
+        if (selected.isEmpty()) return list
+        val map = categoryToGroup.value
+        return list.filter { map[it.categoryId] in selected }
+    }
 
     // ── Estado unificado del dashboard ─────────────────────────────────────────
 
@@ -214,8 +282,8 @@ class DashboardViewModel(
      * Balance disponible = projectedIncomeMxn − actualExpensesMxn (snapshot de la quincena).
      */
     val uiState: StateFlow<DashboardUiState> = combine(
-        allQuincenas, activeQuincena, selectedQuincenaId
-    ) { all, active, selectedId ->
+        allQuincenas, activeQuincena, selectedQuincenaId, _selectedGroupIds, categoryToGroup
+    ) { all, active, selectedId, selectedGroups, catToGroup ->
         val viewed = selectedId?.let { id -> all.firstOrNull { it.id == id } } ?: active
         val idx = all.indexOfFirst { it.id == viewed?.id }
         ViewContext(
@@ -223,7 +291,9 @@ class DashboardViewModel(
             // Orden DESC (recientes primero): "más antigua" = índice mayor.
             canViewOlder = idx in 0 until (all.size - 1),
             canViewNewer = idx > 0,
-            viewingActive = viewed?.id != null && viewed.id == active?.id
+            viewingActive = viewed?.id != null && viewed.id == active?.id,
+            selectedGroupIds = selectedGroups,
+            categoryToGroup = catToGroup
         )
     }
         .distinctUntilChanged()
@@ -249,9 +319,11 @@ class DashboardViewModel(
                     expenseRepository.observeSpendByMember(quincena.id),
                     expenseRepository.observePaidByMember(quincena.id)
                 ) { tx, posted, planned, beneficiary, payer ->
+                    val filteredTx = if (ctx.selectedGroupIds.isEmpty()) tx
+                    else tx.filter { ctx.categoryToGroup[it.categoryId] in ctx.selectedGroupIds }
                     DashboardUiState.Success(
                         quincena = quincena,
-                        transactions = tx,
+                        transactions = filteredTx,
                         postedTotal = posted,
                         plannedTotal = planned,
                         balance = quincena.projectedIncomeMxn - quincena.actualExpensesMxn,

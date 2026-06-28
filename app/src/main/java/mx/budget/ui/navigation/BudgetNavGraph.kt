@@ -25,6 +25,9 @@ import mx.budget.ui.dashboard.DashboardViewModel
 import mx.budget.ui.profile.ProfileScreen
 import mx.budget.ui.review.AttributionReviewScreen
 import mx.budget.ui.review.AttributionReviewViewModel
+import mx.budget.ui.search.SearchResultsScreen
+import mx.budget.ui.search.SearchViewModel
+import mx.budget.ui.suggestions.AllSuggestionsScreen
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Destinos de navegación
@@ -37,6 +40,8 @@ object BudgetDestinations {
     const val ANALYTICS = "analytics"
     const val PROFILE = "profile"
     const val ATTRIBUTION_REVIEW = "attribution_review"
+    const val SEARCH = "search"
+    const val SUGGESTIONS = "suggestions"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,6 +58,7 @@ fun BudgetNavGraph(
     dashboardViewModel: DashboardViewModel,
     captureViewModel: CaptureViewModel,
     attributionReviewViewModel: AttributionReviewViewModel,
+    searchViewModel: SearchViewModel,
     windowWidthDp: Int = 360,
     dynamicColor: Boolean = true,
     onDynamicColorChange: (Boolean) -> Unit = {},
@@ -89,7 +95,26 @@ fun BudgetNavGraph(
                 windowWidthDp = windowWidthDp.dp,
                 currentRoute = currentRoute,
                 onNavigate = onNavigate,
-                onOpenReview = { onNavigate(BudgetDestinations.ATTRIBUTION_REVIEW) }
+                onOpenReview = { onNavigate(BudgetDestinations.ATTRIBUTION_REVIEW) },
+                onOpenSearch = { onNavigate(BudgetDestinations.SEARCH) },
+                onOpenSuggestions = { onNavigate(BudgetDestinations.SUGGESTIONS) }
+            )
+        }
+
+        composable(route = BudgetDestinations.SEARCH) {
+            SearchResultsScreen(
+                searchViewModel = searchViewModel,
+                dashboardViewModel = dashboardViewModel,
+                captureViewModel = captureViewModel,
+                onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
+            )
+        }
+
+        composable(route = BudgetDestinations.SUGGESTIONS) {
+            AllSuggestionsScreen(
+                dashboardViewModel = dashboardViewModel,
+                captureViewModel = captureViewModel,
+                onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
             )
         }
 

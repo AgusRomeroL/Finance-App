@@ -48,13 +48,26 @@ class ProactiveSuggestionEngine(
     private val zone: ZoneId = ZoneId.of("America/Mexico_City")
 ) {
 
+    /** Compatibilidad: la mejor sugerencia (la primera de [suggestMany]). */
     fun suggest(
         history: List<ExpenseEntity>,
         activeQuincena: QuincenaEntity?,
         nowEpochMs: Long,
-    ): ProactiveSuggestion? {
+    ): ProactiveSuggestion? = suggestMany(history, activeQuincena, nowEpochMs, limit = 1).firstOrNull()
+
+    /**
+     * Hasta [limit] sugerencias, en orden de prioridad: primero los gastos de
+     * arranque de quincena (por monto desc), luego los patrones hora+día (por
+     * frecuencia y recencia). Dedupe por clave canónica (el camino 1 gana).
+     */
+    fun suggestMany(
+        history: List<ExpenseEntity>,
+        activeQuincena: QuincenaEntity?,
+        nowEpochMs: Long,
+        limit: Int,
+    ): List<ProactiveSuggestion> {
         val posted = history.filter { it.status == "POSTED" && !it.conceptCanonical.isNullOrBlank() }
-        if (posted.isEmpty()) return null
+        if (posted.isEmpty() || limit <= 0) return emptyList()
 
         val nowZdt = Instant.ofEpochMilli(nowEpochMs).atZone(zone)
         val today: LocalDate = nowZdt.toLocalDate()
@@ -64,6 +77,9 @@ class ProactiveSuggestionEngine(
         fun dayOf(e: ExpenseEntity): LocalDate =
             Instant.ofEpochMilli(e.occurredAt).atZone(zone).toLocalDate()
 
+        // Dedupe por clave canónica preservando la prioridad (camino 1 antes que 2).
+        val out = LinkedHashMap<String, ProactiveSuggestion>()
+
         // ── Camino 1: inicio de quincena (señal diferenciadora) ────────────────
         if (activeQuincena != null && isNearQuincenaStart(activeQuincena, today)) {
             val alreadyThisQuincena = posted
@@ -71,16 +87,15 @@ class ProactiveSuggestionEngine(
                 .mapNotNull { it.conceptCanonical }
                 .toSet()
 
-            val startBills = posted
+            posted
                 .filter { isQuincenaStartDay(dayOf(it).dayOfMonth) }
                 .groupBy { it.conceptCanonical!! }
                 .filter { (key, rows) -> rows.size >= MIN_RECURRENCE && key !in alreadyThisQuincena }
-
-            // El más "pesado" recurrente del arranque (renta/colegiatura > café).
-            val best = startBills.maxByOrNull { (_, rows) -> rows.sumOf { it.amountMxn } }
-            if (best != null) {
-                return build(best.key, best.value, "Suele tocar al inicio de la quincena")
-            }
+                .entries
+                .sortedByDescending { (_, rows) -> rows.sumOf { it.amountMxn } }
+                .forEach { (key, rows) ->
+                    out.getOrPut(key) { build(key, rows, "Suele tocar al inicio de la quincena") }
+                }
         }
 
         // ── Camino 2: patrón por día de la semana + franja horaria ─────────────
@@ -89,24 +104,23 @@ class ProactiveSuggestionEngine(
             .mapNotNull { it.conceptCanonical }
             .toSet()
 
-        val inBand = posted.filter {
-            val z = Instant.ofEpochMilli(it.occurredAt).atZone(zone)
-            z.dayOfWeek == nowDow && abs(z.hour - nowHour) <= HOUR_BAND &&
-                it.conceptCanonical !in registeredToday
-        }
-
-        val best = inBand
+        posted
+            .filter {
+                val z = Instant.ofEpochMilli(it.occurredAt).atZone(zone)
+                z.dayOfWeek == nowDow && abs(z.hour - nowHour) <= HOUR_BAND &&
+                    it.conceptCanonical !in registeredToday
+            }
             .groupBy { it.conceptCanonical!! }
             .filter { it.value.size >= MIN_OCCURRENCES }
-            // Frecuencia primero; desempate por recencia (gasto más reciente del cluster).
-            .maxByOrNull { (_, rows) -> rows.size * RECENCY_SCALE + rows.maxOf { it.occurredAt } }
-            ?: return null
+            .entries
+            .sortedByDescending { (_, rows) -> rows.size * RECENCY_SCALE + rows.maxOf { it.occurredAt } }
+            .forEach { (key, rows) ->
+                out.getOrPut(key) {
+                    build(key, rows, "Sueles registrarlo ${dayPhrase(nowDow)} ${bandPhrase(nowHour)}")
+                }
+            }
 
-        return build(
-            best.key,
-            best.value,
-            "Sueles registrarlo ${dayPhrase(nowDow)} ${bandPhrase(nowHour)}"
-        )
+        return out.values.take(limit)
     }
 
     /** Representante legible + categoría modal del cluster. */

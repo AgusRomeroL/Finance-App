@@ -18,6 +18,7 @@ data class ExpenseWithDetails(
     val amountMxn: Double,
     val occurredAt: Long,
     val status: String,
+    val categoryId: String,
     val categoryName: String,
     val categoryCode: String,
     val categoryColorHex: String?,
