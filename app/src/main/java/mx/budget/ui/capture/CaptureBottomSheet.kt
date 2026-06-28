@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
@@ -31,6 +30,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
@@ -80,6 +80,8 @@ import mx.budget.ui.theme.FinancialTone
 import mx.budget.ui.theme.amountSemantic
 import mx.budget.ui.theme.financeColors
 import java.text.NumberFormat
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -165,6 +167,8 @@ fun CaptureBottomSheet(
                 ) {
                     AmountCard(
                         displayAmount = displayAmount,
+                        concept = concept,
+                        onConceptChange = { viewModel?.onConceptChange(it) },
                         onKey = { viewModel?.onNumpadKey(it) },
                         onRegister = { viewModel?.onRegisterExpense() },
                         canRegister = canRegister
@@ -182,21 +186,23 @@ fun CaptureBottomSheet(
                         onSelect = { viewModel?.onWalletSelected(it) }
                     )
                     Spacer(Modifier.height(14.dp))
-                    AttributionCard(
+                    // Atribución visible = solo "Beneficia a". El pagador (casi
+                    // siempre el adulto dueño de la cuenta) se autodefine y vive
+                    // bajo "Más" para overridear/repartir.
+                    BeneficiaryCard(
                         members = members,
                         beneficiaryShares = beneficiaryShares,
-                        payerShares = payerShares,
-                        onBeneficiaryToggle = { viewModel?.onBeneficiaryToggled(it) },
-                        onBeneficiaryDelta = { id, d -> viewModel?.onBeneficiaryShareDelta(id, d) },
-                        onPayerToggle = { viewModel?.onPayerToggled(it) },
-                        onPayerDelta = { id, d -> viewModel?.onPayerShareDelta(id, d) },
-                        onSelectAllBeneficiaries = { viewModel?.onSelectAllMembers() },
-                        onClearBeneficiaries = { viewModel?.onClearMembers() }
+                        onToggle = { viewModel?.onBeneficiaryToggled(it) },
+                        onDelta = { id, d -> viewModel?.onBeneficiaryShareDelta(id, d) },
+                        onSelectAll = { viewModel?.onSelectAllMembers() },
+                        onClearAll = { viewModel?.onClearMembers() }
                     )
                     Spacer(Modifier.height(14.dp))
                     MoreSection(
-                        concept = concept,
-                        onConceptChange = { viewModel?.onConceptChange(it) }
+                        members = members,
+                        payerShares = payerShares,
+                        onPayerToggle = { viewModel?.onPayerToggled(it) },
+                        onPayerDelta = { id, d -> viewModel?.onPayerShareDelta(id, d) }
                     )
                     Spacer(Modifier.height(16.dp))
                 }
@@ -288,6 +294,8 @@ private fun CaptureHeader(onClose: () -> Unit) {
 @Composable
 private fun AmountCard(
     displayAmount: String,
+    concept: String,
+    onConceptChange: (String) -> Unit,
     onKey: (String) -> Unit,
     onRegister: () -> Unit,
     canRegister: Boolean
@@ -325,7 +333,23 @@ private fun AmountCard(
                 maxLines = 1
             )
         }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(12.dp))
+        // Concepto — junto al monto (no escondido tras "Más"); opcional.
+        OutlinedTextField(
+            value = concept,
+            onValueChange = onConceptChange,
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Concepto (opcional)", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface
+            )
+        )
+        Spacer(Modifier.height(16.dp))
         Keypad(onKey = onKey, onRegister = onRegister, canRegister = canRegister)
     }
 }
@@ -649,24 +673,20 @@ private fun WalletCard(wallet: PaymentMethodEntity, selected: Boolean, onClick: 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Atribución: Beneficia a · Pagó
+// Atribución: Beneficia a (visible) · Pagó (vive en "Más")
 // ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AttributionCard(
+private fun BeneficiaryCard(
     members: List<MemberEntity>,
     beneficiaryShares: Map<String, Int>,
-    payerShares: Map<String, Int>,
-    onBeneficiaryToggle: (String) -> Unit,
-    onBeneficiaryDelta: (String, Int) -> Unit,
-    onPayerToggle: (String) -> Unit,
-    onPayerDelta: (String, Int) -> Unit,
-    onSelectAllBeneficiaries: () -> Unit,
-    onClearBeneficiaries: () -> Unit
+    onToggle: (String) -> Unit,
+    onDelta: (String, Int) -> Unit,
+    onSelectAll: () -> Unit,
+    onClearAll: () -> Unit
 ) {
-    val complete = beneficiaryShares.isNotEmpty() && beneficiaryShares.values.sum() == 100 &&
-        payerShares.isNotEmpty() && payerShares.values.sum() == 100
+    val complete = beneficiaryShares.isNotEmpty() && beneficiaryShares.values.sum() == 100
 
     Card {
         Row(
@@ -675,9 +695,9 @@ private fun AttributionCard(
             verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                CapLabel("Atribución")
+                CapLabel("Beneficia a")
                 Spacer(Modifier.height(3.dp))
-                Text("Quién se beneficia y quién paga", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Quién consume este gasto", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val warn = amountSemantic(FinancialTone.WARNING)
             val inc = amountSemantic(FinancialTone.INCOME)
@@ -702,7 +722,7 @@ private fun AttributionCard(
             }
         }
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(16.dp))
 
         AttributionDimension(
             icon = Icons.Filled.Favorite,
@@ -711,25 +731,10 @@ private fun AttributionCard(
             title = "Beneficia a · consume",
             members = members,
             shares = beneficiaryShares,
-            onToggle = onBeneficiaryToggle,
-            onDelta = onBeneficiaryDelta,
-            onSelectAll = onSelectAllBeneficiaries,
-            onClearAll = onClearBeneficiaries
-        )
-
-        Spacer(Modifier.height(18.dp))
-
-        AttributionDimension(
-            icon = Icons.Filled.Payments,
-            iconTint = MaterialTheme.colorScheme.onSurface,
-            iconBg = MaterialTheme.colorScheme.surfaceContainerHighest,
-            title = "Pagó · adelantó",
-            members = members,
-            shares = payerShares,
-            onToggle = onPayerToggle,
-            onDelta = onPayerDelta,
-            onSelectAll = null,
-            onClearAll = null
+            onToggle = onToggle,
+            onDelta = onDelta,
+            onSelectAll = onSelectAll,
+            onClearAll = onClearAll
         )
     }
 }
@@ -903,51 +908,82 @@ private fun StepButton(icon: ImageVector, description: String, onClick: () -> Un
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// "Más" (concepto, fecha, notas — divulgación progresiva)
+// "Más" — Pagó (default = adulto dueño de la cuenta) + fecha (hoy) + notas
 // ─────────────────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MoreSection(concept: String, onConceptChange: (String) -> Unit) {
+private fun MoreSection(
+    members: List<MemberEntity>,
+    payerShares: Map<String, Int>,
+    onPayerToggle: (String) -> Unit,
+    onPayerDelta: (String, Int) -> Unit
+) {
     var open by rememberSaveable { mutableStateOf(false) }
-    Column {
+    val payerNames = members.filter { it.id in payerShares.keys }.joinToString(", ") { it.displayName }
+    val today = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale("es", "MX"))) }
+    val payerOk = payerShares.isNotEmpty() && payerShares.values.sum() == 100
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(horizontal = 22.dp)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
                 .clickable { open = !open }
-                .padding(horizontal = 4.dp, vertical = 10.dp),
+                .padding(vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Más", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface)
-                Spacer(Modifier.width(8.dp))
-                Text("Concepto, fecha, notas", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text("Más", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        (if (payerNames.isNotEmpty()) "Pagó: $payerNames" else "Pagó: definir") + " · Hoy, $today · Notas",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (payerOk) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.financeColors.warning,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
         AnimatedVisibility(visible = open) {
             Column {
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = concept,
-                    onValueChange = onConceptChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Concepto (opcional)", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions.Default,
-                    shape = RoundedCornerShape(18.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color.Transparent,
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                    )
+                AttributionDimension(
+                    icon = Icons.Filled.Payments,
+                    iconTint = MaterialTheme.colorScheme.onSurface,
+                    iconBg = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    title = "Pagó · adelantó",
+                    members = members,
+                    shares = payerShares,
+                    onToggle = onPayerToggle,
+                    onDelta = onPayerDelta,
+                    onSelectAll = null,
+                    onClearAll = null
                 )
-                Spacer(Modifier.height(6.dp))
-                Text("Fecha y notas: próximamente.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(18.dp))
+                // Fecha — por defecto hoy (día del registro)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier.size(26.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Filled.Event, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(15.dp)) }
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        CapMicroLabel("Fecha")
+                        Text("Hoy · $today", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("Elegir otra fecha y notas: próximamente.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
