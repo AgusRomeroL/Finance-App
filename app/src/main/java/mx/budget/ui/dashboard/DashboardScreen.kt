@@ -773,7 +773,10 @@ private fun MemberDistributionSection(
             )
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                data.take(5).forEachIndexed { i, m ->
+                // Renderiza TODOS los miembros con gasto, no un top-5: el header dice
+                // "N miembros" y cortar a 5 ocultaba al de menor consumo (p. ej. Santiago)
+                // sin forma de verlo (las pantallas de desglose siguen siendo placeholder).
+                data.forEachIndexed { i, m ->
                     MemberBarRow(
                         member = m,
                         fraction = (m.totalMxn / total).toFloat().coerceIn(0f, 1f),
