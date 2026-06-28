@@ -12,7 +12,7 @@ Tres features nuevas pedidas por el usuario —**calendario de movimientos**, **
 
 ### Decisiones confirmadas con el usuario (2026-06-28)
 1. **Calendario:** in-app como fuente de verdad (Room) **+ espejo opcional de una vía** hacia Google Calendar (off por default; solo si el usuario lo activa).
-2. **Recurrentes al vencer:** **propose-then-confirm** (movimiento prefilado en la bandeja, monto esperado del historial) **+ recordatorios configurables por el usuario** — el usuario decide *cuánto antes* quiere el aviso, con presets (p. ej. mismo día, 1/2/3/7 días antes, **"al inicio de la quincena"**).
+2. **Recurrentes:** se modelan como **gastos PLANNED** materializados desde `recurrence_template` (no `pending_capture`; ver decisión refinada en §G.2.0). Confirmar = flip PLANNED→POSTED (monto real ajustable) **+ recordatorios configurables** — el usuario decide *cuánto antes*, con presets (mismo día, 1/2/3/7 días antes, **"al inicio de la quincena"**). Budget-aware: los PLANNED se reflejan en "Disponible para gastar".
 3. **Ubicación:** señal oportunista (nunca obligatoria) con **tres niveles opt-in y permisos distintos** — *Completa/persistente* (background location), *Solo al usar* (while-in-use, **default recomendado**), *Ninguna*. Foreground real solo en captura in-app + **widget vía Activity trampolín**; las fuentes background (reloj/banco) obtienen ubicación al confirmar (salvo nivel persistente). Campo `location_source` para que el significado nunca sea ambiguo. Detalle en §G.4.2.
 4. **Orden de construcción:** **bandeja unificada primero**, luego colgar calendario / voz / señal de ubicación encima.
 
@@ -38,24 +38,81 @@ Feature D pasa a ser "el productor con `source=BANK`". `BankNotificationParser` 
 
 ---
 
-## G.2 Calendario de movimientos
+## G.2 Calendario + recurrencia — PLAN DE IMPLEMENTACIÓN (modelo PLANNED, decidido 2026-06-28)
 
-### G.2.1 Fuente de verdad + espejo
-- **Room es la verdad.** Entidades nuevas: `recurrence_rule` (la regla) y `calendar_event` (ocurrencia materializada / evento manual).
-- **Espejo opcional de una vía** a Google Calendar (`CalendarContract`), off por default, toggle en Perfil. Solo entonces se pide `WRITE_CALENDAR`. Nunca two-way (evita ensuciar el calendario personal de Norma y mantener el modelo offline-first limpio). El espejo es best-effort, como los deletes remotos del sync.
+### G.2.0 Modelo elegido y hallazgos de la arquitectura existente
 
-### G.2.2 Regla de recurrencia
-- `recurrence_rule`: `frequency` (`SEMANAL | QUINCENAL | MENSUAL | ANUAL`), `interval` (cada N), `day_of_month?` (para mensual; QUINCENAL = días 1 y 16 por convención mexicana), `start_date`, `end_date?`, `expected_amount_mxn` (promedio histórico — los recurrentes **varían de monto**: luz, agua), `concept_canonical`, `category_id`, atribución por defecto.
-- **Materialización:** la regla proyecta ocurrencias esperadas. **Tensión a resolver explícitamente:** el presupuesto se organiza por **quincena**, pero un recurrente mensual cruza quincenas — la proyección debe mapear cada ocurrencia a la quincena que le toca (p. ej. "renta mensual día 1" → cae en la 1ª quincena del mes).
+**Decisión (Agustín, 2026-06-28): modelo de gastos PLANNED**, no `pending_capture source=CALENDAR`. La arquitectura original YA preveía esto y estaba a medio diseñar:
+- **`recurrence_template`** (entidad del esquema **v1**, ya en el asset, con FK a household/categoría/wallet) — **dormida**: registrada en `@Database` pero **sin DAO y sin impl** del `RecurrenceRepository` (la interfaz existe). Modelo rico: `cadence`, `cadence_detail` (JSON), `default_amount_mxn`, `default_beneficiary_ids` (JSON), `default_payer_split` (JSON), `next_expected_date`, `is_active`, `confidence_score`, `learned_from_expense_ids`.
+- **`ExpenseStatus = PLANNED → POSTED → RECONCILED`** (`core/model/Enums.kt`). PLANNED = "presupuestado, aún no ejecutado; se muestra como outline". El `ExpenseDao` **ya tiene** la query `status='PLANNED'`. El doc de la entidad dice literal: *"Al activar cada quincena, el sistema materializa instancias PLANNED desde plantillas activas."*
+- **`RecurrenceCadence`**: `QUINCENAL_FIRST | QUINCENAL_SECOND | QUINCENAL_EVERY | MONTHLY_SPECIFIC_HALF | BIMONTHLY | CUSTOM_CRON`. → **la tensión "mensual ↔ quincena" queda resuelta de origen**: la cadencia se expresa nativamente en quincenas.
 
-### G.2.3 Origen de los eventos
-- **Inferido (bajo autorización):** el `ProactiveSuggestionEngine` ya detecta recurrentes (camino "inicio de quincena"). Se ofrece como **sugerencia** "¿Crear recordatorio recurrente para «Colegiatura Santi»?"; si el usuario acepta, se crea la `recurrence_rule`. Nunca se crea solo sin autorización.
-- **Manual:** el usuario crea un evento desde cero.
-- **Editable** en ambos casos: fecha inicio, fecha fin, frecuencia, intervalo, monto esperado, categoría, atribución.
+**Por qué PLANNED gana:** una app de presupuesto **quincenal** debe reflejar los pagos fijos conocidos en "Disponible para gastar" ANTES de pagarlos (es el sentido de planear el periodo). El gasto PLANNED es ledger-native y budget-aware; confirmar = flip PLANNED→POSTED (no un insert nuevo). Reusa toda la pieza ya diseñada.
 
-### G.2.4 Recordatorios + confirmación (decisión #2)
-- **Recordatorio configurable:** el usuario elige *cuánto antes* (presets: mismo día / 1 / 2 / 3 / 7 días antes / **"al inicio de la quincena"**). Lead time por evento, con un default global en Perfil. WorkManager (`PeriodicWorkRequest`, piso 15 min; NO `SCHEDULE_EXACT_ALARM` — penalizado por Play, §F.9).
-- **Al vencer:** se inserta un `pending_capture` con `source=CALENDAR`, `amount_mxn = expected_amount` y `recurrence_id` → notificación + chip → **propose-then-confirm** (el usuario confirma/corrige el monto real antes de que sea gasto POSTED). El recordatorio "avisa antes"; la confirmación "registra al ocurrir". Son dos momentos distintos del mismo evento.
+**Relación con la bandeja unificada (G.1):** el calendario NO produce filas `pending_capture` — su "propuesta" ES el gasto PLANNED. La bandeja/chip del dashboard unifica a nivel de **presentación**: muestra *PLANNED que vencen ahora* + *pending_captures (banco/voz)* con la misma UI de confirmar. Bajo este modelo, `source=CALENDAR` queda **reservado y sin uso** (se deja en el enum por si una variante futura lo necesita).
+
+### G.2.1 Cambios de esquema
+- **`recurrence_template`: NO necesita migración** (ya existe en v1). Solo despertar DAO + impl.
+- **Migración Room v6→v7 — `expense.recurrence_template_id TEXT` (nullable):** provenance PLANNED→plantilla, para (a) **idempotencia** de la materialización, (b) editar/saltar una ocurrencia, (c) recomputar al cambiar la plantilla. `ALTER TABLE ... ADD COLUMN` simple (patrón de `MIGRATION_4_5`); no aparece como CREATE en `schemas/7.json`; el asset se queda en v1. Índice opcional sobre `(recurrence_template_id)` si las queries lo piden.
+- **Eventos manuales sin entidad nueva:** one-off = gasto PLANNED con fecha y sin `recurrence_template_id`. Recurrente manual = un `recurrence_template`. No se crea `calendar_event`.
+
+### G.2.2 Fases de construcción
+
+**Fase 0 — Despertar la capa de recurrencia (sin UI).**
+- `RecurrenceTemplateDao` (nuevo): `observeActive(householdId)`, `getById`, `getActiveForCadence`, `insert/update/delete`, `pause/resume`.
+- `RecurrenceRepositoryImpl` (Room, en `data/repository/impl/`) — cableado como repo PÚBLICO en `BudgetApplication` (igual que los demás: público = Room).
+- Registrar el DAO en `BudgetDatabase`; **migración v6→v7** (col. provenance).
+- *Verificable:* insertar una plantilla, `observeActive` la emite; fresh install v1→v7 sin crash, 793 intactos, asset==golden.
+
+**Fase 1 — Materialización.**
+- `RecurrenceMaterializer` (use-case puro-ish): dado `templates activos` + una `quincena`, produce gastos `status=PLANNED` (+ atribuciones desde `default_beneficiary_ids`/`default_payer_split`, montos desde `default_amount_mxn`) para las plantillas cuya cadencia cae en esa quincena. **Idempotente** por `(recurrence_template_id, quincena_id)`.
+- **Trigger:** al activarse una quincena (hook en el rollover de `QuincenaRepository`/arranque). Más un "materializar ahora" manual para pruebas.
+- Tabla de proyección cadencia→quincena (ver G.2.3).
+
+**Fase 2 — Confirmación PLANNED→POSTED.**
+- `ExpenseRepository.confirmPlanned(expenseId, actualAmountMxn?)`: flip `status=POSTED`, ajusta el monto real (los recurrentes **varían**: luz/agua) y **re-escala los `share_amount_mxn`** de las atribuciones al nuevo monto (los bps no cambian). Encola sync.
+- Surfaced en el chip del dashboard (PLANNED que vencen) y en la pantalla de calendario. "Posponer" = mantener PLANNED, re-agendar recordatorio.
+
+**Fase 3 — Recordatorios (WorkManager).**
+- `ReminderWorker` (`PeriodicWorkRequest`, piso 15 min; **NO** `SCHEDULE_EXACT_ALARM` — penalizado, §F.9). Busca PLANNED cuya `(fecha − lead) ≤ ahora` y no notificados → notificación con acciones [Confirmar]/[Editar]/[Posponer] (reusa la infra de notificación + `BankCaptureActionReceiver` generalizado).
+- **Lead time configurable (decisión #2):** default global en `SettingsRepository` (DataStore) + override por plantilla en `cadence_detail` JSON (`reminder_lead_days` o `"QUINCENA_START"`). Presets UI: mismo día / 1 / 2 / 3 / 7 días / **"al inicio de la quincena"**. Recordar (avisa antes) y confirmar (registra al ocurrir) son dos momentos del mismo PLANNED.
+
+**Fase 4 — UI Calendario.**
+- Nuevo destino de navegación **`CALENDAR`** (reusar el placeholder `LEDGER` o añadir ruta en `BudgetNavGraph` + entrada en rail/bottom-nav). Vista timeline/mes de gastos PLANNED (+ POSTED recientes para contexto), por fecha.
+- Cada PLANNED: concepto, monto esperado, fecha, [Confirmar]/[Editar]/[Posponer].
+- **Gestión de plantillas:** lista de activas; crear/editar (selector de cadencia, monto, fecha inicio/fin, lead de recordatorio, **splits con el `AttributionShareEditor` compartido**); pausar/reanudar/eliminar.
+- Manual one-off: crear un PLANNED con fecha (sin plantilla).
+- **Animaciones Material Expressive obligatorias** (resortes espaciales) en aparición/confirmación/expansión — mandato transversal de CLAUDE.md.
+
+**Fase 5 — Inferencia bajo autorización.**
+- Detector sobre recurrencia (reusa/extiende `ProactiveSuggestionEngine`, que ya halla recurrentes en el camino "inicio de quincena") → sugerencia **"¿Crear plantilla recurrente para «Colegiatura Santi»?"**. Al aceptar, construye el `recurrence_template` con `confidence_score`, `learned_from_expense_ids` y splits default vía `RetroAttributionEngine`. **Nunca** crea plantilla sin autorización explícita (propose-then-confirm).
+
+**Fase 6 — Espejo Google Calendar (opt-in, una vía).**
+- Toggle en Perfil + permiso `WRITE_CALENDAR` (solo si se activa). `CalendarContract` writer a un calendario dedicado; guardar el `external_event_id` (en `cadence_detail` JSON o columna futura) para update/delete. **Best-effort**, una vía (nunca two-way — no ensuciar ni leer el calendario personal de Norma). Última fase, no bloquea las anteriores.
+
+### G.2.3 Proyección cadencia → quincena
+| Cadencia | Materializa en |
+|---|---|
+| `QUINCENAL_FIRST` | 1ª quincena de cada mes (días 1-15) |
+| `QUINCENAL_SECOND` | 2ª quincena (16-fin) |
+| `QUINCENAL_EVERY` | Ambas quincenas |
+| `MONTHLY_SPECIFIC_HALF` | Una quincena específica/mes (`cadence_detail.day_of_month` decide cuál) |
+| `BIMONTHLY` | Cada 2 meses (luz/agua) — track del último periodo materializado |
+| `CUSTOM_CRON` | **Diferido** — empezar sin esto; parsear cron es trabajo posterior |
+
+`cadence_detail` JSON: `{ "day_of_month": 15, "drift_tolerance_days": 3, "reminder_lead_days": 2 }`.
+
+### G.2.4 Budget-awareness (pendiente de UI)
+Los PLANNED del periodo deben reflejarse en "Disponible para gastar" (reservar lo previsto). Decisión de UI futura: mostrarlos como **reservado** separado vs **restado** directo. El dato ya está; la pieza de UI se define al llegar a Fase 4.
+
+### G.2.5 Sincronización
+`recurrence_template` es entidad **sincronizada** (FK, datos del hogar) → `RecurrenceRepositoryImpl` encola outbox; faltará un impl Firestore + manejo en `RemotePullSync` (best-effort; hoy `PERMISSION_DENIED`). Los PLANNED sincronizan como gastos normales. No bloquea las fases (offline-first).
+
+### G.2.6 Pendientes abiertos
+- UI de budget-awareness (reservado vs restado) — Fase 4.
+- "Saltar/editar esta ocurrencia" sin tocar la plantilla (usa `recurrence_template_id` + un flag de override en el PLANNED).
+- `CUSTOM_CRON` (diferido).
+- `RECONCILED` (conciliación bancaria) queda **fuera** de este bloque.
 
 ---
 
