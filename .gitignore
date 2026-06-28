@@ -32,3 +32,4 @@ etl_output.log
 # UI verification screenshots (transient) y JSON crudo del import de diseño
 ui_reference/screenshots/
 ui_reference/claude_design/*.raw.json
+.kotlin/
