@@ -13,7 +13,7 @@ import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.HouseholdDao
 import mx.budget.data.local.dao.MemberDao
 import mx.budget.data.local.dao.PaymentMethodDao
-import mx.budget.data.local.dao.PendingBankCaptureDao
+import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.entity.AttributionReviewEntity
@@ -26,7 +26,7 @@ import mx.budget.data.local.entity.InstallmentPlanEntity
 import mx.budget.data.local.entity.LoanEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
-import mx.budget.data.local.entity.PendingBankCaptureEntity
+import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
 import mx.budget.data.local.entity.SavingsGoalEntity
@@ -58,9 +58,9 @@ import mx.budget.data.local.entity.SyncQueueEntity
         IncomeSourceEntity::class,
         SyncQueueEntity::class,
         AttributionReviewEntity::class,
-        PendingBankCaptureEntity::class
+        PendingCaptureEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -84,7 +84,7 @@ abstract class BudgetDatabase : RoomDatabase() {
 
     abstract fun attributionReviewDao(): AttributionReviewDao
 
-    abstract fun pendingBankCaptureDao(): PendingBankCaptureDao
+    abstract fun pendingCaptureDao(): PendingCaptureDao
 
     companion object {
         /**
@@ -151,6 +151,33 @@ abstract class BudgetDatabase : RoomDatabase() {
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `category` ADD COLUMN `suggested_emoji` TEXT")
+            }
+        }
+
+        /**
+         * v5 → v6: **bandeja unificada de capturas** (Apéndice G.1). Generaliza
+         * `pending_bank_capture` (Feature D) en `pending_capture`, añadiendo el
+         * discriminador `source`, metadata de fuente nullable (voz/calendario) y
+         * las columnas de ubicación (§G.4.2).
+         *
+         * Patrón recreate-table (no simples ALTER) porque hay que (a) volver
+         * nullable los campos de banco y (b) renombrar `merchant`→`concept`, cosas
+         * que SQLite no hace in-place. Se crea la tabla nueva con el `createSql`
+         * LITERAL de `app/schemas/6.json`, se copian las filas existentes (todas
+         * `source='BANK'`, `merchant`→`concept`) y se elimina la vieja. Cualquier
+         * divergencia del CREATE TABLE rompe el identityHash.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // CREATE TABLE — reemplazar por el createSql EXACTO de schemas/6.json.
+                db.execSQL("CREATE TABLE IF NOT EXISTS `pending_capture` (`id` TEXT NOT NULL, `source` TEXT NOT NULL, `amount_mxn` REAL NOT NULL, `concept` TEXT NOT NULL, `occurred_at` INTEGER NOT NULL, `suggested_wallet_id` TEXT, `suggested_category_id` TEXT, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `bank_id` TEXT, `bank_name` TEXT, `bank_package` TEXT, `last4` TEXT, `raw_text` TEXT, `recurrence_id` TEXT, `latitude` REAL, `longitude` REAL, `place_label` TEXT, `location_source` TEXT, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_pending_capture_status` ON `pending_capture` (`status`)")
+                db.execSQL(
+                    "INSERT INTO `pending_capture` " +
+                        "(`id`, `source`, `amount_mxn`, `concept`, `occurred_at`, `suggested_wallet_id`, `suggested_category_id`, `status`, `created_at`, `bank_id`, `bank_name`, `bank_package`, `last4`) " +
+                        "SELECT `id`, 'BANK', `amount_mxn`, `merchant`, `occurred_at`, `suggested_wallet_id`, `suggested_category_id`, `status`, `created_at`, `bank_id`, `bank_name`, `bank_package`, `last4` FROM `pending_bank_capture`"
+                )
+                db.execSQL("DROP TABLE `pending_bank_capture`")
             }
         }
     }

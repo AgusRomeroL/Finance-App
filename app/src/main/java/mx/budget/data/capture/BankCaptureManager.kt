@@ -14,10 +14,10 @@ import mx.budget.data.local.dao.CategoryDao
 import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.MemberDao
 import mx.budget.data.local.dao.PaymentMethodDao
-import mx.budget.data.local.dao.PendingBankCaptureDao
+import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
-import mx.budget.data.local.entity.PendingBankCaptureEntity
+import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.QuincenaRepository
 import java.text.NumberFormat
@@ -42,7 +42,7 @@ import java.util.UUID
  */
 class BankCaptureManager(
     private val context: Context,
-    private val pendingDao: PendingBankCaptureDao,
+    private val pendingDao: PendingCaptureDao,
     private val paymentMethodDao: PaymentMethodDao,
     private val categoryDao: CategoryDao,
     private val expenseDao: ExpenseDao,
@@ -66,20 +66,32 @@ class BankCaptureManager(
         val walletId = resolveWallet(parsed, wallets)
         val categoryId = resolveCategory(parsed.merchant)
 
-        val capture = PendingBankCaptureEntity(
+        val capture = PendingCaptureEntity(
             id = UUID.randomUUID().toString(),
-            bankId = parsed.bankId,
-            bankName = parsed.bankName,
-            bankPackage = parsed.bankPackage,
+            source = "BANK",
             amountMxn = parsed.amountMxn,
-            merchant = parsed.merchant,
-            last4 = parsed.last4,
+            concept = parsed.merchant,
             occurredAt = parsed.occurredAt,
             suggestedWalletId = walletId,
             suggestedCategoryId = categoryId,
             status = "PENDING",
             createdAt = System.currentTimeMillis(),
+            bankId = parsed.bankId,
+            bankName = parsed.bankName,
+            bankPackage = parsed.bankPackage,
+            last4 = parsed.last4,
         )
+        enqueue(capture)
+    }
+
+    /**
+     * Punto de entrada GENÉRICO a la bandeja unificada (§G.1): inserta la
+     * propuesta `PENDING` y postea su notificación. Los futuros productores
+     * (calendario, voz, widget, reloj) llaman aquí en vez de duplicar la lógica;
+     * [ingest] es solo el productor `source="BANK"`. Confirmar/descartar (más
+     * abajo) ya son agnósticos a la fuente.
+     */
+    suspend fun enqueue(capture: PendingCaptureEntity) {
         pendingDao.insert(capture)
         postNotification(capture)
     }
@@ -104,10 +116,10 @@ class BankCaptureManager(
             ?: members.firstOrNull { it.role == "PAYER_ADULT" }?.id
             ?: members.firstOrNull()?.id
 
-        // Atribución inferida por el comercio; fallback conservador y editable.
-        val payerBps = engine.suggest(row.merchant, "PAYER")?.distribution
+        // Atribución inferida por el concepto; fallback conservador y editable.
+        val payerBps = engine.suggest(row.concept, "PAYER")?.distribution
             ?: ownerId?.let { mapOf(it to 10_000) } ?: emptyMap()
-        val beneficiaryBps = engine.suggest(row.merchant, "BENEFICIARY")?.distribution
+        val beneficiaryBps = engine.suggest(row.concept, "BENEFICIARY")?.distribution
             ?: equalSplit(members.map { it.id }).ifEmpty { payerBps }
 
         if (payerBps.isEmpty() || beneficiaryBps.isEmpty()) return
@@ -120,7 +132,7 @@ class BankCaptureManager(
             occurredAt = row.occurredAt,
             quincenaId = quincena.id,
             categoryId = categoryId,
-            concept = row.merchant.take(64),
+            concept = row.concept.take(64),
             amountMxn = row.amountMxn,
             paymentMethodId = walletId,
             status = "POSTED",
@@ -217,15 +229,19 @@ class BankCaptureManager(
 
     // ── Notificación propia (silenciosa, con acciones) ──────────────────────────
 
-    private fun postNotification(capture: PendingBankCaptureEntity) {
+    private fun postNotification(capture: PendingCaptureEntity) {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
         val money = NumberFormat.getCurrencyInstance(Locale("es", "MX")).format(capture.amountMxn)
         val confirmPi = actionIntent(capture.id, BankCaptureActions.CONFIRM)
         val dismissPi = actionIntent(capture.id, BankCaptureActions.DISMISS)
 
+        // Título según la fuente: BANK antepone el banco; el resto, monto + concepto.
+        val title = capture.bankName
+            ?.let { "$it: $money en ${capture.concept}" }
+            ?: "$money en ${capture.concept}"
         val notif = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("${capture.bankName}: $money en ${capture.merchant}")
+            .setContentTitle(title)
             .setContentText("¿Registrar este gasto?")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)

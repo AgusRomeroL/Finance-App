@@ -79,7 +79,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.ai.proactive.ProactiveSuggestion
-import mx.budget.data.local.entity.PendingBankCaptureEntity
+import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
@@ -327,7 +327,7 @@ private fun ExpandedDashboard(
     onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
     onDismissSuggestion: (String) -> Unit,
     onOpenSuggestions: () -> Unit,
-    bankCaptures: List<PendingBankCaptureEntity>,
+    bankCaptures: List<PendingCaptureEntity>,
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit
 ) {
@@ -471,7 +471,7 @@ private fun CompactDashboard(
     onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
     onDismissSuggestion: (String) -> Unit,
     onOpenSuggestions: () -> Unit,
-    bankCaptures: List<PendingBankCaptureEntity>,
+    bankCaptures: List<PendingCaptureEntity>,
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit
 ) {
@@ -1032,7 +1032,7 @@ private fun QuincenaRhythm(progress: QuincenaProgress) {
 internal sealed interface SmartSuggestionItem {
     val key: String
 
-    data class Bank(val capture: PendingBankCaptureEntity) : SmartSuggestionItem {
+    data class Bank(val capture: PendingCaptureEntity) : SmartSuggestionItem {
         override val key get() = "bank:${capture.id}"
     }
 
@@ -1043,7 +1043,7 @@ internal sealed interface SmartSuggestionItem {
 
 /** Combina capturas (D, primero) + proactivas (C) en una sola lista de ítems. */
 internal fun buildSuggestionItems(
-    bankCaptures: List<PendingBankCaptureEntity>,
+    bankCaptures: List<PendingCaptureEntity>,
     proactiveSuggestions: List<ProactiveSuggestion>
 ): List<SmartSuggestionItem> = buildList {
     bankCaptures.forEach { add(SmartSuggestionItem.Bank(it)) }
@@ -1058,7 +1058,7 @@ internal fun buildSuggestionItems(
  */
 @Composable
 private fun SuggestionsSection(
-    bankCaptures: List<PendingBankCaptureEntity>,
+    bankCaptures: List<PendingCaptureEntity>,
     proactiveSuggestions: List<ProactiveSuggestion>,
     isExpanded: Boolean,
     onSeeMore: () -> Unit,
@@ -1239,7 +1239,7 @@ private fun SuggestionActionRow(
  */
 @Composable
 private fun BankCaptureChip(
-    capture: PendingBankCaptureEntity,
+    capture: PendingCaptureEntity,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -1264,10 +1264,10 @@ private fun BankCaptureChip(
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Eyebrow("${capture.bankName} · cargo detectado", color = MaterialTheme.colorScheme.onTertiaryContainer, maxLines = 1)
+                Eyebrow("${capture.bankName ?: "Cargo"} · cargo detectado", color = MaterialTheme.colorScheme.onTertiaryContainer, maxLines = 1)
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    "${capture.amountMxn.toMxn()} en ${capture.merchant}",
+                    "${capture.amountMxn.toMxn()} en ${capture.concept}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,

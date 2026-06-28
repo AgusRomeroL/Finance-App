@@ -144,7 +144,8 @@ class BudgetApplication : Application() {
                 BudgetDatabase.MIGRATION_1_2,
                 BudgetDatabase.MIGRATION_2_3,
                 BudgetDatabase.MIGRATION_3_4,
-                BudgetDatabase.MIGRATION_4_5
+                BudgetDatabase.MIGRATION_4_5,
+                BudgetDatabase.MIGRATION_5_6
             )
             .build()
 
@@ -212,7 +213,7 @@ class BudgetApplication : Application() {
         BankCaptureManager.ensureChannel(this)
         bankCaptureManager = BankCaptureManager(
             context = this,
-            pendingDao = database.pendingBankCaptureDao(),
+            pendingDao = database.pendingCaptureDao(),
             paymentMethodDao = database.paymentMethodDao(),
             categoryDao = database.categoryDao(),
             expenseDao = expenseDao,

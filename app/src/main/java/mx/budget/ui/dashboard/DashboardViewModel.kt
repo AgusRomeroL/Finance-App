@@ -22,9 +22,9 @@ import mx.budget.data.capture.BankCaptureManager
 import mx.budget.data.local.dao.AttributionReviewDao
 import mx.budget.data.local.dao.CategoryDao
 import mx.budget.data.local.dao.ExpenseDao
-import mx.budget.data.local.dao.PendingBankCaptureDao
+import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.local.entity.CategoryEntity
-import mx.budget.data.local.entity.PendingBankCaptureEntity
+import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
@@ -113,7 +113,7 @@ class DashboardViewModel(
     private val householdId: String,
     private val attributionReviewDao: AttributionReviewDao,
     private val expenseDao: ExpenseDao,
-    private val pendingBankCaptureDao: PendingBankCaptureDao,
+    private val pendingCaptureDao: PendingCaptureDao,
     private val bankCaptureManager: BankCaptureManager,
     private val categoryDao: CategoryDao,
     private val proactiveReasoner: ProactiveReasoner
@@ -121,8 +121,8 @@ class DashboardViewModel(
 
     // ── Capturas bancarias pendientes (Feature D, §F.6) ─────────────────────────
 
-    /** Propuestas de gasto detectadas en notificaciones bancarias, por confirmar. */
-    val pendingBankCaptures: StateFlow<List<PendingBankCaptureEntity>> = pendingBankCaptureDao
+    /** Propuestas pendientes de confirmar (bandeja unificada §G.1; hoy solo BANK). */
+    val pendingBankCaptures: StateFlow<List<PendingCaptureEntity>> = pendingCaptureDao
         .observePending()
         .catch { emit(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

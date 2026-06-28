@@ -11,7 +11,7 @@ import androidx.lifecycle.ViewModelProvider
 import kotlinx.coroutines.launch
 import mx.budget.ai.proactive.RetroAttributionEngine
 import mx.budget.data.capture.BankCaptureManager
-import mx.budget.data.local.dao.PendingBankCaptureDao
+import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
             app.householdId,
             app.database.attributionReviewDao(),
             app.database.expenseDao(),
-            app.database.pendingBankCaptureDao(),
+            app.database.pendingCaptureDao(),
             app.bankCaptureManager,
             app.database.categoryDao(),
             app.proactiveReasoner
@@ -119,7 +119,7 @@ class DashboardViewModelFactory(
     private val householdId: String,
     private val attributionReviewDao: AttributionReviewDao,
     private val expenseDao: ExpenseDao,
-    private val pendingBankCaptureDao: PendingBankCaptureDao,
+    private val pendingCaptureDao: PendingCaptureDao,
     private val bankCaptureManager: BankCaptureManager,
     private val categoryDao: mx.budget.data.local.dao.CategoryDao,
     private val proactiveReasoner: mx.budget.ai.proactive.ProactiveReasoner,
@@ -133,7 +133,7 @@ class DashboardViewModelFactory(
             householdId = householdId,
             attributionReviewDao = attributionReviewDao,
             expenseDao = expenseDao,
-            pendingBankCaptureDao = pendingBankCaptureDao,
+            pendingCaptureDao = pendingCaptureDao,
             bankCaptureManager = bankCaptureManager,
             categoryDao = categoryDao,
             proactiveReasoner = proactiveReasoner,
