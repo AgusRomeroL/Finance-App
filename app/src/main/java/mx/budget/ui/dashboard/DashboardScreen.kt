@@ -2,8 +2,13 @@ package mx.budget.ui.dashboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.DraggableState
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -240,21 +245,7 @@ private fun ExpandedDashboard(
                     ) {
                         DashboardHeader(quincena = state.quincena, expanded = true)
                         Spacer(Modifier.height(22.dp))
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            MainHealthPane(
-                                state = state,
-                                modifier = Modifier
-                                    .weight(0.62f)
-                                    .fillMaxHeight()
-                            )
-                            Spacer(Modifier.width(24.dp))
-                            TransactionsPane(
-                                transactions = state.transactions,
-                                modifier = Modifier
-                                    .weight(0.38f)
-                                    .fillMaxHeight()
-                            )
-                        }
+                        BentoPanes(state = state, modifier = Modifier.fillMaxSize())
                     }
                     // FAB extendido
                     ExtendedCaptureFab(
@@ -266,6 +257,57 @@ private fun ExpandedDashboard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Bento de dos paneles con **divisor arrastrable** y proporción persistida.
+ *
+ * Implementado con un handle custom (`draggable`) en vez de
+ * `SupportingPaneScaffold`/`PaneExpansionState` por estabilidad (el brief D3/C7
+ * marca esa API como inestable). La proporción sobrevive el plegado/recreación
+ * vía `rememberSaveable` (brief C13). Anclada en 62/38, arrastrable en [0.45, 0.78].
+ */
+@Composable
+private fun BentoPanes(state: DashboardUiState.Success, modifier: Modifier = Modifier) {
+    var fraction by rememberSaveable { mutableStateOf(0.62f) }
+    BoxWithConstraints(modifier = modifier) {
+        val totalPx = constraints.maxWidth.toFloat()
+        val dragState = rememberDraggableState { delta ->
+            if (totalPx > 0f) fraction = (fraction + delta / totalPx).coerceIn(0.45f, 0.78f)
+        }
+        Row(modifier = Modifier.fillMaxSize()) {
+            MainHealthPane(
+                state = state,
+                modifier = Modifier.weight(fraction).fillMaxHeight()
+            )
+            PaneDragHandle(dragState)
+            TransactionsPane(
+                transactions = state.transactions,
+                modifier = Modifier.weight(1f - fraction).fillMaxHeight()
+            )
+        }
+    }
+}
+
+/** Divisor (gutter 24dp) con grabber visible; arrastrable en horizontal. */
+@Composable
+private fun PaneDragHandle(dragState: DraggableState) {
+    Box(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(24.dp)
+            .draggable(state = dragState, orientation = Orientation.Horizontal)
+            .semantics { contentDescription = "Ajustar ancho de paneles" },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .height(48.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.outlineVariant)
+        )
     }
 }
 
