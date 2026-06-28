@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PriorityHigh
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -108,7 +110,8 @@ fun CaptureBottomSheet(
     val categories by (viewModel?.categories ?: dummyStateFlow(emptyList<CategoryEntity>())).collectAsState()
     val selectedCategoryId by (viewModel?.selectedCategoryId ?: dummyStateFlow<String?>(null)).collectAsState()
     val members by (viewModel?.members ?: dummyStateFlow(emptyList<MemberEntity>())).collectAsState()
-    val selectedMemberIds by (viewModel?.selectedMemberIds ?: dummyStateFlow(emptySet<String>())).collectAsState()
+    val beneficiaryShares by (viewModel?.beneficiaryShares ?: dummyStateFlow(emptyMap<String, Int>())).collectAsState()
+    val payerShares by (viewModel?.payerShares ?: dummyStateFlow(emptyMap<String, Int>())).collectAsState()
     val canRegister by (viewModel?.canRegister ?: dummyStateFlow(false)).collectAsState()
     val operationState by (viewModel?.operationState
         ?: dummyStateFlow<CaptureOperationState>(CaptureOperationState.Idle)).collectAsState()
@@ -181,12 +184,14 @@ fun CaptureBottomSheet(
                     Spacer(Modifier.height(14.dp))
                     AttributionCard(
                         members = members,
-                        selectedMemberIds = selectedMemberIds,
-                        wallets = wallets,
-                        selectedWalletId = selectedWalletId,
-                        onMemberToggled = { viewModel?.onMemberToggled(it) },
-                        onSelectAll = { viewModel?.onSelectAllMembers() },
-                        onClearAll = { viewModel?.onClearMembers() }
+                        beneficiaryShares = beneficiaryShares,
+                        payerShares = payerShares,
+                        onBeneficiaryToggle = { viewModel?.onBeneficiaryToggled(it) },
+                        onBeneficiaryDelta = { id, d -> viewModel?.onBeneficiaryShareDelta(id, d) },
+                        onPayerToggle = { viewModel?.onPayerToggled(it) },
+                        onPayerDelta = { id, d -> viewModel?.onPayerShareDelta(id, d) },
+                        onSelectAllBeneficiaries = { viewModel?.onSelectAllMembers() },
+                        onClearBeneficiaries = { viewModel?.onClearMembers() }
                     )
                     Spacer(Modifier.height(14.dp))
                     MoreSection(
@@ -201,7 +206,7 @@ fun CaptureBottomSheet(
                     selectedCategoryId = selectedCategoryId,
                     displayAmount = displayAmount,
                     members = members,
-                    selectedMemberIds = selectedMemberIds,
+                    beneficiaryShares = beneficiaryShares,
                     enabled = canRegister,
                     isLoading = operationState is CaptureOperationState.Loading,
                     onRegister = { viewModel?.onRegisterExpense() }
@@ -651,22 +656,17 @@ private fun WalletCard(wallet: PaymentMethodEntity, selected: Boolean, onClick: 
 @Composable
 private fun AttributionCard(
     members: List<MemberEntity>,
-    selectedMemberIds: Set<String>,
-    wallets: List<PaymentMethodEntity>,
-    selectedWalletId: String?,
-    onMemberToggled: (String) -> Unit,
-    onSelectAll: () -> Unit,
-    onClearAll: () -> Unit
+    beneficiaryShares: Map<String, Int>,
+    payerShares: Map<String, Int>,
+    onBeneficiaryToggle: (String) -> Unit,
+    onBeneficiaryDelta: (String, Int) -> Unit,
+    onPayerToggle: (String) -> Unit,
+    onPayerDelta: (String, Int) -> Unit,
+    onSelectAllBeneficiaries: () -> Unit,
+    onClearBeneficiaries: () -> Unit
 ) {
-    val nSelected = selectedMemberIds.size
-    val sharePct = if (nSelected > 0) 100 / nSelected else 0
-    val complete = nSelected > 0
-    val allSelected = members.isNotEmpty() && nSelected == members.size
-    // Pagador: derivado del dueño del wallet (modelo actual)
-    val payerMember = remember(selectedWalletId, wallets, members) {
-        val ownerId = wallets.firstOrNull { it.id == selectedWalletId }?.ownerMemberId
-        members.firstOrNull { it.id == ownerId }
-    }
+    val complete = beneficiaryShares.isNotEmpty() && beneficiaryShares.values.sum() == 100 &&
+        payerShares.isNotEmpty() && payerShares.values.sum() == 100
 
     Card {
         Row(
@@ -679,7 +679,6 @@ private fun AttributionCard(
                 Spacer(Modifier.height(3.dp))
                 Text("Quién se beneficia y quién paga", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            // Chip de estado (redundancia: color + icono + texto)
             val warn = amountSemantic(FinancialTone.WARNING)
             val inc = amountSemantic(FinancialTone.INCOME)
             Row(
@@ -705,58 +704,60 @@ private fun AttributionCard(
 
         Spacer(Modifier.height(18.dp))
 
-        // Beneficia a · consume
-        AttributionRowHeader(
+        AttributionDimension(
             icon = Icons.Filled.Favorite,
             iconTint = MaterialTheme.financeColors.income,
             iconBg = MaterialTheme.financeColors.incomeContainer,
             title = "Beneficia a · consume",
-            trailing = if (complete) "$sharePct % c/u" else "Selecciona"
+            members = members,
+            shares = beneficiaryShares,
+            onToggle = onBeneficiaryToggle,
+            onDelta = onBeneficiaryDelta,
+            onSelectAll = onSelectAllBeneficiaries,
+            onClearAll = onClearBeneficiaries
         )
-        Spacer(Modifier.height(10.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Chip "Todos" — selecciona/limpia a todo el hogar (reparto equitativo)
-            AllBeneficiariesChip(
-                selected = allSelected,
-                onClick = { if (allSelected) onClearAll() else onSelectAll() }
-            )
-            members.forEach { m ->
-                MemberChip(
-                    name = m.displayName,
-                    selected = m.id in selectedMemberIds,
-                    sharePct = if (m.id in selectedMemberIds) sharePct else null,
-                    onClick = { onMemberToggled(m.id) }
-                )
-            }
-        }
 
         Spacer(Modifier.height(18.dp))
 
-        // Pagó · adelantó
-        AttributionRowHeader(
+        AttributionDimension(
             icon = Icons.Filled.Payments,
             iconTint = MaterialTheme.colorScheme.onSurface,
             iconBg = MaterialTheme.colorScheme.surfaceContainerHighest,
             title = "Pagó · adelantó",
-            trailing = if (payerMember != null) "100 %" else "Según la cuenta"
+            members = members,
+            shares = payerShares,
+            onToggle = onPayerToggle,
+            onDelta = onPayerDelta,
+            onSelectAll = null,
+            onClearAll = null
         )
-        Spacer(Modifier.height(10.dp))
-        Row {
-            if (payerMember != null) {
-                MemberChip(name = payerMember.displayName, selected = true, sharePct = 100, onClick = {})
-            } else {
-                Text(
-                    "Se toma del dueño de la cuenta seleccionada.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
     }
 }
 
+/**
+ * Una dimensión de atribución (beneficiarios o pagadores): encabezado con el
+ * estado de la suma y una rejilla de chips de miembros. Cada miembro
+ * seleccionado muestra un stepper de % (±5); tocar el avatar/nombre lo quita.
+ * Si [onSelectAll] no es null, antepone un chip "Todos".
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AttributionRowHeader(icon: ImageVector, iconTint: Color, iconBg: Color, title: String, trailing: String) {
+private fun AttributionDimension(
+    icon: ImageVector,
+    iconTint: Color,
+    iconBg: Color,
+    title: String,
+    members: List<MemberEntity>,
+    shares: Map<String, Int>,
+    onToggle: (String) -> Unit,
+    onDelta: (String, Int) -> Unit,
+    onSelectAll: (() -> Unit)?,
+    onClearAll: (() -> Unit)?
+) {
+    val sum = shares.values.sum()
+    val allSelected = members.isNotEmpty() && shares.size == members.size
+
+    // Encabezado + estado de la suma (redundancia: color + texto)
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -775,12 +776,39 @@ private fun AttributionRowHeader(icon: ImageVector, iconTint: Color, iconBg: Col
                 letterSpacing = 1.4.sp
             )
         }
-        Text(trailing, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+        val (statusText, statusColor) = when {
+            shares.isEmpty() -> "Selecciona" to MaterialTheme.colorScheme.onSurfaceVariant
+            sum == 100 -> "100 %" to MaterialTheme.financeColors.income
+            sum < 100 -> "Falta ${100 - sum} %" to MaterialTheme.financeColors.warning
+            else -> "Excede ${sum - 100} %" to MaterialTheme.financeColors.expense
+        }
+        Text(statusText, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = statusColor, maxLines = 1, softWrap = false)
+    }
+
+    Spacer(Modifier.height(10.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (onSelectAll != null) {
+            AllChip(selected = allSelected) { if (allSelected) onClearAll?.invoke() else onSelectAll() }
+        }
+        members.forEach { m ->
+            val pct = shares[m.id]
+            if (pct == null) {
+                UnselectedMemberChip(m.displayName) { onToggle(m.id) }
+            } else {
+                SelectedShareChip(
+                    name = m.displayName,
+                    pct = pct,
+                    onRemove = { onToggle(m.id) },
+                    onMinus = { onDelta(m.id, -5) },
+                    onPlus = { onDelta(m.id, 5) }
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun AllBeneficiariesChip(selected: Boolean, onClick: () -> Unit) {
+private fun AllChip(selected: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(18.dp))
@@ -790,8 +818,7 @@ private fun AllBeneficiariesChip(selected: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            if (selected) Icons.Filled.Check else Icons.Filled.Groups,
-            null,
+            if (selected) Icons.Filled.Check else Icons.Filled.Groups, null,
             tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(if (selected) 16.dp else 18.dp)
         )
@@ -806,44 +833,72 @@ private fun AllBeneficiariesChip(selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun MemberChip(name: String, selected: Boolean, sharePct: Int?, onClick: () -> Unit) {
+private fun UnselectedMemberChip(name: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
+            .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
-            .padding(start = 10.dp, end = if (selected) 8.dp else 14.dp, top = 8.dp, bottom = 8.dp),
+            .padding(start = 10.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (selected) {
+        Icon(Icons.Filled.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(name, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+    }
+}
+
+/** Chip de miembro seleccionado con stepper de % editable. */
+@Composable
+private fun SelectedShareChip(name: String, pct: Int, onRemove: () -> Unit, onMinus: () -> Unit, onPlus: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Región de quitar (avatar + nombre)
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onRemove)
+                .padding(start = 10.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
                 modifier = Modifier.size(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Text(name.take(1).uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onPrimary)
             }
-        } else {
-            Icon(Icons.Filled.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            name,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-            maxLines = 1
-        )
-        if (selected && sharePct != null) {
             Spacer(Modifier.width(8.dp))
-            Text(
-                "$sharePct %",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-                    .padding(horizontal = 7.dp, vertical = 2.dp)
-            )
+            Text(name, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1)
         }
+        // Stepper ±
+        StepButton(Icons.Filled.Remove, "Menos", onMinus)
+        Text(
+            "$pct %",
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.widthIn(min = 34.dp),
+            maxLines = 1, softWrap = false
+        )
+        StepButton(Icons.Filled.Add, "Más", onPlus)
+        Spacer(Modifier.width(6.dp))
+    }
+}
+
+@Composable
+private fun StepButton(icon: ImageVector, description: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .padding(2.dp)
+            .size(26.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, description, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(15.dp))
     }
 }
 
@@ -908,13 +963,13 @@ private fun CaptureFooter(
     selectedCategoryId: String?,
     displayAmount: String,
     members: List<MemberEntity>,
-    selectedMemberIds: Set<String>,
+    beneficiaryShares: Map<String, Int>,
     enabled: Boolean,
     isLoading: Boolean,
     onRegister: () -> Unit
 ) {
     val catName = categories.firstOrNull { it.id == selectedCategoryId }?.displayName
-    val beneficiaries = members.filter { it.id in selectedMemberIds }.joinToString(", ") { it.displayName }
+    val beneficiaries = members.filter { it.id in beneficiaryShares.keys }.joinToString(", ") { it.displayName }
     val summary = buildString {
         append(catName ?: "Elige categoría")
         if (displayAmount != "0.00" && displayAmount != "0") append(" · $").append(displayAmount)

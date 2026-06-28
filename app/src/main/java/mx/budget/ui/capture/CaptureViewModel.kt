@@ -164,14 +164,28 @@ class CaptureViewModel(
             initialValue = emptyList()
         )
 
-    private val _selectedMemberIds = MutableStateFlow<Set<String>>(emptySet())
+    // Atribución en DOS dimensiones, como mapas memberId → porcentaje (0-100).
+    // Cada dimensión debe sumar 100 para registrar. Convertimos a basis points
+    // (×100) al guardar, con ajuste de resto para sumar exactamente 10,000.
+    private val _beneficiaryShares = MutableStateFlow<Map<String, Int>>(emptyMap())
+    private val _payerShares = MutableStateFlow<Map<String, Int>>(emptyMap())
 
-    /**
-     * IDs de los miembros marcados como BENEFICIARY del gasto.
-     * La atribución de PAYER se infiere del wallet seleccionado (ownerMemberId).
-     * Si el wallet no tiene owner, el payer es el primer PAYER_ADULT del hogar.
-     */
-    val selectedMemberIds: StateFlow<Set<String>> = _selectedMemberIds.asStateFlow()
+    /** BENEFICIARY: quién consume → porcentaje por miembro. */
+    val beneficiaryShares: StateFlow<Map<String, Int>> = _beneficiaryShares.asStateFlow()
+
+    /** PAYER: quién paga → porcentaje por miembro (default = dueño del wallet). */
+    val payerShares: StateFlow<Map<String, Int>> = _payerShares.asStateFlow()
+
+    /** Reparte 100% equitativamente entre [ids], con el resto en el último. */
+    private fun equalSplit(ids: Collection<String>): Map<String, Int> {
+        val list = ids.toList()
+        if (list.isEmpty()) return emptyMap()
+        val base = 100 / list.size
+        val remainder = 100 - base * list.size
+        return list.mapIndexed { i, id ->
+            id to if (i == list.lastIndex) base + remainder else base
+        }.toMap()
+    }
 
     // ── Estado de la operación de registro ────────────────────────────────
 
@@ -187,19 +201,19 @@ class CaptureViewModel(
 
     /**
      * `true` si el formulario es válido para registrar (brief C11 — campos mínimos):
-     * - Importe > 0
-     * - Wallet seleccionado
-     * - Categoría seleccionada
-     * - Al menos un beneficiario seleccionado
+     * - Importe > 0, wallet y categoría seleccionados.
+     * - Beneficiarios y pagadores cada uno **sumando exactamente 100%**.
      *
      * El concepto es OPCIONAL (vive bajo "Más"); si se omite, se usa el nombre
      * de la categoría como default en [onRegisterExpense].
      */
     val canRegister: StateFlow<Boolean> = combine(
-        _rawAmount, _concept, _selectedWalletId, _selectedCategoryId, _selectedMemberIds
-    ) { amount, _, walletId, categoryId, memberIds ->
+        _rawAmount, _selectedWalletId, _selectedCategoryId, _beneficiaryShares, _payerShares
+    ) { amount, walletId, categoryId, benef, payer ->
         val amountNum = amount.replace(",", "").toDoubleOrNull() ?: 0.0
-        amountNum > 0 && walletId != null && categoryId != null && memberIds.isNotEmpty()
+        amountNum > 0 && walletId != null && categoryId != null &&
+            benef.isNotEmpty() && benef.values.sum() == 100 &&
+            payer.isNotEmpty() && payer.values.sum() == 100
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -251,9 +265,19 @@ class CaptureViewModel(
         _concept.value = value.take(64) // contrato de ExpenseEntity.concept
     }
 
-    /** Selecciona o deselecciona un wallet como fuente de pago. */
+    /**
+     * Selecciona un wallet como fuente de pago. Si aún no hay pagadores
+     * elegidos, siembra el pagador con el dueño de la cuenta al 100% (default
+     * conveniente, sobreescribible). Si el wallet no tiene dueño, deja al primer
+     * PAYER_ADULT del hogar.
+     */
     fun onWalletSelected(walletId: String) {
         _selectedWalletId.value = walletId
+        if (_payerShares.value.isEmpty()) {
+            val owner = wallets.value.firstOrNull { it.id == walletId }?.ownerMemberId
+                ?: members.value.firstOrNull { it.role == "PAYER_ADULT" }?.id
+            if (owner != null) _payerShares.value = mapOf(owner to 100)
+        }
     }
 
     /** Selecciona una categoría. */
@@ -261,24 +285,48 @@ class CaptureViewModel(
         _selectedCategoryId.value = categoryId
     }
 
-    /**
-     * Alterna la selección de un miembro como beneficiario.
-     * Multi-select: al pulsar sobre un chip ya seleccionado, se deselecciona.
-     */
-    fun onMemberToggled(memberId: String) {
-        _selectedMemberIds.update { current ->
-            if (memberId in current) current - memberId else current + memberId
+    // ── Beneficiarios (quién consume) ──────────────────────────────────────────
+
+    /** Alterna un beneficiario; al cambiar el conjunto se reparte equitativo. */
+    fun onBeneficiaryToggled(memberId: String) {
+        val ids = _beneficiaryShares.value.keys.let {
+            if (memberId in it) it - memberId else it + memberId
         }
+        _beneficiaryShares.value = equalSplit(ids)
     }
 
-    /** Selecciona todos los miembros activos a la vez (chip "Todos"). */
+    /** Ajusta el % de un beneficiario en pasos (clamp 0-100). */
+    fun onBeneficiaryShareDelta(memberId: String, delta: Int) {
+        val cur = _beneficiaryShares.value
+        if (memberId !in cur) return
+        _beneficiaryShares.value = cur + (memberId to (cur.getValue(memberId) + delta).coerceIn(0, 100))
+    }
+
+    /** Selecciona a todo el hogar como beneficiario (reparto equitativo). */
     fun onSelectAllMembers() {
-        _selectedMemberIds.value = members.value.map { it.id }.toSet()
+        _beneficiaryShares.value = equalSplit(members.value.map { it.id })
     }
 
-    /** Limpia la selección de beneficiarios (para alternar el chip "Todos"). */
+    /** Limpia los beneficiarios (para alternar el chip "Todos"). */
     fun onClearMembers() {
-        _selectedMemberIds.value = emptySet()
+        _beneficiaryShares.value = emptyMap()
+    }
+
+    // ── Pagadores (quién paga) ─────────────────────────────────────────────────
+
+    /** Alterna un pagador; al cambiar el conjunto se reparte equitativo. */
+    fun onPayerToggled(memberId: String) {
+        val ids = _payerShares.value.keys.let {
+            if (memberId in it) it - memberId else it + memberId
+        }
+        _payerShares.value = equalSplit(ids)
+    }
+
+    /** Ajusta el % de un pagador en pasos (clamp 0-100). */
+    fun onPayerShareDelta(memberId: String, delta: Int) {
+        val cur = _payerShares.value
+        if (memberId !in cur) return
+        _payerShares.value = cur + (memberId to (cur.getValue(memberId) + delta).coerceIn(0, 100))
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -342,51 +390,36 @@ class CaptureViewModel(
                     createdAt = nowEpoch
                 )
 
-                // 6. Construir atribuciones BENEFICIARY
-                val beneficiaryIds = _selectedMemberIds.value.toList()
-                if (beneficiaryIds.isEmpty()) {
-                    throw IllegalArgumentException("Selecciona al menos un beneficiario.")
+                // 6. Construir atribuciones de AMBAS dimensiones desde los shares (%).
+                val beneficiaryShares = _beneficiaryShares.value
+                val payerShares = _payerShares.value
+                if (beneficiaryShares.isEmpty() || beneficiaryShares.values.sum() != 100) {
+                    throw IllegalArgumentException("La atribución de beneficiarios debe sumar 100%.")
+                }
+                if (payerShares.isEmpty() || payerShares.values.sum() != 100) {
+                    throw IllegalArgumentException("La atribución de pagadores debe sumar 100%.")
                 }
 
-                val baseBps = 10_000 / beneficiaryIds.size
-                val remainder = 10_000 - (baseBps * beneficiaryIds.size)
-
-                val attributions = mutableListOf<ExpenseAttributionEntity>()
-
-                beneficiaryIds.forEachIndexed { index, memberId ->
-                    val bps = if (index == beneficiaryIds.lastIndex) baseBps + remainder else baseBps
-                    attributions.add(
+                // % → basis points; el último absorbe el resto para sumar 10,000 exacto.
+                fun buildRows(shares: Map<String, Int>, role: String): List<ExpenseAttributionEntity> {
+                    val entries = shares.entries.toList()
+                    var assigned = 0
+                    return entries.mapIndexed { i, (memberId, pct) ->
+                        val bps = if (i == entries.lastIndex) 10_000 - assigned
+                        else (pct * 100).also { assigned += it }
                         ExpenseAttributionEntity(
                             id = UUID.randomUUID().toString(),
                             expenseId = expenseId,
                             memberId = memberId,
-                            role = "BENEFICIARY",
+                            role = role,
                             shareBps = bps,
                             shareAmountMxn = amount * bps / 10_000.0
                         )
-                    )
+                    }
                 }
 
-                // 7. Construir atribución PAYER desde el ownerMemberId del wallet
-                val wallet = walletRepository.getById(walletId)
-                val payerMemberId = wallet?.ownerMemberId
-                    ?: memberRepository
-                        .getByRole(householdId, "PAYER_ADULT")
-                        .firstOrNull()?.id
-                    ?: throw IllegalStateException(
-                        "No se encontró un pagador para el wallet seleccionado."
-                    )
-
-                attributions.add(
-                    ExpenseAttributionEntity(
-                        id = UUID.randomUUID().toString(),
-                        expenseId = expenseId,
-                        memberId = payerMemberId,
-                        role = "PAYER",
-                        shareBps = 10_000,
-                        shareAmountMxn = amount
-                    )
-                )
+                val attributions = buildRows(beneficiaryShares, "BENEFICIARY") +
+                    buildRows(payerShares, "PAYER")
 
                 // 7. Inserción atómica (valida bps internamente)
                 expenseRepository.insertWithAttributions(expense, attributions)
@@ -417,7 +450,8 @@ class CaptureViewModel(
         _concept.value = ""
         _selectedWalletId.value = null
         _selectedCategoryId.value = null
-        _selectedMemberIds.value = emptySet()
+        _beneficiaryShares.value = emptyMap()
+        _payerShares.value = emptyMap()
         _operationState.value = CaptureOperationState.Idle
     }
 
