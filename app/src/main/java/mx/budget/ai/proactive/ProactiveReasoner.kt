@@ -1,5 +1,6 @@
 package mx.budget.ai.proactive
 
+import android.util.Log
 import mx.budget.ai.dispatch.JsonRepairer
 import mx.budget.ai.service.AiCoreManager
 import mx.budget.data.local.entity.QuincenaEntity
@@ -62,15 +63,26 @@ class ProactiveReasoner(
         // (UnsupportedDevice en emulador, TemporaryError por cuota/descarga) cae
         // al ranking SQL. ensureReady es idempotente.
         val ready = runCatching { aiCore.ensureReady() }.getOrNull()
-        if (ready != AiCoreManager.Readiness.Available) return candidates
+        if (ready != AiCoreManager.Readiness.Available) {
+            Log.i(TAG, "AICore no disponible ($ready) → fallback SQL (${candidates.size} candidatos)")
+            return candidates
+        }
 
         val prompt = buildPrompt(candidates, activeQuincena, nowEpochMs)
         val raw = runCatching { aiCore.generate(prompt).getOrNull() }.getOrNull()
             ?.takeIf { it.isNotBlank() }
-            ?: return candidates
+        if (raw == null) {
+            Log.w(TAG, "Gemini Nano sin salida → fallback SQL")
+            return candidates
+        }
 
         val reordered = parse(raw, candidates)
-        return reordered.ifEmpty { candidates }
+        if (reordered.isEmpty()) {
+            Log.w(TAG, "Salida de Gemini Nano no parseable/sin claves válidas → fallback SQL. raw=${raw.take(160)}")
+            return candidates
+        }
+        Log.i(TAG, "Gemini Nano OK: reordenó ${reordered.size}, top='${reordered.first().concept}' motivo='${reordered.first().reason}'")
+        return reordered
     }
 
     // ── Prompt ──────────────────────────────────────────────────────────────────
@@ -173,5 +185,10 @@ class ProactiveReasoner(
         in 5..11 -> "mañana"
         in 12..18 -> "tarde"
         else -> "noche"
+    }
+
+    companion object {
+        /** Filtra logs del razonamiento on-device con `adb logcat -s ProactiveReasoner`. */
+        private const val TAG = "ProactiveReasoner"
     }
 }
