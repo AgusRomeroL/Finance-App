@@ -109,6 +109,17 @@ interface ExpenseDao {
     suspend fun getById(id: String): ExpenseEntity?
 
     /**
+     * Cuántos gastos (de cualquier estado) ya provienen de [templateId] en
+     * [quincenaId]. Idempotencia de la materialización (Apéndice G.2, Fase 1):
+     * incluir POSTED evita re-crear un PLANNED si el usuario ya confirmó el pago.
+     */
+    @Query(
+        "SELECT COUNT(*) FROM expense " +
+            "WHERE recurrence_template_id = :templateId AND quincena_id = :quincenaId"
+    )
+    suspend fun countForTemplateInQuincena(templateId: String, quincenaId: String): Int
+
+    /**
      * Todos los gastos del hogar — usado por el pipeline de canonicalización
      * retroactiva (Apéndice F.3.4) para recalcular `concept_canonical` en lote.
      */

@@ -30,6 +30,10 @@ interface RecurrenceTemplateDao {
     @Query("SELECT * FROM recurrence_template WHERE id = :id")
     suspend fun getById(id: String): RecurrenceTemplateEntity?
 
+    /** Snapshot suspend de las plantillas activas (Fase 1: materialización). */
+    @Query("SELECT * FROM recurrence_template WHERE household_id = :householdId AND is_active = 1")
+    suspend fun getActive(householdId: String): List<RecurrenceTemplateEntity>
+
     /** Plantillas activas que comparten una cadencia (Fase 1: materialización). */
     @Query(
         "SELECT * FROM recurrence_template WHERE household_id = :householdId " +

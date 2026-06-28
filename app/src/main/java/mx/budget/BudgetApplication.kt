@@ -33,6 +33,7 @@ import mx.budget.data.repository.impl.MemberRepositoryImpl
 import mx.budget.data.repository.impl.QuincenaRepositoryImpl
 import mx.budget.data.repository.impl.RecurrenceRepositoryImpl
 import mx.budget.data.repository.impl.WalletRepositoryImpl
+import mx.budget.data.recurrence.RecurrenceMaterializer
 import mx.budget.data.settings.SettingsRepository
 import mx.budget.data.sync.RemotePullSync
 import mx.budget.data.sync.SyncManager
@@ -68,6 +69,10 @@ class BudgetApplication : Application() {
 
     /** Plantillas de gasto recurrente (Apéndice G.2, Fase 0). */
     lateinit var recurrenceRepository: RecurrenceRepository
+        private set
+
+    /** Materializa gastos PLANNED desde las plantillas recurrentes (Apéndice G.2, Fase 1). */
+    lateinit var recurrenceMaterializer: RecurrenceMaterializer
         private set
 
     /** Implementación Firestore del repositorio de gastos (solo para push). */
@@ -231,6 +236,16 @@ class BudgetApplication : Application() {
             householdId = householdId,
         )
 
+        // Materializador de recurrentes → gastos PLANNED (Apéndice G.2, Fase 1).
+        recurrenceMaterializer = RecurrenceMaterializer(
+            recurrenceDao = database.recurrenceTemplateDao(),
+            expenseRepository = expenseRepository,
+            expenseDao = expenseDao,
+            paymentMethodDao = database.paymentMethodDao(),
+            memberDao = database.memberDao(),
+            householdId = householdId,
+        )
+
         // Lado nube (Firestore) — usado únicamente por el SyncManager para push.
         val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
         remoteExpenseRepository = mx.budget.data.remote.ExpenseRepositoryFirestore(firestore)
@@ -263,6 +278,21 @@ class BudgetApplication : Application() {
         // una sola vez por instalación; WorkManager persiste el trabajo, así que el
         // flag se marca tras encolar. Re-ejecutable manualmente desde Perfil.
         scheduleRetroLabelingIfNeeded()
+
+        // Materializa los PLANNED faltantes de la quincena activa (idempotente).
+        // Trigger de arranque (§G.2 Fase 1); el de "activación de quincena" se
+        // engancha cuando exista el rollover automático.
+        materializeRecurringForActiveQuincena()
+    }
+
+    /** Crea los PLANNED faltantes de la quincena activa al arrancar (idempotente). */
+    private fun materializeRecurringForActiveQuincena() {
+        appScope.launch {
+            runCatching {
+                val active = quincenaRepository.getActive(householdId) ?: return@launch
+                recurrenceMaterializer.materialize(active)
+            }
+        }
     }
 
     /**
