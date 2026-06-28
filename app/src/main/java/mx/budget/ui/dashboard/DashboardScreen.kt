@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,8 +28,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -968,16 +967,31 @@ private fun QuincenaRhythm(progress: QuincenaProgress) {
 // Sugerencias inteligentes — carrusel (Features C + D)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Un ítem del carrusel de sugerencias: captura bancaria (D) o sugerencia proactiva (C). */
+private sealed interface SmartSuggestionItem {
+    val key: String
+
+    data class Bank(val capture: PendingBankCaptureEntity) : SmartSuggestionItem {
+        override val key get() = "bank:${capture.id}"
+    }
+
+    data class Proactive(val suggestion: ProactiveSuggestion) : SmartSuggestionItem {
+        override val key get() = "proactive:${suggestion.canonicalKey}"
+    }
+}
+
 /**
  * Sección única de "sugerencias inteligentes" que agrupa las capturas bancarias
- * (Feature D) y la sugerencia proactiva (Feature C) en **un solo espacio vertical**
- * que se desliza horizontalmente, imitando el carrusel de Media Controls de Android:
- * con una sola tarjeta ocupa todo el ancho; con dos o más, la siguiente asoma como
- * un "pilar" a la derecha (`contentPadding` + `pageSpacing`) y aparecen puntos.
+ * (Feature D) y la sugerencia proactiva (Feature C), imitando el **rediseño
+ * card-based del reproductor de Android 17 QPR1 Beta 3**: la sugerencia activa se
+ * muestra como tarjeta grande con sus acciones, y las demás se **encogen en cuñas
+ * (píldoras verticales) a izquierda/derecha** mostrando solo su icono. Se cambia
+ * **tocando** la cuña lateral (no swipe). Con una sola sugerencia ocupa todo el
+ * ancho, sin cuñas.
  *
- * Las tarjetas comparten altura (subtítulo a 2 líneas fijas) para que el slot no
- * salte al deslizar. Orden: capturas bancarias primero (más accionables), luego la
- * sugerencia proactiva.
+ * Orden: capturas bancarias primero (más accionables), luego la proactiva. Altura
+ * uniforme (subtítulos a 2 líneas) + `IntrinsicSize.Min` para que las cuñas igualen
+ * la altura de la tarjeta.
  */
 @Composable
 private fun SmartSuggestionsCarousel(
@@ -989,65 +1003,101 @@ private fun SmartSuggestionsCarousel(
     onDismissSuggestion: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val pages: List<@Composable () -> Unit> = buildList {
-        bankCaptures.forEach { capture ->
-            add {
-                BankCaptureChip(
-                    capture = capture,
-                    onConfirm = { onConfirmCapture(capture.id) },
-                    onDismiss = { onDismissCapture(capture.id) }
-                )
-            }
-        }
-        proactiveSuggestion?.let { suggestion ->
-            add {
-                ProactiveSuggestionChip(
-                    suggestion = suggestion,
-                    onRegister = { onRegisterSuggestion(suggestion) },
-                    onDismiss = onDismissSuggestion
-                )
-            }
-        }
+    val items: List<SmartSuggestionItem> = buildList {
+        bankCaptures.forEach { add(SmartSuggestionItem.Bank(it)) }
+        proactiveSuggestion?.let { add(SmartSuggestionItem.Proactive(it)) }
     }
-    if (pages.isEmpty()) return
+    if (items.isEmpty()) return
 
-    // Una sola tarjeta: ancho completo, sin carrusel.
-    if (pages.size == 1) {
-        Box(modifier.fillMaxWidth()) { pages.first().invoke() }
+    // Una sola sugerencia: tarjeta a ancho completo, sin cuñas.
+    if (items.size == 1) {
+        Box(modifier.fillMaxWidth()) {
+            SmartSuggestionCard(items.first(), onConfirmCapture, onDismissCapture, onRegisterSuggestion, onDismissSuggestion)
+        }
         return
     }
 
-    val pagerState = rememberPagerState(pageCount = { pages.size })
-    Column(modifier.fillMaxWidth()) {
-        HorizontalPager(
-            state = pagerState,
-            // El padding derecho reduce el ancho de la página actual y deja asomar
-            // la siguiente como pilar; el spacing es el hueco al deslizar.
-            contentPadding = PaddingValues(end = 26.dp),
-            pageSpacing = 12.dp
-        ) { page ->
-            pages[page].invoke()
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            repeat(pages.size) { i ->
-                val selected = pagerState.currentPage == i
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 3.dp)
-                        .size(if (selected) 8.dp else 6.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
+    // El índice activo se resetea si la lista cambia (al confirmar/descartar).
+    var selected by rememberSaveable(items.map { it.key }.toString()) { mutableStateOf(0) }
+    val active = selected.coerceIn(0, items.lastIndex)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        items.forEachIndexed { i, item ->
+            if (i == active) {
+                Box(Modifier.weight(1f)) {
+                    SmartSuggestionCard(item, onConfirmCapture, onDismissCapture, onRegisterSuggestion, onDismissSuggestion)
+                }
+            } else {
+                SmartSuggestionWedge(
+                    item = item,
+                    onClick = { selected = i },
+                    modifier = Modifier.fillMaxHeight()
                 )
             }
         }
+    }
+}
+
+/** Renderiza la tarjeta completa (activa) según el tipo de sugerencia. */
+@Composable
+private fun SmartSuggestionCard(
+    item: SmartSuggestionItem,
+    onConfirmCapture: (String) -> Unit,
+    onDismissCapture: (String) -> Unit,
+    onRegisterSuggestion: (ProactiveSuggestion) -> Unit,
+    onDismissSuggestion: () -> Unit
+) {
+    when (item) {
+        is SmartSuggestionItem.Bank -> BankCaptureChip(
+            capture = item.capture,
+            onConfirm = { onConfirmCapture(item.capture.id) },
+            onDismiss = { onDismissCapture(item.capture.id) }
+        )
+        is SmartSuggestionItem.Proactive -> ProactiveSuggestionChip(
+            suggestion = item.suggestion,
+            onRegister = { onRegisterSuggestion(item.suggestion) },
+            onDismiss = onDismissSuggestion
+        )
+    }
+}
+
+/** Cuña lateral: píldora vertical angosta con el color/icono del tipo; toca para activarla. */
+@Composable
+private fun SmartSuggestionWedge(
+    item: SmartSuggestionItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bg: Color
+    val fg: Color
+    val icon: ImageVector
+    when (item) {
+        is SmartSuggestionItem.Bank -> {
+            bg = MaterialTheme.colorScheme.tertiaryContainer
+            fg = MaterialTheme.colorScheme.onTertiaryContainer
+            icon = Icons.Filled.AccountBalanceWallet
+        }
+        is SmartSuggestionItem.Proactive -> {
+            bg = MaterialTheme.colorScheme.secondaryContainer
+            fg = MaterialTheme.colorScheme.onSecondaryContainer
+            icon = Icons.Filled.AutoAwesome
+        }
+    }
+    Box(
+        modifier = modifier
+            .width(36.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(bg)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, "Otra sugerencia", tint = fg, modifier = Modifier.size(20.dp))
     }
 }
 
