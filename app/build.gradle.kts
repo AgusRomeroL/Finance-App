@@ -74,6 +74,11 @@ dependencies {
     // experimental `aicore` (que daba PERMISSION_DENIED en el canal de terceros).
     implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
 
+    // LiteRT-LM: corre un modelo Gemma .litertlm local en CPU/GPU/NPU, independiente
+    // de AICore. Es el camino que SÍ funciona en Tensor G4 (Pixel 9 / Fold de Norma),
+    // donde AICore aún no provisiona el feature del Prompt API (FEATURE_NOT_FOUND).
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.13.1")
+
     // Compose Material 3 & Essentials
     implementation("androidx.compose.material3:material3")
     // Material 3 Adaptive — NavigationSuiteScaffold vive aquí (graduado en material3 1.3)

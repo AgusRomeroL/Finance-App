@@ -17,6 +17,8 @@ import mx.budget.ai.proactive.ConceptCanonicalizer
 import mx.budget.ai.proactive.ProactiveReasoner
 import mx.budget.ai.proactive.RetroAttributionEngine
 import mx.budget.ai.service.AiCoreManager
+import mx.budget.ai.service.HybridLlm
+import mx.budget.ai.service.LiteRtLmManager
 import mx.budget.data.capture.BankCaptureManager
 import mx.budget.data.local.BudgetDatabase
 import mx.budget.data.work.CanonicalizeConceptsWorker
@@ -218,7 +220,9 @@ class BudgetApplication : Application() {
             assets.open("ai/proactive_system_prompt.es.txt").bufferedReader().use { it.readText() }
         }.getOrDefault("")
         proactiveReasoner = ProactiveReasoner(
-            aiCore = AiCoreManager(this),
+            // Híbrido: AICore (TPU, cuando Google lo provisione) → LiteRT-LM (Gemma
+            // local, corre en Tensor G4 del Fold de Norma) → SQL.
+            llm = HybridLlm(AiCoreManager(this), LiteRtLmManager(this)),
             systemPrompt = proactiveSystemPrompt,
         )
 

@@ -2,7 +2,8 @@ package mx.budget.ai.proactive
 
 import android.util.Log
 import mx.budget.ai.dispatch.JsonRepairer
-import mx.budget.ai.service.AiCoreManager
+import mx.budget.ai.service.LlmReadiness
+import mx.budget.ai.service.OnDeviceLlm
 import mx.budget.data.local.entity.QuincenaEntity
 import org.json.JSONArray
 import org.json.JSONObject
@@ -37,7 +38,7 @@ import java.time.temporal.ChronoUnit
  * sin hardware (el camino LLM real solo se verifica en un Pixel con Tensor).
  */
 class ProactiveReasoner(
-    private val aiCore: AiCoreManager,
+    private val llm: OnDeviceLlm,
     private val systemPrompt: String,
     private val zone: ZoneId = ZoneId.of("America/Mexico_City"),
 ) {
@@ -62,14 +63,14 @@ class ProactiveReasoner(
         // Disponibilidad del motor on-device. Cualquier estado != Available
         // (UnsupportedDevice en emulador, TemporaryError por cuota/descarga) cae
         // al ranking SQL. ensureReady es idempotente.
-        val ready = runCatching { aiCore.ensureReady() }.getOrNull()
-        if (ready != AiCoreManager.Readiness.Available) {
+        val ready = runCatching { llm.ensureReady() }.getOrNull()
+        if (ready != LlmReadiness.Available) {
             Log.i(TAG, "AICore no disponible ($ready) → fallback SQL (${candidates.size} candidatos)")
             return candidates
         }
 
         val prompt = buildPrompt(candidates, activeQuincena, nowEpochMs)
-        val raw = runCatching { aiCore.generate(prompt).getOrNull() }.getOrNull()
+        val raw = runCatching { llm.generate(prompt).getOrNull() }.getOrNull()
             ?.takeIf { it.isNotBlank() }
         if (raw == null) {
             Log.w(TAG, "Gemini Nano sin salida → fallback SQL")
