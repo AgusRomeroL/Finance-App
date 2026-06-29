@@ -53,8 +53,15 @@ import kotlinx.coroutines.launch
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.ui.dashboard.iconForCategory
 import java.text.NumberFormat
+import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
+
+private val ZONE: ZoneId = ZoneId.of("America/Mexico_City")
 
 private val mxnInt: NumberFormat = NumberFormat.getIntegerInstance(Locale("es", "MX"))
 private fun Double.toMxn(): String = "$" + mxnInt.format(this.toLong())
@@ -63,14 +70,24 @@ private val dayFmt = java.text.SimpleDateFormat("EEE d MMM", Locale("es", "MX"))
 private fun formatDay(epochMillis: Long): String =
     dayFmt.format(Date(epochMillis)).replaceFirstChar { it.uppercase() }
 
+private val selectedDayFmt = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", Locale("es", "MX"))
+private fun LocalDate.formatLong(): String =
+    format(selectedDayFmt).replaceFirstChar { it.uppercase() }
+
+/** Día (zona México) de un gasto a partir de su `occurred_at` (epoch millis). */
+private fun epochToLocalDate(epochMillis: Long): LocalDate =
+    Instant.ofEpochMilli(epochMillis).atZone(ZONE).toLocalDate()
+
 /**
  * Pantalla de Calendario (Apéndice G.2, Fase 4): timeline de gastos `PLANNED`
  * ordenados por fecha, con las acciones de confirmación. Reusa el flujo de
  * Fases 2/3 a través del [CalendarViewModel]. Animaciones de resorte (Material
  * Expressive, mandato transversal) en aparición/reordenamiento/descarte de filas.
  *
- * Increment 1 de la Fase 4: lectura + acciones sobre PLANNED. La gestión de
- * plantillas recurrentes (CRUD) y el preset de lead son incrementos posteriores.
+ * Fase 4: vista de mes estilo Google Calendar arriba (con marcadores en los días
+ * que tienen pagos) + timeline de PLANNED abajo, filtrable al tocar un día. Las
+ * acciones reusan el flujo de Fases 2/3. La gestión de plantillas recurrentes
+ * (CRUD) y el preset de lead son incrementos posteriores.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -82,6 +99,15 @@ fun CalendarScreen(
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<ExpenseWithDetails?>(null) }
+
+    val today = remember { LocalDate.now(ZONE) }
+    var month by remember { mutableStateOf(YearMonth.from(today)) }
+    var selected by remember { mutableStateOf<LocalDate?>(null) }
+
+    val paymentDays = remember(planned) { planned.mapTo(HashSet()) { epochToLocalDate(it.occurredAt) } }
+    val visible = remember(planned, selected) {
+        selected?.let { sel -> planned.filter { epochToLocalDate(it.occurredAt) == sel } } ?: planned
+    }
 
     editing?.let { item ->
         EditAmountDialog(
@@ -104,17 +130,36 @@ fun CalendarScreen(
                 .padding(inner)
                 .statusBarsPadding(),
         ) {
-            Header(onBack = onBack, count = planned.size)
+            Header(
+                onBack = onBack,
+                title = selected?.let { "Pagos: ${it.formatLong()}" } ?: "${planned.size} planeados",
+            )
 
-            if (planned.isEmpty()) {
-                EmptyState()
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(planned, key = { it.expenseId }) { item ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "month") {
+                    Column {
+                        MonthCalendar(
+                            month = month,
+                            today = today,
+                            selected = selected,
+                            paymentDays = paymentDays,
+                            onPrevMonth = { month = month.minusMonths(1) },
+                            onNextMonth = { month = month.plusMonths(1) },
+                            // Tocar el día seleccionado de nuevo limpia el filtro.
+                            onSelectDay = { d -> selected = if (selected == d) null else d },
+                        )
+                        Spacer(Modifier.height(4.dp))
+                    }
+                }
+
+                if (visible.isEmpty()) {
+                    item(key = "empty") { EmptyRow(filtered = selected != null) }
+                } else {
+                    items(visible, key = { it.expenseId }) { item ->
                         PlannedCard(
                             item = item,
                             onConfirm = { viewModel.confirm(item.expenseId) },
@@ -137,7 +182,7 @@ fun CalendarScreen(
 }
 
 @Composable
-private fun Header(onBack: () -> Unit, count: Int) {
+private fun Header(onBack: () -> Unit, title: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -163,9 +208,10 @@ private fun Header(onBack: () -> Unit, count: Int) {
                 letterSpacing = 1.6.sp,
             )
             Text(
-                if (count > 0) "$count planeados" else "Planeado",
+                title,
                 style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Light, fontSize = 28.sp),
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
             )
         }
     }
@@ -289,8 +335,8 @@ private fun EditAmountDialog(
 }
 
 @Composable
-private fun EmptyState() {
-    Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+private fun EmptyRow(filtered: Boolean) {
+    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
                 Icons.Filled.EventAvailable,
@@ -300,7 +346,7 @@ private fun EmptyState() {
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                "No hay gastos planeados.",
+                if (filtered) "Sin pagos este día." else "No hay gastos planeados.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
