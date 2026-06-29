@@ -367,7 +367,41 @@ StatusBarNotification (de un package en la allowlist)
 ### F.8.3 Riesgo
 Por ser **alpha** + disponibilidad fragmentada + foreground-only, la Capa 3 es la **última** en construirse y siempre detrás de la versión SQL de C. No bloquear el roadmap en ella.
 
-**Estado:** especificado a contrato. Construir al final, con la golden suite del Apéndice E.8 extendida para el nuevo intent.
+### F.8.4 Implementación REAL y hallazgos en hardware (2026-06-28)
+
+Construida y **validada en un Pixel 9 Pro físico (Tensor G4)**. El camino no fue el planeado; se documenta lo aprendido porque ahorra días a quien continúe.
+
+**Arquitectura final = híbrido de 3 niveles** (`mx.budget.ai.service`):
+- Interfaz común **`OnDeviceLlm`** (`ensureReady(): LlmReadiness`, `generate(prompt): Result<String>`, `close()`) + sellada `LlmReadiness { Available | Unavailable | Pending }`.
+- **`AiCoreManager`** — Gemini Nano vía **ML Kit GenAI Prompt API** (`com.google.mlkit:genai-prompt`). TPU, gratis, sin almacenamiento. Solo donde Google provisiona el feature.
+- **`LiteRtLmManager`** — modelo Gemma `.litertlm` local vía **LiteRT-LM** (`com.google.ai.edge.litertlm:litertlm-android`). CPU/GPU, independiente de AICore.
+- **`HybridLlm`** — coordina: **AICore → LiteRT-LM → SQL**. `ProactiveReasoner` toma `OnDeviceLlm`.
+
+**Cronología de hallazgos (todos verificados en hardware):**
+1. **Bug del Context (commit `00f66e1`):** el viejo SDK `com.google.ai.edge.aicore` exige el `Context` DENTRO de `generationConfig { context = ... }`. Sin él, en emulador se enmascaraba como `UnsupportedDevice`; en Tensor real lanzaba `Context is required`. **La Capa 3 LLM nunca había corrido.**
+2. **AICore experimental = callejón sin salida en Pixel 9:** tras el fix, el SDK `aicore` daba `PERMISSION_DENIED` (canal de terceros sin allowlist por-app). Se **migró a ML Kit GenAI Prompt API** (vía GA, sin allowlist) — commit `9a01d44`.
+3. **El Prompt API no está en Tensor G4:** ML Kit `checkStatus()` lanza `GenAiException 606-FEATURE_NOT_FOUND ("Feature 636 not available")` en Pixel 9 — el Gemini Nano nuevo del Prompt API llegó primero a **Pixel 10**; en Pixel 9/Fold Google **aún no lo habilita** (device-side, fuera de nuestro control). La AI Edge Gallery de Google también muestra "Gemini Nano via AICore" solo en Pixel 10, no en Pixel 9.
+4. **LiteRT-LM SÍ corre en Tensor G4 (commits `f0e7c15`, `9b2c18f`):** corre un modelo Gemma local, independiente de AICore. **Validado en Pixel 9:** `gemma-4-E4B-it.litertlm` (3.7GB) carga el engine en ~20s e infiere en ~5s (respuesta corta), devolviendo texto real. **PRIMERA vez que la Capa 3 razona en el target.** Correrá igual en el Fold de Norma (mismo chip).
+
+**Gotchas de LiteRT-LM (críticos):**
+- **Backend `CPU`**, no `GPU`: `Backend.GPU()` da `INTERNAL` al compilar el modelo en Pixel 9; `Backend.CPU()` funciona (más lento).
+- **El archivo del modelo debe ser propiedad de la app** (`getExternalFilesDir`/`filesDir`): el `open()` nativo de LiteRT-LM da `PERMISSION_DENIED` si lo colocó otro uid (p. ej. `shell` por adb) — se arregló en pruebas con `chmod 666`; **en producción la app lo descarga a su propia carpeta** (sin el problema).
+- `NativeLibraryLoader` es `internal` (no se llama; la lib se auto-carga).
+- API exacta de litertlm sacada por **`javap` del AAR**, no de la doc (incompleta).
+
+**Gotchas de toolchain (en `gradle.properties`/`build.gradle.kts`):**
+- ML Kit + LiteRT-LM traen **metadata Kotlin 2.2** (proyecto en 2.0.21) → `freeCompilerArgs += "-Xskip-metadata-version-check"` en `kotlinOptions`.
+- Ese flag **corrompe la compilación incremental** ("Couldn't load KotlinClass" flaky) → `kotlin.incremental=false`.
+- LiteRT-LM trae **bytecode Java 21** que Jetifier no procesa → `android.jetifier.ignorelist=litertlm-android`.
+- LiteRT-LM añade ~50MB de `.so` (APK debug ~135MB) y **dispara el warning de 16 KB** (sus libs no están alineadas; debug-only, no afecta release — ver pendientes).
+
+**Estado:** **funcional y validado en hardware.** El `ProactiveReasoner` (re-ranker sobre candidatos SQL, §F.8.2) ya enruta al híbrido.
+
+**PENDIENTE para producción (no hecho):**
+- **Descarga in-app del modelo** Gemma `.litertlm` (HuggingFace `litert-community`, *gated*: licencia Gemma + token, 3.7GB) con progreso, a la carpeta de la app. Hoy el modelo de prueba se copió de la AI Edge Gallery del usuario por adb. **Es la pieza más grande que falta.**
+- **Tuning de latencia:** CPU es lento para un 4B; el prompt real de re-ranking tardará más que los ~5s de prueba. Evaluar arreglar GPU/NPU, o un modelo más chico (Gemma 3 1B) para el re-ranking.
+- Golden suite del Apéndice E.8 extendida para el intent proactivo.
+- Warning de 16 KB (ver CLAUDE.md / pendientes pre-lanzamiento).
 
 ---
 

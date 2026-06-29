@@ -114,6 +114,17 @@ Los PLANNED del periodo deben reflejarse en "Disponible para gastar" (reservar l
 - `CUSTOM_CRON` (diferido).
 - `RECONCILED` (conciliación bancaria) queda **fuera** de este bloque.
 
+### G.2.7 ESTADO DE IMPLEMENTACIÓN (2026-06-28)
+
+> Para quien continúe: **el cimiento G.1 + las Fases 0/1/2 están CONSTRUIDAS, verificadas en emulador y commiteadas.** La siguiente es **Fase 3**.
+
+- **G.1 — Bandeja unificada `pending_capture` HECHA (commit `5ed97de`).** Generaliza `pending_bank_capture` (Feature D) en `pending_capture` con `source` (BANK|CALENDAR|VOICE|WIDGET|WATCH) + columnas de ubicación. **Migración Room v5→v6** (recreate-table: campos de banco nullable, `merchant`→`concept`). `BankCaptureManager` ganó `enqueue()` genérico. **Nota:** bajo el modelo PLANNED, el calendario NO usa `pending_capture` (su propuesta es el PLANNED); `source=CALENDAR` queda reservado.
+- **Fase 0 — Capa de recurrencia HECHA (commit `67286fc`). SIN migración** (la tabla `recurrence_template` y `expense.recurrence_template_id` YA estaban en el esquema v1). `RecurrenceTemplateDao` + `RecurrenceRepositoryImpl` (Room) cableado como `app.recurrenceRepository`.
+- **Fase 1 — Materialización HECHA (commit `a72c3ab`).** `data/recurrence/RecurrenceMaterializer.kt`: crea gastos `status=PLANNED` desde plantillas activas según cadencia, con atribuciones de los splits default (fallback: beneficiary=equalSplit, payer=dueño wallet). **Idempotente** por `(recurrence_template_id, quincena_id)` vía `ExpenseDao.countForTemplateInQuincena`. Trigger de arranque en `BudgetApplication.materializeRecurringForActiveQuincena()`.
+- **Fase 2 — Confirmación PLANNED→POSTED HECHA (commit `3ded134`).** `ExpenseRepository.confirmPlanned(expenseId, actualAmountMxn?)`: flip a POSTED, ajusta monto real y **re-escala** los `share_amount_mxn` (bps no cambian). `postPlannedExpense` delega en él. **Hallazgo:** `observePlannedTotal(quincenaId)` ya existía (budget-awareness con base). **Nota honesta:** el "ajuste de saldo de wallet" que mencionan los docs de interfaz NO está implementado en ningún lado del repo.
+
+**SIGUIENTE = Fase 3 (§G.2.2):** `ReminderWorker` (WorkManager `PeriodicWorkRequest`, piso 15 min, **NO** `SCHEDULE_EXACT_ALARM`): busca PLANNED cuya `(fecha − lead) ≤ ahora` y no notificados → notificación con acciones [Confirmar]/[Editar]/[Posponer] (reusa la infra de notificación + `BankCaptureActionReceiver` + `confirmPlanned`). Lead configurable: default global en `SettingsRepository` (DataStore) + override por plantilla en `cadence_detail` (`reminder_lead_days` o `"QUINCENA_START"`). Luego Fases 4 (UI calendario) → 5 (inferencia bajo autorización) → 6 (espejo Google Calendar).
+
 ---
 
 ## G.3 Captura en lenguaje natural (voz / widget / reloj)
