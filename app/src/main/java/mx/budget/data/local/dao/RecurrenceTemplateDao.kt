@@ -27,6 +27,13 @@ interface RecurrenceTemplateDao {
     )
     fun observeActive(householdId: String): Flow<List<RecurrenceTemplateEntity>>
 
+    /** Todas las plantillas del hogar (activas y pausadas), activas primero. */
+    @Query(
+        "SELECT * FROM recurrence_template WHERE household_id = :householdId " +
+            "ORDER BY is_active DESC, concept"
+    )
+    fun observeAll(householdId: String): Flow<List<RecurrenceTemplateEntity>>
+
     @Query("SELECT * FROM recurrence_template WHERE id = :id")
     suspend fun getById(id: String): RecurrenceTemplateEntity?
 

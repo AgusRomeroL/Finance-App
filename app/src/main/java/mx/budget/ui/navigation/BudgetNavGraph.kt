@@ -21,6 +21,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.collectAsState
 import mx.budget.ui.calendar.CalendarScreen
 import mx.budget.ui.calendar.CalendarViewModel
+import mx.budget.ui.calendar.NewPlannedViewModel
+import mx.budget.ui.calendar.RecurrenceViewModel
+import mx.budget.ui.calendar.TemplatesScreen
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardScreen
 import mx.budget.ui.dashboard.DashboardViewModel
@@ -38,6 +41,7 @@ import mx.budget.ui.suggestions.AllSuggestionsScreen
 object BudgetDestinations {
     const val DASHBOARD = "dashboard"
     const val CALENDAR = "calendar"
+    const val TEMPLATES = "templates"
     const val LEDGER = "ledger"
     const val WALLETS = "wallets"
     const val ANALYTICS = "analytics"
@@ -63,6 +67,8 @@ fun BudgetNavGraph(
     attributionReviewViewModel: AttributionReviewViewModel,
     searchViewModel: SearchViewModel,
     calendarViewModel: CalendarViewModel,
+    newPlannedViewModel: NewPlannedViewModel,
+    recurrenceViewModel: RecurrenceViewModel,
     windowWidthDp: Int = 360,
     dynamicColor: Boolean = true,
     onDynamicColorChange: (Boolean) -> Unit = {},
@@ -132,7 +138,16 @@ fun BudgetNavGraph(
         composable(route = BudgetDestinations.CALENDAR) {
             CalendarScreen(
                 viewModel = calendarViewModel,
-                onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
+                newPlannedViewModel = newPlannedViewModel,
+                onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
+                onOpenTemplates = { onNavigate(BudgetDestinations.TEMPLATES) }
+            )
+        }
+
+        composable(route = BudgetDestinations.TEMPLATES) {
+            TemplatesScreen(
+                viewModel = recurrenceViewModel,
+                onBack = { onNavigate(BudgetDestinations.CALENDAR) }
             )
         }
 

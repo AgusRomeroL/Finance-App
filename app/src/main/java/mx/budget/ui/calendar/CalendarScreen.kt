@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.EventAvailable
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -97,6 +98,7 @@ fun CalendarScreen(
     viewModel: CalendarViewModel,
     newPlannedViewModel: NewPlannedViewModel,
     onBack: () -> Unit,
+    onOpenTemplates: () -> Unit = {},
 ) {
     val planned by viewModel.planned.collectAsState()
     val snackbar = remember { SnackbarHostState() }
@@ -152,6 +154,7 @@ fun CalendarScreen(
             Header(
                 onBack = onBack,
                 title = selected?.let { "Pagos: ${it.formatLong()}" } ?: "${planned.size} planeados",
+                onOpenTemplates = onOpenTemplates,
             )
 
             LazyColumn(
@@ -201,7 +204,7 @@ fun CalendarScreen(
 }
 
 @Composable
-private fun Header(onBack: () -> Unit, title: String) {
+private fun Header(onBack: () -> Unit, title: String, onOpenTemplates: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -219,7 +222,7 @@ private fun Header(onBack: () -> Unit, title: String) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(14.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 "CALENDARIO",
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
@@ -232,6 +235,16 @@ private fun Header(onBack: () -> Unit, title: String) {
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
             )
+        }
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable(onClick = onOpenTemplates),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Repeat, "Plantillas recurrentes", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
         }
     }
 }

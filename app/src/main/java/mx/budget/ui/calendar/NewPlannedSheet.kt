@@ -215,7 +215,7 @@ fun NewPlannedSheet(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DropdownField(
+internal fun DropdownField(
     label: String,
     selectedText: String,
     options: List<Pair<String, String>>,

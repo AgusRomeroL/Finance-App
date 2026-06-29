@@ -18,6 +18,9 @@ class RecurrenceRepositoryImpl(
     override fun observeActive(householdId: String): Flow<List<RecurrenceTemplateEntity>> =
         dao.observeActive(householdId)
 
+    override fun observeAll(householdId: String): Flow<List<RecurrenceTemplateEntity>> =
+        dao.observeAll(householdId)
+
     override suspend fun getById(id: String): RecurrenceTemplateEntity? =
         dao.getById(id)
 

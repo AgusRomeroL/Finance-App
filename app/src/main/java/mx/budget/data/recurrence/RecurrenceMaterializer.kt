@@ -159,6 +159,13 @@ class RecurrenceMaterializer(
 
     /** `["id1","id2"]` → reparto equitativo. */
     private fun parseBeneficiaries(json: String): Map<String, Int> {
+        // Formato nuevo (editor de plantillas, Fase 4 inc. 2c): objeto {id:bps} con
+        // reparto personalizado. Formato histórico: array de ids (reparto equitativo).
+        val asObject = runCatching {
+            val obj = JSONObject(json)
+            obj.keys().asSequence().associateWith { obj.getInt(it) }.filterValues { it > 0 }
+        }.getOrDefault(emptyMap())
+        if (asObject.isNotEmpty()) return asObject
         val ids = runCatching {
             val arr = JSONArray(json)
             (0 until arr.length()).map { arr.getString(it) }.filter { it.isNotBlank() }

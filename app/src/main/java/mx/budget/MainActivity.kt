@@ -14,8 +14,10 @@ import mx.budget.data.capture.BankCaptureManager
 import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.recurrence.RecurrenceMaterializer
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
+import mx.budget.data.repository.RecurrenceRepository
 import mx.budget.data.repository.WalletRepository
 import mx.budget.data.local.dao.AttributionReviewDao
 import mx.budget.data.local.dao.ExpenseDao
@@ -23,6 +25,7 @@ import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.settings.SettingsRepository
 import mx.budget.ui.calendar.CalendarViewModel
 import mx.budget.ui.calendar.NewPlannedViewModel
+import mx.budget.ui.calendar.RecurrenceViewModel
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardViewModel
 import mx.budget.ui.navigation.BudgetNavGraph
@@ -91,6 +94,19 @@ class MainActivity : ComponentActivity() {
         ))[NewPlannedViewModel::class.java]
     }
 
+    private val recurrenceViewModel: RecurrenceViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, RecurrenceViewModelFactory(
+            app.householdId,
+            app.recurrenceRepository,
+            app.categoryRepository,
+            app.walletRepository,
+            app.memberRepository,
+            app.quincenaRepository,
+            app.recurrenceMaterializer
+        ))[RecurrenceViewModel::class.java]
+    }
+
     private val captureViewModel: CaptureViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, CaptureViewModelFactory(
@@ -126,6 +142,7 @@ class MainActivity : ComponentActivity() {
                     searchViewModel = searchViewModel,
                     calendarViewModel = calendarViewModel,
                     newPlannedViewModel = newPlannedViewModel,
+                    recurrenceViewModel = recurrenceViewModel,
                     windowWidthDp = windowWidthDp,
                     dynamicColor = dynamicColor,
                     onDynamicColorChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } },
@@ -187,6 +204,30 @@ class AttributionReviewViewModelFactory(
             expenseRepository = expenseRepository,
             memberRepository = memberRepository,
             householdId = householdId,
+        ) as T
+    }
+}
+
+/** Factory para RecurrenceViewModel (Fase 4 inc. 2c: CRUD de plantillas). */
+class RecurrenceViewModelFactory(
+    private val householdId: String,
+    private val recurrenceRepository: RecurrenceRepository,
+    private val categoryRepository: CategoryRepository,
+    private val walletRepository: WalletRepository,
+    private val memberRepository: MemberRepository,
+    private val quincenaRepository: QuincenaRepository,
+    private val materializer: RecurrenceMaterializer,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return RecurrenceViewModel(
+            householdId = householdId,
+            recurrenceRepository = recurrenceRepository,
+            categoryRepository = categoryRepository,
+            walletRepository = walletRepository,
+            memberRepository = memberRepository,
+            quincenaRepository = quincenaRepository,
+            materializer = materializer,
         ) as T
     }
 }
