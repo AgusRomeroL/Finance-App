@@ -1,8 +1,11 @@
 package mx.budget
 
+import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -123,6 +126,21 @@ class MainActivity : ComponentActivity() {
         ))[CaptureViewModel::class.java]
     }
 
+    /** Pide READ+WRITE_CALENDAR para el espejo (Fase 6); al conceder, activa y reconcilia. */
+    private val calendarPermLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result[Manifest.permission.WRITE_CALENDAR] == true &&
+            result[Manifest.permission.READ_CALENDAR] == true
+        if (granted) {
+            val app = application as BudgetApplication
+            lifecycleScope.launch {
+                app.settingsRepository.setCalendarMirrorEnabled(true)
+                app.calendarMirror.reconcile()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val windowWidthDp = resources.displayMetrics.let {
@@ -137,6 +155,7 @@ class MainActivity : ComponentActivity() {
             val dynamicColor by settings.dynamicColor.collectAsState(initial = app.initialDynamicColor)
             val bankCaptureEnabled by settings.bankCaptureEnabled.collectAsState(initial = false)
             val reminderLeadDays by settings.reminderLeadDays.collectAsState(initial = 2)
+            val calendarMirrorEnabled by settings.calendarMirrorEnabled.collectAsState(initial = false)
             val scope = rememberCoroutineScope()
             BudgetAppTheme(dynamicColor = dynamicColor) {
                 BudgetNavGraph(
@@ -157,7 +176,27 @@ class MainActivity : ComponentActivity() {
                         startActivity(android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
                     },
                     reminderLeadDays = reminderLeadDays,
-                    onReminderLeadChange = { days -> scope.launch { settings.setReminderLeadDays(days) } }
+                    onReminderLeadChange = { days -> scope.launch { settings.setReminderLeadDays(days) } },
+                    calendarMirrorEnabled = calendarMirrorEnabled,
+                    onCalendarMirrorToggle = { enabled ->
+                        if (enabled) {
+                            if (app.calendarMirror.hasPermission()) {
+                                scope.launch {
+                                    settings.setCalendarMirrorEnabled(true)
+                                    app.calendarMirror.reconcile()
+                                }
+                            } else {
+                                calendarPermLauncher.launch(
+                                    arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
+                                )
+                            }
+                        } else {
+                            scope.launch {
+                                settings.setCalendarMirrorEnabled(false)
+                                app.calendarMirror.disableAndPurge()
+                            }
+                        }
+                    }
                 )
             }
         }

@@ -2,6 +2,8 @@ package mx.budget.ui.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Rule
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
@@ -59,7 +62,9 @@ fun ProfileScreen(
     onBankCaptureToggle: (Boolean) -> Unit = {},
     onGrantNotificationAccess: () -> Unit = {},
     reminderLeadDays: Int = 2,
-    onReminderLeadChange: (Int) -> Unit = {}
+    onReminderLeadChange: (Int) -> Unit = {},
+    calendarMirrorEnabled: Boolean = false,
+    onCalendarMirrorToggle: (Boolean) -> Unit = {}
 ) {
     var showLeadDialog by remember { mutableStateOf(false) }
     if (showLeadDialog) {
@@ -74,6 +79,7 @@ fun ProfileScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
             .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
         // Header
@@ -291,6 +297,62 @@ fun ProfileScreen(
                 trailingBadge = null,
                 onClick = { showLeadDialog = true }
             )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Card de espejo a Google Calendar (Fase 6) — opt-in, una vía.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(22.dp)
+        ) {
+            Text(
+                "CALENDARIO",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 1.6.sp
+            )
+            Spacer(Modifier.height(14.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable { onCalendarMirrorToggle(!calendarMirrorEnabled) }
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Event, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Espejo en Google Calendar",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "Copia tus gastos planeados a un calendario propio \"Presupuesto Familiar\". Una sola vía: nunca lee ni toca tus otros calendarios.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Switch(
+                    checked = calendarMirrorEnabled,
+                    onCheckedChange = onCalendarMirrorToggle,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            }
         }
 
         Spacer(Modifier.height(20.dp))

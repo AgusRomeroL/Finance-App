@@ -11,6 +11,11 @@
     <!-- Dictado por voz en la barra de búsqueda (SpeechRecognizer) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Espejo opt-in a Google Calendar (Apéndice G.2, Fase 6). Solo se piden en
+         runtime cuando el usuario activa el toggle; una vía, calendario dedicado. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
     <application
         android:name=".BudgetApplication"
         android:allowBackup="false"

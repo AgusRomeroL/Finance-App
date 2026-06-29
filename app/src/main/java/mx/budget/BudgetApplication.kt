@@ -22,6 +22,7 @@ import mx.budget.ai.proactive.RetroAttributionEngine
 import mx.budget.ai.service.AiCoreManager
 import mx.budget.ai.service.HybridLlm
 import mx.budget.ai.service.LiteRtLmManager
+import mx.budget.data.calendar.CalendarMirror
 import mx.budget.data.capture.BankCaptureManager
 import mx.budget.data.local.BudgetDatabase
 import mx.budget.data.reminder.ReminderNotifier
@@ -80,6 +81,10 @@ class BudgetApplication : Application() {
 
     /** Materializa gastos PLANNED desde las plantillas recurrentes (Apéndice G.2, Fase 1). */
     lateinit var recurrenceMaterializer: RecurrenceMaterializer
+        private set
+
+    /** Espejo opt-in de los PLANNED a un calendario dedicado (Apéndice G.2, Fase 6). */
+    lateinit var calendarMirror: CalendarMirror
         private set
 
     /** Implementación Firestore del repositorio de gastos (solo para push). */
@@ -296,6 +301,20 @@ class BudgetApplication : Application() {
         // Recordatorios de gastos PLANNED (§G.2 Fase 3). Canal + trabajo periódico.
         ReminderNotifier.ensureChannel(this)
         scheduleReminders()
+
+        // Espejo Google Calendar (§G.2 Fase 6). Best-effort: si está activado y hay
+        // permiso, reconcilia los PLANNED al arrancar; si no, no hace nada.
+        calendarMirror = CalendarMirror(
+            context = this,
+            settings = settingsRepository,
+            expenseDao = expenseDao,
+            householdId = householdId,
+        )
+        appScope.launch {
+            if (runCatching { settingsRepository.calendarMirrorEnabled.first() }.getOrDefault(false)) {
+                calendarMirror.reconcile()
+            }
+        }
     }
 
     /**

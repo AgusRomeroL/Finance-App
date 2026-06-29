@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -33,6 +34,9 @@ class SettingsRepository(private val context: Context) {
     private val reminderLeadDaysKey = intPreferencesKey("reminder_lead_days")
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
     private val dismissedTemplateSuggestionsKey = stringSetPreferencesKey("dismissed_template_suggestions")
+    private val calendarMirrorEnabledKey = booleanPreferencesKey("calendar_mirror_enabled")
+    private val calendarMirrorIdKey = longPreferencesKey("calendar_mirror_id")
+    private val calendarEventMapKey = stringPreferencesKey("calendar_event_map_json")
 
     /** Flujo del toggle de color dinámico. Default `true` (Material You). */
     val dynamicColor: Flow<Boolean> = context.dataStore.data
@@ -117,6 +121,39 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[dismissedTemplateSuggestionsKey] = (prefs[dismissedTemplateSuggestionsKey] ?: emptySet()) + canonicalKey
         }
+    }
+
+    // ── Espejo Google Calendar (Apéndice G.2, Fase 6) ───────────────────────────
+
+    /** Toggle del espejo opt-in a Google Calendar. Default `false`. */
+    val calendarMirrorEnabled: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[calendarMirrorEnabledKey] ?: false }
+
+    suspend fun setCalendarMirrorEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[calendarMirrorEnabledKey] = enabled }
+    }
+
+    /** Id del calendario dedicado creado por la app (o null si aún no existe). */
+    suspend fun getMirrorCalendarId(): Long? =
+        context.dataStore.data.first()[calendarMirrorIdKey]?.takeIf { it > 0 }
+
+    suspend fun setMirrorCalendarId(id: Long?) {
+        context.dataStore.edit { prefs ->
+            if (id == null) prefs.remove(calendarMirrorIdKey) else prefs[calendarMirrorIdKey] = id
+        }
+    }
+
+    /** Mapa `expenseId → eventId` de lo ya reflejado (para update/delete one-way). */
+    suspend fun getCalendarEventMap(): Map<String, Long> =
+        decodeLongMap(context.dataStore.data.first()[calendarEventMapKey])
+
+    suspend fun setCalendarEventMap(map: Map<String, Long>) {
+        context.dataStore.edit { prefs -> prefs[calendarEventMapKey] = Json.encodeToString(map) }
+    }
+
+    private fun decodeLongMap(raw: String?): Map<String, Long> {
+        if (raw.isNullOrBlank()) return emptyMap()
+        return runCatching { Json.decodeFromString<Map<String, Long>>(raw) }.getOrDefault(emptyMap())
     }
 
     private fun decodeState(raw: String?): Map<String, Long> {

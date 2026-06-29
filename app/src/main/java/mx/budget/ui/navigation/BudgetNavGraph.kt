@@ -77,7 +77,9 @@ fun BudgetNavGraph(
     onBankCaptureToggle: (Boolean) -> Unit = {},
     onGrantNotificationAccess: () -> Unit = {},
     reminderLeadDays: Int = 2,
-    onReminderLeadChange: (Int) -> Unit = {}
+    onReminderLeadChange: (Int) -> Unit = {},
+    calendarMirrorEnabled: Boolean = false,
+    onCalendarMirrorToggle: (Boolean) -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -178,7 +180,9 @@ fun BudgetNavGraph(
                 onBankCaptureToggle = onBankCaptureToggle,
                 onGrantNotificationAccess = onGrantNotificationAccess,
                 reminderLeadDays = reminderLeadDays,
-                onReminderLeadChange = onReminderLeadChange
+                onReminderLeadChange = onReminderLeadChange,
+                calendarMirrorEnabled = calendarMirrorEnabled,
+                onCalendarMirrorToggle = onCalendarMirrorToggle
             )
         }
     }
