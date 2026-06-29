@@ -106,6 +106,41 @@ interface ExpenseDao {
     )
     fun observePlannedTotal(quincenaId: String): Flow<Double>
 
+    /**
+     * Gastos `PLANNED` del hogar con detalles (categoría/wallet/quincena),
+     * ordenados por fecha ascendente — timeline del calendario (Apéndice G.2,
+     * Fase 4). Mismas columnas/JOINs que [observeWithDetails], pero a nivel
+     * household y filtrando solo lo planeado (no ejecutado).
+     */
+    @Query(
+        """
+        SELECT
+            e.id                       AS expenseId,
+            e.concept                  AS concept,
+            e.amount_mxn               AS amountMxn,
+            e.occurred_at              AS occurredAt,
+            e.status                   AS status,
+            e.category_id              AS categoryId,
+            c.display_name             AS categoryName,
+            c.code                     AS categoryCode,
+            c.color_hex                AS categoryColorHex,
+            pm.display_name            AS paymentMethodName,
+            pm.kind                    AS paymentMethodKind,
+            q.label                    AS quincenaLabel,
+            e.installment_number       AS installmentNumber,
+            ip.total_installments      AS installmentTotal,
+            e.notes                    AS notes
+        FROM expense e
+        INNER JOIN category c        ON c.id = e.category_id
+        INNER JOIN payment_method pm ON pm.id = e.payment_method_id
+        INNER JOIN quincena q        ON q.id = e.quincena_id
+        LEFT JOIN installment_plan ip ON ip.id = e.installment_plan_id
+        WHERE e.household_id = :householdId AND e.status = 'PLANNED'
+        ORDER BY e.occurred_at ASC
+        """
+    )
+    fun observePlannedWithDetails(householdId: String): Flow<List<ExpenseWithDetails>>
+
     @Query("SELECT * FROM expense WHERE id = :id")
     suspend fun getById(id: String): ExpenseEntity?
 

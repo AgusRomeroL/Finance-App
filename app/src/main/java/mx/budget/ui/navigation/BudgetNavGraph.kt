@@ -19,6 +19,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.collectAsState
+import mx.budget.ui.calendar.CalendarScreen
+import mx.budget.ui.calendar.CalendarViewModel
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardScreen
 import mx.budget.ui.dashboard.DashboardViewModel
@@ -35,6 +37,7 @@ import mx.budget.ui.suggestions.AllSuggestionsScreen
 
 object BudgetDestinations {
     const val DASHBOARD = "dashboard"
+    const val CALENDAR = "calendar"
     const val LEDGER = "ledger"
     const val WALLETS = "wallets"
     const val ANALYTICS = "analytics"
@@ -59,6 +62,7 @@ fun BudgetNavGraph(
     captureViewModel: CaptureViewModel,
     attributionReviewViewModel: AttributionReviewViewModel,
     searchViewModel: SearchViewModel,
+    calendarViewModel: CalendarViewModel,
     windowWidthDp: Int = 360,
     dynamicColor: Boolean = true,
     onDynamicColorChange: (Boolean) -> Unit = {},
@@ -121,6 +125,13 @@ fun BudgetNavGraph(
         composable(route = BudgetDestinations.ATTRIBUTION_REVIEW) {
             AttributionReviewScreen(
                 viewModel = attributionReviewViewModel,
+                onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
+            )
+        }
+
+        composable(route = BudgetDestinations.CALENDAR) {
+            CalendarScreen(
+                viewModel = calendarViewModel,
                 onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
             )
         }

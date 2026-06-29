@@ -41,6 +41,7 @@ import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
@@ -173,7 +174,7 @@ private data class NavItem(val route: String, val icon: ImageVector, val label: 
 
 private val navItems = listOf(
     NavItem("dashboard", Icons.Filled.Dashboard, "Inicio"),
-    NavItem("ledger", Icons.AutoMirrored.Filled.ReceiptLong, "Libro"),
+    NavItem("calendar", Icons.Filled.CalendarMonth, "Calendario"),
     NavItem("wallets", Icons.Filled.AccountBalanceWallet, "Cuentas"),
     NavItem("analytics", Icons.Filled.Insights, "Analíticas"),
     NavItem("profile", Icons.Filled.Person, "Perfil")

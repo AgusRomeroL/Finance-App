@@ -19,6 +19,8 @@ import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.WalletRepository
 import mx.budget.data.local.dao.AttributionReviewDao
 import mx.budget.data.local.dao.ExpenseDao
+import mx.budget.data.settings.SettingsRepository
+import mx.budget.ui.calendar.CalendarViewModel
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardViewModel
 import mx.budget.ui.navigation.BudgetNavGraph
@@ -63,6 +65,17 @@ class MainActivity : ComponentActivity() {
         ))[SearchViewModel::class.java]
     }
 
+    private val calendarViewModel: CalendarViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, CalendarViewModelFactory(
+            applicationContext,
+            app.database.expenseDao(),
+            app.expenseRepository,
+            app.settingsRepository,
+            app.householdId
+        ))[CalendarViewModel::class.java]
+    }
+
     private val captureViewModel: CaptureViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, CaptureViewModelFactory(
@@ -96,6 +109,7 @@ class MainActivity : ComponentActivity() {
                     captureViewModel = captureViewModel,
                     attributionReviewViewModel = attributionReviewViewModel,
                     searchViewModel = searchViewModel,
+                    calendarViewModel = calendarViewModel,
                     windowWidthDp = windowWidthDp,
                     dynamicColor = dynamicColor,
                     onDynamicColorChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } },
@@ -156,6 +170,26 @@ class AttributionReviewViewModelFactory(
             expenseDao = expenseDao,
             expenseRepository = expenseRepository,
             memberRepository = memberRepository,
+            householdId = householdId,
+        ) as T
+    }
+}
+
+/** Factory para CalendarViewModel (Fase 4: timeline de gastos PLANNED). */
+class CalendarViewModelFactory(
+    private val appContext: android.content.Context,
+    private val expenseDao: ExpenseDao,
+    private val expenseRepository: ExpenseRepository,
+    private val settingsRepository: SettingsRepository,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return CalendarViewModel(
+            appContext = appContext,
+            expenseDao = expenseDao,
+            expenseRepository = expenseRepository,
+            settingsRepository = settingsRepository,
             householdId = householdId,
         ) as T
     }
