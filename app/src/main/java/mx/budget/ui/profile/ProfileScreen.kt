@@ -57,8 +57,18 @@ fun ProfileScreen(
     onRenormalize: () -> Unit = {},
     bankCaptureEnabled: Boolean = false,
     onBankCaptureToggle: (Boolean) -> Unit = {},
-    onGrantNotificationAccess: () -> Unit = {}
+    onGrantNotificationAccess: () -> Unit = {},
+    reminderLeadDays: Int = 2,
+    onReminderLeadChange: (Int) -> Unit = {}
 ) {
+    var showLeadDialog by remember { mutableStateOf(false) }
+    if (showLeadDialog) {
+        ReminderLeadDialog(
+            current = reminderLeadDays,
+            onSelect = { days -> onReminderLeadChange(days); showLeadDialog = false },
+            onDismiss = { showLeadDialog = false },
+        )
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -258,6 +268,32 @@ fun ProfileScreen(
         }
 
         Spacer(Modifier.height(20.dp))
+
+        // Card de recordatorios (Fase 4 inc. 2d) — lead global de los avisos de PLANNED.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(22.dp)
+        ) {
+            Text(
+                "RECORDATORIOS",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 1.6.sp
+            )
+            Spacer(Modifier.height(14.dp))
+            SettingRow(
+                icon = Icons.Filled.Notifications,
+                title = "Antelación de recordatorios",
+                subtitle = "Avisar ${reminderLeadLabel(reminderLeadDays)} de cada pago planeado",
+                trailingBadge = null,
+                onClick = { showLeadDialog = true }
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
         Text(
             "Los colores de ingreso, gasto y alerta permanecen estables en ambos modos.",
             style = MaterialTheme.typography.bodySmall,
@@ -265,6 +301,47 @@ fun ProfileScreen(
             modifier = Modifier.padding(horizontal = 4.dp)
         )
     }
+}
+
+/** Etiqueta legible del lead global (días). */
+private fun reminderLeadLabel(days: Int): String = when (days) {
+    0 -> "el mismo día"
+    1 -> "1 día antes"
+    else -> "$days días antes"
+}
+
+/** Diálogo de selección del lead global de recordatorios (Fase 4 inc. 2d). */
+@Composable
+private fun ReminderLeadDialog(current: Int, onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Antelación de recordatorios") },
+        text = {
+            Column {
+                listOf(0, 1, 2, 3, 7).forEach { days ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onSelect(days) }
+                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.RadioButton(selected = days == current, onClick = { onSelect(days) })
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            reminderLeadLabel(days).replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cerrar") }
+        }
+    )
 }
 
 /** Fila de ajuste con icono, título, subtítulo y chevron (o badge numérico). */

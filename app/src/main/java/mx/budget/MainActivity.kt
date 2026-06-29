@@ -133,6 +133,7 @@ class MainActivity : ComponentActivity() {
             // Valor inicial leído síncrono al arrancar → sin parpadeo de tema.
             val dynamicColor by settings.dynamicColor.collectAsState(initial = app.initialDynamicColor)
             val bankCaptureEnabled by settings.bankCaptureEnabled.collectAsState(initial = false)
+            val reminderLeadDays by settings.reminderLeadDays.collectAsState(initial = 2)
             val scope = rememberCoroutineScope()
             BudgetAppTheme(dynamicColor = dynamicColor) {
                 BudgetNavGraph(
@@ -151,7 +152,9 @@ class MainActivity : ComponentActivity() {
                     onBankCaptureToggle = { enabled -> scope.launch { settings.setBankCaptureEnabled(enabled) } },
                     onGrantNotificationAccess = {
                         startActivity(android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-                    }
+                    },
+                    reminderLeadDays = reminderLeadDays,
+                    onReminderLeadChange = { days -> scope.launch { settings.setReminderLeadDays(days) } }
                 )
             }
         }

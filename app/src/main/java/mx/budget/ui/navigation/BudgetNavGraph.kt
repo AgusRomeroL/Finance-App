@@ -75,7 +75,9 @@ fun BudgetNavGraph(
     onRenormalize: () -> Unit = {},
     bankCaptureEnabled: Boolean = false,
     onBankCaptureToggle: (Boolean) -> Unit = {},
-    onGrantNotificationAccess: () -> Unit = {}
+    onGrantNotificationAccess: () -> Unit = {},
+    reminderLeadDays: Int = 2,
+    onReminderLeadChange: (Int) -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -174,7 +176,9 @@ fun BudgetNavGraph(
                 onRenormalize = onRenormalize,
                 bankCaptureEnabled = bankCaptureEnabled,
                 onBankCaptureToggle = onBankCaptureToggle,
-                onGrantNotificationAccess = onGrantNotificationAccess
+                onGrantNotificationAccess = onGrantNotificationAccess,
+                reminderLeadDays = reminderLeadDays,
+                onReminderLeadChange = onReminderLeadChange
             )
         }
     }
