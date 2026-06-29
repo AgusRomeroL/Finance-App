@@ -19,8 +19,10 @@ import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.WalletRepository
 import mx.budget.data.local.dao.AttributionReviewDao
 import mx.budget.data.local.dao.ExpenseDao
+import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.settings.SettingsRepository
 import mx.budget.ui.calendar.CalendarViewModel
+import mx.budget.ui.calendar.NewPlannedViewModel
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardViewModel
 import mx.budget.ui.navigation.BudgetNavGraph
@@ -76,6 +78,19 @@ class MainActivity : ComponentActivity() {
         ))[CalendarViewModel::class.java]
     }
 
+    private val newPlannedViewModel: NewPlannedViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, NewPlannedViewModelFactory(
+            app.householdId,
+            app.expenseRepository,
+            app.quincenaRepository,
+            app.database.quincenaDao(),
+            app.categoryRepository,
+            app.walletRepository,
+            app.memberRepository
+        ))[NewPlannedViewModel::class.java]
+    }
+
     private val captureViewModel: CaptureViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, CaptureViewModelFactory(
@@ -110,6 +125,7 @@ class MainActivity : ComponentActivity() {
                     attributionReviewViewModel = attributionReviewViewModel,
                     searchViewModel = searchViewModel,
                     calendarViewModel = calendarViewModel,
+                    newPlannedViewModel = newPlannedViewModel,
                     windowWidthDp = windowWidthDp,
                     dynamicColor = dynamicColor,
                     onDynamicColorChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } },
@@ -171,6 +187,30 @@ class AttributionReviewViewModelFactory(
             expenseRepository = expenseRepository,
             memberRepository = memberRepository,
             householdId = householdId,
+        ) as T
+    }
+}
+
+/** Factory para NewPlannedViewModel (Fase 4 inc. 2b: pago manual PLANNED). */
+class NewPlannedViewModelFactory(
+    private val householdId: String,
+    private val expenseRepository: ExpenseRepository,
+    private val quincenaRepository: QuincenaRepository,
+    private val quincenaDao: QuincenaDao,
+    private val categoryRepository: CategoryRepository,
+    private val walletRepository: WalletRepository,
+    private val memberRepository: MemberRepository,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return NewPlannedViewModel(
+            householdId = householdId,
+            expenseRepository = expenseRepository,
+            quincenaRepository = quincenaRepository,
+            quincenaDao = quincenaDao,
+            categoryRepository = categoryRepository,
+            walletRepository = walletRepository,
+            memberRepository = memberRepository,
         ) as T
     }
 }

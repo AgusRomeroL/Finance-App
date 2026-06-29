@@ -25,8 +25,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -71,7 +73,7 @@ private fun formatDay(epochMillis: Long): String =
     dayFmt.format(Date(epochMillis)).replaceFirstChar { it.uppercase() }
 
 private val selectedDayFmt = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", Locale("es", "MX"))
-private fun LocalDate.formatLong(): String =
+internal fun LocalDate.formatLong(): String =
     format(selectedDayFmt).replaceFirstChar { it.uppercase() }
 
 /** Día (zona México) de un gasto a partir de su `occurred_at` (epoch millis). */
@@ -93,16 +95,22 @@ private fun epochToLocalDate(epochMillis: Long): LocalDate =
 @Composable
 fun CalendarScreen(
     viewModel: CalendarViewModel,
+    newPlannedViewModel: NewPlannedViewModel,
     onBack: () -> Unit,
 ) {
     val planned by viewModel.planned.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<ExpenseWithDetails?>(null) }
+    var showAdd by remember { mutableStateOf(false) }
 
     val today = remember { LocalDate.now(ZONE) }
     var month by remember { mutableStateOf(YearMonth.from(today)) }
     var selected by remember { mutableStateOf<LocalDate?>(null) }
+
+    if (showAdd) {
+        NewPlannedSheet(viewModel = newPlannedViewModel, onDismiss = { showAdd = false })
+    }
 
     val paymentDays = remember(planned) { planned.mapTo(HashSet()) { epochToLocalDate(it.occurredAt) } }
     val visible = remember(planned, selected) {
@@ -123,6 +131,17 @@ fun CalendarScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         snackbarHost = { SnackbarHost(snackbar) },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = {
+                    newPlannedViewModel.start(selected ?: today)
+                    showAdd = true
+                },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Icon(Icons.Filled.Add, "Nuevo pago planeado", tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+        },
     ) { inner ->
         Column(
             modifier = Modifier

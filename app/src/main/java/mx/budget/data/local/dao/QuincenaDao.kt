@@ -33,6 +33,22 @@ interface QuincenaDao {
     @Query("SELECT * FROM quincena WHERE id = :id")
     suspend fun getById(id: String): QuincenaEntity?
 
+    /**
+     * Quincena que contiene una fecha ISO `YYYY-MM-DD` (comparación lexicográfica
+     * sobre `start_date`/`end_date`, válida por el formato ISO). Para asignar la
+     * quincena de un gasto PLANNED manual en una fecha arbitraria (Fase 4 inc. 2b);
+     * el caller cae a la quincena activa si no hay match.
+     */
+    @Query(
+        """
+        SELECT * FROM quincena
+        WHERE household_id = :householdId
+          AND start_date <= :isoDate AND end_date >= :isoDate
+        LIMIT 1
+        """
+    )
+    suspend fun getForDate(householdId: String, isoDate: String): QuincenaEntity?
+
     @Query(
         """
         SELECT * FROM quincena
