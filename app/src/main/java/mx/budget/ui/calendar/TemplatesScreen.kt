@@ -29,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Pause
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
+import mx.budget.data.recurrence.RecurrenceSuggestion
 import mx.budget.ui.capture.AttributionDimension
 import java.text.NumberFormat
 import java.util.Locale
@@ -77,6 +79,7 @@ fun TemplatesScreen(
     onBack: () -> Unit,
 ) {
     val templates by viewModel.templates.collectAsState()
+    val suggestions by viewModel.suggestions.collectAsState()
     val editorVisible by viewModel.editorVisible.collectAsState()
     var deleting by remember { mutableStateOf<RecurrenceTemplateEntity?>(null) }
 
@@ -125,7 +128,7 @@ fun TemplatesScreen(
                 }
             }
 
-            if (templates.isEmpty()) {
+            if (templates.isEmpty() && suggestions.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Filled.Repeat, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp))
@@ -138,13 +141,28 @@ fun TemplatesScreen(
                     contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(templates, key = { it.id }) { t ->
-                        TemplateCard(
-                            t = t,
-                            onEdit = { viewModel.openEdit(t) },
-                            onToggleActive = { if (t.isActive) viewModel.pause(t.id) else viewModel.resume(t.id) },
-                            onDelete = { deleting = t },
-                        )
+                    if (suggestions.isNotEmpty()) {
+                        item(key = "sug_header") {
+                            SectionLabel("SUGERIDAS POR TU HISTORIAL")
+                        }
+                        items(suggestions, key = { "sug_${it.canonicalKey}" }) { s ->
+                            SuggestionCard(
+                                s = s,
+                                onAccept = { viewModel.acceptSuggestion(s) },
+                                onDismiss = { viewModel.dismissSuggestion(s) },
+                            )
+                        }
+                    }
+                    if (templates.isNotEmpty()) {
+                        if (suggestions.isNotEmpty()) item(key = "tpl_header") { SectionLabel("TUS PLANTILLAS") }
+                        items(templates, key = { it.id }) { t ->
+                            TemplateCard(
+                                t = t,
+                                onEdit = { viewModel.openEdit(t) },
+                                onToggleActive = { if (t.isActive) viewModel.pause(t.id) else viewModel.resume(t.id) },
+                                onDelete = { deleting = t },
+                            )
+                        }
                     }
                 }
             }
@@ -193,6 +211,49 @@ private fun TemplateCard(
                 onClick = onToggleActive,
             )
             IconChip(icon = Icons.Filled.Delete, label = "Eliminar", onClick = onDelete)
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        letterSpacing = 1.4.sp,
+        modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+    )
+}
+
+/** Tarjeta de plantilla sugerida por el detector (Fase 5): propose-then-confirm. */
+@Composable
+private fun SuggestionCard(s: RecurrenceSuggestion, onAccept: () -> Unit, onDismiss: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.secondaryContainer).padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondary),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.AutoAwesome, null, tint = MaterialTheme.colorScheme.onSecondary, modifier = Modifier.size(18.dp)) }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(s.concept, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, maxLines = 2)
+                Text(s.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer, maxLines = 2)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary)
+                    .clickable(onClick = onAccept).padding(horizontal = 18.dp, vertical = 10.dp),
+            ) { Text("Crear plantilla", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimary) }
+            Box(
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    .clickable(onClick = onDismiss).padding(horizontal = 18.dp, vertical = 10.dp),
+            ) { Text("Descartar", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface) }
         }
     }
 }

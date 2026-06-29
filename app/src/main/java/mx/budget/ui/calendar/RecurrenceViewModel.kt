@@ -2,23 +2,33 @@ package mx.budget.ui.calendar
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import mx.budget.ai.proactive.ConceptCanonicalizer
+import mx.budget.ai.proactive.RetroAttributionEngine
+import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
+import mx.budget.data.recurrence.RecurrenceDetector
 import mx.budget.data.recurrence.RecurrenceMaterializer
+import mx.budget.data.recurrence.RecurrenceSuggestion
 import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.RecurrenceRepository
 import mx.budget.data.repository.WalletRepository
+import mx.budget.data.settings.SettingsRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -59,7 +69,12 @@ class RecurrenceViewModel(
     private val memberRepository: MemberRepository,
     private val quincenaRepository: QuincenaRepository,
     private val materializer: RecurrenceMaterializer,
+    private val expenseDao: ExpenseDao,
+    private val retroAttributionEngine: RetroAttributionEngine,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
+
+    private val detector = RecurrenceDetector()
 
     val templates: StateFlow<List<RecurrenceTemplateEntity>> =
         recurrenceRepository.observeAll(householdId)
@@ -76,6 +91,30 @@ class RecurrenceViewModel(
     val members: StateFlow<List<MemberEntity>> =
         memberRepository.observeActiveMembers(householdId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Plantillas **sugeridas** por el detector de recurrencia (Fase 5): patrones
+     * regulares del historial que aún no tienen plantilla y que el usuario no ha
+     * descartado. Propose-then-confirm: nada se crea hasta [acceptSuggestion].
+     * Recalcula al cambiar las plantillas (al aceptar una, su sugerencia desaparece)
+     * o los descartes.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val suggestions: StateFlow<List<RecurrenceSuggestion>> = combine(
+        recurrenceRepository.observeAll(householdId),
+        settingsRepository.dismissedTemplateSuggestions,
+        memberRepository.observeActiveMembers(householdId),
+    ) { templates, dismissed, members -> Triple(templates, dismissed, members) }
+        .mapLatest { (templates, dismissed, members) ->
+            val history = runCatching { expenseDao.getAll(householdId) }.getOrDefault(emptyList())
+            val canon = ConceptCanonicalizer(members)
+            val covered = templates.mapNotNull { canon.canonicalize(it.concept) }.toSet()
+            detector.detect(history)
+                .filter { it.canonicalKey !in covered && it.canonicalKey !in dismissed }
+                .take(MAX_SUGGESTIONS)
+        }
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // ── Estado del editor ───────────────────────────────────────────────────────
     private val _editorVisible = MutableStateFlow(false)
@@ -193,6 +232,76 @@ class RecurrenceViewModel(
     fun pause(id: String) { viewModelScope.launch { recurrenceRepository.pause(id) } }
     fun resume(id: String) { viewModelScope.launch { recurrenceRepository.resume(id) } }
     fun delete(t: RecurrenceTemplateEntity) { viewModelScope.launch { recurrenceRepository.delete(t) } }
+
+    // ── Inferencia bajo autorización (Fase 5) ──────────────────────────────────────
+
+    /**
+     * Crea la plantilla sugerida (solo al aceptar). Infiere los splits con el
+     * [RetroAttributionEngine] (mismo motor que Feature B); fallback conservador.
+     * Guarda `confidence_score` y `learned_from_expense_ids` para trazabilidad y
+     * materializa la quincena activa para reflejar el PLANNED.
+     */
+    fun acceptSuggestion(s: RecurrenceSuggestion) {
+        viewModelScope.launch {
+            val active = members.value.filter { !it.role.startsWith("EXTERNAL_") }
+            val benefBps = retroAttributionEngine.suggestForKey(s.canonicalKey, "BENEFICIARY")?.distribution
+                ?.takeIf { it.isNotEmpty() } ?: equalSplitBps(active.map { it.id })
+            val payerBps = retroAttributionEngine.suggestForKey(s.canonicalKey, "PAYER")?.distribution
+                ?.takeIf { it.isNotEmpty() } ?: defaultPayerBps(s.paymentMethodId, active)
+            if (benefBps.isEmpty() || payerBps.isEmpty()) return@launch
+
+            val detail = JSONObject()
+                .put("day_of_month", s.dayOfMonth.coerceIn(1, 31))
+                .put("reminder_lead_days", 2)
+            val template = RecurrenceTemplateEntity(
+                id = UUID.randomUUID().toString(),
+                householdId = householdId,
+                concept = s.concept.take(64),
+                categoryId = s.categoryId,
+                defaultAmountMxn = s.amountMxn,
+                defaultPaymentMethodId = s.paymentMethodId,
+                cadence = s.cadence,
+                cadenceDetail = detail.toString(),
+                defaultBeneficiaryIds = bpsMapToJson(benefBps),
+                defaultPayerSplit = bpsMapToJson(payerBps),
+                isActive = true,
+                confidenceScore = s.confidence,
+                learnedFromExpenseIds = JSONArray(s.learnedFromExpenseIds).toString(),
+            )
+            recurrenceRepository.insert(template)
+            runCatching { quincenaRepository.getActive(householdId)?.let { materializer.materialize(it) } }
+        }
+    }
+
+    /** Descarta una sugerencia (persistente): no vuelve a proponerse. */
+    fun dismissSuggestion(s: RecurrenceSuggestion) {
+        viewModelScope.launch { settingsRepository.dismissTemplateSuggestion(s.canonicalKey) }
+    }
+
+    private fun defaultPayerBps(walletId: String?, active: List<MemberEntity>): Map<String, Int> {
+        val owner = wallets.value.firstOrNull { it.id == walletId }?.ownerMemberId
+            ?: active.firstOrNull { it.role == "PAYER_ADULT" }?.id
+            ?: active.firstOrNull()?.id
+        return owner?.let { mapOf(it to 10_000) } ?: emptyMap()
+    }
+
+    private fun equalSplitBps(ids: List<String>): Map<String, Int> {
+        if (ids.isEmpty()) return emptyMap()
+        val base = 10_000 / ids.size
+        val rem = 10_000 - base * ids.size
+        return ids.mapIndexed { i, id -> id to if (i == ids.lastIndex) base + rem else base }.toMap()
+    }
+
+    private fun bpsMapToJson(bps: Map<String, Int>): String {
+        val obj = JSONObject()
+        bps.forEach { (id, v) -> obj.put(id, v) }
+        return obj.toString()
+    }
+
+    companion object {
+        /** Máximo de plantillas sugeridas mostradas a la vez (evita saturar la lista). */
+        const val MAX_SUGGESTIONS = 4
+    }
 
     // ── Guardado ──────────────────────────────────────────────────────────────────
     fun save() {

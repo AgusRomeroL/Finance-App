@@ -103,7 +103,10 @@ class MainActivity : ComponentActivity() {
             app.walletRepository,
             app.memberRepository,
             app.quincenaRepository,
-            app.recurrenceMaterializer
+            app.recurrenceMaterializer,
+            app.database.expenseDao(),
+            app.retroAttributionEngine,
+            app.settingsRepository
         ))[RecurrenceViewModel::class.java]
     }
 
@@ -220,6 +223,9 @@ class RecurrenceViewModelFactory(
     private val memberRepository: MemberRepository,
     private val quincenaRepository: QuincenaRepository,
     private val materializer: RecurrenceMaterializer,
+    private val expenseDao: ExpenseDao,
+    private val retroAttributionEngine: RetroAttributionEngine,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -231,6 +237,9 @@ class RecurrenceViewModelFactory(
             memberRepository = memberRepository,
             quincenaRepository = quincenaRepository,
             materializer = materializer,
+            expenseDao = expenseDao,
+            retroAttributionEngine = retroAttributionEngine,
+            settingsRepository = settingsRepository,
         ) as T
     }
 }

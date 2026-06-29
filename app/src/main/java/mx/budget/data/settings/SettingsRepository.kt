@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -31,6 +32,7 @@ class SettingsRepository(private val context: Context) {
     private val bankCaptureEnabledKey = booleanPreferencesKey("bank_capture_enabled")
     private val reminderLeadDaysKey = intPreferencesKey("reminder_lead_days")
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
+    private val dismissedTemplateSuggestionsKey = stringSetPreferencesKey("dismissed_template_suggestions")
 
     /** Flujo del toggle de color dinámico. Default `true` (Material You). */
     val dynamicColor: Flow<Boolean> = context.dataStore.data
@@ -100,6 +102,20 @@ class SettingsRepository(private val context: Context) {
             val current = decodeState(prefs[reminderStateKey]).toMutableMap()
             current[expenseId] = untilMillis
             prefs[reminderStateKey] = encodeState(current)
+        }
+    }
+
+    /**
+     * Claves canónicas de plantillas **sugeridas que el usuario descartó** (Fase 5).
+     * Persistente: una sugerencia rechazada no vuelve a aparecer. Distinto del
+     * descarte en sesión de las sugerencias reactivas del dashboard (Feature C).
+     */
+    val dismissedTemplateSuggestions: Flow<Set<String>> = context.dataStore.data
+        .map { prefs -> prefs[dismissedTemplateSuggestionsKey] ?: emptySet() }
+
+    suspend fun dismissTemplateSuggestion(canonicalKey: String) {
+        context.dataStore.edit { prefs ->
+            prefs[dismissedTemplateSuggestionsKey] = (prefs[dismissedTemplateSuggestionsKey] ?: emptySet()) + canonicalKey
         }
     }
 
