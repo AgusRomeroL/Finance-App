@@ -9,6 +9,7 @@ import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.result.ExpenseWithDetails
+import mx.budget.data.local.result.PlannedReminder
 import mx.budget.data.local.result.TopExpense
 
 /**
@@ -107,6 +108,29 @@ interface ExpenseDao {
 
     @Query("SELECT * FROM expense WHERE id = :id")
     suspend fun getById(id: String): ExpenseEntity?
+
+    /**
+     * Gastos `PLANNED` del hogar con el contexto que el [ReminderWorker] (Fase 3)
+     * necesita para decidir si recordar: fecha prevista, inicio de la quincena y
+     * el `cadence_detail` de la plantilla que los originó (LEFT JOIN: los PLANNED
+     * manuales sin plantilla traen `cadenceDetail` nulo y caen al lead global).
+     */
+    @Query(
+        """
+        SELECT
+            e.id          AS expenseId,
+            e.concept     AS concept,
+            e.amount_mxn  AS amountMxn,
+            e.occurred_at AS occurredAt,
+            q.start_date  AS quincenaStartDate,
+            rt.cadence_detail AS cadenceDetail
+        FROM expense e
+        INNER JOIN quincena q ON q.id = e.quincena_id
+        LEFT JOIN recurrence_template rt ON rt.id = e.recurrence_template_id
+        WHERE e.household_id = :householdId AND e.status = 'PLANNED'
+        """
+    )
+    suspend fun getPlannedForReminder(householdId: String): List<PlannedReminder>
 
     /**
      * Cuántos gastos (de cualquier estado) ya provienen de [templateId] en

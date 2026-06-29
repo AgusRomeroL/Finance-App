@@ -64,6 +64,11 @@
             android:name=".data.capture.BankCaptureActionReceiver"
             android:exported="false" />
 
+        <!-- Acciones [Confirmar]/[Posponer] del recordatorio de gastos PLANNED (Fase 3) -->
+        <receiver
+            android:name=".data.reminder.ReminderActionReceiver"
+            android:exported="false" />
+
         <!-- Servicio de sincronización Wear OS -->
         <service
             android:name=".service.BudgetWearListenerService"

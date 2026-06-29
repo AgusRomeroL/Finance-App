@@ -2,10 +2,13 @@ package mx.budget
 
 import android.app.Application
 import androidx.room.Room
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +24,8 @@ import mx.budget.ai.service.HybridLlm
 import mx.budget.ai.service.LiteRtLmManager
 import mx.budget.data.capture.BankCaptureManager
 import mx.budget.data.local.BudgetDatabase
+import mx.budget.data.reminder.ReminderNotifier
+import mx.budget.data.reminder.ReminderWorker
 import mx.budget.data.work.CanonicalizeConceptsWorker
 import mx.budget.data.work.RetroAttributionWorker
 import mx.budget.data.repository.CategoryRepository
@@ -287,6 +292,24 @@ class BudgetApplication : Application() {
         // Trigger de arranque (§G.2 Fase 1); el de "activación de quincena" se
         // engancha cuando exista el rollover automático.
         materializeRecurringForActiveQuincena()
+
+        // Recordatorios de gastos PLANNED (§G.2 Fase 3). Canal + trabajo periódico.
+        ReminderNotifier.ensureChannel(this)
+        scheduleReminders()
+    }
+
+    /**
+     * Agenda el [ReminderWorker] periódico (piso 15 min de WorkManager; NO
+     * `SCHEDULE_EXACT_ALARM`). `KEEP`: respeta una agenda existente entre arranques
+     * para no reiniciar el contador del periodo en cada apertura de la app.
+     */
+    private fun scheduleReminders() {
+        val request = PeriodicWorkRequestBuilder<ReminderWorker>(15, TimeUnit.MINUTES).build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            ReminderWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
     }
 
     /** Crea los PLANNED faltantes de la quincena activa al arrancar (idempotente). */
