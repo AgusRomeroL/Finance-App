@@ -12,6 +12,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,8 +53,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
 import mx.budget.BudgetApplication
 import mx.budget.ui.search.SpeechRecognizerController
 import mx.budget.ui.theme.BudgetAppTheme
@@ -91,9 +90,9 @@ class VoiceCaptureActivity : ComponentActivity() {
 
     private fun submit(text: String, source: String) {
         val app = applicationContext as BudgetApplication
-        lifecycleScope.launch {
-            app.bankCaptureManager.ingestText(text, source)
-        }
+        // Corre en el scope de la aplicación, no en el del Activity (que se destruye
+        // con el finish() de abajo y cancelaría el insert suspend a medias).
+        app.captureNaturalLanguage(text, source)
         Toast.makeText(
             this,
             "Propuesta creada — confírmala en el inicio",
@@ -168,8 +167,12 @@ private fun VoiceCaptureOverlay(
                 .fillMaxWidth()
                 .padding(24.dp)
                 .scale(0.9f + 0.1f * appear)
-                // Consume el clic para que tocar la tarjeta no descarte el overlay.
-                .clickable(enabled = false) {},
+                // Consume el clic para que tocar la tarjeta NO se propague al scrim
+                // (un clickable disabled no intercepta; este no-op sin ripple sí).
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {},
         ) {
             Column(Modifier.padding(20.dp)) {
                 Text("Captura por voz", style = MaterialTheme.typography.titleMedium)

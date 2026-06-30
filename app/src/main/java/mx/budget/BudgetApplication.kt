@@ -350,6 +350,17 @@ class BudgetApplication : Application() {
     }
 
     /**
+     * Captura en lenguaje natural (§G.3): lanza el ingest en el [appScope] de la
+     * aplicación, NO en el scope del Activity que la origina. La
+     * [mx.budget.ui.capture.VoiceCaptureActivity] se cierra inmediatamente tras
+     * disparar la captura; si el insert corriera en su `lifecycleScope`, se
+     * cancelaría al destruirse la Activity antes de completar la suspensión.
+     */
+    fun captureNaturalLanguage(rawText: String, source: String) {
+        appScope.launch { bankCaptureManager.ingestText(rawText, source) }
+    }
+
+    /**
      * Agenda el [ReminderWorker] periódico (piso 15 min de WorkManager; NO
      * `SCHEDULE_EXACT_ALARM`). `KEEP`: respeta una agenda existente entre arranques
      * para no reiniciar el contador del periodo en cada apertura de la app.

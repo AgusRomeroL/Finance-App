@@ -43,6 +43,9 @@ import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -1320,6 +1323,19 @@ private fun BankCaptureChip(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Etiqueta + icono según la fuente de la captura (bandeja unificada §G.1):
+    // banco, voz, widget, reloj o calendario comparten el mismo chip.
+    val (eyebrowText, chipIcon, iconDesc) = when (capture.source) {
+        "VOICE" -> Triple("Por voz · captura", Icons.Filled.Mic, "Captura por voz")
+        "WIDGET" -> Triple("Widget · captura", Icons.Filled.Add, "Captura desde widget")
+        "WATCH" -> Triple("Reloj · captura", Icons.Filled.Watch, "Captura desde reloj")
+        "CALENDAR" -> Triple("Calendario · recordatorio", Icons.Filled.Event, "Recordatorio")
+        else -> Triple(
+            "${capture.bankName ?: "Cargo"} · cargo detectado",
+            Icons.Filled.AccountBalanceWallet,
+            "Cargo bancario",
+        )
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -1334,13 +1350,13 @@ private fun BankCaptureChip(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.Filled.AccountBalanceWallet, "Cargo bancario",
+                    chipIcon, iconDesc,
                     tint = MaterialTheme.colorScheme.onTertiary, modifier = Modifier.size(18.dp)
                 )
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Eyebrow("${capture.bankName ?: "Cargo"} · cargo detectado", color = MaterialTheme.colorScheme.onTertiaryContainer, maxLines = 1)
+                Eyebrow(eyebrowText, color = MaterialTheme.colorScheme.onTertiaryContainer, maxLines = 1)
                 Spacer(Modifier.height(2.dp))
                 Text(
                     "${capture.amountMxn.toMxn()} en ${capture.concept}",
