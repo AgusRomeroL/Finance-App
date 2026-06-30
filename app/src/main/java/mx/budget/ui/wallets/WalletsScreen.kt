@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -132,6 +133,7 @@ fun WalletsScreen(
     val selected by viewModel.selected.collectAsState()
     val movements by viewModel.movements.collectAsState()
     val entities by viewModel.entities.collectAsState()
+    val members by viewModel.members.collectAsState()
 
     val expanded = windowWidthDp >= 600.dp
 
@@ -146,6 +148,8 @@ fun WalletsScreen(
     var showReconcile by remember { mutableStateOf(false) }
     // Hoja de transferencia / pago de tarjeta (RF-41).
     var showTransfer by remember { mutableStateOf(false) }
+    // Hoja de registrar ingreso (acredita el wallet).
+    var showIncome by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -165,7 +169,11 @@ fun WalletsScreen(
                 .padding(inner)
                 .statusBarsPadding(),
         ) {
-            Header(onBack = onBack, onTransfer = { showTransfer = true })
+            Header(
+                onBack = onBack,
+                onIncome = { showIncome = true },
+                onTransfer = { showTransfer = true },
+            )
 
             if (expanded) {
                 Row(modifier = Modifier.fillMaxSize()) {
@@ -235,6 +243,18 @@ fun WalletsScreen(
         )
     }
 
+    if (showIncome) {
+        IncomeSheet(
+            wallets = entities,
+            members = members,
+            onSave = { walletId, memberId, amount, label, dateIso ->
+                viewModel.recordIncome(walletId, memberId, amount, label, dateIso)
+                showIncome = false
+            },
+            onDismiss = { showIncome = false },
+        )
+    }
+
     // Compacto: detalle en bottom sheet.
     if (!expanded && selected != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -261,7 +281,7 @@ fun WalletsScreen(
 }
 
 @Composable
-private fun Header(onBack: () -> Unit, onTransfer: () -> Unit) {
+private fun Header(onBack: () -> Unit, onIncome: () -> Unit, onTransfer: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -296,6 +316,20 @@ private fun Header(onBack: () -> Unit, onTransfer: () -> Unit) {
                 maxLines = 1,
             )
         }
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable(onClick = onIncome),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.TrendingUp, "Registrar ingreso",
+                tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
         Box(
             modifier = Modifier
                 .size(40.dp)

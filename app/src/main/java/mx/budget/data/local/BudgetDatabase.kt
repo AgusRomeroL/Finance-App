@@ -11,6 +11,7 @@ import mx.budget.data.local.dao.CategoryDao
 import mx.budget.data.local.dao.ExpenseAttributionDao
 import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.HouseholdDao
+import mx.budget.data.local.dao.IncomeSourceDao
 import mx.budget.data.local.dao.MemberDao
 import mx.budget.data.local.dao.PaymentMethodDao
 import mx.budget.data.local.dao.PendingCaptureDao
@@ -93,6 +94,8 @@ abstract class BudgetDatabase : RoomDatabase() {
     abstract fun recurrenceTemplateDao(): RecurrenceTemplateDao
 
     abstract fun walletTransferDao(): WalletTransferDao
+
+    abstract fun incomeSourceDao(): IncomeSourceDao
 
     companion object {
         /**

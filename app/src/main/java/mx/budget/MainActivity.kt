@@ -120,6 +120,9 @@ class MainActivity : ComponentActivity() {
         ViewModelProvider(this, WalletsViewModelFactory(
             app.walletRepository,
             app.transferRepository,
+            app.incomeRepository,
+            app.memberRepository,
+            app.quincenaRepository,
             app.database.expenseDao(),
             app.householdId
         ))[WalletsViewModel::class.java]
@@ -441,6 +444,9 @@ class SearchViewModelFactory(
 class WalletsViewModelFactory(
     private val walletRepository: WalletRepository,
     private val transferRepository: mx.budget.data.repository.TransferRepository,
+    private val incomeRepository: mx.budget.data.repository.IncomeRepository,
+    private val memberRepository: MemberRepository,
+    private val quincenaRepository: QuincenaRepository,
     private val expenseDao: ExpenseDao,
     private val householdId: String,
 ) : ViewModelProvider.Factory {
@@ -449,6 +455,9 @@ class WalletsViewModelFactory(
         return WalletsViewModel(
             walletRepository = walletRepository,
             transferRepository = transferRepository,
+            incomeRepository = incomeRepository,
+            memberRepository = memberRepository,
+            quincenaRepository = quincenaRepository,
             expenseDao = expenseDao,
             householdId = householdId,
         ) as T

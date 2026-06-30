@@ -34,6 +34,7 @@ import mx.budget.data.work.CanonicalizeConceptsWorker
 import mx.budget.data.work.RetroAttributionWorker
 import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.RecurrenceRepository
@@ -43,6 +44,7 @@ import mx.budget.data.repository.impl.CategoryRepositoryImpl
 import mx.budget.data.repository.impl.ExpenseRepositoryImpl
 import mx.budget.data.repository.impl.MemberRepositoryImpl
 import mx.budget.data.repository.impl.QuincenaRepositoryImpl
+import mx.budget.data.repository.impl.IncomeRepositoryImpl
 import mx.budget.data.repository.impl.RecurrenceRepositoryImpl
 import mx.budget.data.repository.impl.TransferRepositoryImpl
 import mx.budget.data.repository.impl.WalletRepositoryImpl
@@ -79,6 +81,10 @@ class BudgetApplication : Application() {
 
     /** Transferencias entre wallets / pago de tarjeta (RF-41). */
     lateinit var transferRepository: TransferRepository
+        private set
+
+    /** Ingresos que acreditan el saldo del wallet al postearse. */
+    lateinit var incomeRepository: IncomeRepository
         private set
 
     lateinit var categoryRepository: CategoryRepository
@@ -240,6 +246,11 @@ class BudgetApplication : Application() {
         recurrenceRepository = RecurrenceRepositoryImpl(database.recurrenceTemplateDao())
         transferRepository = TransferRepositoryImpl(
             transferDao = database.walletTransferDao(),
+            paymentMethodDao = database.paymentMethodDao(),
+            db = database
+        )
+        incomeRepository = IncomeRepositoryImpl(
+            dao = database.incomeSourceDao(),
             paymentMethodDao = database.paymentMethodDao(),
             db = database
         )

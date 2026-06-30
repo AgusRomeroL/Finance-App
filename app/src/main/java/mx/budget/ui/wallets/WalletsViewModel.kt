@@ -13,11 +13,16 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import mx.budget.data.local.dao.ExpenseDao
+import mx.budget.data.local.entity.IncomeSourceEntity
+import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.WalletTransferEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.TransferWithNames
 import mx.budget.data.local.result.WalletBalanceInfo
+import mx.budget.data.repository.IncomeRepository
+import mx.budget.data.repository.MemberRepository
+import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.TransferRepository
 import mx.budget.data.repository.WalletRepository
 import java.util.UUID
@@ -33,6 +38,9 @@ import java.util.UUID
 class WalletsViewModel(
     private val walletRepository: WalletRepository,
     private val transferRepository: TransferRepository,
+    private val incomeRepository: IncomeRepository,
+    private val memberRepository: MemberRepository,
+    private val quincenaRepository: QuincenaRepository,
     private val expenseDao: ExpenseDao,
     private val householdId: String,
 ) : ViewModel() {
@@ -116,6 +124,42 @@ class WalletsViewModel(
     val transfers: StateFlow<List<TransferWithNames>> =
         transferRepository.observeTransfers(householdId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Miembros activos del hogar (para elegir quién recibe el ingreso). */
+    val members: StateFlow<List<MemberEntity>> =
+        memberRepository.observeActiveMembers(householdId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Registra un ingreso POSTED en la quincena activa y acredita la cuenta de
+     * depósito (RF: ingresos acreditan el wallet). No-op si no hay quincena activa.
+     */
+    fun recordIncome(
+        walletId: String,
+        memberId: String,
+        amountMxn: Double,
+        label: String,
+        expectedDateIso: String,
+    ) {
+        viewModelScope.launch {
+            val quincena = quincenaRepository.getActive(householdId) ?: return@launch
+            incomeRepository.insert(
+                IncomeSourceEntity(
+                    id = UUID.randomUUID().toString(),
+                    householdId = householdId,
+                    quincenaId = quincena.id,
+                    memberId = memberId,
+                    label = label.ifBlank { "Ingreso" },
+                    amountMxn = amountMxn,
+                    cadence = "IRREGULAR",
+                    expectedDate = expectedDateIso,
+                    paymentMethodId = walletId,
+                    status = "POSTED",
+                    createdAt = System.currentTimeMillis(),
+                )
+            )
+        }
+    }
 
     /**
      * Registra una transferencia (o pago de tarjeta): mueve el saldo de ambas
