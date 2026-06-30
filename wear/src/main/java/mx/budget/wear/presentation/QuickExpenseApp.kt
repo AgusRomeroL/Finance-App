@@ -1,5 +1,10 @@
 package mx.budget.wear.presentation
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -37,6 +42,23 @@ fun QuickExpenseApp(
     val sender = remember { ExpenseSender(context) }
     var showConfirmation by remember { mutableStateOf(false) }
 
+    // Dictado por voz (§G.3): el sistema de Wear capta la voz (es-MX) y devuelve el
+    // transcript; lo mandamos crudo al teléfono, que lo parsea (el reloj NO corre LLM).
+    val voiceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val text = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+            if (!text.isNullOrBlank()) {
+                scope.launch {
+                    if (sender.sendNaturalLanguage(text).isSuccess) showConfirmation = true
+                }
+            }
+        }
+    }
+
     // Preajustes Hardcodeados (Idealmente editables desde móvil)
     val presets = listOf(
         "Café" to 60.0,
@@ -59,7 +81,27 @@ fun QuickExpenseApp(
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
             }
-            
+
+            // Captura por voz en lenguaje natural (§G.3).
+            item {
+                Button(
+                    onClick = {
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(
+                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                            )
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-MX")
+                        }
+                        voiceLauncher.launch(intent)
+                    },
+                    colors = ButtonDefaults.secondaryButtonColors(),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text("🎤 Dictar")
+                }
+            }
+
             items(presets.size) { index ->
                 val (concept, amount) = presets[index]
                 

@@ -26,6 +26,7 @@ import mx.budget.data.local.dao.AttributionReviewDao
 import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.settings.SettingsRepository
+import mx.budget.service.WearSyncManager
 import mx.budget.ui.calendar.CalendarViewModel
 import mx.budget.ui.calendar.NewPlannedViewModel
 import mx.budget.ui.calendar.RecurrenceViewModel
@@ -202,6 +203,10 @@ class MainActivity : ComponentActivity() {
         }
         val app = application as BudgetApplication
         val settings = app.settingsRepository
+        // Empuja el saldo "Disponible" al reloj (tile Glance) mientras la app está
+        // abierta (§G.3). Observa el dashboard; si no hay reloj emparejado, el
+        // Data Layer simplemente cachea/no-op.
+        WearSyncManager(this, dashboardViewModel, lifecycleScope).startSyncObservation()
         setContent {
             // Toggle de color dinámico persistido (brief §2.1): Material You por
             // default; el verde sembrado #016E3E es el fallback (toggle off).

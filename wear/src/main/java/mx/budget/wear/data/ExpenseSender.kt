@@ -15,24 +15,25 @@ class ExpenseSender(private val context: Context) {
     private val messageClient = Wearable.getMessageClient(context)
     private val nodeClient = Wearable.getNodeClient(context)
 
-    suspend fun sendQuickExpense(amount: Double, concept: String): Result<Unit> {
+    suspend fun sendQuickExpense(amount: Double, concept: String): Result<Unit> =
+        send(WearPaths.PATH_NEW_EXPENSE, "$amount|$concept")
+
+    /**
+     * Envía una frase en lenguaje natural dictada en el reloj (§G.3). El reloj NO
+     * corre el LLM: el teléfono recibe el texto crudo y lo parsea/enriquece, dejando
+     * la propuesta en la bandeja (propose-then-confirm).
+     */
+    suspend fun sendNaturalLanguage(text: String): Result<Unit> =
+        send(WearPaths.PATH_NEW_NL, text)
+
+    private suspend fun send(path: String, payload: String): Result<Unit> {
         return try {
             // Localiza el nodo conectado primario (El Teléfono)
             val nodes = nodeClient.connectedNodes.await()
             val targetNode = nodes.firstOrNull { it.isNearby } ?: nodes.firstOrNull()
-            
-            if (targetNode == null) {
-                return Result.failure(Exception("Teléfono no conectado"))
-            }
+                ?: return Result.failure(Exception("Teléfono no conectado"))
 
-            val payload = "$amount|$concept".toByteArray()
-            
-            messageClient.sendMessage(
-                targetNode.id,
-                WearPaths.PATH_NEW_EXPENSE,
-                payload
-            ).await()
-
+            messageClient.sendMessage(targetNode.id, path, payload.toByteArray()).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

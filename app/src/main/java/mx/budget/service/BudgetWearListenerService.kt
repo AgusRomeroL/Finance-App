@@ -2,71 +2,43 @@ package mx.budget.service
 
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import mx.budget.BudgetApplication
 import mx.budget.core.wear.WearPaths
-import mx.budget.data.local.entity.ExpenseEntity
-import java.util.UUID
 
 /**
- * Servicio residente en el Móvil que escucha transacciones entrantes desde el Reloj.
- * Recibe intents predefinidos de Quick Capture y los persiste atómicamente en Room.
+ * Servicio residente en el Móvil que escucha capturas entrantes desde el Reloj
+ * (Apéndice G.3, superficie reloj).
+ *
+ * **Propose-then-confirm**: el reloj NO escribe en el ledger. Lo que llega cae en
+ * la bandeja unificada `pending_capture` con `source=WATCH` y el usuario lo
+ * confirma en el teléfono (chip "Reloj · captura"). Dos rutas, ambas reusando el
+ * pipeline NL de §G.3 a través de [BudgetApplication.captureNaturalLanguage], que
+ * corre en el `appScope` de la app (sobrevive a este servicio efímero):
+ *  - [WearPaths.PATH_NEW_EXPENSE]: preset "amount|concept" → se rearma como frase.
+ *  - [WearPaths.PATH_NEW_NL]: texto dictado en el reloj (el reloj NO corre LLM;
+ *    el parseo/LLM viven en el teléfono).
  */
 class BudgetWearListenerService : WearableListenerService() {
 
-    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
     override fun onMessageReceived(messageEvent: MessageEvent) {
-        if (messageEvent.path == WearPaths.PATH_NEW_EXPENSE) {
-            val payload = String(messageEvent.data)
-            // Payload esperado (simplificado): "amount|concept"
-            val parts = payload.split("|")
-            if (parts.size == 2) {
-                val amount = parts[0].toDoubleOrNull() ?: return
-                val concept = parts[1]
-                
-                serviceScope.launch {
-                    persistQuickExpense(amount, concept)
+        val app = applicationContext as BudgetApplication
+        when (messageEvent.path) {
+            WearPaths.PATH_NEW_EXPENSE -> {
+                // Payload "amount|concept" (preset del reloj). Lo rearmamos como una
+                // frase NL ("concepto monto") que el parser determinista resuelve,
+                // así reusamos un solo camino (sin tocar BankCaptureManager).
+                val parts = String(messageEvent.data).split("|")
+                if (parts.size == 2) {
+                    val amount = parts[0].toDoubleOrNull() ?: return
+                    val concept = parts[1].trim()
+                    app.captureNaturalLanguage("$concept $amount", "WATCH")
                 }
             }
-        } else {
-            super.onMessageReceived(messageEvent)
+            WearPaths.PATH_NEW_NL -> {
+                val text = String(messageEvent.data).trim()
+                if (text.isNotEmpty()) app.captureNaturalLanguage(text, "WATCH")
+            }
+            else -> super.onMessageReceived(messageEvent)
         }
-    }
-
-    private suspend fun persistQuickExpense(amount: Double, concept: String) {
-        // Accedemos a la base de recursos globales atómicamente (Cero mocking)
-        val app = applicationContext as BudgetApplication
-        val database = app.database
-
-        // Obtiene la quincena activa vigente
-        val activeQuincena = database.quincenaDao().getActive(app.householdId) ?: return
-        
-        // Creación del registro (Utilizando defaults preestablecidos para el flujo express de reloj)
-        val expense = ExpenseEntity(
-            id = UUID.randomUUID().toString(),
-            householdId = activeQuincena.householdId,
-            occurredAt = System.currentTimeMillis(),
-            quincenaId = activeQuincena.id,
-            categoryId = "UNASSIGNED", // Categoría temporal hasta reconciliación
-            concept = concept,
-            amountMxn = amount,
-            paymentMethodId = "DEFAULT_WALLET", // Wallet por defecto
-            status = "POSTED",
-            createdAt = System.currentTimeMillis()
-        )
-
-        // Se inserta vía el repositorio (Room + encolado de sync) en lugar de
-        // tocar el DAO directo, para que el push offline-first también ocurra.
-        app.expenseRepository.insertWithAttributions(expense, emptyList())
-        
-        // Actualiza heurísticamente la quincena actual (Actualización de proyecciones)
-        val updatedActualExpenses = activeQuincena.actualExpensesMxn + amount
-        database.quincenaDao().update(
-            activeQuincena.copy(actualExpensesMxn = updatedActualExpenses)
-        )
     }
 }
