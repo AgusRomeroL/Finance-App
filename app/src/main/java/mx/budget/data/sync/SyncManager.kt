@@ -10,9 +10,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import mx.budget.data.local.dao.ExpenseAttributionDao
 import mx.budget.data.local.dao.ExpenseDao
+import mx.budget.data.local.dao.IncomeSourceDao
 import mx.budget.data.local.dao.PaymentMethodDao
 import mx.budget.data.local.dao.SyncQueueDao
+import mx.budget.data.local.dao.WalletTransferDao
 import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.repository.IncomeRepository
+import mx.budget.data.repository.TransferRepository
 import mx.budget.data.repository.WalletRepository
 
 /**
@@ -39,7 +43,11 @@ class SyncManager(
     private val attributionDao: ExpenseAttributionDao,
     private val remoteExpenseRepository: ExpenseRepository,
     private val paymentMethodDao: PaymentMethodDao,
-    private val remoteWalletRepository: WalletRepository
+    private val remoteWalletRepository: WalletRepository,
+    private val transferDao: WalletTransferDao,
+    private val remoteTransferRepository: TransferRepository,
+    private val incomeSourceDao: IncomeSourceDao,
+    private val remoteIncomeRepository: IncomeRepository
 ) {
 
     private val mutex = Mutex()
@@ -100,6 +108,31 @@ class SyncManager(
                                 syncQueueDao.delete(row.id)
                             } else {
                                 remoteWalletRepository.insert(wallet)
+                                syncQueueDao.delete(row.id)
+                            }
+                        }
+
+                        row.entityType == "TRANSFER" && row.operation == "UPSERT" -> {
+                            val transfer = transferDao.getById(row.entityId)
+                            if (transfer == null) {
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteTransferRepository.recordTransfer(transfer)
+                                syncQueueDao.delete(row.id)
+                            }
+                        }
+
+                        row.entityType == "TRANSFER" && row.operation == "DELETE" -> {
+                            remoteTransferRepository.deleteTransfer(row.entityId)
+                            syncQueueDao.delete(row.id)
+                        }
+
+                        row.entityType == "INCOME" && row.operation == "UPSERT" -> {
+                            val income = incomeSourceDao.getById(row.entityId)
+                            if (income == null) {
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteIncomeRepository.insert(income)
                                 syncQueueDao.delete(row.id)
                             }
                         }

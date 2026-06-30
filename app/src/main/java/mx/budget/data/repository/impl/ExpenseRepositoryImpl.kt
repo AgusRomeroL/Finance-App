@@ -226,5 +226,15 @@ class ExpenseRepositoryImpl(
         val kind = db.paymentMethodDao().getById(paymentMethodId)?.kind ?: return
         val effect = if (kind in creditKinds) amount else -amount  // crédito sube deuda; líquido baja
         db.paymentMethodDao().adjustBalance(paymentMethodId, if (posting) effect else -effect)
+        // El saldo cambió: empuja el wallet a la nube (push-sync). FIFO deduplica: el
+        // drain lee el snapshot final del wallet desde Room.
+        syncQueueDao.enqueue(
+            SyncQueueEntity(
+                entityType = "WALLET",
+                entityId = paymentMethodId,
+                operation = "UPSERT",
+                createdAt = System.currentTimeMillis()
+            )
+        )
     }
 }

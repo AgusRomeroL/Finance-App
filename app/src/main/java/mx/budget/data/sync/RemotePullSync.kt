@@ -13,7 +13,9 @@ import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.entity.MemberEntity
+import mx.budget.data.local.entity.IncomeSourceEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.data.local.entity.WalletTransferEntity
 import mx.budget.data.local.entity.QuincenaEntity
 
 /**
@@ -61,6 +63,8 @@ class RemotePullSync(
     private val memberDao = db.memberDao()
     private val paymentMethodDao = db.paymentMethodDao()
     private val quincenaDao = db.quincenaDao()
+    private val walletTransferDao = db.walletTransferDao()
+    private val incomeSourceDao = db.incomeSourceDao()
 
     private val listeners = mutableListOf<ListenerRegistration>()
 
@@ -106,6 +110,20 @@ class RemotePullSync(
             .addSnapshotListener { snapshot, error ->
                 handleSimple(snapshot, error, "quincenas") { it.toObject(QuincenaEntity::class.java) }
                     ?.let { entities -> scope.launch { entities.forEach { quincenaDao.upsert(it) } } }
+            }
+
+        // wallet_transfer (RF-41). Escribe vía DAO directo (anti-eco): no re-encola.
+        listeners += household().collection("wallet_transfer")
+            .addSnapshotListener { snapshot, error ->
+                handleSimple(snapshot, error, "wallet_transfer") { it.toObject(WalletTransferEntity::class.java) }
+                    ?.let { entities -> scope.launch { entities.forEach { walletTransferDao.insert(it) } } }
+            }
+
+        // income_source (ingresos). DAO directo (anti-eco).
+        listeners += household().collection("income_source")
+            .addSnapshotListener { snapshot, error ->
+                handleSimple(snapshot, error, "income_source") { it.toObject(IncomeSourceEntity::class.java) }
+                    ?.let { entities -> scope.launch { entities.forEach { incomeSourceDao.insert(it) } } }
             }
 
         Log.i(TAG, "Pull arrancado para household=$householdId (${listeners.size} listeners)")

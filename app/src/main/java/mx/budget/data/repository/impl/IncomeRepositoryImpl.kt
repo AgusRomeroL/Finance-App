@@ -5,7 +5,9 @@ import kotlinx.coroutines.flow.Flow
 import mx.budget.data.local.BudgetDatabase
 import mx.budget.data.local.dao.IncomeSourceDao
 import mx.budget.data.local.dao.PaymentMethodDao
+import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.entity.IncomeSourceEntity
+import mx.budget.data.local.entity.SyncQueueEntity
 import mx.budget.data.local.result.IncomeByMember
 import mx.budget.data.repository.IncomeRepository
 
@@ -20,6 +22,7 @@ import mx.budget.data.repository.IncomeRepository
 class IncomeRepositoryImpl(
     private val dao: IncomeSourceDao,
     private val paymentMethodDao: PaymentMethodDao,
+    private val syncQueueDao: SyncQueueDao,
     private val db: BudgetDatabase,
 ) : IncomeRepository {
 
@@ -43,6 +46,7 @@ class IncomeRepositoryImpl(
         db.withTransaction {
             dao.insert(income)
             if (income.status == "POSTED") creditWallet(income.paymentMethodId, income.amountMxn, posting = true)
+            enqueue("INCOME", income.id, "UPSERT")
         }
     }
 
@@ -59,6 +63,7 @@ class IncomeRepositoryImpl(
             }
             dao.update(income)
             if (income.status == "POSTED") creditWallet(income.paymentMethodId, income.amountMxn, posting = true)
+            enqueue("INCOME", income.id, "UPSERT")
         }
     }
 
@@ -68,14 +73,30 @@ class IncomeRepositoryImpl(
             if (income.status == "POSTED") return@withTransaction
             dao.update(income.copy(status = "POSTED"))
             creditWallet(income.paymentMethodId, income.amountMxn, posting = true)
+            enqueue("INCOME", incomeId, "UPSERT")
         }
     }
 
-    /** Acredita ([posting]=true) o revierte el ingreso de [amount] sobre [pmId]. */
+    /**
+     * Acredita ([posting]=true) o revierte el ingreso de [amount] sobre [pmId] y
+     * encola el wallet para push.
+     */
     private suspend fun creditWallet(pmId: String?, amount: Double, posting: Boolean) {
         if (pmId == null) return
         val kind = paymentMethodDao.getById(pmId)?.kind ?: return
         val inDelta = if (kind in creditKinds) -amount else amount  // entrada: líquido sube, crédito baja deuda
         paymentMethodDao.adjustBalance(pmId, if (posting) inDelta else -inDelta)
+        enqueue("WALLET", pmId, "UPSERT")
+    }
+
+    private suspend fun enqueue(entityType: String, entityId: String, operation: String) {
+        syncQueueDao.enqueue(
+            SyncQueueEntity(
+                entityType = entityType,
+                entityId = entityId,
+                operation = operation,
+                createdAt = System.currentTimeMillis(),
+            )
+        )
     }
 }

@@ -247,11 +247,13 @@ class BudgetApplication : Application() {
         transferRepository = TransferRepositoryImpl(
             transferDao = database.walletTransferDao(),
             paymentMethodDao = database.paymentMethodDao(),
+            syncQueueDao = syncQueueDao,
             db = database
         )
         incomeRepository = IncomeRepositoryImpl(
             dao = database.incomeSourceDao(),
             paymentMethodDao = database.paymentMethodDao(),
+            syncQueueDao = syncQueueDao,
             db = database
         )
         expenseRepository = ExpenseRepositoryImpl(
@@ -342,6 +344,8 @@ class BudgetApplication : Application() {
         val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
         remoteExpenseRepository = mx.budget.data.remote.ExpenseRepositoryFirestore(firestore)
         val remoteWalletRepository = mx.budget.data.remote.WalletRepositoryFirestore(firestore)
+        val remoteTransferRepository = mx.budget.data.remote.TransferRepositoryFirestore(firestore)
+        val remoteIncomeRepository = mx.budget.data.remote.IncomeRepositoryFirestore(firestore)
 
         // Arranca el drenado del outbox (por conectividad + intento inicial).
         syncManager = SyncManager(
@@ -352,7 +356,11 @@ class BudgetApplication : Application() {
             attributionDao = attributionDao,
             remoteExpenseRepository = remoteExpenseRepository,
             paymentMethodDao = database.paymentMethodDao(),
-            remoteWalletRepository = remoteWalletRepository
+            remoteWalletRepository = remoteWalletRepository,
+            transferDao = database.walletTransferDao(),
+            remoteTransferRepository = remoteTransferRepository,
+            incomeSourceDao = database.incomeSourceDao(),
+            remoteIncomeRepository = remoteIncomeRepository
         )
 
         // Dirección PULL (Firestore → Room). Se arranca como objeto
