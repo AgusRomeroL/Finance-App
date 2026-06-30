@@ -33,6 +33,8 @@ import mx.budget.ui.review.AttributionReviewViewModel
 import mx.budget.ui.search.SearchResultsScreen
 import mx.budget.ui.search.SearchViewModel
 import mx.budget.ui.suggestions.AllSuggestionsScreen
+import mx.budget.ui.wallets.WalletsScreen
+import mx.budget.ui.wallets.WalletsViewModel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Destinos de navegación
@@ -69,6 +71,7 @@ fun BudgetNavGraph(
     calendarViewModel: CalendarViewModel,
     newPlannedViewModel: NewPlannedViewModel,
     recurrenceViewModel: RecurrenceViewModel,
+    walletsViewModel: WalletsViewModel,
     windowWidthDp: Int = 360,
     dynamicColor: Boolean = true,
     onDynamicColorChange: (Boolean) -> Unit = {},
@@ -160,7 +163,11 @@ fun BudgetNavGraph(
         }
 
         composable(route = BudgetDestinations.WALLETS) {
-            PlaceholderScreen("Cuentas y Wallets", onNavigate)
+            WalletsScreen(
+                viewModel = walletsViewModel,
+                windowWidthDp = windowWidthDp.dp,
+                onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
+            )
         }
 
         composable(route = BudgetDestinations.ANALYTICS) {

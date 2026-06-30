@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "required": ["action"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["ADD_EXPENSE", "UNKNOWN"],
+      "description": "ADD_EXPENSE si la frase describe un gasto; UNKNOWN si no hay monto claro."
+    },
+    "amount": {
+      "type": "number",
+      "description": "Monto en MXN, sin símbolo ni comas."
+    },
+    "concept": {
+      "type": "string",
+      "description": "Comercio o descripción breve (1-40 caracteres)."
+    },
+    "date": {
+      "type": "string",
+      "description": "Fecha ISO YYYY-MM-DD, opcional."
+    }
+  }
+}

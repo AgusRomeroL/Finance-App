@@ -51,6 +51,20 @@
             </intent-filter>
         </activity>
 
+        <!-- Captura en lenguaje natural por voz/texto (Apéndice G.3). Overlay
+             transparente compartido por el botón de micrófono y el widget. -->
+        <activity
+            android:name=".ui.capture.VoiceCaptureActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- Captura desde notificaciones bancarias (Feature D, §F.6).
              Requiere que el usuario conceda "Acceso a notificaciones" en Ajustes;
              además es opt-in vía el toggle de Perfil. -->
@@ -73,6 +87,18 @@
         <receiver
             android:name=".data.reminder.ReminderActionReceiver"
             android:exported="false" />
+
+        <!-- Widget de captura rápida en pantalla de inicio (Jetpack Glance, §G.3) -->
+        <receiver
+            android:name=".widget.BudgetCaptureWidgetReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/budget_capture_widget_info" />
+        </receiver>
 
         <!-- Servicio de sincronización Wear OS -->
         <service

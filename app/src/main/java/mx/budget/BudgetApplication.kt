@@ -17,11 +17,14 @@ import kotlinx.coroutines.runBlocking
 import mx.budget.ai.proactive.BankNotificationParser
 import mx.budget.ai.proactive.BankTemplates
 import mx.budget.ai.proactive.ConceptCanonicalizer
+import mx.budget.ai.proactive.NaturalLanguageCaptureParser
+import mx.budget.ai.proactive.NlCaptureExtractor
 import mx.budget.ai.proactive.ProactiveReasoner
 import mx.budget.ai.proactive.RetroAttributionEngine
 import mx.budget.ai.service.AiCoreManager
 import mx.budget.ai.service.HybridLlm
 import mx.budget.ai.service.LiteRtLmManager
+import mx.budget.ai.service.OnDeviceLlm
 import mx.budget.data.calendar.CalendarMirror
 import mx.budget.data.capture.BankCaptureManager
 import mx.budget.data.local.BudgetDatabase
@@ -147,6 +150,22 @@ class BudgetApplication : Application() {
     lateinit var proactiveReasoner: ProactiveReasoner
         private set
 
+    /**
+     * Motor LLM on-device híbrido (AICore → LiteRT-LM → no-disponible), §F.8.
+     * Compartido por el [proactiveReasoner] (Capa 3) y el [nlCaptureExtractor]
+     * (captura NL, §G.3). Único punto de construcción del LLM en runtime.
+     */
+    lateinit var onDeviceLlm: OnDeviceLlm
+        private set
+
+    /**
+     * Extractor de captura en lenguaje natural (§G.3). LLM opcional → parser
+     * determinista garantizado. Lo consume [bankCaptureManager.ingestText] para
+     * voz in-app / widget / reloj.
+     */
+    lateinit var nlCaptureExtractor: NlCaptureExtractor
+        private set
+
     /** Valor inicial del toggle de color dinámico, leído una vez al arrancar. */
     var initialDynamicColor: Boolean = true
         private set
@@ -229,11 +248,23 @@ class BudgetApplication : Application() {
         val proactiveSystemPrompt = runCatching {
             assets.open("ai/proactive_system_prompt.es.txt").bufferedReader().use { it.readText() }
         }.getOrDefault("")
+        // Híbrido: AICore (TPU, cuando Google lo provisione) → LiteRT-LM (Gemma
+        // local, corre en Tensor G4 del Fold de Norma) → no-disponible. Único
+        // constructor del LLM en runtime; lo comparten Capa 3 y la captura NL.
+        onDeviceLlm = HybridLlm(AiCoreManager(this), LiteRtLmManager(this))
         proactiveReasoner = ProactiveReasoner(
-            // Híbrido: AICore (TPU, cuando Google lo provisione) → LiteRT-LM (Gemma
-            // local, corre en Tensor G4 del Fold de Norma) → SQL.
-            llm = HybridLlm(AiCoreManager(this), LiteRtLmManager(this)),
+            llm = onDeviceLlm,
             systemPrompt = proactiveSystemPrompt,
+        )
+
+        // Captura en lenguaje natural (§G.3): LLM opcional → parser determinista.
+        val nlCapturePrompt = runCatching {
+            assets.open("ai/nl_capture_prompt.es.txt").bufferedReader().use { it.readText() }
+        }.getOrDefault("")
+        nlCaptureExtractor = NlCaptureExtractor(
+            parser = NaturalLanguageCaptureParser(),
+            llm = onDeviceLlm,
+            systemPrompt = nlCapturePrompt,
         )
 
         BankCaptureManager.ensureChannel(this)
@@ -248,6 +279,7 @@ class BudgetApplication : Application() {
             expenseRepository = expenseRepository,
             engine = retroAttributionEngine,
             householdId = householdId,
+            nlCaptureExtractor = nlCaptureExtractor,
         )
 
         // Materializador de recurrentes → gastos PLANNED (Apéndice G.2, Fase 1).

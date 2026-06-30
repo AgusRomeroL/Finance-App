@@ -8,6 +8,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import mx.budget.R
+import mx.budget.ai.proactive.NlCaptureExtractor
 import mx.budget.ai.proactive.ParsedCharge
 import mx.budget.ai.proactive.RetroAttributionEngine
 import mx.budget.data.local.dao.CategoryDao
@@ -51,6 +52,7 @@ class BankCaptureManager(
     private val expenseRepository: ExpenseRepository,
     private val engine: RetroAttributionEngine,
     private val householdId: String,
+    private val nlCaptureExtractor: NlCaptureExtractor,
 ) {
 
     // ── Ingreso de una propuesta (desde el listener) ────────────────────────────
@@ -94,6 +96,34 @@ class BankCaptureManager(
     suspend fun enqueue(capture: PendingCaptureEntity) {
         pendingDao.insert(capture)
         postNotification(capture)
+    }
+
+    /**
+     * Productor de **lenguaje natural** (Apéndice G.3): voz in-app, widget, reloj.
+     * Convierte el texto dictado/escrito en una propuesta `PENDING`, resolviendo
+     * categoría (modal por concepto histórico) y wallet (primer activo) igual que
+     * [ingest]. El [NlCaptureExtractor] intenta el LLM y cae al parser determinista.
+     * Devuelve sin efecto si no se logra extraer un monto > 0.
+     *
+     * @param source `VOICE | WIDGET | WATCH` (§G.1).
+     * @param occurredAt si se provee, anula la fecha inferida del texto.
+     */
+    suspend fun ingestText(rawText: String, source: String, occurredAt: Long? = null) {
+        val parsed = nlCaptureExtractor.extract(rawText) ?: return
+        val wallets = paymentMethodDao.getActive(householdId)
+        val capture = PendingCaptureEntity(
+            id = UUID.randomUUID().toString(),
+            source = source,
+            amountMxn = parsed.amountMxn,
+            concept = parsed.concept,
+            occurredAt = occurredAt ?: parsed.occurredAt,
+            suggestedWalletId = wallets.firstOrNull()?.id,
+            suggestedCategoryId = resolveCategory(parsed.concept),
+            status = "PENDING",
+            createdAt = System.currentTimeMillis(),
+            rawText = rawText,
+        )
+        enqueue(capture)
     }
 
     // ── Confirmación / descarte (desde chip o notificación) ─────────────────────

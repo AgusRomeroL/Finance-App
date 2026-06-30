@@ -69,6 +69,11 @@ dependencies {
     // Wear OS Data Layer
     implementation("com.google.android.gms:play-services-wearable:18.1.0")
 
+    // Jetpack Glance — widget de pantalla de inicio para captura rápida (§G.3).
+    // Runtime de Compose propio de Glance, independiente del compose-bom.
+    implementation("androidx.glance:glance-appwidget:1.1.0")
+    implementation("androidx.glance:glance-material3:1.1.0")
+
     // Gemini Nano on-device: ML Kit GenAI Prompt API (vía GA, sin allowlist por-app;
     // maneja descarga del modelo con checkStatus()/download()). Reemplaza al SDK
     // experimental `aicore` (que daba PERMISSION_DENIED en el canal de terceros).

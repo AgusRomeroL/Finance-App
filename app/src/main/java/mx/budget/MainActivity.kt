@@ -35,6 +35,7 @@ import mx.budget.ui.navigation.BudgetNavGraph
 import mx.budget.ui.review.AttributionReviewViewModel
 import mx.budget.ui.search.SearchViewModel
 import mx.budget.ui.theme.BudgetAppTheme
+import mx.budget.ui.wallets.WalletsViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -113,6 +114,15 @@ class MainActivity : ComponentActivity() {
         ))[RecurrenceViewModel::class.java]
     }
 
+    private val walletsViewModel: WalletsViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, WalletsViewModelFactory(
+            app.walletRepository,
+            app.database.expenseDao(),
+            app.householdId
+        ))[WalletsViewModel::class.java]
+    }
+
     private val captureViewModel: CaptureViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, CaptureViewModelFactory(
@@ -166,6 +176,7 @@ class MainActivity : ComponentActivity() {
                     calendarViewModel = calendarViewModel,
                     newPlannedViewModel = newPlannedViewModel,
                     recurrenceViewModel = recurrenceViewModel,
+                    walletsViewModel = walletsViewModel,
                     windowWidthDp = windowWidthDp,
                     dynamicColor = dynamicColor,
                     onDynamicColorChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } },
@@ -336,6 +347,22 @@ class SearchViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return SearchViewModel(
             expenseRepository = expenseRepository,
+            householdId = householdId,
+        ) as T
+    }
+}
+
+/** Factory para WalletsViewModel (pantalla Cuentas: saldos por wallet + movimientos). */
+class WalletsViewModelFactory(
+    private val walletRepository: WalletRepository,
+    private val expenseDao: ExpenseDao,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return WalletsViewModel(
+            walletRepository = walletRepository,
+            expenseDao = expenseDao,
             householdId = householdId,
         ) as T
     }

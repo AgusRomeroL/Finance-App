@@ -35,6 +35,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.content.Intent
+import mx.budget.ui.capture.VoiceCaptureActivity
 import mx.budget.ui.search.SpeechRecognizerController
 
 /**
@@ -55,6 +57,7 @@ fun BottomActionBar(
     readOnly: Boolean = false,
     onActivate: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -69,6 +72,27 @@ fun BottomActionBar(
             onActivate = onActivate,
             modifier = Modifier.weight(1f)
         )
+        // Captura por voz en lenguaje natural (§G.3): abre el overlay de dictado,
+        // que arma la propuesta y la deja en la bandeja (propose-then-confirm).
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable {
+                    context.startActivity(
+                        Intent(context, VoiceCaptureActivity::class.java)
+                            .putExtra(VoiceCaptureActivity.EXTRA_SOURCE, "VOICE")
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Filled.Mic, "Capturar por voz",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
+            )
+        }
         // Botón "+" de captura con gradiente primary (look del FAB previo).
         Box(
             modifier = Modifier
