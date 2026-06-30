@@ -101,12 +101,12 @@ fun WalletFormSheet(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(top = 8.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             Text(
                 if (initial == null) "Nueva cuenta" else "Editar cuenta",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
             )
 
@@ -118,14 +118,23 @@ fun WalletFormSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Text(
-                "Tipo",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                KIND_OPTIONS.forEach { (k, label) ->
-                    KindChip(label = label, selected = k == kind, onClick = { kind = k })
+            // Grupo "Tipo": la etiqueta se mantiene pegada a sus chips (10dp),
+            // mientras el espaciado mayor (18dp) separa las secciones del form.
+            // verticalArrangement en la FlowRow es clave: sin él, las filas de
+            // chips que envuelven (con fontScale alto + bold) se tocan.
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Tipo",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    KIND_OPTIONS.forEach { (k, label) ->
+                        KindChip(label = label, selected = k == kind, onClick = { kind = k })
+                    }
                 }
             }
 
