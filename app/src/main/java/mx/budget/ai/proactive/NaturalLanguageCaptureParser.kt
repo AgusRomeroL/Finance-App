@@ -4,16 +4,44 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 /**
+ * Una persona (o "TODOS") con un % opcional, tal como lo nombra la frase. El
+ * nombre es CRUDO (sin resolver a memberId); [mx.budget.data.capture.BankCaptureManager]
+ * lo resuelve contra el roster con [mx.budget.ai.dispatch.AliasResolver].
+ *
+ * @param name  nombre como aparece en la frase, o el literal "TODOS" (toda la familia).
+ * @param share porcentaje 0-100 si la frase lo especifica; null = reparto equitativo.
+ */
+data class NameShare(
+    val name: String,
+    val share: Int? = null,
+)
+
+/**
  * Movimiento propuesto extraído de una frase en lenguaje natural (Apéndice G.3).
  *
- * @param amountMxn   monto positivo en MXN.
- * @param concept     comercio/descripción breve ("gasolina", "café").
- * @param occurredAt  epoch millis (hoy por default; "ayer"/"antier" lo retroceden).
+ * Los campos básicos (monto, concepto, fecha) los garantiza el parser determinista;
+ * los **enriquecidos** (notas, hints de categoría/wallet, beneficiarios, pagadores)
+ * solo los llena el camino LLM con contexto del hogar (§G.3, captura rica). El
+ * parser determinista los deja en sus defaults vacíos.
+ *
+ * @param amountMxn      monto positivo en MXN.
+ * @param concept        comercio/descripción breve ("gasolina", "café").
+ * @param occurredAt     epoch millis (hoy por default; "ayer"/"antier" lo retroceden).
+ * @param notes          detalle extra que no es el concepto, o null.
+ * @param categoryHint   nombre de categoría sugerido por el LLM (sin resolver), o null.
+ * @param walletHint     nombre de método de pago sugerido por el LLM (sin resolver), o null.
+ * @param beneficiaries  quién consume, con nombres crudos + % opcional (vacío si la frase no lo dice).
+ * @param payers         quién paga, con nombres crudos + % opcional (vacío si no se menciona).
  */
 data class ParsedNlCapture(
     val amountMxn: Double,
     val concept: String,
     val occurredAt: Long,
+    val notes: String? = null,
+    val categoryHint: String? = null,
+    val walletHint: String? = null,
+    val beneficiaries: List<NameShare> = emptyList(),
+    val payers: List<NameShare> = emptyList(),
 )
 
 /**

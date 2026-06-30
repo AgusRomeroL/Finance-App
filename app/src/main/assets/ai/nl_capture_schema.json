@@ -13,11 +13,53 @@
     },
     "concept": {
       "type": "string",
-      "description": "Comercio o descripción breve (1-40 caracteres)."
+      "description": "Descripción breve del gasto (1-40 caracteres), tomada de la frase."
+    },
+    "category": {
+      "type": "string",
+      "description": "Nombre EXACTO de una categoría del contexto del hogar, u omitir."
+    },
+    "wallet": {
+      "type": "string",
+      "description": "Nombre EXACTO de un método de pago del contexto del hogar, u omitir."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Detalle extra que no sea el concepto, u omitir."
+    },
+    "beneficiaries": {
+      "type": "array",
+      "description": "Quién consume el gasto. Omitir si la frase no lo dice.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre EXACTO de un miembro del contexto, o 'TODOS' para toda la familia."
+          },
+          "share": {
+            "type": "number",
+            "description": "Porcentaje entero opcional; si se omite se reparte por igual."
+          }
+        }
+      }
+    },
+    "payers": {
+      "type": "array",
+      "description": "Quién paga el gasto. Mismo formato que beneficiaries. Omitir si no se menciona.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "share": { "type": "number" }
+        }
+      }
     },
     "date": {
       "type": "string",
-      "description": "Fecha ISO YYYY-MM-DD, opcional."
+      "description": "Fecha ISO YYYY-MM-DD, opcional (la fecha se resuelve de forma determinista)."
     }
   }
 }

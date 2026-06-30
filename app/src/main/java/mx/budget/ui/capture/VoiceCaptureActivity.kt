@@ -76,6 +76,14 @@ class VoiceCaptureActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val source = intent.getStringExtra(EXTRA_SOURCE) ?: "VOICE"
 
+        // Ingesta headless: si llega texto por extra (automatización, pruebas adb,
+        // futuros productores tipo Tasker), lo procesa directo sin abrir el overlay.
+        val directText = intent.getStringExtra(EXTRA_TEXT)
+        if (!directText.isNullOrBlank()) {
+            submit(directText, source)
+            return
+        }
+
         setContent {
             BudgetAppTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
@@ -103,6 +111,9 @@ class VoiceCaptureActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_SOURCE = "extra_source"
+
+        /** Texto a ingerir sin UI (ingesta headless: automatización/pruebas). */
+        const val EXTRA_TEXT = "extra_text"
     }
 }
 

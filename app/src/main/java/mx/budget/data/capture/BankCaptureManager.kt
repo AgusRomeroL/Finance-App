@@ -5,12 +5,18 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import mx.budget.R
+import mx.budget.ai.dispatch.AliasResolver
+import mx.budget.ai.proactive.CaptureContext
+import mx.budget.ai.proactive.NameShare
 import mx.budget.ai.proactive.NlCaptureExtractor
 import mx.budget.ai.proactive.ParsedCharge
 import mx.budget.ai.proactive.RetroAttributionEngine
+import mx.budget.core.unaccent
+import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.dao.CategoryDao
 import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.MemberDao
@@ -23,6 +29,7 @@ import mx.budget.data.location.LocationProvider
 import mx.budget.data.location.LocationSource
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.QuincenaRepository
+import org.json.JSONObject
 import java.text.NumberFormat
 import java.util.Locale
 import java.util.UUID
@@ -121,21 +128,99 @@ class BankCaptureManager(
      * @param occurredAt si se provee, anula la fecha inferida del texto.
      */
     suspend fun ingestText(rawText: String, source: String, occurredAt: Long? = null) {
-        val parsed = nlCaptureExtractor.extract(rawText) ?: return
+        // Roster del hogar para (a) darle contexto al LLM y (b) resolver nombres→IDs.
+        // Excluimos EXTERNAL_* de la atribución (igual que [confirm]).
+        val members = memberDao.getActiveMembers(householdId)
+            .filter { !it.role.startsWith("EXTERNAL_") }
+        val categories = categoryDao.getAll(householdId)
         val wallets = paymentMethodDao.getActive(householdId)
+
+        val context = CaptureContext(
+            memberNames = members.map { it.displayName },
+            categoryNames = categories.map { it.displayName },
+            walletNames = wallets.map { it.displayName },
+        )
+        val parsed = nlCaptureExtractor.extract(rawText, context) ?: return
+
+        // Resolución determinista de los nombres crudos del LLM → IDs reales.
+        val resolver = AliasResolver(members = members, categories = categories, wallets = wallets)
+        val beneficiaryBps = resolveShares(parsed.beneficiaries, resolver, members)
+        val payerBps = resolveShares(parsed.payers, resolver, members)
+        val categoryId = parsed.categoryHint?.let { resolver.resolveCategory(it)?.id }
+            ?: resolveCategory(parsed.concept)
+        val walletId = parsed.walletHint?.let { resolver.resolveWallet(it)?.id }
+            ?: wallets.firstOrNull()?.id
+
+        Log.d(
+            "NlCapture",
+            "resuelto: categoría=$categoryId wallet=$walletId notas='${parsed.notes}' " +
+                "beneficiarios=$beneficiaryBps pagadores=$payerBps",
+        )
+
         val capture = PendingCaptureEntity(
             id = UUID.randomUUID().toString(),
             source = source,
             amountMxn = parsed.amountMxn,
             concept = parsed.concept,
             occurredAt = occurredAt ?: parsed.occurredAt,
-            suggestedWalletId = wallets.firstOrNull()?.id,
-            suggestedCategoryId = resolveCategory(parsed.concept),
+            suggestedWalletId = walletId,
+            suggestedCategoryId = categoryId,
             status = "PENDING",
             createdAt = System.currentTimeMillis(),
             rawText = rawText,
+            suggestedBeneficiaryJson = bpsToJson(beneficiaryBps),
+            suggestedPayerJson = bpsToJson(payerBps),
+            notes = parsed.notes,
         )
         enqueue(capture)
+    }
+
+    /** Serializa `{memberId: bps}` a JSON, o null si no hay atribución. */
+    private fun bpsToJson(bps: Map<String, Int>): String? =
+        if (bps.isEmpty()) null else JSONObject(bps as Map<*, *>).toString()
+
+    /**
+     * Marca una captura como CONFIRMED y cancela su notificación, SIN crear gasto:
+     * lo usa la ruta "revisar al confirmar", donde la hoja de captura ya registró el
+     * gasto (con posibles ediciones del usuario). Complementa a [confirm], que sí
+     * construye el gasto para las capturas simples.
+     */
+    suspend fun markConfirmedExternally(captureId: String) {
+        pendingDao.updateStatus(captureId, "CONFIRMED")
+        cancelNotification(captureId)
+    }
+
+    /**
+     * Resuelve los nombres crudos del LLM ([NameShare]) a un mapa `memberId → bps`
+     * (suma 10,000). Soporta el comodín "TODOS"/"familia" (= todos los miembros).
+     * Si ningún `share` viene explícito → reparto equitativo; si todos vienen →
+     * se reescalan; si vienen mezclados (algunos sí, otros no) → equitativo (seguro).
+     */
+    private fun resolveShares(
+        shares: List<NameShare>,
+        resolver: AliasResolver,
+        members: List<MemberEntity>,
+    ): Map<String, Int> {
+        if (shares.isEmpty()) return emptyMap()
+        // memberId → share (% explícito o null). LinkedHashMap conserva el orden.
+        val resolved = LinkedHashMap<String, Int?>()
+        for (ns in shares) {
+            val token = ns.name.trim().lowercase().unaccent()
+            if (token in ALL_TOKENS) {
+                members.forEach { m -> if (m.id !in resolved) resolved[m.id] = null }
+            } else {
+                val m = resolver.resolveMember(ns.name) ?: continue
+                // Un share explícito gana sobre un null previo (p.ej. de "TODOS").
+                resolved[m.id] = ns.share ?: resolved[m.id]
+            }
+        }
+        if (resolved.isEmpty()) return emptyMap()
+        val explicit = resolved.filterValues { it != null }
+        return when {
+            explicit.isEmpty() -> equalSplit(resolved.keys.toList())
+            explicit.size == resolved.size -> normalizeBps(resolved.mapValues { it.value!! })
+            else -> equalSplit(resolved.keys.toList())
+        }
     }
 
     // ── Confirmación / descarte (desde chip o notificación) ─────────────────────
@@ -338,6 +423,9 @@ class BankCaptureManager(
 
     companion object {
         const val CHANNEL_ID = "bank_capture"
+
+        /** Comodines que la frase usa para "toda la familia" (ya sin acentos). */
+        private val ALL_TOKENS = setOf("todos", "todas", "todo", "familia", "casa", "hogar")
 
         /**
          * Ventana corta (§G.4.2) para auto-adjuntar ubicación al confirmar una

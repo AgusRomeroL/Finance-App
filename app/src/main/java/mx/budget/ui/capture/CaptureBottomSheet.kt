@@ -118,6 +118,7 @@ fun CaptureBottomSheet(
     val attributionSuggestion by (viewModel?.attributionSuggestion
         ?: dummyStateFlow<CaptureSuggestion?>(null)).collectAsState()
     val canRegister by (viewModel?.canRegister ?: dummyStateFlow(false)).collectAsState()
+    val notes by (viewModel?.notes ?: dummyStateFlow("")).collectAsState()
     val operationState by (viewModel?.operationState
         ?: dummyStateFlow<CaptureOperationState>(CaptureOperationState.Idle)).collectAsState()
 
@@ -223,7 +224,9 @@ fun CaptureBottomSheet(
                         members = members,
                         payerShares = payerShares,
                         onPayerToggle = { viewModel?.onPayerToggled(it) },
-                        onPayerDelta = { id, d -> viewModel?.onPayerShareDelta(id, d) }
+                        onPayerDelta = { id, d -> viewModel?.onPayerShareDelta(id, d) },
+                        notes = notes,
+                        onNotesChange = { viewModel?.onNotesChange(it) }
                     )
                     Spacer(Modifier.height(16.dp))
                 }
@@ -774,9 +777,13 @@ private fun MoreSection(
     members: List<MemberEntity>,
     payerShares: Map<String, Int>,
     onPayerToggle: (String) -> Unit,
-    onPayerDelta: (String, Int) -> Unit
+    onPayerDelta: (String, Int) -> Unit,
+    notes: String,
+    onNotesChange: (String) -> Unit
 ) {
-    var open by rememberSaveable { mutableStateOf(false) }
+    // Abre por defecto si ya hay nota (p.ej. prellenada desde una captura NL), para
+    // que el usuario la vea sin tener que expandir.
+    var open by rememberSaveable(notes.isNotBlank()) { mutableStateOf(notes.isNotBlank()) }
     val payerNames = members.filter { it.id in payerShares.keys }.joinToString(", ") { it.displayName }
     val today = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale("es", "MX"))) }
     val payerOk = payerShares.isNotEmpty() && payerShares.values.sum() == 100
@@ -838,8 +845,21 @@ private fun MoreSection(
                         Text("Hoy · $today", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
+                Spacer(Modifier.height(18.dp))
+                // Notas libres (detalle que no es el concepto). Las captura NL puede
+                // prellenarlas desde la frase ("nota: aniversario").
+                CapMicroLabel("Notas")
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = onNotesChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Detalle opcional…") },
+                    minLines = 1,
+                    maxLines = 3,
+                )
                 Spacer(Modifier.height(12.dp))
-                Text("Elegir otra fecha y notas: próximamente.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Elegir otra fecha: próximamente.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(16.dp))
             }
         }

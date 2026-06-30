@@ -22,6 +22,8 @@ import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.data.local.entity.PendingCaptureEntity
+import org.json.JSONObject
 import mx.budget.data.location.LocationProvider
 import mx.budget.data.location.LocationSource
 import mx.budget.data.repository.CategoryRepository
@@ -113,7 +115,13 @@ class CaptureViewModel(
     private val categoryRepository: CategoryRepository,
     private val retroAttributionEngine: RetroAttributionEngine,
     private val locationProvider: LocationProvider,
-    private val householdId: String
+    private val householdId: String,
+    /**
+     * Callback opcional para cerrar el ciclo "revisar al confirmar" (§G.3): tras
+     * registrar un gasto que vino de una captura pendiente, marca esa captura como
+     * CONFIRMED (y cancela su notificación). null = la hoja no nació de una captura.
+     */
+    private val onPendingConfirmed: (suspend (String) -> Unit)? = null
 ) : ViewModel() {
 
     // ── Importe ingresado desde el numpad ──────────────────────────────────
@@ -142,6 +150,62 @@ class CaptureViewModel(
      * Truncada a 64 chars en el commit (contrato de ExpenseEntity).
      */
     val concept: StateFlow<String> = _concept.asStateFlow()
+
+    // ── Notas libres (viven bajo "Más") ────────────────────────────────────────
+
+    private val _notes = MutableStateFlow("")
+
+    /** Nota libre opcional del gasto (detalle que no es el concepto). */
+    val notes: StateFlow<String> = _notes.asStateFlow()
+
+    /** Actualiza la nota libre. */
+    fun onNotesChange(value: String) {
+        _notes.value = value.take(280)
+    }
+
+    // ── Captura pendiente en revisión (§G.3, "revisar al confirmar") ────────────
+    // Si la hoja se abrió prellenada desde una propuesta de la bandeja, guardamos su
+    // id para marcarla CONFIRMED al registrar (no se queda colgada en la bandeja).
+    private var pendingCaptureId: String? = null
+
+    /**
+     * Prellena la hoja desde una captura pendiente rica (§G.3): monto, concepto,
+     * categoría, wallet, beneficiarios/pagadores (bps→%) y notas. El usuario revisa
+     * y edita antes de registrar; al registrar se marca la captura CONFIRMED.
+     */
+    fun prefillFromPending(capture: PendingCaptureEntity) {
+        pendingCaptureId = capture.id
+        val a = capture.amountMxn
+        _rawAmount.value = if (a % 1.0 == 0.0) a.toLong().toString() else a.toString()
+        _concept.value = capture.concept.take(64)
+        _notes.value = capture.notes.orEmpty().take(280)
+        capture.suggestedCategoryId?.let { _selectedCategoryId.value = it }
+
+        val benef = jsonToPercent(capture.suggestedBeneficiaryJson)
+        if (benef.isNotEmpty()) _beneficiaryShares.value = benef
+        val payer = jsonToPercent(capture.suggestedPayerJson)
+        if (payer.isNotEmpty()) _payerShares.value = payer
+
+        // Wallet: si no vino pagador en la frase, sembramos al dueño de la cuenta
+        // (mismo default que [onWalletSelected]).
+        capture.suggestedWalletId?.let { walletId ->
+            _selectedWalletId.value = walletId
+            if (_payerShares.value.isEmpty()) {
+                val owner = wallets.value.firstOrNull { it.id == walletId }?.ownerMemberId
+                    ?: members.value.firstOrNull { it.role == "PAYER_ADULT" }?.id
+                if (owner != null) _payerShares.value = mapOf(owner to 100)
+            }
+        }
+    }
+
+    /** Parsea un JSON `{memberId: bps}` a `memberId → %` (suma 100), o vacío. */
+    private fun jsonToPercent(json: String?): Map<String, Int> {
+        if (json.isNullOrBlank()) return emptyMap()
+        val obj = runCatching { JSONObject(json) }.getOrNull() ?: return emptyMap()
+        val bps = LinkedHashMap<String, Int>()
+        obj.keys().forEach { k -> bps[k] = obj.optInt(k) }
+        return bpsToPercent(bps)
+    }
 
     // ── Sugerencia de atribución en vivo (Feature A, §F.4) ──────────────────
     //
@@ -477,6 +541,7 @@ class CaptureViewModel(
                     paymentMethodId = walletId,
                     status = "POSTED",
                     createdAt = nowEpoch,
+                    notes = _notes.value.trim().ifBlank { null },
                     latitude = fix?.latitude,
                     longitude = fix?.longitude,
                     placeLabel = fix?.placeLabel,
@@ -517,6 +582,13 @@ class CaptureViewModel(
                 // 7. Inserción atómica (valida bps internamente)
                 expenseRepository.insertWithAttributions(expense, attributions)
 
+                // 8. Si la hoja nació de una captura pendiente (§G.3), márcala
+                // CONFIRMED para sacarla de la bandeja (el gasto ya se registró aquí).
+                pendingCaptureId?.let { id ->
+                    runCatching { onPendingConfirmed?.invoke(id) }
+                    pendingCaptureId = null
+                }
+
                 _operationState.value = CaptureOperationState.Success(expenseId)
 
             } catch (e: Exception) {
@@ -541,10 +613,12 @@ class CaptureViewModel(
     fun onDismiss() {
         _rawAmount.value = "0"
         _concept.value = ""
+        _notes.value = ""
         _selectedWalletId.value = null
         _selectedCategoryId.value = null
         _beneficiaryShares.value = emptyMap()
         _payerShares.value = emptyMap()
+        pendingCaptureId = null
         _operationState.value = CaptureOperationState.Idle
     }
 

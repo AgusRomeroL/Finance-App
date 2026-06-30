@@ -142,7 +142,8 @@ class MainActivity : ComponentActivity() {
             app.categoryRepository,
             app.retroAttributionEngine,
             app.locationProvider,
-            app.householdId
+            app.householdId,
+            { id -> app.bankCaptureManager.markConfirmedExternally(id) }
         ))[CaptureViewModel::class.java]
     }
 
@@ -475,6 +476,7 @@ class CaptureViewModelFactory(
     private val retroAttributionEngine: RetroAttributionEngine,
     private val locationProvider: mx.budget.data.location.LocationProvider,
     private val householdId: String,
+    private val onPendingConfirmed: (suspend (String) -> Unit)? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -487,6 +489,7 @@ class CaptureViewModelFactory(
             retroAttributionEngine = retroAttributionEngine,
             locationProvider = locationProvider,
             householdId = householdId,
+            onPendingConfirmed = onPendingConfirmed,
         ) as T
     }
 }

@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.data.local.entity.PendingCaptureEntity
+import mx.budget.data.local.entity.hasRichCapture
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
@@ -275,6 +276,19 @@ fun DashboardScreen(
         showCapture = true
     }
 
+    // Confirmar una captura de la bandeja (§G.3): si trae datos ricos (beneficiarios/
+    // pagadores/notas extraídos por el LLM), abre la hoja PRELLENADA para revisar antes
+    // de registrar; si es simple (banco, o NL sin atribución), se confirma directo.
+    val onConfirmCapture: (String) -> Unit = { id ->
+        val cap = bankCaptures.firstOrNull { it.id == id }
+        if (cap != null && cap.hasRichCapture && captureViewModel != null) {
+            captureViewModel.prefillFromPending(cap)
+            showCapture = true
+        } else {
+            viewModel.confirmBankCapture(id)
+        }
+    }
+
     androidx.compose.runtime.CompositionLocalProvider(
         LocalExpenseRowClick provides { tx -> detailViewModel?.open(tx) }
     ) {
@@ -294,7 +308,7 @@ fun DashboardScreen(
                 onDismissSuggestion = viewModel::dismissProactiveSuggestion,
                 onOpenSuggestions = onOpenSuggestions,
                 bankCaptures = bankCaptures,
-                onConfirmCapture = viewModel::confirmBankCapture,
+                onConfirmCapture = onConfirmCapture,
                 onDismissCapture = viewModel::dismissBankCapture
             )
         } else {
@@ -313,7 +327,7 @@ fun DashboardScreen(
                 onDismissSuggestion = viewModel::dismissProactiveSuggestion,
                 onOpenSuggestions = onOpenSuggestions,
                 bankCaptures = bankCaptures,
-                onConfirmCapture = viewModel::confirmBankCapture,
+                onConfirmCapture = onConfirmCapture,
                 onDismissCapture = viewModel::dismissBankCapture
             )
         }

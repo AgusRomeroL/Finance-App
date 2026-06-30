@@ -61,7 +61,7 @@ import mx.budget.data.local.entity.SyncQueueEntity
         AttributionReviewEntity::class,
         PendingCaptureEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -218,6 +218,25 @@ abstract class BudgetDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `payment_method` ADD COLUMN `opening_balance_mxn` REAL NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v8 → v9: **captura rica de lenguaje natural** (Apéndice G.3). El LLM con
+         * contexto del hogar puede asignar beneficiarios, pagadores y notas desde la
+         * frase; se persisten en `pending_capture` para prellenar la hoja al confirmar.
+         *
+         * Tres columnas nuevas nullable por `ALTER TABLE ADD COLUMN` (Room valida
+         * columnas por nombre/tipo, no por orden; mismo patrón que v2→v3, v6→v7),
+         * coincidentes con `PendingCaptureEntity`: `suggested_beneficiary_json`,
+         * `suggested_payer_json` (atribución `{memberId: bps}` serializada) y `notes`.
+         * Sin índice. Las filas existentes quedan en null (capturas simples).
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pending_capture` ADD COLUMN `suggested_beneficiary_json` TEXT")
+                db.execSQL("ALTER TABLE `pending_capture` ADD COLUMN `suggested_payer_json` TEXT")
+                db.execSQL("ALTER TABLE `pending_capture` ADD COLUMN `notes` TEXT")
             }
         }
     }

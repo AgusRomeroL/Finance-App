@@ -79,6 +79,22 @@ data class PendingCaptureEntity(
     @ColumnInfo(name = "recurrence_id")
     val recurrenceId: String? = null,
 
+    // ── Captura rica de lenguaje natural (§G.3) ─────────────────────────────────
+    // El LLM con contexto del hogar puede asignar beneficiarios/pagadores y notas
+    // desde la frase. Se guardan resueltos (memberId→bps como JSON) para prellenar
+    // la hoja de captura al confirmar (propose-then-confirm con revisión).
+
+    /** VOICE/WIDGET/WATCH: atribución BENEFICIARY como JSON `{memberId: bps}`, o null. */
+    @ColumnInfo(name = "suggested_beneficiary_json")
+    val suggestedBeneficiaryJson: String? = null,
+
+    /** VOICE/WIDGET/WATCH: atribución PAYER como JSON `{memberId: bps}`, o null. */
+    @ColumnInfo(name = "suggested_payer_json")
+    val suggestedPayerJson: String? = null,
+
+    /** Nota libre extraída de la frase (detalle que no es el concepto), o null. */
+    val notes: String? = null,
+
     // ── Ubicación opcional (§G.4.2) ─────────────────────────────────────────────
 
     val latitude: Double? = null,
@@ -92,3 +108,13 @@ data class PendingCaptureEntity(
     @ColumnInfo(name = "location_source")
     val locationSource: String? = null,
 )
+
+/**
+ * `true` si la captura trae datos ricos del LLM (beneficiarios/pagadores/notas)
+ * que ameritan una revisión en la hoja prellenada antes de registrar. Las
+ * capturas simples (banco, o NL sin atribución) se confirman directo.
+ */
+val PendingCaptureEntity.hasRichCapture: Boolean
+    get() = !suggestedBeneficiaryJson.isNullOrBlank() ||
+        !suggestedPayerJson.isNullOrBlank() ||
+        !notes.isNullOrBlank()
