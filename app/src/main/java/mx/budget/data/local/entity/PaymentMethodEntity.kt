@@ -80,6 +80,15 @@ data class PaymentMethodEntity(
     @ColumnInfo(name = "current_balance_mxn")
     val currentBalanceMxn: Double = 0.0,
 
+    /**
+     * Saldo inicial (ancla) declarado por el usuario al dar de alta/editar el
+     * wallet. Es el punto de partida de la identidad contable
+     * `saldo = saldo_inicial + Σ ingresos − Σ gastos`. En débito/efectivo es el
+     * dinero disponible hoy; en crédito es la deuda actual. Migración v7→v8.
+     */
+    @ColumnInfo(name = "opening_balance_mxn", defaultValue = "0")
+    val openingBalanceMxn: Double = 0.0,
+
     /** Tasa de interés anual si aplica. */
     @ColumnInfo(name = "interest_apr")
     val interestApr: Double? = null,

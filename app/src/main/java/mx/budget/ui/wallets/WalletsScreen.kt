@@ -5,8 +5,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,11 +32,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -44,7 +49,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.WalletBalanceInfo
 import mx.budget.ui.dashboard.iconForCategory
@@ -116,10 +124,30 @@ fun WalletsScreen(
     val liquidTotal by viewModel.liquidTotal.collectAsState()
     val selected by viewModel.selected.collectAsState()
     val movements by viewModel.movements.collectAsState()
+    val entities by viewModel.entities.collectAsState()
 
     val expanded = windowWidthDp >= 600.dp
 
-    Scaffold(containerColor = MaterialTheme.colorScheme.surface) { inner ->
+    // Formulario de alta/edición: null = cerrado; Some(null) = nuevo; Some(wallet) = editar.
+    var showForm by remember { mutableStateOf(false) }
+    var formInitial by remember { mutableStateOf<PaymentMethodEntity?>(null) }
+    val openEdit: (String) -> Unit = { id ->
+        formInitial = entities.firstOrNull { it.id == id }
+        showForm = true
+    }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { formInitial = null; showForm = true },
+                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                text = { Text("Nueva cuenta") },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        },
+    ) { inner ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -136,11 +164,13 @@ fun WalletsScreen(
                         revolvingDebt = revolvingDebt,
                         selectedId = selected?.paymentMethodId,
                         onSelect = viewModel::selectWallet,
+                        onEdit = openEdit,
                         modifier = Modifier.weight(0.62f).fillMaxHeight(),
                     )
                     DetailPane(
                         wallet = selected,
                         movements = movements,
+                        onEdit = openEdit,
                         modifier = Modifier.weight(0.38f).fillMaxHeight(),
                     )
                 }
@@ -151,10 +181,23 @@ fun WalletsScreen(
                     revolvingDebt = revolvingDebt,
                     selectedId = null,
                     onSelect = viewModel::selectWallet,
+                    onEdit = openEdit,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
         }
+    }
+
+    if (showForm) {
+        WalletFormSheet(
+            initial = formInitial,
+            householdId = viewModel.household,
+            onSave = { wallet ->
+                viewModel.saveWallet(wallet)
+                showForm = false
+            },
+            onDismiss = { showForm = false },
+        )
     }
 
     // Compacto: detalle en bottom sheet.
@@ -168,6 +211,7 @@ fun WalletsScreen(
             MovementsPanel(
                 wallet = selected,
                 movements = movements,
+                onEdit = { selected?.let { openEdit(it.paymentMethodId) } },
                 // Acota la altura: el LazyColumn interno necesita un máximo finito
                 // dentro del ColumnScope del sheet (si no, mide con altura infinita).
                 modifier = Modifier
@@ -226,6 +270,7 @@ private fun WalletList(
     revolvingDebt: Double,
     selectedId: String?,
     onSelect: (String) -> Unit,
+    onEdit: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Agrupa por sección preservando el orden definido; el resto cae en "Otras".
@@ -262,6 +307,7 @@ private fun WalletList(
                     wallet = w,
                     selected = w.paymentMethodId == selectedId,
                     onClick = { onSelect(w.paymentMethodId) },
+                    onLongClick = { onEdit(w.paymentMethodId) },
                     modifier = Modifier.animateItem(
                         fadeInSpec = spring(stiffness = 380f),
                         fadeOutSpec = spring(stiffness = 380f),
@@ -327,11 +373,13 @@ private fun SectionHeader(label: String) {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WalletCard(
     wallet: WalletBalanceInfo,
     selected: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.secondaryContainer
@@ -346,7 +394,7 @@ private fun WalletCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(bg)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -435,6 +483,7 @@ private fun UtilizationBar(pct: Double, limit: Double) {
 private fun DetailPane(
     wallet: WalletBalanceInfo?,
     movements: List<ExpenseWithDetails>,
+    onEdit: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -451,6 +500,7 @@ private fun DetailPane(
             MovementsPanel(
                 wallet = wallet,
                 movements = movements,
+                onEdit = { wallet?.let { onEdit(it.paymentMethodId) } },
                 modifier = Modifier.fillMaxSize().padding(16.dp),
             )
         }
@@ -470,20 +520,40 @@ private fun DetailPane(
 private fun MovementsPanel(
     wallet: WalletBalanceInfo?,
     movements: List<ExpenseWithDetails>,
+    onEdit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
-        Text(
-            wallet?.displayName ?: "",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-        )
-        Text(
-            wallet?.balance?.toMxn() ?: "",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    wallet?.displayName ?: "",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                )
+                Text(
+                    wallet?.balance?.toMxn() ?: "",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    .clickable(onClick = onEdit),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.Edit,
+                    contentDescription = "Editar cuenta",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
         Spacer(Modifier.height(12.dp))
         if (movements.isEmpty()) {
             Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {

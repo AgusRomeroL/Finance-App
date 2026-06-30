@@ -10,8 +10,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import mx.budget.data.local.dao.ExpenseAttributionDao
 import mx.budget.data.local.dao.ExpenseDao
+import mx.budget.data.local.dao.PaymentMethodDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.repository.WalletRepository
 
 /**
  * Orquestador del push offline-first (Room → Firestore).
@@ -35,7 +37,9 @@ class SyncManager(
     private val syncQueueDao: SyncQueueDao,
     private val expenseDao: ExpenseDao,
     private val attributionDao: ExpenseAttributionDao,
-    private val remoteExpenseRepository: ExpenseRepository
+    private val remoteExpenseRepository: ExpenseRepository,
+    private val paymentMethodDao: PaymentMethodDao,
+    private val remoteWalletRepository: WalletRepository
 ) {
 
     private val mutex = Mutex()
@@ -88,6 +92,16 @@ class SyncManager(
                             //  intentamos el delete remoto y solo quitamos la fila en éxito.
                             remoteExpenseRepository.deleteAndRevertBalance(row.entityId)
                             syncQueueDao.delete(row.id)
+                        }
+
+                        row.entityType == "WALLET" && row.operation == "UPSERT" -> {
+                            val wallet = paymentMethodDao.getById(row.entityId)
+                            if (wallet == null) {
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteWalletRepository.insert(wallet)
+                                syncQueueDao.delete(row.id)
+                            }
                         }
 
                         else -> {

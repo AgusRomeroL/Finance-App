@@ -196,7 +196,8 @@ class BudgetApplication : Application() {
                 BudgetDatabase.MIGRATION_3_4,
                 BudgetDatabase.MIGRATION_4_5,
                 BudgetDatabase.MIGRATION_5_6,
-                BudgetDatabase.MIGRATION_6_7
+                BudgetDatabase.MIGRATION_6_7,
+                BudgetDatabase.MIGRATION_7_8
             )
             .build()
 
@@ -222,7 +223,11 @@ class BudgetApplication : Application() {
         // Repositorios públicos = implementaciones Room (offline-first).
         quincenaRepository = QuincenaRepositoryImpl(database.quincenaDao())
         memberRepository = MemberRepositoryImpl(database.memberDao())
-        walletRepository = WalletRepositoryImpl(database.paymentMethodDao())
+        walletRepository = WalletRepositoryImpl(
+            dao = database.paymentMethodDao(),
+            syncQueueDao = syncQueueDao,
+            db = database
+        )
         categoryRepository = CategoryRepositoryImpl(database.categoryDao())
         recurrenceRepository = RecurrenceRepositoryImpl(database.recurrenceTemplateDao())
         expenseRepository = ExpenseRepositoryImpl(
@@ -312,6 +317,7 @@ class BudgetApplication : Application() {
         // Lado nube (Firestore) — usado únicamente por el SyncManager para push.
         val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
         remoteExpenseRepository = mx.budget.data.remote.ExpenseRepositoryFirestore(firestore)
+        val remoteWalletRepository = mx.budget.data.remote.WalletRepositoryFirestore(firestore)
 
         // Arranca el drenado del outbox (por conectividad + intento inicial).
         syncManager = SyncManager(
@@ -320,7 +326,9 @@ class BudgetApplication : Application() {
             syncQueueDao = syncQueueDao,
             expenseDao = expenseDao,
             attributionDao = attributionDao,
-            remoteExpenseRepository = remoteExpenseRepository
+            remoteExpenseRepository = remoteExpenseRepository,
+            paymentMethodDao = database.paymentMethodDao(),
+            remoteWalletRepository = remoteWalletRepository
         )
 
         // Dirección PULL (Firestore → Room). Se arranca como objeto

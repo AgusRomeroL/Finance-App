@@ -61,7 +61,7 @@ import mx.budget.data.local.entity.SyncQueueEntity
         AttributionReviewEntity::class,
         PendingCaptureEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -202,6 +202,22 @@ abstract class BudgetDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `expense` ADD COLUMN `longitude` REAL")
                 db.execSQL("ALTER TABLE `expense` ADD COLUMN `place_label` TEXT")
                 db.execSQL("ALTER TABLE `expense` ADD COLUMN `location_source` TEXT")
+            }
+        }
+
+        /**
+         * v7 → v8: **saldo inicial (ancla) del wallet**. Añade
+         * `payment_method.opening_balance_mxn` — el punto de partida que el usuario
+         * declara al alta/edición, base de `saldo = inicial + Σ ingresos − Σ gastos`.
+         *
+         * Columna nueva por `ALTER TABLE ADD COLUMN` con `NOT NULL DEFAULT 0` (los 13
+         * wallets sembrados arrancan en 0). El `DEFAULT 0` debe coincidir con el
+         * `@ColumnInfo(defaultValue = "0")` de `PaymentMethodEntity` para que el
+         * identityHash de `app/schemas/8.json` valide. Sin índice.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `payment_method` ADD COLUMN `opening_balance_mxn` REAL NOT NULL DEFAULT 0")
             }
         }
     }
