@@ -96,4 +96,14 @@ class WalletsViewModel(
     fun deactivateWallet(wallet: PaymentMethodEntity) {
         viewModelScope.launch { walletRepository.update(wallet.copy(isActive = false)) }
     }
+
+    /**
+     * Conciliación manual (RF-42): re-ancla el saldo al valor real del estado de
+     * cuenta. Es la válvula de corrección del modelo guardado+mantenido (Fase 2),
+     * que puede derivar al editar/borrar gastos. Fija `current_balance_mxn` absoluto
+     * (en crédito = deuda real) y encola sync.
+     */
+    fun reconcileWallet(paymentMethodId: String, newBalance: Double) {
+        viewModelScope.launch { walletRepository.reconcileBalance(paymentMethodId, newBalance) }
+    }
 }

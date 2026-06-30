@@ -33,19 +33,25 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -135,6 +141,8 @@ fun WalletsScreen(
         formInitial = entities.firstOrNull { it.id == id }
         showForm = true
     }
+    // Diálogo de conciliación manual (RF-42) sobre el wallet seleccionado.
+    var showReconcile by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -171,6 +179,7 @@ fun WalletsScreen(
                         wallet = selected,
                         movements = movements,
                         onEdit = openEdit,
+                        onReconcile = { showReconcile = true },
                         modifier = Modifier.weight(0.38f).fillMaxHeight(),
                     )
                 }
@@ -200,6 +209,18 @@ fun WalletsScreen(
         )
     }
 
+    val toReconcile = selected
+    if (showReconcile && toReconcile != null) {
+        ReconcileDialog(
+            wallet = toReconcile,
+            onConfirm = { newBalance ->
+                viewModel.reconcileWallet(toReconcile.paymentMethodId, newBalance)
+                showReconcile = false
+            },
+            onDismiss = { showReconcile = false },
+        )
+    }
+
     // Compacto: detalle en bottom sheet.
     if (!expanded && selected != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -212,6 +233,7 @@ fun WalletsScreen(
                 wallet = selected,
                 movements = movements,
                 onEdit = { selected?.let { openEdit(it.paymentMethodId) } },
+                onReconcile = { showReconcile = true },
                 // Acota la altura: el LazyColumn interno necesita un máximo finito
                 // dentro del ColumnScope del sheet (si no, mide con altura infinita).
                 modifier = Modifier
@@ -484,6 +506,7 @@ private fun DetailPane(
     wallet: WalletBalanceInfo?,
     movements: List<ExpenseWithDetails>,
     onEdit: (String) -> Unit,
+    onReconcile: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -501,6 +524,7 @@ private fun DetailPane(
                 wallet = wallet,
                 movements = movements,
                 onEdit = { wallet?.let { onEdit(it.paymentMethodId) } },
+                onReconcile = onReconcile,
                 modifier = Modifier.fillMaxSize().padding(16.dp),
             )
         }
@@ -521,6 +545,7 @@ private fun MovementsPanel(
     wallet: WalletBalanceInfo?,
     movements: List<ExpenseWithDetails>,
     onEdit: () -> Unit,
+    onReconcile: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -538,21 +563,9 @@ private fun MovementsPanel(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                    .clickable(onClick = onEdit),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Filled.Edit,
-                    contentDescription = "Editar cuenta",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
+            HeaderAction(Icons.Filled.Balance, "Conciliar saldo", onReconcile)
+            Spacer(Modifier.width(8.dp))
+            HeaderAction(Icons.Filled.Edit, "Editar cuenta", onEdit)
         }
         Spacer(Modifier.height(12.dp))
         if (movements.isEmpty()) {
@@ -621,6 +634,67 @@ private fun MovementRow(item: ExpenseWithDetails) {
             maxLines = 1,
         )
     }
+}
+
+@Composable
+private fun HeaderAction(icon: ImageVector, description: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/**
+ * Conciliación manual (RF-42): fija el saldo real del wallet. En crédito pide la
+ * deuda real. Reusa el patrón de `EditAmountDialog` del calendario.
+ */
+@Composable
+private fun ReconcileDialog(
+    wallet: WalletBalanceInfo,
+    onConfirm: (Double) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val credit = !isLiquid(wallet.kind)
+    var text by remember { mutableStateOf(wallet.balance.toLong().toString()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Conciliar saldo") },
+        text = {
+            Column {
+                Text(
+                    wallet.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { new -> text = new.filter { it.isDigit() || it == '.' } },
+                    label = { Text(if (credit) "Deuda real (MXN)" else "Saldo real (MXN)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { text.toDoubleOrNull()?.let(onConfirm) },
+                enabled = text.toDoubleOrNull() != null,
+            ) { Text("Conciliar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
 }
 
 @Composable
