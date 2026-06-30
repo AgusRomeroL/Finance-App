@@ -118,6 +118,8 @@ fun CalendarScreen(
     val visible = remember(planned, selected) {
         selected?.let { sel -> planned.filter { epochToLocalDate(it.occurredAt) == sel } } ?: planned
     }
+    // Monto reservado (PLANNED) de lo que se está mostrando — respeta el filtro por día (G.2.4).
+    val plannedSum = remember(visible) { visible.sumOf { it.amountMxn } }
 
     editing?.let { item ->
         EditAmountDialog(
@@ -153,7 +155,8 @@ fun CalendarScreen(
         ) {
             Header(
                 onBack = onBack,
-                title = selected?.let { "Pagos: ${it.formatLong()}" } ?: "${planned.size} planeados",
+                title = selected?.let { "${it.formatLong()} · ${plannedSum.toMxn()}" }
+                    ?: "${plannedSum.toMxn()} planeados",
                 onOpenTemplates = onOpenTemplates,
             )
 

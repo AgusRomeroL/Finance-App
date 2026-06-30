@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -920,7 +922,20 @@ private fun HeroKpi(state: DashboardUiState.Success) {
     val q = state.quincena
     val income = (q?.projectedIncomeMxn?.takeIf { it > 0.0 } ?: q?.actualIncomeMxn ?: 0.0)
     val spent = state.postedTotal
-    val available = income - spent
+    val planned = state.plannedTotal
+    val hasPlanned = planned > 0.0
+    val gross = income - spent          // histórico: Ingresos − Gastos POSTED
+    val net = gross - planned           // budget-aware: además reserva lo PLANNED (G.2.4)
+    // Toggle de presentación. Default = neto, según el propósito quincenal (reservar lo previsto
+    // ANTES de pagarlo). Solo aplica si hay PLANNED; sin ellos el KPI se comporta como siempre.
+    var showNet by rememberSaveable { mutableStateOf(true) }
+    val shown = if (hasPlanned && showNet) net else gross
+    // Interpola la cifra al alternar el modo — movimiento expresivo (M3), nunca un salto.
+    val animatedShown by animateFloatAsState(
+        targetValue = shown.toFloat(),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "heroAmount",
+    )
     val progress = remember(q?.id) { computeProgress(q) }
 
     Column {
@@ -939,7 +954,7 @@ private fun HeroKpi(state: DashboardUiState.Success) {
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                available.toGrouped(),
+                animatedShown.toDouble().toGrouped(),
                 style = MaterialTheme.typography.displayLarge.copy(
                     fontWeight = FontWeight.Light,
                     fontSize = 66.sp,
@@ -976,6 +991,23 @@ private fun HeroKpi(state: DashboardUiState.Success) {
                 color = expenseC.color,
                 maxLines = 1, softWrap = false
             )
+            // Término "Reservado" sólo en modo neto: lo PLANNED no es ingreso ni gasto ejecutado,
+            // por eso tono neutral (tertiary) y la etiqueta porta el significado, no el color.
+            AnimatedVisibility(visible = hasPlanned && showNet) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("  −  ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "Reservado ${planned.toMxn()}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.tertiary,
+                        maxLines = 1, softWrap = false
+                    )
+                }
+            }
+        }
+        if (hasPlanned) {
+            Spacer(Modifier.height(14.dp))
+            ReserveToggle(showNet = showNet, onChange = { showNet = it })
         }
         Spacer(Modifier.height(20.dp))
         QuincenaRhythm(progress = progress)
@@ -986,6 +1018,42 @@ private fun HeroKpi(state: DashboardUiState.Success) {
             viewingActive = state.viewingActive
         )
     }
+}
+
+/**
+ * Segmentado mini para el KPI (G.2.4): "Neto" reserva lo PLANNED del periodo; "Bruto" sólo resta
+ * lo ya pagado (POSTED). Redundancia no-cromática: el segmento activo va relleno + en negrita,
+ * no depende sólo del color.
+ */
+@Composable
+private fun ReserveToggle(showNet: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(3.dp)
+    ) {
+        ReserveSegment("Neto", selected = showNet) { onChange(true) }
+        ReserveSegment("Bruto", selected = !showNet) { onChange(false) }
+    }
+}
+
+@Composable
+private fun ReserveSegment(label: String, selected: Boolean, onClick: () -> Unit) {
+    val base = Modifier.clip(RoundedCornerShape(50))
+    val withBg = if (selected) base.background(MaterialTheme.colorScheme.primary) else base
+    Text(
+        label,
+        style = MaterialTheme.typography.labelLarge.copy(
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+        ),
+        color = if (selected) MaterialTheme.colorScheme.onPrimary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1, softWrap = false,
+        modifier = withBg
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+    )
 }
 
 @Composable
@@ -1766,12 +1834,23 @@ internal fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) 
 // Tarjeta de salud colapsada (compacto)
 // ─────────────────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CollapsedHealthCard(state: DashboardUiState.Success) {
     val q = state.quincena
     val income = (q?.projectedIncomeMxn?.takeIf { it > 0.0 } ?: q?.actualIncomeMxn ?: 0.0)
     val spent = state.postedTotal
-    val available = income - spent
+    val planned = state.plannedTotal
+    val hasPlanned = planned > 0.0
+    val gross = income - spent
+    val net = gross - planned           // budget-aware: reserva lo PLANNED (G.2.4)
+    var showNet by rememberSaveable { mutableStateOf(true) }
+    val shown = if (hasPlanned && showNet) net else gross
+    val animatedShown by animateFloatAsState(
+        targetValue = shown.toFloat(),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "heroAmountCompact",
+    )
     val progress = remember(q?.id) { computeProgress(q) }
     val pct = (progress.fraction * 100).toInt()
     val incomeC = amountSemantic(FinancialTone.INCOME)
@@ -1809,7 +1888,7 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
             )
             Spacer(Modifier.width(4.dp))
             Text(
-                available.toGrouped(),
+                animatedShown.toDouble().toGrouped(),
                 style = MaterialTheme.typography.displayMedium.copy(
                     fontWeight = FontWeight.Light, fontSize = 52.sp
                 ),
@@ -1824,18 +1903,32 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
             )
         }
         Spacer(Modifier.height(8.dp))
-        Row {
+        FlowRow(verticalArrangement = Arrangement.Center) {
             Text(
                 "${incomeC.sign} ${income.toMxn()}",
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = incomeC.color
+                color = incomeC.color, maxLines = 1, softWrap = false
             )
             Text("   ", style = MaterialTheme.typography.bodySmall)
             Text(
                 "${expenseC.sign} ${spent.toMxn()}",
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = expenseC.color
+                color = expenseC.color, maxLines = 1, softWrap = false
             )
+            AnimatedVisibility(visible = hasPlanned && showNet) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("   ", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "− ${planned.toMxn()} reservado",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.tertiary, maxLines = 1, softWrap = false
+                    )
+                }
+            }
+        }
+        if (hasPlanned) {
+            Spacer(Modifier.height(12.dp))
+            ReserveToggle(showNet = showNet, onChange = { showNet = it })
         }
         Spacer(Modifier.height(16.dp))
         Box(
