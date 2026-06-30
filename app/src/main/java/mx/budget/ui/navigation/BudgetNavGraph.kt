@@ -66,6 +66,7 @@ object BudgetDestinations {
 fun BudgetNavGraph(
     dashboardViewModel: DashboardViewModel,
     captureViewModel: CaptureViewModel,
+    expenseDetailViewModel: mx.budget.ui.detail.ExpenseDetailViewModel? = null,
     attributionReviewViewModel: AttributionReviewViewModel,
     searchViewModel: SearchViewModel,
     calendarViewModel: CalendarViewModel,
@@ -82,7 +83,9 @@ fun BudgetNavGraph(
     reminderLeadDays: Int = 2,
     onReminderLeadChange: (Int) -> Unit = {},
     calendarMirrorEnabled: Boolean = false,
-    onCalendarMirrorToggle: (Boolean) -> Unit = {}
+    onCalendarMirrorToggle: (Boolean) -> Unit = {},
+    locationLevel: String = "NONE",
+    onLocationLevelChange: (String) -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -109,6 +112,7 @@ fun BudgetNavGraph(
             DashboardScreen(
                 viewModel = dashboardViewModel,
                 captureViewModel = captureViewModel,
+                detailViewModel = expenseDetailViewModel,
                 windowWidthDp = windowWidthDp.dp,
                 currentRoute = currentRoute,
                 onNavigate = onNavigate,
@@ -189,7 +193,9 @@ fun BudgetNavGraph(
                 reminderLeadDays = reminderLeadDays,
                 onReminderLeadChange = onReminderLeadChange,
                 calendarMirrorEnabled = calendarMirrorEnabled,
-                onCalendarMirrorToggle = onCalendarMirrorToggle
+                onCalendarMirrorToggle = onCalendarMirrorToggle,
+                locationLevel = locationLevel,
+                onLocationLevelChange = onLocationLevelChange
             )
         }
     }

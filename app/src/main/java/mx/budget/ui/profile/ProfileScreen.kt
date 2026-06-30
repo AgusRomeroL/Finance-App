@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
@@ -64,9 +65,19 @@ fun ProfileScreen(
     reminderLeadDays: Int = 2,
     onReminderLeadChange: (Int) -> Unit = {},
     calendarMirrorEnabled: Boolean = false,
-    onCalendarMirrorToggle: (Boolean) -> Unit = {}
+    onCalendarMirrorToggle: (Boolean) -> Unit = {},
+    locationLevel: String = "NONE",
+    onLocationLevelChange: (String) -> Unit = {}
 ) {
     var showLeadDialog by remember { mutableStateOf(false) }
+    var showLocationDialog by remember { mutableStateOf(false) }
+    if (showLocationDialog) {
+        LocationLevelDialog(
+            current = locationLevel,
+            onSelect = { level -> onLocationLevelChange(level); showLocationDialog = false },
+            onDismiss = { showLocationDialog = false },
+        )
+    }
     if (showLeadDialog) {
         ReminderLeadDialog(
             current = reminderLeadDays,
@@ -356,6 +367,60 @@ fun ProfileScreen(
         }
 
         Spacer(Modifier.height(20.dp))
+
+        // Card de ubicación del gasto (Apéndice G.4) — opt-in por nivel.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(22.dp)
+        ) {
+            Text(
+                "UBICACIÓN",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 1.6.sp
+            )
+            Spacer(Modifier.height(14.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable { showLocationDialog = true }
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.LocationOn, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Ubicación del gasto",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        locationLevelLabel(locationLevel),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
         Text(
             "Los colores de ingreso, gasto y alerta permanecen estables en ambos modos.",
             style = MaterialTheme.typography.bodySmall,
@@ -363,6 +428,58 @@ fun ProfileScreen(
             modifier = Modifier.padding(horizontal = 4.dp)
         )
     }
+}
+
+/** Subtítulo legible del nivel de ubicación elegido. */
+private fun locationLevelLabel(level: String): String = when (level) {
+    "WHILE_IN_USE" -> "Solo al usar — fija el lugar al capturar o confirmar en la app"
+    "PERSISTENT" -> "Persistente — también en segundo plano (banco/reloj)"
+    else -> "Desactivada — los gastos no guardan ubicación"
+}
+
+/** Diálogo de selección del nivel de captura de ubicación (§G.4.2). */
+@Composable
+private fun LocationLevelDialog(current: String, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+    val options = listOf(
+        "NONE" to "Desactivada",
+        "WHILE_IN_USE" to "Solo al usar (recomendado)",
+        "PERSISTENT" to "Persistente (segundo plano)",
+    )
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Ubicación del gasto") },
+        text = {
+            Column {
+                Text(
+                    "La ubicación ayuda a recordar y categorizar tus gastos. Es opcional y privada (se queda en tu hogar).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp, start = 8.dp, end = 8.dp)
+                )
+                options.forEach { (value, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onSelect(value) }
+                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.RadioButton(selected = value == current, onClick = { onSelect(value) })
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cerrar") }
+        }
+    )
 }
 
 /** Etiqueta legible del lead global (días). */

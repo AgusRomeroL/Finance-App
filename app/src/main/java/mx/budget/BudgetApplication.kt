@@ -140,6 +140,14 @@ class BudgetApplication : Application() {
         private set
 
     /**
+     * Proveedor de ubicación on-device (Apéndice G.4). Lo comparten la captura
+     * in-app (CaptureViewModel), la captura bancaria (BankCaptureManager) y el
+     * detalle del gasto (añadir ubicación manual). Opt-in por nivel desde Perfil.
+     */
+    lateinit var locationProvider: mx.budget.data.location.LocationProvider
+        private set
+
+    /**
      * Razonador proactivo con Gemini Nano on-device (Capa 3, §F.8). Envuelve el
      * ranking SQL determinista de Feature C: el LLM re-prioriza y reexplica los
      * candidatos sin inventar gastos. Si el dispositivo no expone Gemini Nano
@@ -187,7 +195,8 @@ class BudgetApplication : Application() {
                 BudgetDatabase.MIGRATION_2_3,
                 BudgetDatabase.MIGRATION_3_4,
                 BudgetDatabase.MIGRATION_4_5,
-                BudgetDatabase.MIGRATION_5_6
+                BudgetDatabase.MIGRATION_5_6,
+                BudgetDatabase.MIGRATION_6_7
             )
             .build()
 
@@ -267,6 +276,13 @@ class BudgetApplication : Application() {
             systemPrompt = nlCapturePrompt,
         )
 
+        // Proveedor de ubicación on-device (Apéndice G.4). Construido antes que la
+        // captura bancaria porque ésta lo usa para el fix al confirmar/ingresar.
+        locationProvider = mx.budget.data.location.LocationProvider(
+            context = this,
+            settings = settingsRepository,
+        )
+
         BankCaptureManager.ensureChannel(this)
         bankCaptureManager = BankCaptureManager(
             context = this,
@@ -280,6 +296,7 @@ class BudgetApplication : Application() {
             engine = retroAttributionEngine,
             householdId = householdId,
             nlCaptureExtractor = nlCaptureExtractor,
+            locationProvider = locationProvider,
         )
 
         // Materializador de recurrentes → gastos PLANNED (Apéndice G.2, Fase 1).

@@ -22,6 +22,8 @@ import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.data.location.LocationProvider
+import mx.budget.data.location.LocationSource
 import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
@@ -100,6 +102,7 @@ data class CaptureSuggestion(
  * @param memberRepository   Repositorio para listar miembros del hogar.
  * @param categoryRepository Repositorio para listar categorías.
  * @param retroAttributionEngine Motor de inferencia para la sugerencia en vivo (Feature A).
+ * @param locationProvider   Proveedor de ubicación on-device (§G.4); fix al registrar.
  * @param householdId        ID del hogar activo.
  */
 class CaptureViewModel(
@@ -109,6 +112,7 @@ class CaptureViewModel(
     private val memberRepository: MemberRepository,
     private val categoryRepository: CategoryRepository,
     private val retroAttributionEngine: RetroAttributionEngine,
+    private val locationProvider: LocationProvider,
     private val householdId: String
 ) : ViewModel() {
 
@@ -457,6 +461,11 @@ class CaptureViewModel(
                 val categoryName = categories.value.firstOrNull { it.id == categoryId }?.displayName
                 val conceptValue = _concept.value.trim().ifBlank { categoryName ?: "Gasto" }.take(64)
 
+                // Ubicación (§G.4): el sheet está en foreground → fix fresco si el
+                // nivel/permiso lo permiten. Best-effort: si no, queda NONE y la
+                // captura procede igual.
+                val fix = locationProvider.currentFix(requireForeground = true)
+
                 val expense = ExpenseEntity(
                     id = expenseId,
                     householdId = householdId,
@@ -467,7 +476,11 @@ class CaptureViewModel(
                     amountMxn = amount,
                     paymentMethodId = walletId,
                     status = "POSTED",
-                    createdAt = nowEpoch
+                    createdAt = nowEpoch,
+                    latitude = fix?.latitude,
+                    longitude = fix?.longitude,
+                    placeLabel = fix?.placeLabel,
+                    locationSource = if (fix != null) LocationSource.CAPTURE else LocationSource.NONE,
                 )
 
                 // 6. Construir atribuciones de AMBAS dimensiones desde los shares (%).

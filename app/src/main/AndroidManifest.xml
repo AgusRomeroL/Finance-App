@@ -16,6 +16,13 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
+    <!-- Ubicación del gasto (Apéndice G.4). Opt-in por nivel desde Perfil:
+         "Solo al usar" pide FINE+COARSE en runtime; "Persistente" añade
+         BACKGROUND_LOCATION (flujo aparte, Android 11+). Sin permiso = sin GPS. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
     <application
         android:name=".BudgetApplication"
         android:allowBackup="false"

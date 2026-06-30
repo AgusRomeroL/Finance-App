@@ -61,7 +61,7 @@ import mx.budget.data.local.entity.SyncQueueEntity
         AttributionReviewEntity::class,
         PendingCaptureEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -181,6 +181,27 @@ abstract class BudgetDatabase : RoomDatabase() {
                         "SELECT `id`, 'BANK', `amount_mxn`, `merchant`, `occurred_at`, `suggested_wallet_id`, `suggested_category_id`, `status`, `created_at`, `bank_id`, `bank_name`, `bank_package`, `last4` FROM `pending_bank_capture`"
                 )
                 db.execSQL("DROP TABLE `pending_bank_capture`")
+            }
+        }
+
+        /**
+         * v6 → v7: **ubicación del gasto** (Apéndice G.4). Añade las 4 columnas de
+         * ubicación a `expense`, espejo de las que `pending_capture` ya tiene desde
+         * v6: `latitude`, `longitude`, `place_label`, `location_source`
+         * (`CAPTURE | CONFIRM | MANUAL | NONE`).
+         *
+         * Columnas nuevas por `ALTER TABLE ADD COLUMN` (no aparecen como CREATE en
+         * `app/schemas/7.json`; Room valida columnas por nombre/tipo, no por orden),
+         * todas nullable, coincidentes con `ExpenseEntity`. Sin índice. Los 793
+         * gastos sembrados quedan con ubicación nula (`location_source` interpretado
+         * como `NONE`), según §G.4.2.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `expense` ADD COLUMN `latitude` REAL")
+                db.execSQL("ALTER TABLE `expense` ADD COLUMN `longitude` REAL")
+                db.execSQL("ALTER TABLE `expense` ADD COLUMN `place_label` TEXT")
+                db.execSQL("ALTER TABLE `expense` ADD COLUMN `location_source` TEXT")
             }
         }
     }

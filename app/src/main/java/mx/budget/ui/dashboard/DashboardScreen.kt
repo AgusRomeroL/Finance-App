@@ -127,6 +127,15 @@ private class SimpleMonth {
 
 private fun Long.toShortDate(): String = shortMonth.format(this)
 
+/**
+ * Callback de tap sobre una fila de gasto → abre el detalle (§G.4). Se propaga por
+ * CompositionLocal para no enhebrarlo por todas las composables privadas anidadas
+ * que renderizan [TransactionRow]. Default no-op (las pantallas que no hospedan el
+ * detalle dejan las filas sin acción).
+ */
+private val LocalExpenseRowClick =
+    androidx.compose.runtime.staticCompositionLocalOf<(ExpenseWithDetails) -> Unit> { {} }
+
 /** Parsea ISO yyyy-MM-dd de forma segura; null si falla. */
 private fun parseIso(s: String?): LocalDate? =
     runCatching { LocalDate.parse(s, isoDate) }.getOrNull()
@@ -204,6 +213,7 @@ private val navItems = listOf(
 fun DashboardScreen(
     viewModel: DashboardViewModel,
     captureViewModel: CaptureViewModel? = null,
+    detailViewModel: mx.budget.ui.detail.ExpenseDetailViewModel? = null,
     windowWidthDp: Dp = 360.dp,
     currentRoute: String = "dashboard",
     onNavigate: ((String) -> Unit)? = null,
@@ -226,6 +236,11 @@ fun DashboardScreen(
             viewModel = captureViewModel,
             onDismiss = { showCapture = false }
         )
+    }
+
+    // Hoja de detalle del gasto (§G.4): ubicación + hora. Se abre al tocar una fila.
+    if (detailViewModel != null) {
+        mx.budget.ui.detail.ExpenseDetailSheet(viewModel = detailViewModel)
     }
 
     if (showFilterSheet) {
@@ -260,44 +275,48 @@ fun DashboardScreen(
         showCapture = true
     }
 
-    if (isExpanded) {
-        ExpandedDashboard(
-            state = uiState,
-            currentRoute = currentRoute,
-            onNavigate = onNavigate,
-            onCapture = { showCapture = true },
-            onOpenSearch = onOpenSearch,
-            pendingReviewCount = pendingReviewCount,
-            onOpenReview = onOpenReview,
-            quincenaNav = quincenaNav,
-            filterUi = filterUi,
-            proactiveSuggestions = proactiveSuggestions,
-            onRegisterSuggestion = onRegisterSuggestion,
-            onDismissSuggestion = viewModel::dismissProactiveSuggestion,
-            onOpenSuggestions = onOpenSuggestions,
-            bankCaptures = bankCaptures,
-            onConfirmCapture = viewModel::confirmBankCapture,
-            onDismissCapture = viewModel::dismissBankCapture
-        )
-    } else {
-        CompactDashboard(
-            state = uiState,
-            currentRoute = currentRoute,
-            onNavigate = onNavigate,
-            onCapture = { showCapture = true },
-            onOpenSearch = onOpenSearch,
-            pendingReviewCount = pendingReviewCount,
-            onOpenReview = onOpenReview,
-            quincenaNav = quincenaNav,
-            filterUi = filterUi,
-            proactiveSuggestions = proactiveSuggestions,
-            onRegisterSuggestion = onRegisterSuggestion,
-            onDismissSuggestion = viewModel::dismissProactiveSuggestion,
-            onOpenSuggestions = onOpenSuggestions,
-            bankCaptures = bankCaptures,
-            onConfirmCapture = viewModel::confirmBankCapture,
-            onDismissCapture = viewModel::dismissBankCapture
-        )
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalExpenseRowClick provides { tx -> detailViewModel?.open(tx) }
+    ) {
+        if (isExpanded) {
+            ExpandedDashboard(
+                state = uiState,
+                currentRoute = currentRoute,
+                onNavigate = onNavigate,
+                onCapture = { showCapture = true },
+                onOpenSearch = onOpenSearch,
+                pendingReviewCount = pendingReviewCount,
+                onOpenReview = onOpenReview,
+                quincenaNav = quincenaNav,
+                filterUi = filterUi,
+                proactiveSuggestions = proactiveSuggestions,
+                onRegisterSuggestion = onRegisterSuggestion,
+                onDismissSuggestion = viewModel::dismissProactiveSuggestion,
+                onOpenSuggestions = onOpenSuggestions,
+                bankCaptures = bankCaptures,
+                onConfirmCapture = viewModel::confirmBankCapture,
+                onDismissCapture = viewModel::dismissBankCapture
+            )
+        } else {
+            CompactDashboard(
+                state = uiState,
+                currentRoute = currentRoute,
+                onNavigate = onNavigate,
+                onCapture = { showCapture = true },
+                onOpenSearch = onOpenSearch,
+                pendingReviewCount = pendingReviewCount,
+                onOpenReview = onOpenReview,
+                quincenaNav = quincenaNav,
+                filterUi = filterUi,
+                proactiveSuggestions = proactiveSuggestions,
+                onRegisterSuggestion = onRegisterSuggestion,
+                onDismissSuggestion = viewModel::dismissProactiveSuggestion,
+                onOpenSuggestions = onOpenSuggestions,
+                bankCaptures = bankCaptures,
+                onConfirmCapture = viewModel::confirmBankCapture,
+                onDismissCapture = viewModel::dismissBankCapture
+            )
+        }
     }
 }
 
@@ -1789,11 +1808,13 @@ internal fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) 
         runCatching { tx.categoryColorHex?.let { Color(android.graphics.Color.parseColor(it)) } }
             .getOrNull()
     }
+    val onRowClick = LocalExpenseRowClick.current
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
+            .clickable { onRowClick(tx) }
             .background(rowBg)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically

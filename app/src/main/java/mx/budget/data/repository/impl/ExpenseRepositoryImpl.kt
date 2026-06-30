@@ -125,6 +125,35 @@ class ExpenseRepositoryImpl(
         }
     }
 
+    override suspend fun setLocation(
+        expenseId: String,
+        latitude: Double?,
+        longitude: Double?,
+        placeLabel: String?,
+        source: String
+    ) {
+        db.withTransaction {
+            val expense = dao.getById(expenseId) ?: return@withTransaction
+            dao.update(
+                expense.copy(
+                    latitude = latitude,
+                    longitude = longitude,
+                    placeLabel = placeLabel,
+                    locationSource = source
+                )
+            )
+            enqueueSync(expenseId, "UPSERT")
+        }
+    }
+
+    override suspend fun setOccurredAt(expenseId: String, occurredAt: Long) {
+        db.withTransaction {
+            val expense = dao.getById(expenseId) ?: return@withTransaction
+            dao.update(expense.copy(occurredAt = occurredAt))
+            enqueueSync(expenseId, "UPSERT")
+        }
+    }
+
     private suspend fun enqueueSync(expenseId: String, operation: String) {
         syncQueueDao.enqueue(
             SyncQueueEntity(

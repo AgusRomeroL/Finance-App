@@ -19,6 +19,8 @@ import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.entity.PendingCaptureEntity
+import mx.budget.data.location.LocationProvider
+import mx.budget.data.location.LocationSource
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.QuincenaRepository
 import java.text.NumberFormat
@@ -53,6 +55,7 @@ class BankCaptureManager(
     private val engine: RetroAttributionEngine,
     private val householdId: String,
     private val nlCaptureExtractor: NlCaptureExtractor,
+    private val locationProvider: LocationProvider,
 ) {
 
     // ── Ingreso de una propuesta (desde el listener) ────────────────────────────
@@ -68,6 +71,11 @@ class BankCaptureManager(
         val walletId = resolveWallet(parsed, wallets)
         val categoryId = resolveCategory(parsed.merchant)
 
+        // Ubicación al ingresar (§G.4.2): solo bajo nivel PERSISTENT, porque ingest
+        // corre en background (NotificationListenerService). Bajo "solo al usar" da
+        // null y la ubicación llega al confirmar (foreground). Best-effort.
+        val fix = locationProvider.currentFix(requireForeground = false)
+
         val capture = PendingCaptureEntity(
             id = UUID.randomUUID().toString(),
             source = "BANK",
@@ -82,6 +90,10 @@ class BankCaptureManager(
             bankName = parsed.bankName,
             bankPackage = parsed.bankPackage,
             last4 = parsed.last4,
+            latitude = fix?.latitude,
+            longitude = fix?.longitude,
+            placeLabel = fix?.placeLabel,
+            locationSource = if (fix != null) LocationSource.CAPTURE else null,
         )
         enqueue(capture)
     }
@@ -156,6 +168,21 @@ class BankCaptureManager(
 
         val expenseId = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
+
+        // Ubicación del gasto (§G.4.2), por prioridad:
+        //  (a) la que la captura ya trae (fix tomado al ingresar, nivel persistente);
+        //  (b) si no, y la confirmación cae dentro de la ventana corta del cargo,
+        //      un fix fresco en este momento (confirmar = foreground) → CONFIRM;
+        //  (c) si no, sin ubicación (NONE). Evita "ubicación = donde confirmaste horas
+        //      después".
+        val locationFix = when {
+            row.locationSource != null -> LocationData(row.latitude, row.longitude, row.placeLabel, row.locationSource)
+            now - row.occurredAt <= CONFIRM_WINDOW_MS ->
+                locationProvider.currentFix(requireForeground = true)
+                    ?.let { LocationData(it.latitude, it.longitude, it.placeLabel, LocationSource.CONFIRM) }
+            else -> null
+        }
+
         val expense = ExpenseEntity(
             id = expenseId,
             householdId = householdId,
@@ -167,6 +194,10 @@ class BankCaptureManager(
             paymentMethodId = walletId,
             status = "POSTED",
             createdAt = now,
+            latitude = locationFix?.latitude,
+            longitude = locationFix?.longitude,
+            placeLabel = locationFix?.placeLabel,
+            locationSource = locationFix?.source ?: LocationSource.NONE,
         )
         val attributions =
             buildRows(expenseId, normalizeBps(beneficiaryBps), "BENEFICIARY", row.amountMxn) +
@@ -297,8 +328,23 @@ class BankCaptureManager(
         return PendingIntent.getBroadcast(context, (captureId + action).hashCode(), intent, flags)
     }
 
+    /** Ubicación resuelta para el gasto al confirmar (interno). */
+    private data class LocationData(
+        val latitude: Double?,
+        val longitude: Double?,
+        val placeLabel: String?,
+        val source: String,
+    )
+
     companion object {
         const val CHANNEL_ID = "bank_capture"
+
+        /**
+         * Ventana corta (§G.4.2) para auto-adjuntar ubicación al confirmar una
+         * captura de background: 15 min desde el cargo. Más allá, la confirmación
+         * no representa el lugar del gasto → queda NONE.
+         */
+        const val CONFIRM_WINDOW_MS = 15 * 60 * 1000L
 
         /** Crea el canal de notificaciones de captura bancaria (idempotente). */
         fun ensureChannel(context: Context) {

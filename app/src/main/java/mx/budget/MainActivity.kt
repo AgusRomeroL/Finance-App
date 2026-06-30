@@ -123,6 +123,14 @@ class MainActivity : ComponentActivity() {
         ))[WalletsViewModel::class.java]
     }
 
+    private val expenseDetailViewModel: mx.budget.ui.detail.ExpenseDetailViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, ExpenseDetailViewModelFactory(
+            app.expenseRepository,
+            app.locationProvider
+        ))[mx.budget.ui.detail.ExpenseDetailViewModel::class.java]
+    }
+
     private val captureViewModel: CaptureViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, CaptureViewModelFactory(
@@ -132,6 +140,7 @@ class MainActivity : ComponentActivity() {
             app.memberRepository,
             app.categoryRepository,
             app.retroAttributionEngine,
+            app.locationProvider,
             app.householdId
         ))[CaptureViewModel::class.java]
     }
@@ -151,6 +160,41 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Nivel de ubicación que el usuario pidió, recordado entre el grant de foreground
+    // y el de background (§G.4: el background se solicita en un flujo aparte, Android 11+).
+    private var pendingLocationTarget: String? = null
+
+    /** Pide FINE+COARSE (solo-al-usar). Si el objetivo era persistente, escala a background. */
+    private val foregroundLocationLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        val app = application as BudgetApplication
+        if (granted) {
+            val target = pendingLocationTarget ?: SettingsRepository.LOCATION_LEVEL_WHILE_IN_USE
+            if (target == SettingsRepository.LOCATION_LEVEL_PERSISTENT &&
+                android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q &&
+                !app.locationProvider.hasBackgroundPermission()
+            ) {
+                backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            } else {
+                lifecycleScope.launch { app.settingsRepository.setLocationCaptureLevel(target) }
+            }
+        }
+        pendingLocationTarget = null
+    }
+
+    /** Pide ACCESS_BACKGROUND_LOCATION (persistente). Si se niega, cae a solo-al-usar. */
+    private val backgroundLocationLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val app = application as BudgetApplication
+        val level = if (granted) SettingsRepository.LOCATION_LEVEL_PERSISTENT
+        else SettingsRepository.LOCATION_LEVEL_WHILE_IN_USE
+        lifecycleScope.launch { app.settingsRepository.setLocationCaptureLevel(level) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val windowWidthDp = resources.displayMetrics.let {
@@ -166,11 +210,15 @@ class MainActivity : ComponentActivity() {
             val bankCaptureEnabled by settings.bankCaptureEnabled.collectAsState(initial = false)
             val reminderLeadDays by settings.reminderLeadDays.collectAsState(initial = 2)
             val calendarMirrorEnabled by settings.calendarMirrorEnabled.collectAsState(initial = false)
+            val locationLevel by settings.locationCaptureLevel.collectAsState(
+                initial = SettingsRepository.LOCATION_LEVEL_NONE
+            )
             val scope = rememberCoroutineScope()
             BudgetAppTheme(dynamicColor = dynamicColor) {
                 BudgetNavGraph(
                     dashboardViewModel = dashboardViewModel,
                     captureViewModel = captureViewModel,
+                    expenseDetailViewModel = expenseDetailViewModel,
                     attributionReviewViewModel = attributionReviewViewModel,
                     searchViewModel = searchViewModel,
                     calendarViewModel = calendarViewModel,
@@ -205,6 +253,36 @@ class MainActivity : ComponentActivity() {
                             scope.launch {
                                 settings.setCalendarMirrorEnabled(false)
                                 app.calendarMirror.disableAndPurge()
+                            }
+                        }
+                    },
+                    locationLevel = locationLevel,
+                    onLocationLevelChange = { level ->
+                        when (level) {
+                            SettingsRepository.LOCATION_LEVEL_NONE ->
+                                scope.launch { settings.setLocationCaptureLevel(SettingsRepository.LOCATION_LEVEL_NONE) }
+
+                            SettingsRepository.LOCATION_LEVEL_WHILE_IN_USE ->
+                                if (app.locationProvider.hasForegroundPermission()) {
+                                    scope.launch { settings.setLocationCaptureLevel(SettingsRepository.LOCATION_LEVEL_WHILE_IN_USE) }
+                                } else {
+                                    pendingLocationTarget = SettingsRepository.LOCATION_LEVEL_WHILE_IN_USE
+                                    foregroundLocationLauncher.launch(
+                                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                                    )
+                                }
+
+                            SettingsRepository.LOCATION_LEVEL_PERSISTENT -> when {
+                                !app.locationProvider.hasForegroundPermission() -> {
+                                    pendingLocationTarget = SettingsRepository.LOCATION_LEVEL_PERSISTENT
+                                    foregroundLocationLauncher.launch(
+                                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                                    )
+                                }
+                                !app.locationProvider.hasBackgroundPermission() ->
+                                    backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                                else ->
+                                    scope.launch { settings.setLocationCaptureLevel(SettingsRepository.LOCATION_LEVEL_PERSISTENT) }
                             }
                         }
                     }
@@ -369,6 +447,20 @@ class WalletsViewModelFactory(
 }
 
 /** Factory para CaptureViewModel */
+/** Factory para ExpenseDetailViewModel (detalle de gasto: ubicación + hora, §G.4). */
+class ExpenseDetailViewModelFactory(
+    private val expenseRepository: ExpenseRepository,
+    private val locationProvider: mx.budget.data.location.LocationProvider,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.detail.ExpenseDetailViewModel(
+            expenseRepository = expenseRepository,
+            locationProvider = locationProvider,
+        ) as T
+    }
+}
+
 class CaptureViewModelFactory(
     private val expenseRepository: ExpenseRepository,
     private val quincenaRepository: QuincenaRepository,
@@ -376,6 +468,7 @@ class CaptureViewModelFactory(
     private val memberRepository: MemberRepository,
     private val categoryRepository: CategoryRepository,
     private val retroAttributionEngine: RetroAttributionEngine,
+    private val locationProvider: mx.budget.data.location.LocationProvider,
     private val householdId: String,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -387,6 +480,7 @@ class CaptureViewModelFactory(
             memberRepository = memberRepository,
             categoryRepository = categoryRepository,
             retroAttributionEngine = retroAttributionEngine,
+            locationProvider = locationProvider,
             householdId = householdId,
         ) as T
     }

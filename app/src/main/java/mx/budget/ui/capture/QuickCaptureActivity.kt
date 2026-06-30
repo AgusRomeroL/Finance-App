@@ -29,6 +29,7 @@ class QuickCaptureActivity : ComponentActivity() {
                 app.memberRepository,
                 app.categoryRepository,
                 app.retroAttributionEngine,
+                app.locationProvider,
                 app.householdId,
             ),
         )[CaptureViewModel::class.java]

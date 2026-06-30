@@ -37,6 +37,7 @@ class SettingsRepository(private val context: Context) {
     private val calendarMirrorEnabledKey = booleanPreferencesKey("calendar_mirror_enabled")
     private val calendarMirrorIdKey = longPreferencesKey("calendar_mirror_id")
     private val calendarEventMapKey = stringPreferencesKey("calendar_event_map_json")
+    private val locationCaptureLevelKey = stringPreferencesKey("location_capture_level")
 
     /** Flujo del toggle de color dinámico. Default `true` (Material You). */
     val dynamicColor: Flow<Boolean> = context.dataStore.data
@@ -151,6 +152,21 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[calendarEventMapKey] = Json.encodeToString(map) }
     }
 
+    // ── Nivel de captura de ubicación (Apéndice G.4) ────────────────────────────
+
+    /**
+     * Nivel opt-in de ubicación elegido en Perfil: `"NONE"` (default), `"WHILE_IN_USE"`
+     * o `"PERSISTENT"`. Distinto del permiso del SO: este flag es la intención del
+     * usuario; el [mx.budget.data.location.LocationProvider] cruza ambos (intención ∧
+     * permiso concedido) antes de pedir un fix. Default `"NONE"`: cero ubicación.
+     */
+    val locationCaptureLevel: Flow<String> = context.dataStore.data
+        .map { prefs -> prefs[locationCaptureLevelKey] ?: LOCATION_LEVEL_NONE }
+
+    suspend fun setLocationCaptureLevel(level: String) {
+        context.dataStore.edit { prefs -> prefs[locationCaptureLevelKey] = level }
+    }
+
     private fun decodeLongMap(raw: String?): Map<String, Long> {
         if (raw.isNullOrBlank()) return emptyMap()
         return runCatching { Json.decodeFromString<Map<String, Long>>(raw) }.getOrDefault(emptyMap())
@@ -169,5 +185,10 @@ class SettingsRepository(private val context: Context) {
 
         /** Sentinela "ya notificado, no volver a avisar" (hasta posponer o confirmar). */
         const val NEVER_AGAIN = Long.MAX_VALUE
+
+        // Niveles de captura de ubicación (§G.4.2). Strings estables persistidos.
+        const val LOCATION_LEVEL_NONE = "NONE"
+        const val LOCATION_LEVEL_WHILE_IN_USE = "WHILE_IN_USE"
+        const val LOCATION_LEVEL_PERSISTENT = "PERSISTENT"
     }
 }

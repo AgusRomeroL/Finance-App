@@ -151,5 +151,22 @@ data class ExpenseEntity(
 
     /** Miembro que registró el gasto (auditoría). */
     @ColumnInfo(name = "created_by_member_id")
-    val createdByMemberId: String? = null
+    val createdByMemberId: String? = null,
+
+    // ── Ubicación opcional (Apéndice G.4) ───────────────────────────────────────
+    // Espejo de las columnas de `pending_capture`. Se llenan al capturar (foreground
+    // → CAPTURE), al confirmar una captura de banco dentro de ventana (CONFIRM) o
+    // a mano desde el detalle (MANUAL). Null/sin permiso = NONE. Migración v6→v7.
+
+    val latitude: Double? = null,
+
+    val longitude: Double? = null,
+
+    /** Etiqueta legible reverse-geocodeada on-device; null si falla (solo coords). */
+    @ColumnInfo(name = "place_label")
+    val placeLabel: String? = null,
+
+    /** `CAPTURE | CONFIRM | MANUAL | NONE` — procedencia de la ubicación (§G.4.2). */
+    @ColumnInfo(name = "location_source")
+    val locationSource: String? = null
 )

@@ -113,6 +113,25 @@ interface ExpenseRepository {
     suspend fun deleteAndRevertBalance(expenseId: String)
 
     /**
+     * Fija/actualiza la ubicación de un gasto (Apéndice G.4). Lo usa el detalle del
+     * gasto al "añadir ubicación" (source=MANUAL) o para borrarla (pasar todo null
+     * con [source]="NONE"). Encola push de sync. No-op si el gasto no existe.
+     */
+    suspend fun setLocation(
+        expenseId: String,
+        latitude: Double?,
+        longitude: Double?,
+        placeLabel: String?,
+        source: String
+    )
+
+    /**
+     * Actualiza la fecha/hora (`occurred_at`, epoch millis) de un gasto (§G.4.1).
+     * Encola push de sync. No-op si el gasto no existe.
+     */
+    suspend fun setOccurredAt(expenseId: String, occurredAt: Long)
+
+    /**
      * Transiciona un gasto de PLANNED a POSTED.
      * Ajusta saldo del wallet y recalcula totales de quincena.
      */

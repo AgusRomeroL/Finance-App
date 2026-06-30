@@ -202,4 +202,20 @@ class ExpenseRepositoryFirestore(
         if (actualAmountMxn != null) updates["amountMxn"] = actualAmountMxn
         ref.update(updates).await()
     }
+
+    override suspend fun setLocation(
+        expenseId: String,
+        latitude: Double?,
+        longitude: Double?,
+        placeLabel: String?,
+        source: String
+    ) {
+        // El push real lo hace el SyncManager reenviando el ExpenseEntity completo
+        // (incluidas las columnas de ubicación). Este método existe para cumplir el
+        // contrato; el lado nube se actualiza vía el UPSERT encolado en Room.
+    }
+
+    override suspend fun setOccurredAt(expenseId: String, occurredAt: Long) {
+        // Igual que setLocation: el cambio viaja en el UPSERT del ExpenseEntity.
+    }
 }

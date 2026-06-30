@@ -69,6 +69,11 @@ dependencies {
     // Wear OS Data Layer
     implementation("com.google.android.gms:play-services-wearable:18.1.0")
 
+    // Ubicación (Apéndice G.4): FusedLocationProviderClient.getCurrentLocation()
+    // para adjuntar lat/lon/place_label al gasto. .await() vía
+    // kotlinx-coroutines-play-services (ya presente más abajo).
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+
     // Jetpack Glance — widget de pantalla de inicio para captura rápida (§G.3).
     // Runtime de Compose propio de Glance, independiente del compose-bom.
     implementation("androidx.glance:glance-appwidget:1.1.0")
