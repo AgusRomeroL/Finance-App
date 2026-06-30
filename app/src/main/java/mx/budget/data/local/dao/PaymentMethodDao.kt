@@ -85,6 +85,15 @@ interface PaymentMethodDao {
     @Query("UPDATE payment_method SET current_balance_mxn = :newBalance WHERE id = :paymentMethodId")
     suspend fun updateBalance(paymentMethodId: String, newBalance: Double)
 
+    /**
+     * Ajuste relativo y atómico del saldo (Fase 2 — saldo guardado+mantenido).
+     * Lo invoca [mx.budget.data.repository.impl.ExpenseRepositoryImpl] al postear,
+     * editar, borrar o confirmar un gasto: el saldo parte del ancla declarada y se
+     * mueve con cada gasto POSTED nuevo (los 793 sembrados no lo tocan).
+     */
+    @Query("UPDATE payment_method SET current_balance_mxn = current_balance_mxn + :delta WHERE id = :paymentMethodId")
+    suspend fun adjustBalance(paymentMethodId: String, delta: Double)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(paymentMethod: PaymentMethodEntity)
 

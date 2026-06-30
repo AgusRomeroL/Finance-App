@@ -76,6 +76,9 @@ class ExpenseRepositoryImpl(
             dao.insert(expense)
             attributionDao.deleteByExpenseId(expense.id)
             attributionDao.insertAll(attributions)
+            if (expense.status == "POSTED") {
+                applyToWallet(expense.paymentMethodId, expense.amountMxn, posting = true)
+            }
             enqueueSync(expense.id, "UPSERT")
         }
     }
@@ -85,9 +88,19 @@ class ExpenseRepositoryImpl(
         attributions: List<ExpenseAttributionEntity>
     ) {
         db.withTransaction {
+            // Saldo guardado+mantenido: revierte el efecto del estado anterior y
+            // aplica el del nuevo. Cubre cambios de monto, de wallet y de status
+            // (POSTED↔PLANNED) sin doble conteo.
+            val old = dao.getById(expense.id)
+            if (old != null && old.status == "POSTED") {
+                applyToWallet(old.paymentMethodId, old.amountMxn, posting = false)
+            }
             dao.update(expense)
             attributionDao.deleteByExpenseId(expense.id)
             attributionDao.insertAll(attributions)
+            if (expense.status == "POSTED") {
+                applyToWallet(expense.paymentMethodId, expense.amountMxn, posting = true)
+            }
             enqueueSync(expense.id, "UPSERT")
         }
     }
@@ -120,6 +133,9 @@ class ExpenseRepositoryImpl(
     override suspend fun deleteAndRevertBalance(expenseId: String) {
         db.withTransaction {
             val expense = dao.getById(expenseId) ?: return@withTransaction
+            if (expense.status == "POSTED") {
+                applyToWallet(expense.paymentMethodId, expense.amountMxn, posting = false)
+            }
             dao.delete(expense)
             enqueueSync(expenseId, "DELETE")
         }
@@ -176,6 +192,10 @@ class ExpenseRepositoryImpl(
             val newAmount = actualAmountMxn ?: expense.amountMxn
             dao.update(expense.copy(status = "POSTED", amountMxn = newAmount))
 
+            // Saldo guardado+mantenido: el gasto pasa de PLANNED (sin efecto) a
+            // POSTED, así que aplica el efecto del monto real al wallet.
+            applyToWallet(expense.paymentMethodId, newAmount, posting = true)
+
             // Re-escala las atribuciones al monto real (los bps no cambian). insertAll
             // es REPLACE: conserva los ids y solo actualiza el share_amount_mxn.
             if (newAmount != expense.amountMxn) {
@@ -185,5 +205,26 @@ class ExpenseRepositoryImpl(
             }
             enqueueSync(expenseId, "UPSERT")
         }
+    }
+
+    // ── Saldo guardado+mantenido (Fase 2) ───────────────────────────────────────
+    //
+    // El saldo del wallet parte del ancla (opening_balance, Fase 1) y se mueve con
+    // cada gasto POSTED nuevo. En débito/efectivo/digital/ahorro el gasto BAJA el
+    // saldo; en crédito/departamental/BNPL SUBE la deuda. Los 793 gastos sembrados
+    // no pasan por aquí (se insertaron por el asset), así que no afectan el saldo:
+    // queda exactamente "del saldo declarado hacia adelante".
+
+    private val creditKinds = setOf("CREDIT_CARD", "DEPARTMENT_STORE_CARD", "BNPL_INSTALLMENT")
+
+    /**
+     * Aplica ([posting]=true) o revierte ([posting]=false) el efecto de un gasto
+     * POSTED de [amount] sobre el saldo del wallet [paymentMethodId]. No-op si el
+     * wallet no existe.
+     */
+    private suspend fun applyToWallet(paymentMethodId: String, amount: Double, posting: Boolean) {
+        val kind = db.paymentMethodDao().getById(paymentMethodId)?.kind ?: return
+        val effect = if (kind in creditKinds) amount else -amount  // crédito sube deuda; líquido baja
+        db.paymentMethodDao().adjustBalance(paymentMethodId, if (posting) effect else -effect)
     }
 }
