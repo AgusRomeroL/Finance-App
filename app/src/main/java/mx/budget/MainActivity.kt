@@ -119,6 +119,7 @@ class MainActivity : ComponentActivity() {
         val app = application as BudgetApplication
         ViewModelProvider(this, WalletsViewModelFactory(
             app.walletRepository,
+            app.transferRepository,
             app.database.expenseDao(),
             app.householdId
         ))[WalletsViewModel::class.java]
@@ -439,6 +440,7 @@ class SearchViewModelFactory(
 /** Factory para WalletsViewModel (pantalla Cuentas: saldos por wallet + movimientos). */
 class WalletsViewModelFactory(
     private val walletRepository: WalletRepository,
+    private val transferRepository: mx.budget.data.repository.TransferRepository,
     private val expenseDao: ExpenseDao,
     private val householdId: String,
 ) : ViewModelProvider.Factory {
@@ -446,6 +448,7 @@ class WalletsViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return WalletsViewModel(
             walletRepository = walletRepository,
+            transferRepository = transferRepository,
             expenseDao = expenseDao,
             householdId = householdId,
         ) as T

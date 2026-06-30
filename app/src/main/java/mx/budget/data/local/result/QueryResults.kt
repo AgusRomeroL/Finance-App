@@ -99,6 +99,20 @@ data class WalletBalanceInfo(
 )
 
 /**
+ * Transferencia entre wallets con los nombres de ambas cuentas resueltos (RF-41).
+ * Alimenta el historial de transferencias en la pantalla Wallets.
+ */
+data class TransferWithNames(
+    val id: String,
+    val amountMxn: Double,
+    val occurredAt: Long,
+    val note: String?,
+    val fromName: String,
+    val toName: String,
+    val toKind: String
+)
+
+/**
  * Resumen de un plan de cuotas activo.
  */
 data class InstallmentSummary(

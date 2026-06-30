@@ -14,9 +14,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.data.local.entity.WalletTransferEntity
 import mx.budget.data.local.result.ExpenseWithDetails
+import mx.budget.data.local.result.TransferWithNames
 import mx.budget.data.local.result.WalletBalanceInfo
+import mx.budget.data.repository.TransferRepository
 import mx.budget.data.repository.WalletRepository
+import java.util.UUID
 
 /**
  * ViewModel de la pantalla Wallets ("Cuentas"): expone los saldos por wallet,
@@ -28,6 +32,7 @@ import mx.budget.data.repository.WalletRepository
  */
 class WalletsViewModel(
     private val walletRepository: WalletRepository,
+    private val transferRepository: TransferRepository,
     private val expenseDao: ExpenseDao,
     private val householdId: String,
 ) : ViewModel() {
@@ -105,5 +110,37 @@ class WalletsViewModel(
      */
     fun reconcileWallet(paymentMethodId: String, newBalance: Double) {
         viewModelScope.launch { walletRepository.reconcileBalance(paymentMethodId, newBalance) }
+    }
+
+    /** Historial de transferencias entre cuentas (RF-41). */
+    val transfers: StateFlow<List<TransferWithNames>> =
+        transferRepository.observeTransfers(householdId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Registra una transferencia (o pago de tarjeta): mueve el saldo de ambas
+     * cuentas. [occurredAt] por defecto = ahora.
+     */
+    fun recordTransfer(
+        fromId: String,
+        toId: String,
+        amountMxn: Double,
+        note: String?,
+        occurredAt: Long,
+    ) {
+        viewModelScope.launch {
+            transferRepository.recordTransfer(
+                WalletTransferEntity(
+                    id = UUID.randomUUID().toString(),
+                    householdId = householdId,
+                    fromPaymentMethodId = fromId,
+                    toPaymentMethodId = toId,
+                    amountMxn = amountMxn,
+                    occurredAt = occurredAt,
+                    note = note?.ifBlank { null },
+                    createdAt = occurredAt,
+                )
+            )
+        }
     }
 }

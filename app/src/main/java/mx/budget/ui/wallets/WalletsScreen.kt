@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -143,6 +144,8 @@ fun WalletsScreen(
     }
     // Diálogo de conciliación manual (RF-42) sobre el wallet seleccionado.
     var showReconcile by remember { mutableStateOf(false) }
+    // Hoja de transferencia / pago de tarjeta (RF-41).
+    var showTransfer by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -162,7 +165,7 @@ fun WalletsScreen(
                 .padding(inner)
                 .statusBarsPadding(),
         ) {
-            Header(onBack = onBack)
+            Header(onBack = onBack, onTransfer = { showTransfer = true })
 
             if (expanded) {
                 Row(modifier = Modifier.fillMaxSize()) {
@@ -221,6 +224,17 @@ fun WalletsScreen(
         )
     }
 
+    if (showTransfer) {
+        WalletTransferSheet(
+            wallets = entities,
+            onSave = { fromId, toId, amount, note ->
+                viewModel.recordTransfer(fromId, toId, amount, note, System.currentTimeMillis())
+                showTransfer = false
+            },
+            onDismiss = { showTransfer = false },
+        )
+    }
+
     // Compacto: detalle en bottom sheet.
     if (!expanded && selected != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -247,7 +261,7 @@ fun WalletsScreen(
 }
 
 @Composable
-private fun Header(onBack: () -> Unit) {
+private fun Header(onBack: () -> Unit, onTransfer: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -280,6 +294,19 @@ private fun Header(onBack: () -> Unit) {
                 style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Light, fontSize = 28.sp),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable(onClick = onTransfer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.SwapHoriz, "Transferir o pagar tarjeta",
+                tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp),
             )
         }
     }

@@ -17,6 +17,7 @@ import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.local.dao.RecurrenceTemplateDao
 import mx.budget.data.local.dao.SyncQueueDao
+import mx.budget.data.local.dao.WalletTransferDao
 import mx.budget.data.local.entity.AttributionReviewEntity
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.ExpenseAttributionEntity
@@ -32,6 +33,7 @@ import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
 import mx.budget.data.local.entity.SavingsGoalEntity
 import mx.budget.data.local.entity.SyncQueueEntity
+import mx.budget.data.local.entity.WalletTransferEntity
 
 /**
  * Base de datos Room del módulo de presupuesto.
@@ -59,9 +61,10 @@ import mx.budget.data.local.entity.SyncQueueEntity
         IncomeSourceEntity::class,
         SyncQueueEntity::class,
         AttributionReviewEntity::class,
-        PendingCaptureEntity::class
+        PendingCaptureEntity::class,
+        WalletTransferEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -88,6 +91,8 @@ abstract class BudgetDatabase : RoomDatabase() {
     abstract fun pendingCaptureDao(): PendingCaptureDao
 
     abstract fun recurrenceTemplateDao(): RecurrenceTemplateDao
+
+    abstract fun walletTransferDao(): WalletTransferDao
 
     companion object {
         /**
@@ -237,6 +242,22 @@ abstract class BudgetDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `pending_capture` ADD COLUMN `suggested_beneficiary_json` TEXT")
                 db.execSQL("ALTER TABLE `pending_capture` ADD COLUMN `suggested_payer_json` TEXT")
                 db.execSQL("ALTER TABLE `pending_capture` ADD COLUMN `notes` TEXT")
+            }
+        }
+
+        /**
+         * v9 → v10: **transferencias entre wallets** (RF-41). Crea la tabla
+         * `wallet_transfer` (origen, destino, monto, fecha, nota). El CREATE TABLE y
+         * los índices se copiaron LITERAL del `createSql` que KSP genera en
+         * `app/schemas/10.json`; cualquier divergencia rompe el identityHash. El asset
+         * se queda en v1.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `wallet_transfer` (`id` TEXT NOT NULL, `household_id` TEXT NOT NULL, `from_payment_method_id` TEXT NOT NULL, `to_payment_method_id` TEXT NOT NULL, `amount_mxn` REAL NOT NULL, `occurred_at` INTEGER NOT NULL, `note` TEXT, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`household_id`) REFERENCES `household`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`from_payment_method_id`) REFERENCES `payment_method`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`to_payment_method_id`) REFERENCES `payment_method`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallet_transfer_household_id` ON `wallet_transfer` (`household_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallet_transfer_from_payment_method_id` ON `wallet_transfer` (`from_payment_method_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallet_transfer_to_payment_method_id` ON `wallet_transfer` (`to_payment_method_id`)")
             }
         }
     }

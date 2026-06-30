@@ -37,12 +37,14 @@ import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.RecurrenceRepository
+import mx.budget.data.repository.TransferRepository
 import mx.budget.data.repository.WalletRepository
 import mx.budget.data.repository.impl.CategoryRepositoryImpl
 import mx.budget.data.repository.impl.ExpenseRepositoryImpl
 import mx.budget.data.repository.impl.MemberRepositoryImpl
 import mx.budget.data.repository.impl.QuincenaRepositoryImpl
 import mx.budget.data.repository.impl.RecurrenceRepositoryImpl
+import mx.budget.data.repository.impl.TransferRepositoryImpl
 import mx.budget.data.repository.impl.WalletRepositoryImpl
 import mx.budget.data.recurrence.RecurrenceMaterializer
 import mx.budget.data.settings.SettingsRepository
@@ -73,6 +75,10 @@ class BudgetApplication : Application() {
         private set
 
     lateinit var walletRepository: WalletRepository
+        private set
+
+    /** Transferencias entre wallets / pago de tarjeta (RF-41). */
+    lateinit var transferRepository: TransferRepository
         private set
 
     lateinit var categoryRepository: CategoryRepository
@@ -198,7 +204,8 @@ class BudgetApplication : Application() {
                 BudgetDatabase.MIGRATION_5_6,
                 BudgetDatabase.MIGRATION_6_7,
                 BudgetDatabase.MIGRATION_7_8,
-                BudgetDatabase.MIGRATION_8_9
+                BudgetDatabase.MIGRATION_8_9,
+                BudgetDatabase.MIGRATION_9_10
             )
             .build()
 
@@ -231,6 +238,11 @@ class BudgetApplication : Application() {
         )
         categoryRepository = CategoryRepositoryImpl(database.categoryDao())
         recurrenceRepository = RecurrenceRepositoryImpl(database.recurrenceTemplateDao())
+        transferRepository = TransferRepositoryImpl(
+            transferDao = database.walletTransferDao(),
+            paymentMethodDao = database.paymentMethodDao(),
+            db = database
+        )
         expenseRepository = ExpenseRepositoryImpl(
             dao = expenseDao,
             attributionDao = attributionDao,
