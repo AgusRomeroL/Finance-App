@@ -21,7 +21,7 @@
     },
     "wallet": {
       "type": "string",
-      "description": "Nombre EXACTO de un método de pago del contexto del hogar, u omitir."
+      "description": "Nombre EXACTO de un método de pago del contexto. SOLO si la frase nombra explícitamente cómo se pagó; omitir si no se menciona (no adivinar)."
     },
     "notes": {
       "type": "string",

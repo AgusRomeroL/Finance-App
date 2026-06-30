@@ -6,20 +6,24 @@ Campos del JSON:
 - "action": "ADD_EXPENSE" si la frase describe un gasto con monto; "UNKNOWN" si no hay monto claro.
 - "amount": monto en pesos MXN, número sin símbolo ni comas (ej. 1234.56).
 - "concept": descripción breve del gasto (1 a 40 caracteres), tomada de la frase.
-- "category": UNA categoría EXACTA del CONTEXTO, u omitir si ninguna aplica.
-- "wallet": UN método de pago EXACTO del CONTEXTO, u omitir si no se menciona.
+- "category": UNA categoría EXACTA del CONTEXTO (puedes inferirla del concepto, ej. "luz"→Electricidad), u omitir.
+- "wallet": UN método de pago EXACTO del CONTEXTO. Inclúyelo SOLO si la frase NOMBRA explícitamente cómo se pagó (ej. "con la BBVA", "en efectivo", "tarjeta Coppel"). Si la frase NO menciona método de pago, OMITE "wallet" por completo. NUNCA lo adivines.
 - "notes": detalle extra que NO sea el concepto (ej. "regalo de cumpleaños", "de la semana"), u omitir.
 - "beneficiaries": quién CONSUME el gasto. Arreglo de objetos {"name","share"}. "name" EXACTO del CONTEXTO, o "TODOS" para toda la familia. "share" es un porcentaje entero OPCIONAL (si lo omites, se reparte por igual). Omite el arreglo completo si la frase no dice para quién es.
 - "payers": quién PAGA el gasto. Mismo formato que "beneficiaries". Omite el arreglo si la frase no menciona quién pagó.
 
 Reglas:
-1. No inventes: "concept" y "notes" salen de la frase; "category", "wallet" y las personas salen del CONTEXTO.
-2. Si no hay un monto claro, responde {"action":"UNKNOWN"}.
-3. Los "share" no tienen que sumar 100; el sistema los reescala.
+1. No inventes: "concept" y "notes" salen de la frase; "wallet" y las personas salen del CONTEXTO. "category" puedes inferirla del concepto.
+2. NUNCA pongas un "wallet" ni una persona (beneficiarie/pagadore) que la frase no mencione. Ante la duda, OMITE el campo: es mejor dejarlo vacío que adivinar.
+3. Un grupo que no sea un MIEMBRO del CONTEXTO ni "TODOS" (ej. "los niños", "los chicos") NO se puede resolver: omite "beneficiaries" en ese caso.
+4. Si no hay un monto claro, responde {"action":"UNKNOWN"}.
+5. Los "share" no tienen que sumar 100; el sistema los reescala.
 
 Ejemplos (los nombres reales del hogar están en el CONTEXTO, no en estos ejemplos):
 TEXTO: "gasté 200 en gasolina"
 JSON: {"action":"ADD_EXPENSE","amount":200,"concept":"gasolina","category":"Gasolina"}
+TEXTO: "pagué 1250 de la luz"
+JSON: {"action":"ADD_EXPENSE","amount":1250,"concept":"luz","category":"Electricidad"}
 TEXTO: "850 de despensa para toda la familia, la pagó Ana"
 JSON: {"action":"ADD_EXPENSE","amount":850,"concept":"despensa","category":"Despensa","beneficiaries":[{"name":"TODOS"}],"payers":[{"name":"Ana","share":100}]}
 TEXTO: "1200 de la cena de Luis y Marta, mitad y mitad, con la tarjeta del banco, nota aniversario"
