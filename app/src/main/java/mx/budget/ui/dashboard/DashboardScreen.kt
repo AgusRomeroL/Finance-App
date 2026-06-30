@@ -956,7 +956,9 @@ private fun MainHealthPane(state: DashboardUiState.Success, modifier: Modifier =
 @Composable
 private fun HeroKpi(state: DashboardUiState.Success) {
     val q = state.quincena
-    val income = (q?.projectedIncomeMxn?.takeIf { it > 0.0 } ?: q?.actualIncomeMxn ?: 0.0)
+    // Ingreso = budget proyectado, elevado por el ingreso real recibido (en vivo)
+    // si lo supera. maxOf evita doble conteo del sueldo ya presupuestado.
+    val income = maxOf(q?.projectedIncomeMxn ?: 0.0, state.actualIncome)
     val spent = state.postedTotal
     val planned = state.plannedTotal
     val hasPlanned = planned > 0.0
@@ -1051,6 +1053,7 @@ private fun HeroKpi(state: DashboardUiState.Success) {
         RitmoCard(
             quincena = state.quincena,
             postedTotal = state.postedTotal,
+            actualIncome = state.actualIncome,
             viewingActive = state.viewingActive
         )
     }
@@ -1494,10 +1497,11 @@ private fun ProactiveSuggestionChip(
 private fun RitmoCard(
     quincena: QuincenaEntity?,
     postedTotal: Double,
+    actualIncome: Double,
     viewingActive: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val income = (quincena?.projectedIncomeMxn?.takeIf { it > 0.0 } ?: quincena?.actualIncomeMxn ?: 0.0)
+    val income = maxOf(quincena?.projectedIncomeMxn ?: 0.0, actualIncome)
     val budget = (quincena?.projectedExpensesMxn?.takeIf { it > 0.0 } ?: income)
     val progress = remember(quincena?.id) { computeProgress(quincena) }
     val available = income - postedTotal
@@ -1889,7 +1893,7 @@ internal fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) 
 @Composable
 private fun CollapsedHealthCard(state: DashboardUiState.Success) {
     val q = state.quincena
-    val income = (q?.projectedIncomeMxn?.takeIf { it > 0.0 } ?: q?.actualIncomeMxn ?: 0.0)
+    val income = maxOf(q?.projectedIncomeMxn ?: 0.0, state.actualIncome)
     val spent = state.postedTotal
     val planned = state.plannedTotal
     val hasPlanned = planned > 0.0
@@ -2017,6 +2021,7 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
         RitmoCard(
             quincena = state.quincena,
             postedTotal = state.postedTotal,
+            actualIncome = state.actualIncome,
             viewingActive = state.viewingActive
         )
     }

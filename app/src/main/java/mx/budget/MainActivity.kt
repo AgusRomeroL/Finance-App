@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
         ViewModelProvider(this, DashboardViewModelFactory(
             app.quincenaRepository,
             app.expenseRepository,
+            app.incomeRepository,
             app.memberRepository,
             app.householdId,
             app.database.attributionReviewDao(),
@@ -306,6 +307,7 @@ class MainActivity : ComponentActivity() {
 class DashboardViewModelFactory(
     private val quincenaRepository: QuincenaRepository,
     private val expenseRepository: ExpenseRepository,
+    private val incomeRepository: mx.budget.data.repository.IncomeRepository,
     private val memberRepository: MemberRepository,
     private val householdId: String,
     private val attributionReviewDao: AttributionReviewDao,
@@ -320,6 +322,7 @@ class DashboardViewModelFactory(
         return DashboardViewModel(
             quincenaRepository = quincenaRepository,
             expenseRepository = expenseRepository,
+            incomeRepository = incomeRepository,
             memberRepository = memberRepository,
             householdId = householdId,
             attributionReviewDao = attributionReviewDao,

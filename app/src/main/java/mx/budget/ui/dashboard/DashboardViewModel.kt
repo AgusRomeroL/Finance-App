@@ -29,6 +29,7 @@ import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
 
@@ -62,6 +63,8 @@ sealed class DashboardUiState {
         val postedTotal: Double,
         val plannedTotal: Double,
         val balance: Double,
+        /** Ingreso real recibido (income_source POSTED) de la quincena, en vivo. */
+        val actualIncome: Double = 0.0,
         /** Gasto por miembro BENEFICIARY (quién consume) — toggle "Beneficiario". */
         val beneficiaryDistribution: List<SpendByMember>,
         /** Gasto por miembro PAYER (quién paga) — toggle "Pagador". */
@@ -109,6 +112,7 @@ private const val MAX_PROACTIVE = 8
 class DashboardViewModel(
     private val quincenaRepository: QuincenaRepository,
     private val expenseRepository: ExpenseRepository,
+    private val incomeRepository: IncomeRepository,
     private val memberRepository: MemberRepository,
     private val householdId: String,
     private val attributionReviewDao: AttributionReviewDao,
@@ -330,7 +334,13 @@ class DashboardViewModel(
                         canViewOlder = ctx.canViewOlder,
                         canViewNewer = ctx.canViewNewer,
                         viewingActive = ctx.viewingActive
-                    ) as DashboardUiState
+                    )
+                }.combine(
+                    // Ingreso real recibido (en vivo), para que registrar un ingreso
+                    // se refleje en "Disponible para gastar" sin doble conteo del budget.
+                    incomeRepository.observePostedTotal(quincena.id)
+                ) { success, incomePosted ->
+                    success.copy(actualIncome = incomePosted) as DashboardUiState
                 }
             }
         }
