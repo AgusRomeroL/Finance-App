@@ -363,19 +363,25 @@ class BudgetApplication : Application() {
             remoteIncomeRepository = remoteIncomeRepository
         )
 
-        // Dirección PULL (Firestore → Room). Se arranca como objeto
-        // independiente (lo más simple): comparte el mismo `appScope` y la
-        // misma instancia de Firestore que el push. Escribe SOLO vía DAO
-        // (anti-eco), así que nunca re-encola en `sync_queue`. Firestore SDK
-        // cachea offline, por lo que registrar los listeners aquí es seguro
-        // aunque no haya red al arrancar.
+        // Dirección PULL (Firestore → Room). Comparte `appScope` y la misma
+        // instancia de Firestore que el push. Escribe SOLO vía DAO (anti-eco).
         remotePullSync = RemotePullSync(
             firestore = firestore,
             db = database,
             scope = appScope,
             householdId = householdId
         )
-        remotePullSync.start()
+
+        // Auth anónima ANTES de arrancar pull/push: sin usuario autenticado,
+        // Firestore rechaza todo (PERMISSION_DENIED) y los snapshot listeners
+        // mueren sin re-registrarse. Por eso el sign-in va primero; recién
+        // después registramos los listeners del pull y drenamos el outbox del
+        // push. Firestore cachea offline, así que es seguro aunque no haya red.
+        appScope.launch {
+            mx.budget.data.remote.AuthManager().signInAnonymously()
+            remotePullSync.start()
+            syncManager.drain()
+        }
 
         // Pipeline de normalización/atribución retroactiva (Apéndice F.3). Se encola
         // una sola vez por instalación; WorkManager persiste el trabajo, así que el

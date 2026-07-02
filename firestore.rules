@@ -1,0 +1,27 @@
+rules_version = '2';
+
+// Reglas de seguridad de Firestore para la Finance-App.
+//
+// La app es de UN SOLO hogar por instalación y usa autenticación ANÓNIMA:
+// los dispositivos del hogar (Norma, Agustín) inician sesión anónima y
+// comparten los mismos datos bajo `households/{householdId}` (householdId fijo
+// = "default_household"). No se puede atar el hogar al uid porque cada
+// instalación anónima tiene un uid distinto, así que la regla exige únicamente
+// que la petición esté autenticada. Suficiente para una app personal; NO usar
+// tal cual para una app multi-tenant pública.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Datos del hogar (expenses, wallets, wallet_transfer, income_source,
+    // categories, members, quincenas y subcolecciones como attributions):
+    // lectura/escritura solo para usuarios autenticados.
+    match /households/{householdId}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Todo lo demás: cerrado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
