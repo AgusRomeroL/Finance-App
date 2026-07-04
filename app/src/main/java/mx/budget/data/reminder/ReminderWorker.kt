@@ -12,7 +12,7 @@ import kotlinx.serialization.json.jsonObject
 import mx.budget.BudgetApplication
 import mx.budget.data.local.result.PlannedReminder
 import mx.budget.data.settings.SettingsRepository
-import mx.budget.service.WearSyncManager
+import mx.budget.service.WearSnapshotBuilder
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
@@ -68,19 +68,10 @@ class ReminderWorker(
 
             settings.setReminderState(newState)
 
-            // Empuja el saldo "Disponible" al reloj en cada corrida (~15 min), para
-            // que el tile Glance no quede obsoleto con la app cerrada (§G.3). Mismo
-            // cálculo que el KPI del dashboard. Best-effort: nunca falla el worker.
-            runCatching {
-                val q = app.database.quincenaDao().getActive(app.householdId)
-                if (q != null) {
-                    WearSyncManager.pushSnapshot(
-                        context = applicationContext,
-                        balance = q.projectedIncomeMxn - q.actualExpensesMxn,
-                        quincenaLabel = q.label,
-                    )
-                }
-            }
+            // Empuja el snapshot completo al reloj en cada corrida (~15 min), para
+            // que los Tiles y el hub no queden obsoletos con la app cerrada (§G.3).
+            // Best-effort: nunca falla el worker.
+            runCatching { WearSnapshotBuilder.push(applicationContext) }
 
             Result.success()
         } catch (e: Exception) {

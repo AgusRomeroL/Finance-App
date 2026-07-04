@@ -38,6 +38,23 @@ class BudgetWearListenerService : WearableListenerService() {
                 val text = String(messageEvent.data).trim()
                 if (text.isNotEmpty()) app.captureNaturalLanguage(text, "WATCH")
             }
+            WearPaths.PATH_NEW_INCOME -> {
+                // Payload "amount|label". El ingreso NO va a la bandeja (es de gasto);
+                // se inserta directo como PLANNED en la quincena activa.
+                val parts = String(messageEvent.data).split("|")
+                if (parts.size == 2) {
+                    val amount = parts[0].toDoubleOrNull() ?: return
+                    app.captureWatchIncome(amount, parts[1].trim())
+                }
+            }
+            WearPaths.PATH_CONFIRM_PENDING -> {
+                val id = String(messageEvent.data).trim()
+                if (id.isNotEmpty()) app.confirmPendingFromWatch(id)
+            }
+            WearPaths.PATH_DISCARD_PENDING -> {
+                val id = String(messageEvent.data).trim()
+                if (id.isNotEmpty()) app.dismissPendingFromWatch(id)
+            }
             else -> super.onMessageReceived(messageEvent)
         }
     }

@@ -44,9 +44,10 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 
-    // Wear Compose (Material + Foundation)
+    // Wear Compose (Material + Foundation) + navegación del hub
     implementation("androidx.wear.compose:compose-material:1.4.0")
     implementation("androidx.wear.compose:compose-foundation:1.4.0")
+    implementation("androidx.wear.compose:compose-navigation:1.4.0")
 
     // Horologist — AppScaffold/ScreenScaffold + ScalingLazyColumn responsivo
     implementation("com.google.android.horologist:horologist-compose-layout:0.6.17")
@@ -55,6 +56,12 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:18.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
-    // Glance Tile para el vistazo de saldo en la home del reloj
-    implementation("androidx.glance:glance-wear-tiles:1.0.0-alpha05")
+    // Tiles (ProtoLayout) — el camino oficial y estable, renderizado por el
+    // sistema (sin recomposición de Compose). Reemplaza a glance-wear-tiles alpha,
+    // que crasheaba ("Glance Wear Tile Error") y hundía el FPS del reloj.
+    implementation("androidx.wear.tiles:tiles:1.4.0")
+    implementation("androidx.wear.protolayout:protolayout:1.2.0")
+    implementation("androidx.wear.protolayout:protolayout-material:1.2.0")
+    // SuspendingTileService: onTileRequest en corrutina (para await del Data Layer).
+    implementation("com.google.android.horologist:horologist-tiles:0.6.17")
 }

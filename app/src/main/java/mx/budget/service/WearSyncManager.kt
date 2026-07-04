@@ -5,16 +5,17 @@ import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import mx.budget.core.wear.WearPaths
 import mx.budget.ui.dashboard.DashboardUiState
 import mx.budget.ui.dashboard.DashboardViewModel
 
 /**
  * Gestor pasivo residente en el módulo móvil.
- * Observa el estado principal de la Dashboard y retransmite
- * asincrónicamente el presupuesto restante (Balance) hacia los nodos acoplados.
+ * Observa el estado principal de la Dashboard y retransmite asincrónicamente el
+ * snapshot completo del presupuesto (saldo + recomendados + movimientos +
+ * bandeja + gasto por miembro) hacia los nodos acoplados vía [WearSnapshotBuilder].
  */
 class WearSyncManager(
     private val context: Context,
@@ -23,17 +24,16 @@ class WearSyncManager(
 ) {
 
     fun startSyncObservation() {
-        dashboardViewModel.uiState
-            .onEach { state ->
+        appScope.launch {
+            // collectLatest: si el dashboard emite de nuevo mientras se arma un
+            // snapshot (consulta Room), se cancela el anterior y se rehace con el
+            // estado más reciente — evita apilar builds redundantes.
+            dashboardViewModel.uiState.collectLatest { state ->
                 if (state is DashboardUiState.Success) {
-                    pushSnapshot(
-                        context = context,
-                        balance = state.balance,
-                        quincenaLabel = state.quincena?.label ?: "Sin Quincena"
-                    )
+                    WearSnapshotBuilder.push(context)
                 }
             }
-            .launchIn(appScope)
+        }
     }
 
     companion object {

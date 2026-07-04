@@ -19,6 +19,25 @@ class ExpenseSender(private val context: Context) {
         send(WearPaths.PATH_NEW_EXPENSE, "$amount|$concept")
 
     /**
+     * Confirma un cargo recomendado (Tile A) reusando el camino de gasto rápido:
+     * el teléfono lo deja en la bandeja `pending_capture` (propose-then-confirm).
+     */
+    suspend fun acceptSuggestion(amount: Double, concept: String): Result<Unit> =
+        sendQuickExpense(amount, concept)
+
+    /** Ingreso manual (monto|etiqueta). El teléfono lo inserta PLANNED. */
+    suspend fun sendIncome(amount: Double, label: String): Result<Unit> =
+        send(WearPaths.PATH_NEW_INCOME, "$amount|$label")
+
+    /** Confirma una captura de la bandeja desde el reloj (payload = id). */
+    suspend fun confirmPending(id: String): Result<Unit> =
+        send(WearPaths.PATH_CONFIRM_PENDING, id)
+
+    /** Descarta una captura de la bandeja desde el reloj (payload = id). */
+    suspend fun discardPending(id: String): Result<Unit> =
+        send(WearPaths.PATH_DISCARD_PENDING, id)
+
+    /**
      * Envía una frase en lenguaje natural dictada en el reloj (§G.3). El reloj NO
      * corre el LLM: el teléfono recibe el texto crudo y lo parsea/enriquece, dejando
      * la propuesta en la bandeja (propose-then-confirm).

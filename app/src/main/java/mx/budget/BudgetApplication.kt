@@ -460,6 +460,62 @@ class BudgetApplication : Application() {
     }
 
     /**
+     * Ingreso manual capturado en el reloj (§G.3). A diferencia del gasto, el
+     * ingreso NO pasa por la bandeja `pending_capture` (orientada a gasto): se
+     * inserta directo como `PLANNED` en la quincena activa (el usuario lo postea
+     * después en el teléfono). Corre en el [appScope] (sobrevive al listener
+     * efímero del reloj). Al terminar refresca el snapshot del reloj.
+     */
+    fun captureWatchIncome(amountMxn: Double, label: String) {
+        if (amountMxn <= 0.0) return
+        appScope.launch {
+            runCatching {
+                val quincena = quincenaRepository.getActive(householdId) ?: return@launch
+                val members = database.memberDao().getActiveMembers(householdId)
+                val memberId = members.firstOrNull { it.role == "PAYER_ADULT" }?.id
+                    ?: members.firstOrNull()?.id ?: return@launch
+                val today = java.time.LocalDate
+                    .now(java.time.ZoneId.of("America/Mexico_City")).toString()
+                incomeRepository.insert(
+                    mx.budget.data.local.entity.IncomeSourceEntity(
+                        id = java.util.UUID.randomUUID().toString(),
+                        householdId = householdId,
+                        quincenaId = quincena.id,
+                        memberId = memberId,
+                        label = label.trim().ifBlank { "Ingreso" }.take(64),
+                        amountMxn = amountMxn,
+                        expectedDate = today,
+                        status = "PLANNED",
+                        createdAt = System.currentTimeMillis(),
+                    )
+                )
+            }
+            mx.budget.service.WearSnapshotBuilder.push(this@BudgetApplication)
+        }
+    }
+
+    /**
+     * Confirma una captura de la bandeja desde el reloj: reusa el mismo camino
+     * agnóstico a la fuente que el chip del dashboard ([BankCaptureManager.confirm]),
+     * que arma el gasto POSTED con atribución inferida. Refresca el snapshot del
+     * reloj al terminar (para que la lista de pendientes baje el item).
+     */
+    fun confirmPendingFromWatch(captureId: String) {
+        appScope.launch {
+            runCatching { bankCaptureManager.confirm(captureId) }
+            mx.budget.service.WearSnapshotBuilder.push(this@BudgetApplication)
+        }
+    }
+
+    /** Descarta una captura de la bandeja desde el reloj ([BankCaptureManager.dismiss]). */
+    fun dismissPendingFromWatch(captureId: String) {
+        appScope.launch {
+            runCatching { bankCaptureManager.dismiss(captureId) }
+            mx.budget.service.WearSnapshotBuilder.push(this@BudgetApplication)
+        }
+    }
+
+    /**
      * Agenda el [ReminderWorker] periódico (piso 15 min de WorkManager; NO
      * `SCHEDULE_EXACT_ALARM`). `KEEP`: respeta una agenda existente entre arranques
      * para no reiniciar el contador del periodo en cada apertura de la app.

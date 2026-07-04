@@ -47,11 +47,31 @@
             </intent-filter>
         </service>
 
-        <!-- Tile de saldo en la home del reloj. -->
-        <service
-            android:name=".presentation.tile.BudgetGlanceTileService"
+        <!-- Actividad ligera de captura (monto+tipo+voz), lanzada desde el Tile B. -->
+        <activity
+            android:name=".presentation.CapturaActivity"
             android:exported="true"
-            android:label="@string/app_name"
+            android:theme="@style/Theme.BudgetWear" />
+
+        <!-- Tile A — Recomendados (ProtoLayout). -->
+        <service
+            android:name=".presentation.tile.SuggestionsTileService"
+            android:exported="true"
+            android:label="Recomendados"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/ic_wear_launcher" />
+        </service>
+
+        <!-- Tile B — Captura (ProtoLayout). -->
+        <service
+            android:name=".presentation.tile.QuickEntryTileService"
+            android:exported="true"
+            android:label="Captura"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
             <intent-filter>
                 <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
