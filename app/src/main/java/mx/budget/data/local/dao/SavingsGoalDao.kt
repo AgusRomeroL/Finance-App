@@ -26,4 +26,8 @@ interface SavingsGoalDao {
 
     @Update
     suspend fun update(goal: SavingsGoalEntity)
+
+    /** Borrado por id usado EXCLUSIVAMENTE por el pull (removal remoto). */
+    @Query("DELETE FROM savings_goal WHERE id = :id")
+    suspend fun deleteById(id: String)
 }

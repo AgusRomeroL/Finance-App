@@ -64,6 +64,9 @@ class RemotePullSync(
     private val quincenaDao = db.quincenaDao()
     private val walletTransferDao = db.walletTransferDao()
     private val incomeSourceDao = db.incomeSourceDao()
+    private val savingsGoalDao = db.savingsGoalDao()
+    private val loanDao = db.loanDao()
+    private val installmentPlanDao = db.installmentPlanDao()
 
     private val listeners = mutableListOf<ListenerRegistration>()
 
@@ -126,6 +129,41 @@ class RemotePullSync(
                 local == null || remote.updatedAt > local.updatedAt
             },
             onRemoved = { incomeSourceDao.deleteById(it) },
+        )
+
+        // Hoja de balance (MVP Fase 3.5): savings_goal / loan / installment_plan,
+        // todas con LWW + removal remoto.
+        listeners += register(
+            "savings_goal",
+            { it.toSavingsGoalEntity() },
+            apply = { savingsGoalDao.insert(it) },
+            shouldApply = { remote ->
+                val local = savingsGoalDao.getById(remote.id)
+                local == null || remote.updatedAt > local.updatedAt
+            },
+            onRemoved = { savingsGoalDao.deleteById(it) },
+        )
+
+        listeners += register(
+            "loan",
+            { it.toLoanEntity() },
+            apply = { loanDao.insert(it) },
+            shouldApply = { remote ->
+                val local = loanDao.getById(remote.id)
+                local == null || remote.updatedAt > local.updatedAt
+            },
+            onRemoved = { loanDao.deleteById(it) },
+        )
+
+        listeners += register(
+            "installment_plan",
+            { it.toInstallmentPlanEntity() },
+            apply = { installmentPlanDao.insert(it) },
+            shouldApply = { remote ->
+                val local = installmentPlanDao.getById(remote.id)
+                local == null || remote.updatedAt > local.updatedAt
+            },
+            onRemoved = { installmentPlanDao.deleteById(it) },
         )
 
         Log.i(TAG, "Pull arrancado para household=$householdId (${listeners.size} listeners)")

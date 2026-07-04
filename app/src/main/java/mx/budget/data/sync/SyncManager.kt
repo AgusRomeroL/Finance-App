@@ -11,11 +11,17 @@ import kotlinx.coroutines.sync.withLock
 import mx.budget.data.local.dao.ExpenseAttributionDao
 import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.IncomeSourceDao
+import mx.budget.data.local.dao.InstallmentPlanDao
+import mx.budget.data.local.dao.LoanDao
 import mx.budget.data.local.dao.PaymentMethodDao
+import mx.budget.data.local.dao.SavingsGoalDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.dao.WalletTransferDao
+import mx.budget.data.remote.LoanRepositoryFirestore
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.IncomeRepository
+import mx.budget.data.repository.InstallmentRepository
+import mx.budget.data.repository.SavingsRepository
 import mx.budget.data.repository.TransferRepository
 import mx.budget.data.repository.WalletRepository
 
@@ -47,7 +53,15 @@ class SyncManager(
     private val transferDao: WalletTransferDao,
     private val remoteTransferRepository: TransferRepository,
     private val incomeSourceDao: IncomeSourceDao,
-    private val remoteIncomeRepository: IncomeRepository
+    private val remoteIncomeRepository: IncomeRepository,
+    // MVP Fase 3.5 — hoja de balance (opcionales para compatibilidad).
+    private val savingsGoalDao: SavingsGoalDao? = null,
+    private val remoteSavingsRepository: SavingsRepository? = null,
+    private val loanDao: LoanDao? = null,
+    /** Concreto (no interfaz): expone `deleteById` para drenar `LOAN|DELETE`. */
+    private val remoteLoanRepository: LoanRepositoryFirestore? = null,
+    private val installmentPlanDao: InstallmentPlanDao? = null,
+    private val remoteInstallmentRepository: InstallmentRepository? = null,
 ) {
 
     private val mutex = Mutex()
@@ -133,6 +147,43 @@ class SyncManager(
                                 syncQueueDao.delete(row.id)
                             } else {
                                 remoteIncomeRepository.insert(income)
+                                syncQueueDao.delete(row.id)
+                            }
+                        }
+
+                        // ── Hoja de balance (MVP Fase 3.5) ─────────────────────
+
+                        row.entityType == "SAVINGS" && row.operation == "UPSERT" -> {
+                            val goal = savingsGoalDao?.getById(row.entityId)
+                            if (goal == null || remoteSavingsRepository == null) {
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteSavingsRepository.insert(goal)
+                                syncQueueDao.delete(row.id)
+                            }
+                        }
+
+                        row.entityType == "LOAN" && row.operation == "UPSERT" -> {
+                            val loan = loanDao?.getById(row.entityId)
+                            if (loan == null || remoteLoanRepository == null) {
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteLoanRepository.insert(loan)
+                                syncQueueDao.delete(row.id)
+                            }
+                        }
+
+                        row.entityType == "LOAN" && row.operation == "DELETE" -> {
+                            remoteLoanRepository?.deleteById(row.entityId)
+                            syncQueueDao.delete(row.id)
+                        }
+
+                        row.entityType == "INSTALLMENT" && row.operation == "UPSERT" -> {
+                            val plan = installmentPlanDao?.getById(row.entityId)
+                            if (plan == null || remoteInstallmentRepository == null) {
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteInstallmentRepository.insert(plan)
                                 syncQueueDao.delete(row.id)
                             }
                         }

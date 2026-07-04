@@ -69,7 +69,7 @@ import mx.budget.data.local.entity.WalletTransferEntity
         PendingCaptureEntity::class,
         WalletTransferEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -299,6 +299,21 @@ abstract class BudgetDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `payment_method` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `wallet_transfer` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `income_source` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v11 → v12: **`updated_at` para la hoja de balance** (MVP Fase 3.5).
+         * Extiende el LWW del sync a las 3 tablas que ahora también se pushean:
+         * `savings_goal`, `loan`, `installment_plan`. Mismo diseño que v10→v11
+         * (`NOT NULL DEFAULT 0` coincidente con el `@ColumnInfo` para que el
+         * identityHash de `app/schemas/12.json` valide).
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `savings_goal` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `loan` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `installment_plan` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

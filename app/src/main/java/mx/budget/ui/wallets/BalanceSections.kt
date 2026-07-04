@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -251,7 +253,12 @@ fun SavingsGoalSheet(
     var current by remember { mutableStateOf(existing?.currentMxn?.toPlainString() ?: "") }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetMaxWidth = 640.dp) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
             Text(
                 if (existing == null) "Nueva meta de ahorro" else "Editar meta",
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
@@ -306,7 +313,12 @@ fun LoanSheet(
     val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetMaxWidth = 640.dp) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
             Text(
                 if (existing == null) "Nuevo préstamo" else "Préstamo",
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
@@ -390,7 +402,12 @@ fun InstallmentSheet(
     var amount by remember { mutableStateOf(existing?.installmentAmountMxn?.toPlainString() ?: "") }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetMaxWidth = 640.dp) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
             Text(
                 if (existing == null) "Nuevo plan a meses" else "Plan a meses",
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),

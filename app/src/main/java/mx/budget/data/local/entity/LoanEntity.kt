@@ -73,5 +73,9 @@ data class LoanEntity(
     @ColumnInfo(name = "payment_schedule_id")
     val paymentScheduleId: String? = null,
 
-    val notes: String? = null
+    val notes: String? = null,
+
+    /** Última modificación local (epoch millis), para LWW del sync (v11→v12). */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0
 )

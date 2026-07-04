@@ -103,5 +103,9 @@ data class InstallmentPlanEntity(
 
     /** Categoría de gasto vinculada (LOANS.*). */
     @ColumnInfo(name = "category_id")
-    val categoryId: String? = null
+    val categoryId: String? = null,
+
+    /** Última modificación local (epoch millis), para LWW del sync (v11→v12). */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0
 )

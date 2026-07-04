@@ -230,7 +230,8 @@ class BudgetApplication : Application() {
                 BudgetDatabase.MIGRATION_7_8,
                 BudgetDatabase.MIGRATION_8_9,
                 BudgetDatabase.MIGRATION_9_10,
-                BudgetDatabase.MIGRATION_10_11
+                BudgetDatabase.MIGRATION_10_11,
+                BudgetDatabase.MIGRATION_11_12
             )
             .build()
 
@@ -275,11 +276,12 @@ class BudgetApplication : Application() {
             syncQueueDao = syncQueueDao,
             db = database
         )
-        // MVP Fase 3: analíticas + hoja de balance (DAOs sobre tablas de v1).
+        // MVP Fase 3: analíticas + hoja de balance. Desde Fase 3.5 los repos de
+        // balance encolan en sync_queue (patrón TRANSFER).
         analyticsRepository = mx.budget.data.repository.impl.AnalyticsRepositoryImpl(database.analyticsDao())
-        installmentRepository = mx.budget.data.repository.impl.InstallmentRepositoryImpl(database.installmentPlanDao(), database)
-        loanRepository = mx.budget.data.repository.impl.LoanRepositoryImpl(database.loanDao(), database)
-        savingsRepository = mx.budget.data.repository.impl.SavingsRepositoryImpl(database.savingsGoalDao())
+        installmentRepository = mx.budget.data.repository.impl.InstallmentRepositoryImpl(database.installmentPlanDao(), syncQueueDao, database)
+        loanRepository = mx.budget.data.repository.impl.LoanRepositoryImpl(database.loanDao(), syncQueueDao, database)
+        savingsRepository = mx.budget.data.repository.impl.SavingsRepositoryImpl(database.savingsGoalDao(), syncQueueDao, database)
         expenseRepository = ExpenseRepositoryImpl(
             dao = expenseDao,
             attributionDao = attributionDao,
@@ -370,6 +372,10 @@ class BudgetApplication : Application() {
         val remoteWalletRepository = mx.budget.data.remote.WalletRepositoryFirestore(firestore)
         val remoteTransferRepository = mx.budget.data.remote.TransferRepositoryFirestore(firestore)
         val remoteIncomeRepository = mx.budget.data.remote.IncomeRepositoryFirestore(firestore)
+        // Hoja de balance (MVP Fase 3.5).
+        val remoteSavingsRepository = mx.budget.data.remote.SavingsRepositoryFirestore(firestore)
+        val remoteLoanRepository = mx.budget.data.remote.LoanRepositoryFirestore(firestore, householdId)
+        val remoteInstallmentRepository = mx.budget.data.remote.InstallmentRepositoryFirestore(firestore)
 
         // Arranca el drenado del outbox (por conectividad + intento inicial).
         syncManager = SyncManager(
@@ -384,7 +390,13 @@ class BudgetApplication : Application() {
             transferDao = database.walletTransferDao(),
             remoteTransferRepository = remoteTransferRepository,
             incomeSourceDao = database.incomeSourceDao(),
-            remoteIncomeRepository = remoteIncomeRepository
+            remoteIncomeRepository = remoteIncomeRepository,
+            savingsGoalDao = database.savingsGoalDao(),
+            remoteSavingsRepository = remoteSavingsRepository,
+            loanDao = database.loanDao(),
+            remoteLoanRepository = remoteLoanRepository,
+            installmentPlanDao = database.installmentPlanDao(),
+            remoteInstallmentRepository = remoteInstallmentRepository
         )
 
         // Dirección PULL (Firestore → Room). Comparte `appScope` y la misma

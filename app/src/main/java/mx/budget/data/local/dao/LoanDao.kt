@@ -33,4 +33,8 @@ interface LoanDao {
 
     @Delete
     suspend fun delete(loan: LoanEntity)
+
+    /** Borrado por id usado EXCLUSIVAMENTE por el pull (removal remoto). */
+    @Query("DELETE FROM loan WHERE id = :id")
+    suspend fun deleteById(id: String)
 }

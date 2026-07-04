@@ -5,9 +5,12 @@ import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.entity.IncomeSourceEntity
+import mx.budget.data.local.entity.InstallmentPlanEntity
+import mx.budget.data.local.entity.LoanEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.QuincenaEntity
+import mx.budget.data.local.entity.SavingsGoalEntity
 import mx.budget.data.local.entity.WalletTransferEntity
 
 /**
@@ -158,6 +161,54 @@ fun DocumentSnapshot.toWalletTransferEntity(): WalletTransferEntity? {
         occurredAt = lng("occurredAt", "occurred_at") ?: return null,
         note = str("note", "note"),
         createdAt = lng("createdAt", "created_at") ?: 0L,
+        updatedAt = lng("updatedAt", "updated_at") ?: 0L,
+    )
+}
+
+fun DocumentSnapshot.toSavingsGoalEntity(): SavingsGoalEntity? {
+    return SavingsGoalEntity(
+        id = id.ifBlank { str("id", "id") ?: return null },
+        householdId = str("householdId", "household_id") ?: return null,
+        name = str("name", "name") ?: return null,
+        targetMxn = dbl("targetMxn", "target_mxn") ?: return null,
+        currentMxn = dbl("currentMxn", "current_mxn") ?: 0.0,
+        targetDate = str("targetDate", "target_date"),
+        linkedPaymentMethodId = str("linkedPaymentMethodId", "linked_payment_method_id"),
+        updatedAt = lng("updatedAt", "updated_at") ?: 0L,
+    )
+}
+
+fun DocumentSnapshot.toLoanEntity(): LoanEntity? {
+    return LoanEntity(
+        id = id.ifBlank { str("id", "id") ?: return null },
+        householdId = str("householdId", "household_id") ?: return null,
+        debtorMemberId = str("debtorMemberId", "debtor_member_id") ?: return null,
+        principalMxn = dbl("principalMxn", "principal_mxn") ?: return null,
+        remainingBalanceMxn = dbl("remainingBalanceMxn", "remaining_balance_mxn") ?: return null,
+        agreedInterestMxn = dbl("agreedInterestMxn", "agreed_interest_mxn") ?: 0.0,
+        issuedAt = str("issuedAt", "issued_at") ?: return null,
+        dueAt = str("dueAt", "due_at"),
+        paymentScheduleId = str("paymentScheduleId", "payment_schedule_id"),
+        notes = str("notes", "notes"),
+        updatedAt = lng("updatedAt", "updated_at") ?: 0L,
+    )
+}
+
+fun DocumentSnapshot.toInstallmentPlanEntity(): InstallmentPlanEntity? {
+    return InstallmentPlanEntity(
+        id = id.ifBlank { str("id", "id") ?: return null },
+        householdId = str("householdId", "household_id") ?: return null,
+        displayName = str("displayName", "display_name") ?: return null,
+        creditorMemberId = str("creditorMemberId", "creditor_member_id"),
+        paymentMethodId = str("paymentMethodId", "payment_method_id"),
+        principalMxn = dbl("principalMxn", "principal_mxn") ?: return null,
+        totalInstallments = int("totalInstallments", "total_installments") ?: return null,
+        installmentAmountMxn = dbl("installmentAmountMxn", "installment_amount_mxn") ?: return null,
+        interestRateApr = dbl("interestRateApr", "interest_rate_apr"),
+        startDate = str("startDate", "start_date") ?: return null,
+        currentInstallment = int("currentInstallment", "current_installment") ?: 0,
+        status = str("status", "status") ?: "ACTIVE",
+        categoryId = str("categoryId", "category_id"),
         updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }

@@ -51,5 +51,9 @@ data class SavingsGoalEntity(
     val targetDate: String? = null,
 
     @ColumnInfo(name = "linked_payment_method_id")
-    val linkedPaymentMethodId: String? = null
+    val linkedPaymentMethodId: String? = null,
+
+    /** Última modificación local (epoch millis), para LWW del sync (v11→v12). */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0
 )

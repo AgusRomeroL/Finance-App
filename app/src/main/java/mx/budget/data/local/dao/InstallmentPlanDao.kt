@@ -52,4 +52,8 @@ interface InstallmentPlanDao {
 
     @Update
     suspend fun update(plan: InstallmentPlanEntity)
+
+    /** Borrado por id usado EXCLUSIVAMENTE por el pull (removal remoto). */
+    @Query("DELETE FROM installment_plan WHERE id = :id")
+    suspend fun deleteById(id: String)
 }
