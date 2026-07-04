@@ -65,7 +65,7 @@ import mx.budget.data.local.entity.WalletTransferEntity
         PendingCaptureEntity::class,
         WalletTransferEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -261,6 +261,30 @@ abstract class BudgetDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallet_transfer_household_id` ON `wallet_transfer` (`household_id`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallet_transfer_from_payment_method_id` ON `wallet_transfer` (`from_payment_method_id`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallet_transfer_to_payment_method_id` ON `wallet_transfer` (`to_payment_method_id`)")
+            }
+        }
+
+        /**
+         * v10 → v11: **`updated_at` para LWW del sync multi-dispositivo** (MVP
+         * Fase 2). Añade la marca de última modificación local a las 4 tablas que
+         * se **pushean** a Firestore: `expense`, `payment_method`,
+         * `wallet_transfer`, `income_source`. El pull remoto solo aplica un doc si
+         * su `updatedAt` es mayor que el local; `0` (default de migración y de
+         * docs legados/seed sin el campo) nunca pisa una edición local.
+         *
+         * NO se añade a `expense_attribution` (viaja con su gasto: la gatea
+         * `expense.updated_at`) ni a category/member/quincena (solo pull, sin
+         * escritura local que proteger). Columnas por `ALTER TABLE ADD COLUMN`
+         * con `NOT NULL DEFAULT 0`, coincidente con el
+         * `@ColumnInfo(defaultValue = "0")` de las entidades para que el
+         * identityHash de `app/schemas/11.json` valide (mismo patrón que v7→v8).
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `expense` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `payment_method` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `wallet_transfer` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `income_source` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

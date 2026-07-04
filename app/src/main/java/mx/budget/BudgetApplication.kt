@@ -211,7 +211,8 @@ class BudgetApplication : Application() {
                 BudgetDatabase.MIGRATION_6_7,
                 BudgetDatabase.MIGRATION_7_8,
                 BudgetDatabase.MIGRATION_8_9,
-                BudgetDatabase.MIGRATION_9_10
+                BudgetDatabase.MIGRATION_9_10,
+                BudgetDatabase.MIGRATION_10_11
             )
             .build()
 

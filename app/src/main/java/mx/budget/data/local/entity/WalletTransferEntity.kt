@@ -67,5 +67,9 @@ data class WalletTransferEntity(
     val note: String? = null,
 
     @ColumnInfo(name = "created_at")
-    val createdAt: Long
+    val createdAt: Long,
+
+    /** Última modificación local (epoch millis), para LWW del sync (v10→v11). */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0
 )

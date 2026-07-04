@@ -98,5 +98,9 @@ data class PaymentMethodEntity(
     val ownerMemberId: String? = null,
 
     @ColumnInfo(name = "is_active")
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+
+    /** Última modificación local (epoch millis), para LWW del sync (v10→v11). */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0
 )

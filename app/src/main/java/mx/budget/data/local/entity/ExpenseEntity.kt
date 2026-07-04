@@ -168,5 +168,15 @@ data class ExpenseEntity(
 
     /** `CAPTURE | CONFIRM | MANUAL | NONE` — procedencia de la ubicación (§G.4.2). */
     @ColumnInfo(name = "location_source")
-    val locationSource: String? = null
+    val locationSource: String? = null,
+
+    /**
+     * Última modificación local (epoch millis) — base de la resolución de
+     * conflictos LWW del sync multi-dispositivo (MVP Fase 2). Los repos la
+     * estampan en cada escritura; el pull remoto solo aplica un documento si su
+     * `updatedAt` es mayor que el local. `0` = nunca editado tras la migración
+     * (los sembrados y docs legados jamás pisan una edición local). v10→v11.
+     */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0
 )
