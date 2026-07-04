@@ -2,6 +2,8 @@ package mx.budget.ai
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,19 +49,54 @@ class AiAssistantViewModel(
     private val _llmAvailable = MutableStateFlow(false)
     val llmAvailable: StateFlow<Boolean> = _llmAvailable.asStateFlow()
 
+    private var llmPollJob: Job? = null
+
     init {
-        viewModelScope.launch {
-            // ensureReady devuelve Pending mientras el engine carga (Gemma en
-            // CPU tarda). Reintenta hasta resolver Available/Unavailable para
-            // que la pregunta libre se habilite sola cuando termine la carga.
-            var readiness = runCatching { llm.ensureReady() }.getOrNull() ?: LlmReadiness.Unavailable
-            var attempts = 0
-            while (readiness is LlmReadiness.Pending && attempts < 60) {
-                kotlinx.coroutines.delay(2_000)
-                readiness = runCatching { llm.ensureReady() }.getOrNull() ?: LlmReadiness.Unavailable
-                attempts++
+        ensureLlmReadinessChecked()
+    }
+
+    /**
+     * Dispara (o reanuda) el sondeo de disponibilidad del LLM. Segura de
+     * llamar varias veces — si ya está disponible o hay un sondeo en curso,
+     * no hace nada.
+     *
+     * La UI la invoca de nuevo cada vez que se abre el chat: así, si un
+     * sondeo previo terminó en `Unavailable` (p. ej. porque el modelo aún no
+     * se había empujado por adb, o un fallo transitorio de inicialización),
+     * el usuario puede recuperar la pregunta libre sin reiniciar la app.
+     *
+     * Mientras el engine está `Pending` (Gemma en CPU puede tardar varios
+     * minutos en frío, sobre todo la primera carga tras instalar), reintenta
+     * con backoff exponencial SIN un límite de intentos que lo dé por
+     * perdido — el límite anterior (60 intentos × 2 s ≈ 120 s) apagaba la
+     * pregunta libre para siempre si la carga tardaba más, sin forma de
+     * recuperarla salvo reiniciar el proceso.
+     */
+    fun ensureLlmReadinessChecked() {
+        if (_llmAvailable.value) return
+        if (llmPollJob?.isActive == true) return
+        llmPollJob = viewModelScope.launch {
+            var delayMs = LLM_POLL_INITIAL_DELAY_MS
+            while (true) {
+                val readiness = runCatching { llm.ensureReady() }.getOrElse { LlmReadiness.Unavailable }
+                when (readiness) {
+                    LlmReadiness.Available -> {
+                        _llmAvailable.value = true
+                        return@launch
+                    }
+                    LlmReadiness.Unavailable -> {
+                        // Terminal por ahora (sin modelo/init fallido) — no se
+                        // insiste en bucle, pero ensureLlmReadinessChecked()
+                        // puede relanzar el sondeo más tarde.
+                        _llmAvailable.value = false
+                        return@launch
+                    }
+                    is LlmReadiness.Pending -> {
+                        delay(delayMs)
+                        delayMs = (delayMs * 3 / 2).coerceAtMost(LLM_POLL_MAX_DELAY_MS)
+                    }
+                }
             }
-            _llmAvailable.value = readiness == LlmReadiness.Available
         }
     }
 
@@ -127,4 +164,9 @@ class AiAssistantViewModel(
     // NOTA: no se hace llm.close() en onCleared — el OnDeviceLlm es el HybridLlm
     // compartido de la app (lo usa también la capa proactiva); su ciclo de vida
     // es el del proceso, no el de este ViewModel.
+
+    private companion object {
+        const val LLM_POLL_INITIAL_DELAY_MS = 2_000L
+        const val LLM_POLL_MAX_DELAY_MS = 15_000L
+    }
 }

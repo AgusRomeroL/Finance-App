@@ -67,6 +67,11 @@ fun AiChatSheet(
     val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
     val listState = rememberLazyListState()
 
+    // Cada apertura del sheet reintenta el sondeo si aún no está disponible —
+    // cubre el caso de un `Unavailable` previo que ya podría haberse resuelto
+    // (p. ej. el modelo se empujó por adb después de arrancar la app).
+    LaunchedEffect(Unit) { viewModel.ensureLlmReadinessChecked() }
+
     // Auto-scroll al último mensaje.
     LaunchedEffect(history.size) {
         if (history.isNotEmpty()) listState.animateScrollToItem(history.lastIndex)
