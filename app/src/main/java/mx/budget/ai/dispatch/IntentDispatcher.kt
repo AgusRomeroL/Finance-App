@@ -2,6 +2,11 @@ package mx.budget.ai.dispatch
 
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
 import mx.budget.ai.domain.AssistantResponse
 import mx.budget.ai.domain.DispatchResult
 import mx.budget.data.local.result.QuincenaSnapshot
@@ -42,17 +47,60 @@ class IntentDispatcher(
     /** Zona horaria canónica del hogar (spec). */
     private val zone = ZoneId.of("America/Mexico_City")
 
-    suspend fun dispatch(rawResponse: String): DispatchResult {
+    /**
+     * Despacha la salida CRUDA del LLM. Tres niveles de tolerancia:
+     *  1. Decode estricto del JSON reparado.
+     *  2. Parseo manual laxo (intent en minúsculas/con espacios, args sueltos).
+     *  3. Fallback heurístico sobre [originalQuestion] (sin LLM) — el chat
+     *     siempre intenta responder con datos reales antes de rendirse.
+     */
+    suspend fun dispatch(rawResponse: String, originalQuestion: String? = null): DispatchResult {
         val repairedJson = JsonRepairer.repair(rawResponse)
 
-        val response = try {
+        val response = runCatching {
             jsonConfig.decodeFromString<AssistantResponse>(repairedJson)
-        } catch (e: Exception) {
-            return DispatchResult.ParseError(rawResponse)
-        }
+        }.getOrNull()
+            ?: parseTolerant(repairedJson)
+            ?: originalQuestion?.let { q ->
+                android.util.Log.w(TAG, "Salida LLM no parseable, fallback heurístico. Raw: $rawResponse")
+                HeuristicIntentGuesser.guess(q, resolverProvider())
+            }
+            ?: return DispatchResult.ParseError(rawResponse)
 
         return dispatch(response)
     }
+
+    /**
+     * Parseo laxo para salidas "casi válidas" de modelos chicos: intent con
+     * mayúsculas/espacios/guiones inconsistentes, args con tipos primitivos
+     * variados, campos faltantes. Devuelve null si ni siquiera es un objeto
+     * JSON con un intent reconocible.
+     */
+    private fun parseTolerant(json: String): AssistantResponse? = runCatching {
+        val obj = jsonConfig.parseToJsonElement(json).jsonObject
+        val intentRaw = (obj["intent"] as? JsonPrimitive)?.contentOrNull ?: return null
+        val normalized = intentRaw.trim().uppercase().replace(Regex("[\\s-]+"), "_")
+        val intent = AssistantResponse.Intent.entries.firstOrNull { it.name == normalized }
+            ?: return null
+
+        val argsObj = obj["args"] as? JsonObject
+        fun str(key: String): String? = (argsObj?.get(key) as? JsonPrimitive)?.contentOrNull
+
+        AssistantResponse(
+            intent = intent,
+            args = AssistantResponse.Args(
+                category_code = str("category_code"),
+                member_alias = str("member_alias"),
+                wallet_name = str("wallet_name"),
+                plan_name = str("plan_name"),
+                hypothetical_cut_category = str("hypothetical_cut_category"),
+                baseline_quincenas = (argsObj?.get("baseline_quincenas") as? JsonPrimitive)?.intOrNull,
+                from_date = str("from_date"),
+                to_date = str("to_date"),
+            ),
+            reason = (obj["reason"] as? JsonPrimitive)?.contentOrNull ?: "",
+        )
+    }.getOrNull()
 
     /**
      * Despacha una respuesta YA estructurada (la usan los chips deterministas
@@ -74,6 +122,17 @@ class IntentDispatcher(
                     projected = row?.projected ?: (cat.budgetDefaultMxn ?: 0.0),
                     actual = row?.actual ?: 0.0,
                     remaining = row?.remaining ?: (cat.budgetDefaultMxn ?: 0.0),
+                )
+            }
+
+            AssistantResponse.Intent.GET_TOP_CATEGORY -> {
+                val rows = analyticsRepository.getSpendByCategory(householdId, quincena.id)
+                    .filter { it.actual > 0 }
+                    .sortedByDescending { it.actual }
+                if (rows.isEmpty()) DispatchResult.Unknown("Sin gastos en la quincena activa")
+                else DispatchResult.TopCategories(
+                    categories = rows.take(3),
+                    totalMxn = rows.sumOf { it.actual },
                 )
             }
 
@@ -192,7 +251,7 @@ class IntentDispatcher(
                 )
             }
 
-            AssistantResponse.Intent.UNKNOWN -> DispatchResult.Unknown(response.reason)
+            AssistantResponse.Intent.UNKNOWN -> DispatchResult.OutOfScope
         }
     }
 
@@ -201,5 +260,9 @@ class IntentDispatcher(
         val from = LocalDate.parse(startIso).atStartOfDay(zone).toInstant().toEpochMilli()
         val to = LocalDate.parse(endIso).plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
         return from to to
+    }
+
+    private companion object {
+        const val TAG = "IntentDispatcher"
     }
 }

@@ -8,6 +8,7 @@
       "type": "string",
       "enum": [
         "GET_CATEGORY_REMAINING",
+        "GET_TOP_CATEGORY",
         "GET_TOP_SPENDER",
         "GET_SPEND_BY_MEMBER",
         "GET_WALLET_BALANCE",

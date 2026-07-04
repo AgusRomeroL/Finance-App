@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -263,6 +264,14 @@ class MainActivity : ComponentActivity() {
             )
             val scope = rememberCoroutineScope()
             BudgetAppTheme(dynamicColor = dynamicColor) {
+                // Surface raíz: pinta colorScheme.background bajo TODO el NavHost.
+                // Sin él, las pantallas que no traen Scaffold/Surface propio
+                // (Analíticas, Libro Mayor) dibujan texto del tema sobre la
+                // ventana del sistema — ilegible en dark mode.
+                androidx.compose.material3.Surface(
+                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.background,
+                ) {
                 BudgetNavGraph(
                     dashboardViewModel = dashboardViewModel,
                     captureViewModel = captureViewModel,
@@ -338,6 +347,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 )
+                }
             }
         }
     }

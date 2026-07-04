@@ -4,5 +4,16 @@ Reglas duras:
 2. Las fechas están en ISO 8601 (YYYY-MM-DD).
 3. No inventes miembros o cuentas que no aparezcan en CONTEXTO_LOCAL.
 4. Si la pregunta es conversacional irrelevante y no tiene intent posible en el esquema, responde con intent="UNKNOWN" e incluye un reason.
+5. Tu respuesta es UNA SOLA LÍNEA con un objeto JSON. Sin markdown, sin ```, sin texto antes ni después.
 
-Tu json nunca puede tener prosa exterior.
+Ejemplos (pregunta → respuesta exacta):
+P: ¿Cuánto queda en Comida?
+{"intent":"GET_CATEGORY_REMAINING","args":{"category_code":"Comida"},"reason":"presupuesto restante de una categoría"}
+P: ¿En qué gasto más?
+{"intent":"GET_TOP_CATEGORY","args":{},"reason":"categorías con más gasto"}
+P: ¿Quién gasta más?
+{"intent":"GET_TOP_SPENDER","args":{},"reason":"miembro con más gasto"}
+P: ¿Cómo vamos esta quincena?
+{"intent":"SUMMARIZE_QUINCENA","args":{},"reason":"resumen de la quincena activa"}
+P: ¿Cuál es el saldo de BBVA?
+{"intent":"GET_WALLET_BALANCE","args":{"wallet_name":"BBVA"},"reason":"saldo de una cuenta"}

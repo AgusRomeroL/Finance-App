@@ -1,11 +1,10 @@
 package mx.budget.ui.analytics
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,7 +55,7 @@ import java.util.Locale
  * Analíticas. Con LLM disponible acepta pregunta libre; sin LLM (emulador)
  * ofrece chips predefinidos que van directo al dispatcher determinista.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiChatSheet(
     viewModel: AiAssistantViewModel,
@@ -118,10 +117,13 @@ fun AiChatSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            // Atajos deterministas (sin args — funcionan siempre).
-            FlowRow(
+            // Atajos deterministas (sin args) — una sola fila horizontal
+            // desplazable, como los chips de filtro (no crecen en vertical).
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 predefinedChips.forEach { (label, intent) ->
                     AssistChip(
@@ -162,6 +164,7 @@ fun AiChatSheet(
 
 private val predefinedChips = listOf(
     "Resumen de la quincena" to AssistantResponse.Intent.SUMMARIZE_QUINCENA,
+    "¿En qué gasto más?" to AssistantResponse.Intent.GET_TOP_CATEGORY,
     "¿Quién gasta más?" to AssistantResponse.Intent.GET_TOP_SPENDER,
     "Comparar quincenas" to AssistantResponse.Intent.COMPARE_QUINCENAS,
     "Cuotas pendientes" to AssistantResponse.Intent.LIST_UPCOMING_INSTALLMENTS,
@@ -198,6 +201,14 @@ private fun formatResult(result: DispatchResult, money: NumberFormat): String = 
     is DispatchResult.CategoryRemaining ->
         "${result.category.displayName}: gastado ${money.format(result.actual)} de " +
             "${money.format(result.projected)} presupuestados — quedan ${money.format(result.remaining)}."
+
+    is DispatchResult.TopCategories -> buildString {
+        append("Donde más se gasta esta quincena:")
+        result.categories.forEachIndexed { i, c ->
+            val pct = if (result.totalMxn > 0) (c.actual / result.totalMxn * 100).toInt() else 0
+            append("\n${i + 1}. ${c.categoryName}: ${money.format(c.actual)} ($pct % del total)")
+        }
+    }
 
     is DispatchResult.TopSpender ->
         "El mayor gasto de la quincena lo concentra ${result.member.displayName}: " +
@@ -239,9 +250,31 @@ private fun formatResult(result: DispatchResult, money: NumberFormat): String = 
             "diferencia ${money.format(savingsMxn)}."
     }
 
-    is DispatchResult.Unknown -> "No pude resolverlo: ${result.reason.ifBlank { "intent desconocido" }}"
+    // Pregunta fuera del dominio financiero (saludo, charla): en vez de un
+    // seco "no pude resolverlo", el asistente se ofrece proactivamente y guía.
+    DispatchResult.OutOfScope -> ASSISTANT_CAPABILITIES
 
-    is DispatchResult.ParseError -> "La respuesta del modelo no fue un intent válido. Intenta reformular."
+    is DispatchResult.Unknown ->
+        // Errores internos con dato concreto (sin quincena activa, miembro no
+        // hallado, etc.) se muestran tal cual; si viene vacío, guía proactiva.
+        result.reason.ifBlank { ASSISTANT_CAPABILITIES }
+
+    is DispatchResult.ParseError ->
+        "No estoy seguro de haber entendido eso. $ASSISTANT_CAPABILITIES"
 
     is DispatchResult.MissingArg -> "Me faltó un dato (${result.argumentName}). Especifica a qué te refieres."
 }
+
+/**
+ * Mensaje proactivo del asistente cuando la pregunta cae fuera de su dominio o
+ * no se pudo mapear. No está cableado a detectar saludos: es la manera general
+ * de decirle al usuario en qué SÍ puede ayudar, invitándolo a preguntar.
+ */
+private const val ASSISTANT_CAPABILITIES =
+    "Estoy aquí para ayudarte con tus finanzas. Puedes preguntarme, por ejemplo:\n" +
+        "· En qué gastas más\n" +
+        "· Cuánto queda en una categoría\n" +
+        "· Quién gasta más\n" +
+        "· El saldo de una cuenta\n" +
+        "· Cómo va la quincena\n" +
+        "· Tus cuotas pendientes"

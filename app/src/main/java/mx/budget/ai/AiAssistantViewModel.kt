@@ -49,8 +49,17 @@ class AiAssistantViewModel(
 
     init {
         viewModelScope.launch {
-            _llmAvailable.value =
-                runCatching { llm.ensureReady() }.getOrNull() == LlmReadiness.Available
+            // ensureReady devuelve Pending mientras el engine carga (Gemma en
+            // CPU tarda). Reintenta hasta resolver Available/Unavailable para
+            // que la pregunta libre se habilite sola cuando termine la carga.
+            var readiness = runCatching { llm.ensureReady() }.getOrNull() ?: LlmReadiness.Unavailable
+            var attempts = 0
+            while (readiness is LlmReadiness.Pending && attempts < 60) {
+                kotlinx.coroutines.delay(2_000)
+                readiness = runCatching { llm.ensureReady() }.getOrNull() ?: LlmReadiness.Unavailable
+                attempts++
+            }
+            _llmAvailable.value = readiness == LlmReadiness.Available
         }
     }
 
@@ -67,7 +76,9 @@ class AiAssistantViewModel(
 
             ledgerRagUseCase.invoke(question, defaultHouseholdId).fold(
                 onSuccess = { rawJson ->
-                    val dispatchResult = dispatcher.dispatch(rawJson)
+                    // La pregunta original habilita el fallback heurístico del
+                    // dispatcher cuando la salida del LLM no parsea como intent.
+                    val dispatchResult = dispatcher.dispatch(rawJson, originalQuestion = question)
                     finish(dispatchResult, System.currentTimeMillis() - startMs)
                 },
                 onFailure = { error ->

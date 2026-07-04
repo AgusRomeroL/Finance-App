@@ -53,4 +53,28 @@ class AliasResolver(
             i.displayName.lowercase().unaccent().contains(needle)
         }
     }
+
+    // ── Búsqueda inversa: la entidad mencionada DENTRO de un texto libre ─────
+    // (las usa el fallback heurístico cuando el LLM no produjo un intent
+    // parseable). Se prefiere el nombre MÁS LARGO contenido en la pregunta
+    // para que "comida gatos" gane sobre "comida".
+
+    fun findCategoryIn(text: String): CategoryEntity? =
+        findByName(text, categories) { it.displayName }
+
+    fun findMemberIn(text: String): MemberEntity? =
+        findByName(text, members) { it.displayName }
+
+    fun findWalletIn(text: String): PaymentMethodEntity? =
+        findByName(text, wallets) { it.displayName }
+
+    fun findInstallmentPlanIn(text: String): InstallmentPlanEntity? =
+        findByName(text, installments) { it.displayName }
+
+    private fun <T> findByName(text: String, entities: List<T>, name: (T) -> String): T? {
+        val haystack = text.lowercase().unaccent()
+        return entities
+            .filter { name(it).length >= 3 && haystack.contains(name(it).lowercase().unaccent()) }
+            .maxByOrNull { name(it).length }
+    }
 }

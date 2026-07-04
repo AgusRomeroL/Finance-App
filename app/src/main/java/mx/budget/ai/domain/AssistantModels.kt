@@ -30,6 +30,12 @@ sealed class DispatchResult {
         val share: Double
     ) : DispatchResult()
 
+    /** "¿En qué gasto más?" — categorías con más gasto real en la quincena activa. */
+    data class TopCategories(
+        val categories: List<SpendByCategory>,
+        val totalMxn: Double
+    ) : DispatchResult()
+
     data class SpendByMemberResult(
         val member: MemberEntity,
         val totalMxn: Double,
@@ -75,6 +81,13 @@ sealed class DispatchResult {
     data class Unknown(
         val reason: String
     ) : DispatchResult()
+
+    /**
+     * La pregunta cae fuera del dominio financiero (saludo, charla, etc.). El
+     * modelo la clasificó bien como UNKNOWN; la UI responde con una guía
+     * proactiva de capacidades en vez de un error.
+     */
+    data object OutOfScope : DispatchResult()
 
     data class ParseError(
         val rawJson: String

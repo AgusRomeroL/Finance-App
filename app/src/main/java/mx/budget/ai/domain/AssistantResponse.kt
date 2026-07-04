@@ -8,12 +8,15 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class AssistantResponse(
     val intent: Intent,
-    val args: Args,
-    val reason: String
+    // Con defaults: un JSON válido al que el modelo le faltó "args" o "reason"
+    // sigue siendo despachable (los modelos chicos los omiten con frecuencia).
+    val args: Args = Args(),
+    val reason: String = ""
 ) {
     @Serializable
     enum class Intent {
         GET_CATEGORY_REMAINING,
+        GET_TOP_CATEGORY,
         GET_TOP_SPENDER,
         GET_SPEND_BY_MEMBER,
         GET_WALLET_BALANCE,
