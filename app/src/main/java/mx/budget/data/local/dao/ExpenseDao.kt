@@ -272,4 +272,12 @@ interface ExpenseDao {
 
     @Delete
     suspend fun delete(expense: ExpenseEntity)
+
+    /**
+     * Borrado por id usado EXCLUSIVAMENTE por el pull (removal remoto). Las
+     * atribuciones caen por FK CASCADE. NO ajusta saldos: el saldo del wallet
+     * llega como estado en su propio documento remoto.
+     */
+    @Query("DELETE FROM expense WHERE id = :id")
+    suspend fun deleteById(id: String)
 }

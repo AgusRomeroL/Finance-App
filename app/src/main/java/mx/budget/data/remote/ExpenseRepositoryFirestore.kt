@@ -16,7 +16,13 @@ import mx.budget.data.local.result.TopExpense
 import mx.budget.data.repository.ExpenseRepository
 
 class ExpenseRepositoryFirestore(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    /**
+     * Household activo, para rutas directas (`households/{hh}/expenses/{id}`)
+     * en operaciones que solo reciben el id (delete). Si es null se cae al
+     * collectionGroup query legado.
+     */
+    private val householdId: String? = null,
 ) : ExpenseRepository {
 
     private fun getCollection(householdId: String) =
@@ -189,8 +195,23 @@ class ExpenseRepositoryFirestore(
     }
 
     override suspend fun deleteAndRevertBalance(expenseId: String) {
-        val matches = firestore.collectionGroup("expenses").whereEqualTo("id", expenseId).get().await()
-        matches.documents.firstOrNull()?.reference?.delete()?.await()
+        // Delete remoto fiable (MVP Fase 2e): ruta directa por id (el id del doc
+        // ES el id de la entidad) + borrado de la subcolección `attributions` en
+        // batch (Firestore NO borra subcolecciones al borrar el padre). Fallback
+        // al collectionGroup legado solo si no se conoce el household.
+        val ref = if (householdId != null) {
+            getCollection(householdId).document(expenseId)
+        } else {
+            firestore.collectionGroup("expenses").whereEqualTo("id", expenseId).get().await()
+                .documents.firstOrNull()?.reference ?: return
+        }
+        val attribs = ref.collection("attributions").get().await()
+        if (!attribs.isEmpty) {
+            val batch = firestore.batch()
+            attribs.documents.forEach { batch.delete(it.reference) }
+            batch.commit().await()
+        }
+        ref.delete().await()
     }
 
     override suspend fun postPlannedExpense(expenseId: String) {

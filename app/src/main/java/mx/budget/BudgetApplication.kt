@@ -343,7 +343,7 @@ class BudgetApplication : Application() {
 
         // Lado nube (Firestore) — usado únicamente por el SyncManager para push.
         val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-        remoteExpenseRepository = mx.budget.data.remote.ExpenseRepositoryFirestore(firestore)
+        remoteExpenseRepository = mx.budget.data.remote.ExpenseRepositoryFirestore(firestore, householdId)
         val remoteWalletRepository = mx.budget.data.remote.WalletRepositoryFirestore(firestore)
         val remoteTransferRepository = mx.budget.data.remote.TransferRepositoryFirestore(firestore)
         val remoteIncomeRepository = mx.budget.data.remote.IncomeRepositoryFirestore(firestore)

@@ -76,7 +76,7 @@ class ExpenseRepositoryImpl(
         attributions: List<ExpenseAttributionEntity>
     ) {
         db.withTransaction {
-            dao.insert(expense)
+            dao.insert(expense.copy(updatedAt = System.currentTimeMillis()))
             attributionDao.deleteByExpenseId(expense.id)
             attributionDao.insertAll(attributions)
             if (expense.status == "POSTED") {
@@ -98,7 +98,7 @@ class ExpenseRepositoryImpl(
             if (old != null && old.status == "POSTED") {
                 applyToWallet(old.paymentMethodId, old.amountMxn, posting = false)
             }
-            dao.update(expense)
+            dao.update(expense.copy(updatedAt = System.currentTimeMillis()))
             attributionDao.deleteByExpenseId(expense.id)
             attributionDao.insertAll(attributions)
             if (expense.status == "POSTED") {
@@ -129,6 +129,9 @@ class ExpenseRepositoryImpl(
                 }
                 attributionDao.insertAll(rows)
             }
+            // Las atribuciones viajan con su gasto: subir el timestamp del gasto
+            // para que el LWW remoto no pise este cambio con un doc viejo.
+            dao.update(expense.copy(updatedAt = System.currentTimeMillis()))
             enqueueSync(expenseId, "UPSERT")
         }
     }
@@ -158,7 +161,8 @@ class ExpenseRepositoryImpl(
                     latitude = latitude,
                     longitude = longitude,
                     placeLabel = placeLabel,
-                    locationSource = source
+                    locationSource = source,
+                    updatedAt = System.currentTimeMillis()
                 )
             )
             enqueueSync(expenseId, "UPSERT")
@@ -168,7 +172,7 @@ class ExpenseRepositoryImpl(
     override suspend fun setOccurredAt(expenseId: String, occurredAt: Long) {
         db.withTransaction {
             val expense = dao.getById(expenseId) ?: return@withTransaction
-            dao.update(expense.copy(occurredAt = occurredAt))
+            dao.update(expense.copy(occurredAt = occurredAt, updatedAt = System.currentTimeMillis()))
             enqueueSync(expenseId, "UPSERT")
         }
     }
@@ -193,7 +197,7 @@ class ExpenseRepositoryImpl(
             if (expense.status != "PLANNED") return@withTransaction
 
             val newAmount = actualAmountMxn ?: expense.amountMxn
-            dao.update(expense.copy(status = "POSTED", amountMxn = newAmount))
+            dao.update(expense.copy(status = "POSTED", amountMxn = newAmount, updatedAt = System.currentTimeMillis()))
 
             // Saldo guardado+mantenido: el gasto pasa de PLANNED (sin efecto) a
             // POSTED, así que aplica el efecto del monto real al wallet.

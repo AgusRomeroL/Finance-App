@@ -50,7 +50,7 @@ class WalletRepositoryImpl(
 
     override suspend fun insert(paymentMethod: PaymentMethodEntity) {
         db.withTransaction {
-            dao.insert(paymentMethod)
+            dao.insert(paymentMethod.copy(updatedAt = System.currentTimeMillis()))
             enqueueSync(paymentMethod.id)
         }
     }
@@ -60,7 +60,7 @@ class WalletRepositoryImpl(
 
     override suspend fun update(paymentMethod: PaymentMethodEntity) {
         db.withTransaction {
-            dao.update(paymentMethod)
+            dao.update(paymentMethod.copy(updatedAt = System.currentTimeMillis()))
             enqueueSync(paymentMethod.id)
         }
     }

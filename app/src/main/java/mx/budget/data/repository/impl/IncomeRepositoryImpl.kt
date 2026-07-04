@@ -44,7 +44,7 @@ class IncomeRepositoryImpl(
 
     override suspend fun insert(income: IncomeSourceEntity) {
         db.withTransaction {
-            dao.insert(income)
+            dao.insert(income.copy(updatedAt = System.currentTimeMillis()))
             if (income.status == "POSTED") creditWallet(income.paymentMethodId, income.amountMxn, posting = true)
             enqueue("INCOME", income.id, "UPSERT")
         }
@@ -61,7 +61,7 @@ class IncomeRepositoryImpl(
             if (old != null && old.status == "POSTED") {
                 creditWallet(old.paymentMethodId, old.amountMxn, posting = false)
             }
-            dao.update(income)
+            dao.update(income.copy(updatedAt = System.currentTimeMillis()))
             if (income.status == "POSTED") creditWallet(income.paymentMethodId, income.amountMxn, posting = true)
             enqueue("INCOME", income.id, "UPSERT")
         }
@@ -71,7 +71,7 @@ class IncomeRepositoryImpl(
         db.withTransaction {
             val income = dao.getById(incomeId) ?: return@withTransaction
             if (income.status == "POSTED") return@withTransaction
-            dao.update(income.copy(status = "POSTED"))
+            dao.update(income.copy(status = "POSTED", updatedAt = System.currentTimeMillis()))
             creditWallet(income.paymentMethodId, income.amountMxn, posting = true)
             enqueue("INCOME", incomeId, "UPSERT")
         }

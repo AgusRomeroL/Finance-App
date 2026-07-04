@@ -21,6 +21,10 @@ interface IncomeSourceDao {
     @Update
     suspend fun update(income: IncomeSourceEntity)
 
+    /** Borrado por id usado EXCLUSIVAMENTE por el pull (removal remoto); no toca saldos. */
+    @Query("DELETE FROM income_source WHERE id = :id")
+    suspend fun deleteById(id: String)
+
     @Query("SELECT * FROM income_source WHERE id = :id")
     suspend fun getById(id: String): IncomeSourceEntity?
 

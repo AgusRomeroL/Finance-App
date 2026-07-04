@@ -82,8 +82,8 @@ interface PaymentMethodDao {
         thresholdPct: Double
     ): List<PaymentMethodEntity>
 
-    @Query("UPDATE payment_method SET current_balance_mxn = :newBalance WHERE id = :paymentMethodId")
-    suspend fun updateBalance(paymentMethodId: String, newBalance: Double)
+    @Query("UPDATE payment_method SET current_balance_mxn = :newBalance, updated_at = :now WHERE id = :paymentMethodId")
+    suspend fun updateBalance(paymentMethodId: String, newBalance: Double, now: Long = System.currentTimeMillis())
 
     /**
      * Ajuste relativo y atómico del saldo (Fase 2 — saldo guardado+mantenido).
@@ -91,8 +91,8 @@ interface PaymentMethodDao {
      * editar, borrar o confirmar un gasto: el saldo parte del ancla declarada y se
      * mueve con cada gasto POSTED nuevo (los 793 sembrados no lo tocan).
      */
-    @Query("UPDATE payment_method SET current_balance_mxn = current_balance_mxn + :delta WHERE id = :paymentMethodId")
-    suspend fun adjustBalance(paymentMethodId: String, delta: Double)
+    @Query("UPDATE payment_method SET current_balance_mxn = current_balance_mxn + :delta, updated_at = :now WHERE id = :paymentMethodId")
+    suspend fun adjustBalance(paymentMethodId: String, delta: Double, now: Long = System.currentTimeMillis())
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(paymentMethod: PaymentMethodEntity)

@@ -31,7 +31,7 @@ class TransferRepositoryImpl(
 
     override suspend fun recordTransfer(transfer: WalletTransferEntity) {
         db.withTransaction {
-            transferDao.insert(transfer)
+            transferDao.insert(transfer.copy(updatedAt = System.currentTimeMillis()))
             applyFlow(transfer.fromPaymentMethodId, transfer.amountMxn, inflow = false)
             applyFlow(transfer.toPaymentMethodId, transfer.amountMxn, inflow = true)
             enqueue("TRANSFER", transfer.id, "UPSERT")

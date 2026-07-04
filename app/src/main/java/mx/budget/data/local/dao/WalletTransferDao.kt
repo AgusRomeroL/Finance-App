@@ -18,6 +18,10 @@ interface WalletTransferDao {
     @Delete
     suspend fun delete(transfer: WalletTransferEntity)
 
+    /** Borrado por id usado EXCLUSIVAMENTE por el pull (removal remoto); no toca saldos. */
+    @Query("DELETE FROM wallet_transfer WHERE id = :id")
+    suspend fun deleteById(id: String)
+
     @Query("SELECT * FROM wallet_transfer WHERE id = :id")
     suspend fun getById(id: String): WalletTransferEntity?
 
