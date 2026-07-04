@@ -102,6 +102,24 @@ class BudgetApplication : Application() {
     lateinit var calendarMirror: CalendarMirror
         private set
 
+    // ── MVP Fase 3: analíticas + hoja de balance (local-only por ahora) ──────
+
+    /** Agregaciones de solo lectura (Analíticas + RAG del asistente). */
+    lateinit var analyticsRepository: mx.budget.data.repository.AnalyticsRepository
+        private set
+
+    /** Planes de cuotas / MSI. */
+    lateinit var installmentRepository: mx.budget.data.repository.InstallmentRepository
+        private set
+
+    /** Préstamos otorgados por el hogar. */
+    lateinit var loanRepository: mx.budget.data.repository.LoanRepository
+        private set
+
+    /** Metas de ahorro. */
+    lateinit var savingsRepository: mx.budget.data.repository.SavingsRepository
+        private set
+
     /** Implementación Firestore del repositorio de gastos (solo para push). */
     lateinit var remoteExpenseRepository: ExpenseRepository
         private set
@@ -257,6 +275,11 @@ class BudgetApplication : Application() {
             syncQueueDao = syncQueueDao,
             db = database
         )
+        // MVP Fase 3: analíticas + hoja de balance (DAOs sobre tablas de v1).
+        analyticsRepository = mx.budget.data.repository.impl.AnalyticsRepositoryImpl(database.analyticsDao())
+        installmentRepository = mx.budget.data.repository.impl.InstallmentRepositoryImpl(database.installmentPlanDao(), database)
+        loanRepository = mx.budget.data.repository.impl.LoanRepositoryImpl(database.loanDao(), database)
+        savingsRepository = mx.budget.data.repository.impl.SavingsRepositoryImpl(database.savingsGoalDao())
         expenseRepository = ExpenseRepositoryImpl(
             dao = expenseDao,
             attributionDao = attributionDao,

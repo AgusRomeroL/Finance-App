@@ -6,8 +6,12 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import mx.budget.data.local.converter.Converters
+import mx.budget.data.local.dao.AnalyticsDao
 import mx.budget.data.local.dao.AttributionReviewDao
 import mx.budget.data.local.dao.CategoryDao
+import mx.budget.data.local.dao.InstallmentPlanDao
+import mx.budget.data.local.dao.LoanDao
+import mx.budget.data.local.dao.SavingsGoalDao
 import mx.budget.data.local.dao.ExpenseAttributionDao
 import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.HouseholdDao
@@ -96,6 +100,16 @@ abstract class BudgetDatabase : RoomDatabase() {
     abstract fun walletTransferDao(): WalletTransferDao
 
     abstract fun incomeSourceDao(): IncomeSourceDao
+
+    // MVP Fase 3 — DAOs sobre tablas existentes desde v1 (añadir un @Dao NO
+    // cambia el esquema ni exige migración).
+    abstract fun analyticsDao(): AnalyticsDao
+
+    abstract fun installmentPlanDao(): InstallmentPlanDao
+
+    abstract fun loanDao(): LoanDao
+
+    abstract fun savingsGoalDao(): SavingsGoalDao
 
     companion object {
         /**

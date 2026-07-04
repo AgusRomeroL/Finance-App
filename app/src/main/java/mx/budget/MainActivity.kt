@@ -125,8 +125,35 @@ class MainActivity : ComponentActivity() {
             app.memberRepository,
             app.quincenaRepository,
             app.database.expenseDao(),
-            app.householdId
+            app.householdId,
+            app.savingsRepository,
+            app.loanRepository,
+            app.installmentRepository
         ))[WalletsViewModel::class.java]
+    }
+
+    private val analyticsViewModel: mx.budget.ui.analytics.AnalyticsViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, AnalyticsViewModelFactory(
+            app.analyticsRepository,
+            app.database.analyticsDao(),
+            app.quincenaRepository,
+            app.savingsRepository,
+            app.installmentRepository,
+            app.loanRepository,
+            app.householdId
+        ))[mx.budget.ui.analytics.AnalyticsViewModel::class.java]
+    }
+
+    private val ledgerViewModel: mx.budget.ui.ledger.LedgerViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, LedgerViewModelFactory(
+            app.expenseRepository,
+            app.quincenaRepository,
+            app.categoryRepository,
+            app.walletRepository,
+            app.householdId
+        ))[mx.budget.ui.ledger.LedgerViewModel::class.java]
     }
 
     private val expenseDetailViewModel: mx.budget.ui.detail.ExpenseDetailViewModel by lazy {
@@ -240,6 +267,8 @@ class MainActivity : ComponentActivity() {
                     newPlannedViewModel = newPlannedViewModel,
                     recurrenceViewModel = recurrenceViewModel,
                     walletsViewModel = walletsViewModel,
+                    analyticsViewModel = analyticsViewModel,
+                    ledgerViewModel = ledgerViewModel,
                     windowWidthDp = windowWidthDp,
                     dynamicColor = dynamicColor,
                     onDynamicColorChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } },
@@ -456,6 +485,9 @@ class WalletsViewModelFactory(
     private val quincenaRepository: QuincenaRepository,
     private val expenseDao: ExpenseDao,
     private val householdId: String,
+    private val savingsRepository: mx.budget.data.repository.SavingsRepository? = null,
+    private val loanRepository: mx.budget.data.repository.LoanRepository? = null,
+    private val installmentRepository: mx.budget.data.repository.InstallmentRepository? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -466,6 +498,53 @@ class WalletsViewModelFactory(
             memberRepository = memberRepository,
             quincenaRepository = quincenaRepository,
             expenseDao = expenseDao,
+            householdId = householdId,
+            savingsRepository = savingsRepository,
+            loanRepository = loanRepository,
+            installmentRepository = installmentRepository,
+        ) as T
+    }
+}
+
+/** Factory para AnalyticsViewModel (MVP Fase 3). */
+class AnalyticsViewModelFactory(
+    private val analyticsRepository: mx.budget.data.repository.AnalyticsRepository,
+    private val analyticsDao: mx.budget.data.local.dao.AnalyticsDao,
+    private val quincenaRepository: QuincenaRepository,
+    private val savingsRepository: mx.budget.data.repository.SavingsRepository,
+    private val installmentRepository: mx.budget.data.repository.InstallmentRepository,
+    private val loanRepository: mx.budget.data.repository.LoanRepository,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.analytics.AnalyticsViewModel(
+            analyticsRepository = analyticsRepository,
+            analyticsDao = analyticsDao,
+            quincenaRepository = quincenaRepository,
+            savingsRepository = savingsRepository,
+            installmentRepository = installmentRepository,
+            loanRepository = loanRepository,
+            householdId = householdId,
+        ) as T
+    }
+}
+
+/** Factory para LedgerViewModel (MVP Fase 3). */
+class LedgerViewModelFactory(
+    private val expenseRepository: ExpenseRepository,
+    private val quincenaRepository: QuincenaRepository,
+    private val categoryRepository: CategoryRepository,
+    private val walletRepository: WalletRepository,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.ledger.LedgerViewModel(
+            expenseRepository = expenseRepository,
+            quincenaRepository = quincenaRepository,
+            categoryRepository = categoryRepository,
+            walletRepository = walletRepository,
             householdId = householdId,
         ) as T
     }

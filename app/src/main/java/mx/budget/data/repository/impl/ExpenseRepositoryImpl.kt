@@ -58,12 +58,12 @@ class ExpenseRepositoryImpl(
         dao.getTopExpenses(quincenaId, limit)
 
     override suspend fun getSpendForMember(quincenaId: String, memberId: String): SpendByMember? =
-        null // Implementación futura via AnalyticsDao
+        db.analyticsDao().getSpendForMember(quincenaId, memberId)
 
     override suspend fun getSpendByMemberAndCategory(
         fromEpoch: Long,
         toEpoch: Long
-    ): List<MemberSpendByCategory> = emptyList()
+    ): List<MemberSpendByCategory> = db.analyticsDao().getSpendByMemberAndCategory(fromEpoch, toEpoch)
 
     override suspend fun getByDateRange(
         householdId: String,

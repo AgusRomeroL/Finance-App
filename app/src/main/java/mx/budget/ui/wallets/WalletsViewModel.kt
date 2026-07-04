@@ -20,9 +20,15 @@ import mx.budget.data.local.entity.WalletTransferEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.TransferWithNames
 import mx.budget.data.local.result.WalletBalanceInfo
+import mx.budget.data.local.entity.InstallmentPlanEntity
+import mx.budget.data.local.entity.LoanEntity
+import mx.budget.data.local.entity.SavingsGoalEntity
 import mx.budget.data.repository.IncomeRepository
+import mx.budget.data.repository.InstallmentRepository
+import mx.budget.data.repository.LoanRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
+import mx.budget.data.repository.SavingsRepository
 import mx.budget.data.repository.TransferRepository
 import mx.budget.data.repository.WalletRepository
 import java.util.UUID
@@ -43,6 +49,10 @@ class WalletsViewModel(
     private val quincenaRepository: QuincenaRepository,
     private val expenseDao: ExpenseDao,
     private val householdId: String,
+    // MVP Fase 3 — hoja de balance (opcionales para no romper llamadas previas).
+    private val savingsRepository: SavingsRepository? = null,
+    private val loanRepository: LoanRepository? = null,
+    private val installmentRepository: InstallmentRepository? = null,
 ) : ViewModel() {
 
     /** Kinds líquidos (saldo disponible, no deuda). */
@@ -194,5 +204,48 @@ class WalletsViewModel(
      */
     fun deleteTransfer(id: String) {
         viewModelScope.launch { transferRepository.deleteTransfer(id) }
+    }
+
+    // ── MVP Fase 3: hoja de balance (ahorro / préstamos / MSI) ───────────────
+
+    val savingsGoals: StateFlow<List<SavingsGoalEntity>> =
+        (savingsRepository?.observeAll(householdId) ?: flowOf(emptyList()))
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val loans: StateFlow<List<LoanEntity>> =
+        (loanRepository?.observeAll(householdId) ?: flowOf(emptyList()))
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val installments: StateFlow<List<InstallmentPlanEntity>> =
+        (installmentRepository?.observeActive(householdId) ?: flowOf(emptyList()))
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Alta/edición de meta de ahorro (insert es REPLACE). */
+    fun saveSavingsGoal(goal: SavingsGoalEntity) {
+        viewModelScope.launch { savingsRepository?.insert(goal) }
+    }
+
+    /** Alta/edición de préstamo (insert es REPLACE). */
+    fun saveLoan(loan: LoanEntity) {
+        viewModelScope.launch { loanRepository?.insert(loan) }
+    }
+
+    /** Registra un pago recibido del deudor (reduce el saldo pendiente). */
+    fun applyLoanPayment(loanId: String, paymentMxn: Double) {
+        viewModelScope.launch { loanRepository?.applyPayment(loanId, paymentMxn) }
+    }
+
+    fun deleteLoan(loan: LoanEntity) {
+        viewModelScope.launch { loanRepository?.delete(loan) }
+    }
+
+    /** Alta/edición de plan de cuotas (insert es REPLACE). */
+    fun saveInstallment(plan: InstallmentPlanEntity) {
+        viewModelScope.launch { installmentRepository?.insert(plan) }
+    }
+
+    /** Avanza la cuota; al llegar al total el repo lo marca PAID_OFF. */
+    fun advanceInstallment(planId: String) {
+        viewModelScope.launch { installmentRepository?.advanceInstallment(planId) }
     }
 }

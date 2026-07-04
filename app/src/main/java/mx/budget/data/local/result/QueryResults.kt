@@ -161,6 +161,16 @@ data class IncomeByMember(
 )
 
 /**
+ * Concepto agregado de una quincena (top conceptos de la pantalla Analíticas).
+ * Agrupa por `concept_canonical` (fallback al concepto crudo).
+ */
+data class TopConcept(
+    val concept: String,
+    val totalMxn: Double,
+    val timesCount: Int
+)
+
+/**
  * Fila plana de atribución para reconstruir la distribución de un gasto.
  * Usada por el [mx.budget.ai.proactive.RetroAttributionEngine] para inferir
  * la atribución histórica más probable de un concepto canónico (Apéndice F.3.5).

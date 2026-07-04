@@ -149,6 +149,9 @@ fun WalletsScreen(
     val entities by viewModel.entities.collectAsState()
     val members by viewModel.members.collectAsState()
     val transfers by viewModel.transfers.collectAsState()
+    val savingsGoals by viewModel.savingsGoals.collectAsState()
+    val loans by viewModel.loans.collectAsState()
+    val installments by viewModel.installments.collectAsState()
 
     val expanded = windowWidthDp >= 600.dp
 
@@ -167,6 +170,27 @@ fun WalletsScreen(
     var showIncome by remember { mutableStateOf(false) }
     // Transferencia marcada para borrar (confirma antes de revertir saldos).
     var transferToDelete by remember { mutableStateOf<TransferWithNames?>(null) }
+    // Sheets de hoja de balance (MVP Fase 3). *Open separa "nuevo" (draft null) de "cerrado".
+    var savingsSheetOpen by remember { mutableStateOf(false) }
+    var savingsDraft by remember { mutableStateOf<mx.budget.data.local.entity.SavingsGoalEntity?>(null) }
+    var loanSheetOpen by remember { mutableStateOf(false) }
+    var loanDraft by remember { mutableStateOf<mx.budget.data.local.entity.LoanEntity?>(null) }
+    var planSheetOpen by remember { mutableStateOf(false) }
+    var planDraft by remember { mutableStateOf<mx.budget.data.local.entity.InstallmentPlanEntity?>(null) }
+    val moneyFmt = remember { java.text.NumberFormat.getCurrencyInstance(java.util.Locale("es", "MX")) }
+    val memberNames = remember(members) { members.associate { it.id to it.displayName } }
+    val balanceSections: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
+        balanceSheetSections(
+            savings = savingsGoals,
+            loans = loans,
+            installments = installments,
+            memberNames = memberNames,
+            money = moneyFmt,
+            onEditSavings = { savingsDraft = it; savingsSheetOpen = true },
+            onEditLoan = { loanDraft = it; loanSheetOpen = true },
+            onEditInstallment = { planDraft = it; planSheetOpen = true },
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -203,6 +227,7 @@ fun WalletsScreen(
                         onEdit = openEdit,
                         transfers = transfers,
                         onTransferLongPress = { transferToDelete = it },
+                        extraSections = balanceSections,
                         modifier = Modifier.weight(0.62f).fillMaxHeight(),
                     )
                     DetailPane(
@@ -223,6 +248,7 @@ fun WalletsScreen(
                     onEdit = openEdit,
                     transfers = transfers,
                     onTransferLongPress = { transferToDelete = it },
+                    extraSections = balanceSections,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -281,6 +307,77 @@ fun WalletsScreen(
             transfer = t,
             onConfirm = { viewModel.deleteTransfer(t.id); transferToDelete = null },
             onDismiss = { transferToDelete = null },
+        )
+    }
+
+    // ── Sheets de hoja de balance (MVP Fase 3) ───────────────────────────────
+    if (savingsSheetOpen) {
+        SavingsGoalSheet(
+            existing = savingsDraft,
+            onSave = { name, target, current ->
+                viewModel.saveSavingsGoal(
+                    (savingsDraft ?: mx.budget.data.local.entity.SavingsGoalEntity(
+                        id = java.util.UUID.randomUUID().toString(),
+                        householdId = viewModel.household,
+                        name = name,
+                        targetMxn = target,
+                    )).copy(name = name, targetMxn = target, currentMxn = current)
+                )
+                savingsSheetOpen = false
+            },
+            onDismiss = { savingsSheetOpen = false },
+        )
+    }
+
+    if (loanSheetOpen) {
+        LoanSheet(
+            existing = loanDraft,
+            members = members,
+            onSave = { debtorId, principal, notes ->
+                viewModel.saveLoan(
+                    loanDraft?.copy(debtorMemberId = debtorId, notes = notes)
+                        ?: mx.budget.data.local.entity.LoanEntity(
+                            id = java.util.UUID.randomUUID().toString(),
+                            householdId = viewModel.household,
+                            debtorMemberId = debtorId,
+                            principalMxn = principal,
+                            remainingBalanceMxn = principal,
+                            issuedAt = java.time.LocalDate.now().toString(),
+                            notes = notes,
+                        )
+                )
+                loanSheetOpen = false
+            },
+            onPayment = { loanId, amount -> viewModel.applyLoanPayment(loanId, amount) },
+            onDelete = { viewModel.deleteLoan(it); loanSheetOpen = false },
+            onDismiss = { loanSheetOpen = false },
+        )
+    }
+
+    if (planSheetOpen) {
+        InstallmentSheet(
+            existing = planDraft,
+            onSave = { name, principal, total, amount, startIso ->
+                viewModel.saveInstallment(
+                    planDraft?.copy(
+                        displayName = name,
+                        principalMxn = principal,
+                        totalInstallments = total,
+                        installmentAmountMxn = amount,
+                    ) ?: mx.budget.data.local.entity.InstallmentPlanEntity(
+                        id = java.util.UUID.randomUUID().toString(),
+                        householdId = viewModel.household,
+                        displayName = name,
+                        principalMxn = principal,
+                        totalInstallments = total,
+                        installmentAmountMxn = amount,
+                        startDate = startIso,
+                    )
+                )
+                planSheetOpen = false
+            },
+            onAdvance = { viewModel.advanceInstallment(it) },
+            onDismiss = { planSheetOpen = false },
         )
     }
 
@@ -385,6 +482,7 @@ private fun WalletList(
     onEdit: (String) -> Unit,
     transfers: List<TransferWithNames>,
     onTransferLongPress: (TransferWithNames) -> Unit,
+    extraSections: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     // Agrupa por sección preservando el orden definido; el resto cae en "Otras".
@@ -448,6 +546,9 @@ private fun WalletList(
                 )
             }
         }
+
+        // Hoja de balance: ahorro / prestamos / MSI (MVP Fase 3).
+        extraSections?.invoke(this)
     }
 }
 

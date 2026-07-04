@@ -19,7 +19,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.collectAsState
+import mx.budget.ui.analytics.AnalyticsScreen
+import mx.budget.ui.analytics.AnalyticsViewModel
 import mx.budget.ui.calendar.CalendarScreen
+import mx.budget.ui.detail.ExpenseDetailSheet
+import mx.budget.ui.ledger.LedgerScreen
+import mx.budget.ui.ledger.LedgerViewModel
 import mx.budget.ui.calendar.CalendarViewModel
 import mx.budget.ui.calendar.NewPlannedViewModel
 import mx.budget.ui.calendar.RecurrenceViewModel
@@ -73,6 +78,8 @@ fun BudgetNavGraph(
     newPlannedViewModel: NewPlannedViewModel,
     recurrenceViewModel: RecurrenceViewModel,
     walletsViewModel: WalletsViewModel,
+    analyticsViewModel: AnalyticsViewModel? = null,
+    ledgerViewModel: LedgerViewModel? = null,
     windowWidthDp: Int = 360,
     dynamicColor: Boolean = true,
     onDynamicColorChange: (Boolean) -> Unit = {},
@@ -163,7 +170,17 @@ fun BudgetNavGraph(
         }
 
         composable(route = BudgetDestinations.LEDGER) {
-            PlaceholderScreen("Libro Mayor", onNavigate)
+            if (ledgerViewModel != null) {
+                LedgerScreen(
+                    viewModel = ledgerViewModel,
+                    onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
+                    onOpenDetail = { row -> expenseDetailViewModel?.open(row) },
+                )
+                // Detalle Fase 1 (ver/editar/borrar) reutilizado desde el ledger.
+                expenseDetailViewModel?.let { ExpenseDetailSheet(it) }
+            } else {
+                PlaceholderScreen("Libro Mayor", onNavigate)
+            }
         }
 
         composable(route = BudgetDestinations.WALLETS) {
@@ -175,7 +192,17 @@ fun BudgetNavGraph(
         }
 
         composable(route = BudgetDestinations.ANALYTICS) {
-            PlaceholderScreen("Analíticas e IA", onNavigate)
+            if (analyticsViewModel != null) {
+                AnalyticsScreen(
+                    viewModel = analyticsViewModel,
+                    onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
+                    onOpenLedger = if (ledgerViewModel != null) {
+                        { onNavigate(BudgetDestinations.LEDGER) }
+                    } else null,
+                )
+            } else {
+                PlaceholderScreen("Analíticas e IA", onNavigate)
+            }
         }
 
         composable(route = BudgetDestinations.PROFILE) {
