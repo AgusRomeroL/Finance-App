@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import mx.budget.ai.proactive.RetroAttributionEngine
 import mx.budget.data.capture.BankCaptureManager
@@ -145,6 +146,11 @@ class MainActivity : ComponentActivity() {
         ))[mx.budget.ui.analytics.AnalyticsViewModel::class.java]
     }
 
+    private val aiAssistantViewModel: mx.budget.ai.AiAssistantViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, AiAssistantViewModelFactory(app))[mx.budget.ai.AiAssistantViewModel::class.java]
+    }
+
     private val ledgerViewModel: mx.budget.ui.ledger.LedgerViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, LedgerViewModelFactory(
@@ -269,6 +275,7 @@ class MainActivity : ComponentActivity() {
                     walletsViewModel = walletsViewModel,
                     analyticsViewModel = analyticsViewModel,
                     ledgerViewModel = ledgerViewModel,
+                    aiAssistantViewModel = aiAssistantViewModel,
                     windowWidthDp = windowWidthDp,
                     dynamicColor = dynamicColor,
                     onDynamicColorChange = { enabled -> scope.launch { settings.setDynamicColor(enabled) } },
@@ -526,6 +533,52 @@ class AnalyticsViewModelFactory(
             installmentRepository = installmentRepository,
             loanRepository = loanRepository,
             householdId = householdId,
+        ) as T
+    }
+}
+
+/**
+ * Factory del asistente reactivo (MVP Fase 4). Construye el pipeline completo
+ * desde el contenedor manual: RAG (OnDeviceLlm compartido = HybridLlm) +
+ * IntentDispatcher con repos reales + AliasResolver fresco por dispatch.
+ */
+class AiAssistantViewModelFactory(
+    private val app: BudgetApplication,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        val rag = mx.budget.ai.rag.LedgerRagUseCase(
+            context = app,
+            llm = app.onDeviceLlm,
+            quincenaRepository = app.quincenaRepository,
+            expenseRepository = app.expenseRepository,
+            analyticsRepository = app.analyticsRepository,
+            walletRepository = app.walletRepository,
+            installmentRepository = app.installmentRepository,
+        )
+        val resolverProvider: suspend () -> mx.budget.ai.dispatch.AliasResolver = {
+            mx.budget.ai.dispatch.AliasResolver(
+                members = app.memberRepository.observeActiveMembers(app.householdId).first(),
+                categories = app.categoryRepository.observeAll(app.householdId).first(),
+                wallets = app.walletRepository.getActive(app.householdId),
+                installments = app.installmentRepository.getActive(app.householdId),
+            )
+        }
+        val dispatcher = mx.budget.ai.dispatch.IntentDispatcher(
+            resolverProvider = resolverProvider,
+            analyticsRepository = app.analyticsRepository,
+            expenseRepository = app.expenseRepository,
+            walletRepository = app.walletRepository,
+            installmentRepository = app.installmentRepository,
+            quincenaRepository = app.quincenaRepository,
+            memberRepository = app.memberRepository,
+            householdId = app.householdId,
+        )
+        return mx.budget.ai.AiAssistantViewModel(
+            llm = app.onDeviceLlm,
+            ledgerRagUseCase = rag,
+            dispatcher = dispatcher,
+            defaultHouseholdId = app.householdId,
         ) as T
     }
 }

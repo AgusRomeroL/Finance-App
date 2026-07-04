@@ -80,6 +80,7 @@ fun BudgetNavGraph(
     walletsViewModel: WalletsViewModel,
     analyticsViewModel: AnalyticsViewModel? = null,
     ledgerViewModel: LedgerViewModel? = null,
+    aiAssistantViewModel: mx.budget.ai.AiAssistantViewModel? = null,
     windowWidthDp: Int = 360,
     dynamicColor: Boolean = true,
     onDynamicColorChange: (Boolean) -> Unit = {},
@@ -199,6 +200,7 @@ fun BudgetNavGraph(
                     onOpenLedger = if (ledgerViewModel != null) {
                         { onNavigate(BudgetDestinations.LEDGER) }
                     } else null,
+                    aiViewModel = aiAssistantViewModel,
                 )
             } else {
                 PlaceholderScreen("Analíticas e IA", onNavigate)

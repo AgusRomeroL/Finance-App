@@ -2,8 +2,9 @@ package mx.budget.ai.rag
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import mx.budget.ai.service.AiCoreManager
+import mx.budget.ai.service.OnDeviceLlm
 import mx.budget.data.repository.AnalyticsRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.InstallmentRepository
@@ -14,10 +15,13 @@ import java.io.InputStreamReader
 /**
  * Orquestador principal del pipeline RAG Local. Conecta los repositorios de Room
  * con la IA manteniéndose 100% como lector de datos.
+ *
+ * MVP Fase 4: el motor es la interfaz [OnDeviceLlm] (el HybridLlm de la app:
+ * AICore → LiteRT-LM), no el AiCoreManager concreto.
  */
 class LedgerRagUseCase(
     private val context: Context,
-    private val aiCoreManager: AiCoreManager,
+    private val llm: OnDeviceLlm,
     private val quincenaRepository: QuincenaRepository,
     private val expenseRepository: ExpenseRepository,
     private val analyticsRepository: AnalyticsRepository,
@@ -48,8 +52,10 @@ class LedgerRagUseCase(
                 expenseRepository.getTopExpenses(activeQuincena.id, 15) else emptyList(),
             walletsSnapshot = if (ContextDimension.Wallets in schemaDims)
                 analyticsRepository.getDebtConcentration(householdId) else emptyList(),
-            memberSpend = emptyList(), // Asumiendo que AnalyticsRepo o similar expone esto en la fase posterior
-            activeInstallments = emptyList(), // Asumiendo que InstallmentRepo expone el estado
+            memberSpend = if (ContextDimension.ByMember in schemaDims)
+                expenseRepository.observeSpendByMember(activeQuincena.id).first() else emptyList(),
+            activeInstallments = if (ContextDimension.Installments in schemaDims)
+                installmentRepository.observeActiveSummaries(householdId).first() else emptyList(),
             history6q = if (ContextDimension.HistoricalCompare in schemaDims)
                 quincenaRepository.getClosedSnapshots(householdId, 6) else emptyList()
         )
@@ -57,7 +63,7 @@ class LedgerRagUseCase(
         val serializedContext = ContextSerializer.serialize(ragCtx)
         val fullPrompt = assembler.assemble(serializedContext, sanitizedQ)
 
-        aiCoreManager.generate(fullPrompt)
+        llm.generate(fullPrompt)
     }
 
     private fun loadAsset(path: String): String {

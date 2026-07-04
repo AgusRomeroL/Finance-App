@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,7 +27,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,8 +55,10 @@ fun AnalyticsScreen(
     viewModel: AnalyticsViewModel,
     onBack: () -> Unit,
     onOpenLedger: (() -> Unit)? = null,
+    aiViewModel: mx.budget.ai.AiAssistantViewModel? = null,
 ) {
     val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
+    var chatOpen by remember { mutableStateOf(false) }
 
     val quincena by viewModel.activeQuincena.collectAsState()
     val byCategory by viewModel.spendByCategory.collectAsState()
@@ -65,6 +70,7 @@ fun AnalyticsScreen(
     val totalCommitment by viewModel.totalCommitment.collectAsState()
     val totalReceivable by viewModel.totalReceivable.collectAsState()
 
+    Box(Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
@@ -215,6 +221,25 @@ fun AnalyticsScreen(
                 }
             }
         }
+    }
+
+    // FAB del asistente (MVP Fase 4) — chat determinista + LLM si hay.
+    if (aiViewModel != null) {
+        androidx.compose.material3.ExtendedFloatingActionButton(
+            onClick = { chatOpen = true },
+            icon = { Icon(Icons.Filled.AutoAwesome, contentDescription = null) },
+            text = { Text("Preguntar") },
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(24.dp),
+        )
+    }
+    } // Box
+
+    if (chatOpen && aiViewModel != null) {
+        AiChatSheet(viewModel = aiViewModel, onDismiss = { chatOpen = false })
     }
 }
 

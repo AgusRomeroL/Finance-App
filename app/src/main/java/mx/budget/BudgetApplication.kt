@@ -461,13 +461,21 @@ class BudgetApplication : Application() {
         )
     }
 
-    /** Crea los PLANNED faltantes de la quincena activa al arrancar (idempotente). */
+    /**
+     * Rollover + materialización al arrancar (idempotente): primero garantiza
+     * que exista la quincena ACTIVE de HOY (la semilla termina en jun-2026 —
+     * sin esto la app queda "SIN QUINCENA ACTIVA" desde jul-2026) y luego crea
+     * los PLANNED faltantes de esa quincena.
+     */
     private fun materializeRecurringForActiveQuincena() {
         appScope.launch {
-            runCatching {
-                val active = quincenaRepository.getActive(householdId) ?: return@launch
-                recurrenceMaterializer.materialize(active)
-            }
+            val active = runCatching {
+                mx.budget.data.quincena.QuincenaRollover(
+                    dao = database.quincenaDao(),
+                    householdId = householdId,
+                ).ensureActiveForToday()
+            }.getOrNull() ?: quincenaRepository.getActive(householdId) ?: return@launch
+            runCatching { recurrenceMaterializer.materialize(active) }
         }
     }
 
