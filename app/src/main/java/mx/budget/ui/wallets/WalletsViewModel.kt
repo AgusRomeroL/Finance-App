@@ -187,4 +187,12 @@ class WalletsViewModel(
             )
         }
     }
+
+    /**
+     * Borra una transferencia y revierte el ajuste de saldo de ambas cuentas
+     * (RF-41). El repo encola el push del borrado y de los dos wallets.
+     */
+    fun deleteTransfer(id: String) {
+        viewModelScope.launch { transferRepository.deleteTransfer(id) }
+    }
 }

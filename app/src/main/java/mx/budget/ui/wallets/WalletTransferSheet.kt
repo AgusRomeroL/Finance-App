@@ -33,9 +33,33 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.ui.theme.financeColors
+import java.text.NumberFormat
+import java.util.Locale
+
+/** Kinds líquidos: el saldo es disponible (aplica el aviso de saldo insuficiente). */
+private val LIQUID_KINDS = setOf("DEBIT_ACCOUNT", "CASH", "DIGITAL_WALLET", "EMPLOYER_SAVINGS_FUND")
+
+private val mxnFmt: NumberFormat = NumberFormat.getIntegerInstance(Locale("es", "MX"))
+private fun Double.toMxnSigned(): String {
+    val v = this.toLong()
+    return if (v < 0) "−$" + mxnFmt.format(-v) else "$" + mxnFmt.format(v)
+}
+
+/**
+ * Limpia la entrada de un monto: conserva dígitos, un solo punto decimal y hasta
+ * 2 decimales. Evita entradas malformadas ("1.2.3") que rompían el parseo.
+ */
+private fun sanitizeAmountInput(raw: String): String {
+    val filtered = raw.filter { it.isDigit() || it == '.' }
+    val dot = filtered.indexOf('.')
+    if (dot < 0) return filtered
+    val intPart = filtered.substring(0, dot)
+    val decPart = filtered.substring(dot + 1).filter { it.isDigit() }.take(2)
+    return "$intPart.$decPart"
+}
 
 private fun String.toAmountOrNull(): Double? =
-    filter { it.isDigit() || it == '.' }.toDoubleOrNull()
+    sanitizeAmountInput(this).toDoubleOrNull()
 
 /**
  * Transferencia entre cuentas / pago de tarjeta (RF-41). Mueve dinero de una
@@ -58,6 +82,12 @@ fun WalletTransferSheet(
 
     val amountVal = amount.toAmountOrNull()
     val canSave = fromId != null && toId != null && fromId != toId && (amountVal ?: 0.0) > 0.0
+
+    // Aviso suave de saldo insuficiente (solo cuentas líquidas): no bloquea, solo
+    // advierte que la cuenta quedará en negativo (sobregiros reales existen).
+    val fromWallet = wallets.firstOrNull { it.id == fromId }
+    val overdraws = fromWallet != null && fromWallet.kind in LIQUID_KINDS &&
+        amountVal != null && amountVal > fromWallet.currentBalanceMxn
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -89,7 +119,7 @@ fun WalletTransferSheet(
 
             OutlinedTextField(
                 value = amount,
-                onValueChange = { amount = it.filter { c -> c.isDigit() || c == '.' } },
+                onValueChange = { amount = sanitizeAmountInput(it) },
                 label = { Text("Monto (MXN)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
@@ -108,6 +138,15 @@ fun WalletTransferSheet(
                     "El origen y el destino no pueden ser la misma cuenta.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.financeColors.expense,
+                )
+            }
+
+            if (overdraws && fromWallet != null && amountVal != null) {
+                Text(
+                    "Saldo insuficiente — ${fromWallet.displayName} quedará en " +
+                        "${(fromWallet.currentBalanceMxn - amountVal).toMxnSigned()}.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.financeColors.warning,
                 )
             }
 

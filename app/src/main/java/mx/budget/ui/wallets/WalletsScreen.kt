@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.result.ExpenseWithDetails
+import mx.budget.data.local.result.TransferWithNames
 import mx.budget.data.local.result.WalletBalanceInfo
 import mx.budget.ui.dashboard.iconForCategory
 import mx.budget.ui.theme.FinancialTone
@@ -87,6 +88,19 @@ private fun Double.toMxn(): String = "$" + mxnInt.format(this.toLong())
 private val dayFmt = java.text.SimpleDateFormat("EEE d MMM", Locale("es", "MX"))
 private fun formatDay(epochMillis: Long): String =
     dayFmt.format(Date(epochMillis)).replaceFirstChar { it.uppercase() }
+
+/**
+ * Limpia la entrada de un monto: conserva dígitos, un solo punto decimal y hasta
+ * 2 decimales. Evita entradas malformadas ("1.2.3") que rompían el parseo.
+ */
+private fun sanitizeAmountInput(raw: String): String {
+    val filtered = raw.filter { it.isDigit() || it == '.' }
+    val dot = filtered.indexOf('.')
+    if (dot < 0) return filtered
+    val intPart = filtered.substring(0, dot)
+    val decPart = filtered.substring(dot + 1).filter { it.isDigit() }.take(2)
+    return "$intPart.$decPart"
+}
 
 /** Kinds líquidos: el saldo es disponible, no deuda. */
 private val LIQUID_KINDS = setOf("DEBIT_ACCOUNT", "CASH", "DIGITAL_WALLET", "EMPLOYER_SAVINGS_FUND")
@@ -134,6 +148,7 @@ fun WalletsScreen(
     val movements by viewModel.movements.collectAsState()
     val entities by viewModel.entities.collectAsState()
     val members by viewModel.members.collectAsState()
+    val transfers by viewModel.transfers.collectAsState()
 
     val expanded = windowWidthDp >= 600.dp
 
@@ -150,6 +165,8 @@ fun WalletsScreen(
     var showTransfer by remember { mutableStateOf(false) }
     // Hoja de registrar ingreso (acredita el wallet).
     var showIncome by remember { mutableStateOf(false) }
+    // Transferencia marcada para borrar (confirma antes de revertir saldos).
+    var transferToDelete by remember { mutableStateOf<TransferWithNames?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -184,6 +201,8 @@ fun WalletsScreen(
                         selectedId = selected?.paymentMethodId,
                         onSelect = viewModel::selectWallet,
                         onEdit = openEdit,
+                        transfers = transfers,
+                        onTransferLongPress = { transferToDelete = it },
                         modifier = Modifier.weight(0.62f).fillMaxHeight(),
                     )
                     DetailPane(
@@ -202,6 +221,8 @@ fun WalletsScreen(
                     selectedId = null,
                     onSelect = viewModel::selectWallet,
                     onEdit = openEdit,
+                    transfers = transfers,
+                    onTransferLongPress = { transferToDelete = it },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -252,6 +273,14 @@ fun WalletsScreen(
                 showIncome = false
             },
             onDismiss = { showIncome = false },
+        )
+    }
+
+    transferToDelete?.let { t ->
+        DeleteTransferDialog(
+            transfer = t,
+            onConfirm = { viewModel.deleteTransfer(t.id); transferToDelete = null },
+            onDismiss = { transferToDelete = null },
         )
     }
 
@@ -354,6 +383,8 @@ private fun WalletList(
     selectedId: String?,
     onSelect: (String) -> Unit,
     onEdit: (String) -> Unit,
+    transfers: List<TransferWithNames>,
+    onTransferLongPress: (TransferWithNames) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Agrupa por sección preservando el orden definido; el resto cae en "Otras".
@@ -391,6 +422,24 @@ private fun WalletList(
                     selected = w.paymentMethodId == selectedId,
                     onClick = { onSelect(w.paymentMethodId) },
                     onLongClick = { onEdit(w.paymentMethodId) },
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = spring(stiffness = 380f),
+                        fadeOutSpec = spring(stiffness = 380f),
+                        placementSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                    ),
+                )
+            }
+        }
+
+        // Historial de transferencias (RF-41). Household-wide; long-press para borrar.
+        if (transfers.isNotEmpty()) {
+            item(key = "header_transfers") {
+                SectionHeader("Transferencias")
+            }
+            items(transfers, key = { it.id }) { t ->
+                TransferRow(
+                    transfer = t,
+                    onLongClick = { onTransferLongPress(t) },
                     modifier = Modifier.animateItem(
                         fadeInSpec = spring(stiffness = 380f),
                         fadeOutSpec = spring(stiffness = 380f),
@@ -697,6 +746,93 @@ private fun MovementRow(item: ExpenseWithDetails) {
     }
 }
 
+/**
+ * Fila de una transferencia en el historial (RF-41). Muestra origen → destino,
+ * fecha, nota y (si el destino es crédito) la etiqueta "Pago de tarjeta".
+ * Long-press dispara la confirmación de borrado.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TransferRow(
+    transfer: TransferWithNames,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val credit = !isLiquid(transfer.toKind)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .combinedClickable(onClick = {}, onLongClick = onLongClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.SwapHoriz,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "${transfer.fromName} → ${transfer.toName}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+            )
+            val subtitle = buildString {
+                append(formatDay(transfer.occurredAt))
+                if (credit) append(" · Pago de tarjeta")
+                transfer.note?.takeIf { it.isNotBlank() }?.let { append(" · "); append(it) }
+            }
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            transfer.amountMxn.toMxn(),
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+    }
+}
+
+/** Confirma el borrado de una transferencia (revierte el saldo de ambas cuentas). */
+@Composable
+private fun DeleteTransferDialog(
+    transfer: TransferWithNames,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Borrar transferencia") },
+        text = {
+            Text(
+                "Se eliminará la transferencia de ${transfer.fromName} a ${transfer.toName} " +
+                    "por ${transfer.amountMxn.toMxn()} y se revertirá el saldo de ambas cuentas.",
+            )
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Borrar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
+}
+
 @Composable
 private fun HeaderAction(icon: ImageVector, description: String, onClick: () -> Unit) {
     Box(
@@ -741,7 +877,7 @@ private fun ReconcileDialog(
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = text,
-                    onValueChange = { new -> text = new.filter { it.isDigit() || it == '.' } },
+                    onValueChange = { new -> text = sanitizeAmountInput(new) },
                     label = { Text(if (credit) "Deuda real (MXN)" else "Saldo real (MXN)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
