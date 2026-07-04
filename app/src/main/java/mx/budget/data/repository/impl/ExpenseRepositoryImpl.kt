@@ -51,6 +51,9 @@ class ExpenseRepositoryImpl(
     override suspend fun getById(id: String): ExpenseEntity? =
         dao.getById(id)
 
+    override suspend fun getAttributions(expenseId: String): List<ExpenseAttributionEntity> =
+        attributionDao.getByExpenseId(expenseId)
+
     override suspend fun getTopExpenses(quincenaId: String, limit: Int): List<TopExpense> =
         dao.getTopExpenses(quincenaId, limit)
 

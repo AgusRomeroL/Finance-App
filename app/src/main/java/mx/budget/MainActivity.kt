@@ -133,7 +133,11 @@ class MainActivity : ComponentActivity() {
         val app = application as BudgetApplication
         ViewModelProvider(this, ExpenseDetailViewModelFactory(
             app.expenseRepository,
-            app.locationProvider
+            app.locationProvider,
+            app.categoryRepository,
+            app.walletRepository,
+            app.memberRepository,
+            app.householdId
         ))[mx.budget.ui.detail.ExpenseDetailViewModel::class.java]
     }
 
@@ -467,17 +471,24 @@ class WalletsViewModelFactory(
     }
 }
 
-/** Factory para CaptureViewModel */
-/** Factory para ExpenseDetailViewModel (detalle de gasto: ubicación + hora, §G.4). */
+/** Factory para ExpenseDetailViewModel (detalle: ubicación/hora §G.4 + edición/borrado Fase 1). */
 class ExpenseDetailViewModelFactory(
     private val expenseRepository: ExpenseRepository,
     private val locationProvider: mx.budget.data.location.LocationProvider,
+    private val categoryRepository: CategoryRepository,
+    private val walletRepository: WalletRepository,
+    private val memberRepository: MemberRepository,
+    private val householdId: String,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return mx.budget.ui.detail.ExpenseDetailViewModel(
             expenseRepository = expenseRepository,
             locationProvider = locationProvider,
+            categoryRepository = categoryRepository,
+            walletRepository = walletRepository,
+            memberRepository = memberRepository,
+            householdId = householdId,
         ) as T
     }
 }

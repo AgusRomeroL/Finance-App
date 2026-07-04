@@ -44,6 +44,12 @@ interface ExpenseRepository {
 
     suspend fun getById(id: String): ExpenseEntity?
 
+    /**
+     * Atribuciones actuales de un gasto (ambas dimensiones BENEFICIARY + PAYER).
+     * Alimenta el modo edición del detalle del gasto.
+     */
+    suspend fun getAttributions(expenseId: String): List<ExpenseAttributionEntity>
+
     /** Top N gastos de una quincena (para RAG). */
     suspend fun getTopExpenses(quincenaId: String, limit: Int = 15): List<TopExpense>
 

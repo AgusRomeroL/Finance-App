@@ -62,6 +62,9 @@ class ExpenseRepositoryFirestore(
     override fun searchWithDetails(householdId: String, query: String): Flow<List<ExpenseWithDetails>> =
         kotlinx.coroutines.flow.flowOf(emptyList())
 
+    // No-op intencional: la app siempre lee atribuciones de Room; este impl es solo push.
+    override suspend fun getAttributions(expenseId: String): List<ExpenseAttributionEntity> = emptyList()
+
     override fun observePostedTotal(quincenaId: String): Flow<Double> = callbackFlow {
         val listener = firestore.collectionGroup("expenses")
             .whereEqualTo("quincenaId", quincenaId)
