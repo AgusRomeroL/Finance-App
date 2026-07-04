@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 rootProject.name = "Finance-App"
 include(":app")
 include(":wear")
+include(":wearcore")

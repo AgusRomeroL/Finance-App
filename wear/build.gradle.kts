@@ -35,6 +35,9 @@ android {
 }
 
 dependencies {
+    // Constantes compartidas del Data Layer telefono-reloj (MVP Fase 5).
+    implementation(project(":wearcore"))
+
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
