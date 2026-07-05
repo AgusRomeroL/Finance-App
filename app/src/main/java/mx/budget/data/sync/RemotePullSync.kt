@@ -31,10 +31,10 @@ import mx.budget.data.local.entity.ExpenseAttributionEntity
  *
  * ── RESOLUCIÓN DE CONFLICTOS (LWW por `updated_at`, MVP Fase 2c) ────────
  * Para las entidades que la app escribe localmente (expense, payment_method,
- * wallet_transfer, income_source) el doc remoto solo se aplica si su
- * `updatedAt` es ESTRICTAMENTE mayor que el local. Docs sin campo (seed,
- * legados) deserializan `updatedAt = 0` y nunca pisan una edición local.
- * category/member/quincena no tienen `updated_at` (solo pull): REPLACE.
+ * wallet_transfer, income_source y, desde v13, category) el doc remoto solo
+ * se aplica si su `updatedAt` es ESTRICTAMENTE mayor que el local. Docs sin
+ * campo (seed, legados) deserializan `updatedAt = 0` y nunca pisan una
+ * edición local. member/quincena no tienen `updated_at` (solo pull): REPLACE.
  *
  * ── DELETES REMOTOS (Fase 2e) ───────────────────────────────────────────
  * Un `DocumentChange.Type.REMOVED` borra la fila local por id vía DAO
@@ -67,6 +67,7 @@ class RemotePullSync(
     private val savingsGoalDao = db.savingsGoalDao()
     private val loanDao = db.loanDao()
     private val installmentPlanDao = db.installmentPlanDao()
+    private val pendingCaptureDao = db.pendingCaptureDao()
 
     private val listeners = mutableListOf<ListenerRegistration>()
 
@@ -91,10 +92,40 @@ class RemotePullSync(
                 scope.launch { changes.forEach { applyExpenseChange(it) } }
             }
 
-        // categories / members / quincenas: solo pull, sin LWW (REPLACE).
-        listeners += register("categories", { it.toCategoryEntity() }, { categoryDao.upsert(it) })
-        listeners += register("members", { it.toMemberEntity() }, { memberDao.upsert(it) })
-        listeners += register("quincenas", { it.toQuincenaEntity() }, { quincenaDao.upsert(it) })
+        // members / quincenas: desde v14 la app los escribe localmente (wizard de
+        // onboarding, CRUD de maestros) → LWW por updated_at. Seed/legados (0)
+        // nunca pisan una edición local.
+        listeners += register(
+            "members",
+            { it.toMemberEntity() },
+            apply = { memberDao.upsert(it) },
+            shouldApply = { remote ->
+                val local = memberDao.getById(remote.id)
+                local == null || remote.updatedAt > local.updatedAt
+            },
+        )
+        listeners += register(
+            "quincenas",
+            { it.toQuincenaEntity() },
+            apply = { quincenaDao.upsert(it) },
+            shouldApply = { remote ->
+                val local = quincenaDao.getById(remote.id)
+                local == null || remote.updatedAt > local.updatedAt
+            },
+        )
+
+        // categories: desde v13 la app las escribe localmente (alta inline en
+        // captura, edición de color) → LWW por updated_at, como los wallets.
+        // Seed/legados (updatedAt=0) nunca pisan una edición local.
+        listeners += register(
+            "categories",
+            { it.toCategoryEntity() },
+            apply = { categoryDao.upsert(it) },
+            shouldApply = { remote ->
+                val local = categoryDao.getById(remote.id)
+                local == null || remote.updatedAt > local.updatedAt
+            },
+        )
 
         // wallets → payment_method: LWW por updated_at.
         listeners += register(
@@ -165,6 +196,21 @@ class RemotePullSync(
             },
             onRemoved = { installmentPlanDao.deleteById(it) },
         )
+
+        // proposals (Fase B): gastos que un COLABORADOR propone desde la web o su
+        // app. No pueden escribir el ledger; el dueño los ve como sugerencias en
+        // su bandeja `pending_capture` (source=REMOTE) y entran por el patrón
+        // propose-then-confirm ya existente. Anti-eco: se insertan vía DAO directo
+        // con id determinista ("proposal:{id}") para evitar duplicados en re-emisiones.
+        listeners += household().collection("proposals")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w(TAG, "Listener de 'proposals' falló; se reintentará al reconectar", error)
+                    return@addSnapshotListener
+                }
+                val changes = snapshot?.documentChanges ?: return@addSnapshotListener
+                scope.launch { changes.forEach { applyProposalChange(it) } }
+            }
 
         Log.i(TAG, "Pull arrancado para household=$householdId (${listeners.size} listeners)")
     }
@@ -278,6 +324,52 @@ class RemotePullSync(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Fallo al aplicar gasto remoto ${change.document.id} a Room", e)
+        }
+    }
+
+    /**
+     * Refleja una propuesta remota (colaborador) en la bandeja local
+     * `pending_capture` con `source="REMOTE"`. Solo procesa las PENDING nuevas
+     * (ADDED/MODIFIED con status PENDING). Id determinista `proposal:{docId}`
+     * para que re-emisiones del snapshot NO dupliquen la fila (el insert es
+     * REPLACE). No encola en sync_queue (pending_capture es local-only).
+     */
+    private suspend fun applyProposalChange(change: DocumentChange) {
+        try {
+            if (change.type == DocumentChange.Type.REMOVED) return
+            val doc = change.document
+            val status = (doc.getString("status") ?: "PENDING")
+            if (status != "PENDING") return
+
+            val amount = (doc.get("amountMxn") ?: doc.get("amount_mxn")) as? Number ?: return
+            val concept = (doc.getString("concept") ?: doc.getString("note"))?.takeIf { it.isNotBlank() }
+                ?: "Propuesta"
+            val occurredAt = ((doc.get("occurredAt") ?: doc.get("occurred_at")) as? Number)?.toLong()
+                ?: System.currentTimeMillis()
+            val note = doc.getString("note")
+
+            val localId = "proposal:${doc.id}"
+            // Idempotencia: si ya existe (y no está PENDING, o ya está), no re-crea
+            // trabajo del usuario. Un REPLACE sobre una fila ya confirmada la
+            // resucitaría, así que solo insertamos si no existe o sigue PENDING.
+            val existing = pendingCaptureDao.getById(localId)
+            if (existing != null && existing.status != "PENDING") return
+
+            pendingCaptureDao.insert(
+                mx.budget.data.local.entity.PendingCaptureEntity(
+                    id = localId,
+                    source = "REMOTE",
+                    amountMxn = amount.toDouble(),
+                    concept = concept,
+                    occurredAt = occurredAt,
+                    status = "PENDING",
+                    enrichStatus = "READY",
+                    createdAt = System.currentTimeMillis(),
+                    notes = note,
+                )
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Fallo al aplicar propuesta remota ${change.document.id}", e)
         }
     }
 

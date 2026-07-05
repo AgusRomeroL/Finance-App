@@ -141,6 +141,40 @@ class DashboardViewModel(
         viewModelScope.launch { bankCaptureManager.dismiss(id) }
     }
 
+    // ── "Por reembolsar" (Fase B, B3) ───────────────────────────────────────────
+
+    /** Gastos que un tercero adelantó y el hogar aún le debe (tap → detalle). */
+    val pendingReimbursements: StateFlow<List<ExpenseWithDetails>> = expenseRepository
+        .observePendingReimbursements(householdId)
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Totales de lo pendiente por tercero (cuánto se le debe a cada quién). */
+    val pendingReimbursementTotals: StateFlow<List<mx.budget.data.local.result.PendingReimbursementByPayer>> =
+        expenseRepository.observePendingReimbursementTotals(householdId)
+            .catch { emit(emptyList()) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Miembros activos del hogar (para nombrar terceros y detectar single-member). */
+    val members: StateFlow<List<mx.budget.data.local.entity.MemberEntity>> = memberRepository
+        .observeActiveMembers(householdId)
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * `true` cuando el hogar es de una sola persona: exactamente 1 PAYER_ADULT y 0
+     * dependientes (BENEFICIARY_DEPENDENT). En ese caso el dashboard oculta el toggle
+     * Beneficiario/Pagador y las barras por miembro (no aportan con un solo consumidor).
+     * Reactivo sobre [members].
+     */
+    val singleMember: StateFlow<Boolean> = members
+        .map { list ->
+            val adults = list.count { it.role == "PAYER_ADULT" }
+            val dependents = list.count { it.role == "BENEFICIARY_DEPENDENT" }
+            adults <= 1 && dependents == 0
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     /**
      * Conteo de atribuciones pendientes de revisar (Feature B). Alimenta el badge
      * "N por revisar" del dashboard, que entra a la pantalla de revisión.

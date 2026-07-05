@@ -69,5 +69,14 @@ data class MemberEntity(
      * Metadatos adicionales serializados como JSON.
      * Puede incluir: color, avatar, birthdate.
      */
-    val meta: String = "{}"
+    val meta: String = "{}",
+
+    /**
+     * Última modificación local (epoch millis) para LWW del sync (v13→v14).
+     * Desde la Fase B los miembros se crean/editan localmente (wizard de
+     * onboarding, CRUD de maestros), así que el pull debe gatearse por este
+     * timestamp como el resto. Seed/legados quedan en 0 (nunca pisan).
+     */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0
 )

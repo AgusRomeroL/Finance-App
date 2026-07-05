@@ -1,6 +1,15 @@
 package mx.budget.ui.capture
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +46,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Savings
@@ -44,6 +54,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +66,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,26 +95,35 @@ import mx.budget.ui.theme.FinancialTone
 import mx.budget.ui.theme.amountSemantic
 import mx.budget.ui.theme.financeColors
 import java.text.NumberFormat
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CaptureBottomSheet — rediseño "Architectural Ledger" (frame 03)
+// CaptureBottomSheet — rediseño "Architectural Ledger" (frame 03) + paquete A3
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Hoja acotada a 640dp centrada en pantallas grandes (brief D2), con:
+//  · Toggle Gasto/Ingreso funcional (AnimatedContent con resortes M3)
 //  · Monto + keypad
-//  · Categoría = recientes + búsqueda + acordeón de grupos (brief C10)
+//  · Categoría = recientes REALES + búsqueda + crear inline + acordeón (brief C10)
 //  · Atribución en dos dimensiones: "Beneficia a" / "Pagó" (brief C12)
+//  · Fecha con DatePicker M3 (quincena determinista por fecha)
+//  · Modo Review (SP-A1): prellenado + campos "Por decidir"
 //  · Footer con resumen vivo + CTA Guardar
 // Stateless: el CaptureViewModel es el único dueño del estado.
+
+/** Resorte espacial estándar del sheet (Material Expressive). */
+private fun <T> captureSpring() = spring<T>(dampingRatio = 0.8f, stiffness = 380f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CaptureBottomSheet(
     viewModel: CaptureViewModel? = null,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    mode: CaptureSheetMode = CaptureSheetMode.New,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -121,11 +144,31 @@ fun CaptureBottomSheet(
     val notes by (viewModel?.notes ?: dummyStateFlow("")).collectAsState()
     val operationState by (viewModel?.operationState
         ?: dummyStateFlow<CaptureOperationState>(CaptureOperationState.Idle)).collectAsState()
+    // A3: nuevos estados
+    val captureKind by (viewModel?.captureKind ?: dummyStateFlow(CaptureKind.EXPENSE)).collectAsState()
+    val selectedDate by (viewModel?.selectedDate ?: dummyStateFlow<LocalDate?>(null)).collectAsState()
+    val incomeMemberId by (viewModel?.incomeMemberId ?: dummyStateFlow<String?>(null)).collectAsState()
+    val recentCategories by (viewModel?.recentCategories ?: dummyStateFlow(emptyList<CategoryEntity>())).collectAsState()
+    val categorySearchResults by (viewModel?.categorySearchResults ?: dummyStateFlow(emptyList<CategoryEntity>())).collectAsState()
+    val unresolvedFields by (viewModel?.unresolvedFields ?: dummyStateFlow(emptySet<CaptureField>())).collectAsState()
+    // Fase B/B3: "¿Quién pagó?" con tercero.
+    val allMembers by (viewModel?.allMembers ?: dummyStateFlow(emptyList<MemberEntity>())).collectAsState()
+    val thirdPartyPayerId by (viewModel?.thirdPartyPayerId ?: dummyStateFlow<String?>(null)).collectAsState()
+    val thirdPartyMode by (viewModel?.thirdPartyMode
+        ?: dummyStateFlow(CaptureViewModel.ThirdPartyMode.REIMBURSE)).collectAsState()
+
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    // Aplica el modo de apertura (SP-A1) una vez por instancia de modo.
+    LaunchedEffect(mode, viewModel) { viewModel?.applyMode(mode) }
 
     LaunchedEffect(operationState) {
         when (val s = operationState) {
             is CaptureOperationState.Success -> {
-                sheetState.hide(); viewModel?.onOperationStateConsumed(); onDismiss()
+                sheetState.hide()
+                // Resetea el formulario para la siguiente captura (recientes frescas).
+                viewModel?.onDismiss()
+                onDismiss()
             }
             is CaptureOperationState.Error -> {
                 scope.launch { snackbarHostState.showSnackbar(s.message) }
@@ -160,7 +203,12 @@ fun CaptureBottomSheet(
                     .padding(inner)
                     .imePadding()
             ) {
-                CaptureHeader(onClose = { viewModel?.onDismiss(); onDismiss() })
+                CaptureHeader(
+                    kind = captureKind,
+                    isReview = mode is CaptureSheetMode.Review,
+                    onKindChange = { viewModel?.onKindChange(it) },
+                    onClose = { viewModel?.onDismiss(); onDismiss() }
+                )
 
                 // Contenido scrollable — weight(1f) (fill) acota el alto del scroll
                 // exactamente al espacio entre header y footer, alineando pintura y
@@ -175,83 +223,183 @@ fun CaptureBottomSheet(
                     AmountCard(
                         displayAmount = displayAmount,
                         concept = concept,
+                        kind = captureKind,
                         onConceptChange = { viewModel?.onConceptChange(it) },
                         onKey = { viewModel?.onNumpadKey(it) },
-                        onRegister = { viewModel?.onRegisterExpense() },
-                        canRegister = canRegister
+                        onRegister = { viewModel?.onRegister() },
+                        canRegister = canRegister,
+                        amountPending = CaptureField.AMOUNT in unresolvedFields,
+                        conceptPending = CaptureField.CONCEPT in unresolvedFields
                     )
-                    // Sugerencia de atribución aprendida del historial (Feature A,
-                    // §F.4): visible pero ignorable; "Aplicar" rellena los % sin
-                    // auto-confirmar. AnimatedVisibility evita saltos del sheet.
-                    AnimatedVisibility(visible = attributionSuggestion != null) {
-                        attributionSuggestion?.let { suggestion ->
-                            Column {
+                    Spacer(Modifier.height(14.dp))
+
+                    // Conmutación Gasto/Ingreso con resortes M3 (A3 §2).
+                    AnimatedContent(
+                        targetState = captureKind,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                slideInVertically(animationSpec = captureSpring()) { it / 12 })
+                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium)))
+                                .using(SizeTransform(clip = false) { _, _ -> captureSpring() })
+                        },
+                        label = "captureKindContent"
+                    ) { kind ->
+                        when (kind) {
+                            CaptureKind.EXPENSE -> Column {
+                                // Sugerencia de atribución aprendida del historial
+                                // (Feature A, §F.4): visible pero ignorable.
+                                AnimatedVisibility(visible = attributionSuggestion != null) {
+                                    attributionSuggestion?.let { suggestion ->
+                                        Column {
+                                            AttributionSuggestionChip(
+                                                suggestion = suggestion,
+                                                members = members,
+                                                onApply = { viewModel?.applySuggestion() }
+                                            )
+                                            Spacer(Modifier.height(14.dp))
+                                        }
+                                    }
+                                }
+                                CategoryCard(
+                                    categories = categories,
+                                    recents = recentCategories,
+                                    searchResults = categorySearchResults,
+                                    selectedCategoryId = selectedCategoryId,
+                                    pending = CaptureField.CATEGORY in unresolvedFields,
+                                    onSelect = { viewModel?.onCategorySelected(it) },
+                                    onQueryChange = { viewModel?.onCategoryQueryChange(it) },
+                                    onCreateCategory = { name, parentId ->
+                                        viewModel?.onCreateCategory(name, parentId)
+                                    }
+                                )
                                 Spacer(Modifier.height(14.dp))
-                                AttributionSuggestionChip(
-                                    suggestion = suggestion,
+                                WalletsCard(
+                                    title = "Fuente de pago",
+                                    wallets = wallets,
+                                    selectedWalletId = selectedWalletId,
+                                    pending = CaptureField.WALLET in unresolvedFields,
+                                    onSelect = { viewModel?.onWalletSelected(it) }
+                                )
+                                Spacer(Modifier.height(14.dp))
+                                // Atribución visible = solo "Beneficia a". El pagador (casi
+                                // siempre el adulto dueño de la cuenta) se autodefine y vive
+                                // bajo "Más" para overridear/repartir.
+                                BeneficiaryCard(
                                     members = members,
-                                    onApply = { viewModel?.applySuggestion() }
+                                    beneficiaryShares = beneficiaryShares,
+                                    pending = CaptureField.BENEFICIARY in unresolvedFields,
+                                    onToggle = { viewModel?.onBeneficiaryToggled(it) },
+                                    onDelta = { id, d -> viewModel?.onBeneficiaryShareDelta(id, d) },
+                                    onSelectAll = { viewModel?.onSelectAllMembers() },
+                                    onClearAll = { viewModel?.onClearMembers() }
+                                )
+                                Spacer(Modifier.height(14.dp))
+                                MoreSection(
+                                    members = members,
+                                    payerShares = payerShares,
+                                    onPayerToggle = { viewModel?.onPayerToggled(it) },
+                                    onPayerDelta = { id, d -> viewModel?.onPayerShareDelta(id, d) },
+                                    notes = notes,
+                                    onNotesChange = { viewModel?.onNotesChange(it) },
+                                    selectedDate = selectedDate,
+                                    onPickDate = { showDatePicker = true },
+                                    onResetDate = { viewModel?.onDateSelected(null) },
+                                    datePending = CaptureField.DATE in unresolvedFields,
+                                    payerPending = CaptureField.PAYER in unresolvedFields,
+                                    // Fase B/B3: pagó un tercero.
+                                    allMembers = allMembers,
+                                    thirdPartyPayerId = thirdPartyPayerId,
+                                    thirdPartyMode = thirdPartyMode,
+                                    onThirdPartySelected = { viewModel?.onThirdPartyPayerSelected(it) },
+                                    onThirdPartyMode = { viewModel?.onThirdPartyModeChange(it) },
+                                    onCreateExternalPayer = { viewModel?.onCreateExternalPayer(it) }
+                                )
+                            }
+
+                            CaptureKind.INCOME -> Column {
+                                WalletsCard(
+                                    title = "Cuenta destino",
+                                    wallets = wallets,
+                                    selectedWalletId = selectedWalletId,
+                                    onSelect = { viewModel?.onWalletSelected(it) }
+                                )
+                                Spacer(Modifier.height(14.dp))
+                                IncomeMemberCard(
+                                    members = members,
+                                    selectedMemberId = incomeMemberId,
+                                    onSelect = { viewModel?.onIncomeMemberSelected(it) }
+                                )
+                                Spacer(Modifier.height(14.dp))
+                                IncomeDateCard(
+                                    selectedDate = selectedDate,
+                                    onPickDate = { showDatePicker = true },
+                                    onResetDate = { viewModel?.onDateSelected(null) }
                                 )
                             }
                         }
                     }
-                    Spacer(Modifier.height(14.dp))
-                    CategoryCard(
-                        categories = categories,
-                        selectedCategoryId = selectedCategoryId,
-                        onSelect = { viewModel?.onCategorySelected(it) }
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    WalletsCard(
-                        wallets = wallets,
-                        selectedWalletId = selectedWalletId,
-                        onSelect = { viewModel?.onWalletSelected(it) }
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    // Atribución visible = solo "Beneficia a". El pagador (casi
-                    // siempre el adulto dueño de la cuenta) se autodefine y vive
-                    // bajo "Más" para overridear/repartir.
-                    BeneficiaryCard(
-                        members = members,
-                        beneficiaryShares = beneficiaryShares,
-                        onToggle = { viewModel?.onBeneficiaryToggled(it) },
-                        onDelta = { id, d -> viewModel?.onBeneficiaryShareDelta(id, d) },
-                        onSelectAll = { viewModel?.onSelectAllMembers() },
-                        onClearAll = { viewModel?.onClearMembers() }
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    MoreSection(
-                        members = members,
-                        payerShares = payerShares,
-                        onPayerToggle = { viewModel?.onPayerToggled(it) },
-                        onPayerDelta = { id, d -> viewModel?.onPayerShareDelta(id, d) },
-                        notes = notes,
-                        onNotesChange = { viewModel?.onNotesChange(it) }
-                    )
                     Spacer(Modifier.height(16.dp))
                 }
 
                 CaptureFooter(
+                    kind = captureKind,
                     categories = categories,
                     selectedCategoryId = selectedCategoryId,
                     displayAmount = displayAmount,
                     members = members,
                     beneficiaryShares = beneficiaryShares,
+                    incomeMemberId = incomeMemberId,
+                    wallets = wallets,
+                    selectedWalletId = selectedWalletId,
+                    selectedDate = selectedDate,
                     enabled = canRegister,
                     isLoading = operationState is CaptureOperationState.Loading,
-                    onRegister = { viewModel?.onRegisterExpense() }
+                    onRegister = { viewModel?.onRegister() }
                 )
             }
+        }
+    }
+
+    // DatePicker M3 (A3 §5): fecha del movimiento; la quincena se resuelve
+    // determinista en el VM (q-YYYY-MM-FIRST|SECOND).
+    if (showDatePicker) {
+        val initialMillis = (selectedDate ?: LocalDate.now())
+            .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        // El DatePicker trabaja en UTC-días: la conversión inversa
+                        // también debe ser UTC para no correr un día.
+                        viewModel?.onDateSelected(
+                            Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
+                        )
+                    }
+                    showDatePicker = false
+                }) { Text("Aceptar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancelar") }
+            }
+        ) {
+            DatePicker(state = datePickerState, showModeToggle = false)
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Header
+// Header — título + toggle Gasto/Ingreso funcional
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun CaptureHeader(onClose: () -> Unit) {
+private fun CaptureHeader(
+    kind: CaptureKind,
+    isReview: Boolean,
+    onKindChange: (CaptureKind) -> Unit,
+    onClose: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -259,7 +407,7 @@ private fun CaptureHeader(onClose: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f, fill = false)) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -272,42 +420,79 @@ private fun CaptureHeader(onClose: () -> Unit) {
             }
             Spacer(Modifier.width(14.dp))
             Column {
-                CapLabel("Nuevo movimiento")
+                CapLabel(if (isReview) "Revisión" else "Nuevo movimiento")
                 Text(
-                    "Capturar gasto",
+                    when {
+                        isReview -> "Completar captura"
+                        kind == CaptureKind.INCOME -> "Registrar ingreso"
+                        else -> "Capturar gasto"
+                    },
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2
                 )
             }
         }
-        // Segmentado Gasto/Ingreso (visual; el VM registra gastos)
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(22.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Box(
+        // Segmentado Gasto/Ingreso — conmutación real (A3 §2). En Review se
+        // oculta: se revisa un gasto, no se cambia de tipo a media revisión.
+        if (!isReview) {
+            Spacer(Modifier.width(12.dp))
+            Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(horizontal = 14.dp, vertical = 7.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Text(
-                    "Gasto",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.financeColors.expense
+                KindOption(
+                    label = "Gasto",
+                    selected = kind == CaptureKind.EXPENSE,
+                    selectedColor = MaterialTheme.financeColors.expense,
+                    onClick = { onKindChange(CaptureKind.EXPENSE) }
                 )
-            }
-            Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)) {
-                Text(
-                    "Ingreso",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                KindOption(
+                    label = "Ingreso",
+                    selected = kind == CaptureKind.INCOME,
+                    selectedColor = MaterialTheme.financeColors.income,
+                    onClick = { onKindChange(CaptureKind.INCOME) }
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun KindOption(
+    label: String,
+    selected: Boolean,
+    selectedColor: Color,
+    onClick: () -> Unit
+) {
+    val bg by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
+        animationSpec = captureSpring(),
+        label = "kindOptionBg"
+    )
+    val fg by animateColorAsState(
+        targetValue = if (selected) selectedColor else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = captureSpring(),
+        label = "kindOptionFg"
+    )
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+            ),
+            color = fg,
+            maxLines = 1
+        )
     }
 }
 
@@ -319,10 +504,13 @@ private fun CaptureHeader(onClose: () -> Unit) {
 private fun AmountCard(
     displayAmount: String,
     concept: String,
+    kind: CaptureKind,
     onConceptChange: (String) -> Unit,
     onKey: (String) -> Unit,
     onRegister: () -> Unit,
-    canRegister: Boolean
+    canRegister: Boolean,
+    amountPending: Boolean = false,
+    conceptPending: Boolean = false
 ) {
     Card {
         Row(
@@ -330,7 +518,13 @@ private fun AmountCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            CapLabel("Monto")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CapLabel("Monto")
+                if (amountPending) {
+                    Spacer(Modifier.width(8.dp))
+                    PendingBadge()
+                }
+            }
             CapLabel("MXN")
         }
         Spacer(Modifier.height(8.dp))
@@ -358,17 +552,28 @@ private fun AmountCard(
             )
         }
         Spacer(Modifier.height(12.dp))
-        // Concepto — junto al monto (no escondido tras "Más"); opcional.
+        if (conceptPending) {
+            PendingBadge()
+            Spacer(Modifier.height(6.dp))
+        }
+        // Concepto — junto al monto (no escondido tras "Más"); opcional en gasto,
+        // etiqueta del ingreso en modo INCOME.
         OutlinedTextField(
             value = concept,
             onValueChange = onConceptChange,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Concepto (opcional)", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            placeholder = {
+                Text(
+                    if (kind == CaptureKind.INCOME) "Etiqueta (ej. Sueldo, Honorarios)"
+                    else "Concepto (opcional)",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = if (conceptPending) MaterialTheme.financeColors.warning else Color.Transparent,
                 focusedContainerColor = MaterialTheme.colorScheme.surface,
                 unfocusedContainerColor = MaterialTheme.colorScheme.surface
             )
@@ -443,28 +648,44 @@ private fun KeypadKey(key: String, modifier: Modifier = Modifier, onClick: () ->
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Categoría: recientes + búsqueda + acordeón
+// Categoría: recientes reales + búsqueda + crear inline + acordeón
 // ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CategoryCard(
     categories: List<CategoryEntity>,
+    recents: List<CategoryEntity>,
+    searchResults: List<CategoryEntity>,
     selectedCategoryId: String?,
-    onSelect: (String) -> Unit
+    pending: Boolean,
+    onSelect: (String) -> Unit,
+    onQueryChange: (String) -> Unit,
+    onCreateCategory: (name: String, parentId: String) -> Unit
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var expandedGroup by rememberSaveable { mutableStateOf<String?>(null) }
+    // Nombre de la categoría en proceso de creación (null = no se está creando):
+    // al elegirlo se muestra el selector de grupo padre (A3 §4).
+    var createName by rememberSaveable { mutableStateOf<String?>(null) }
 
     val leaves = remember(categories) { categories.filter { it.parentId != null } }
-    val parentsById = remember(categories) { categories.filter { it.parentId == null }.associateBy { it.id } }
+    val parents = remember(categories) {
+        categories.filter { it.parentId == null }.sortedBy { it.sortOrder }
+    }
+    val parentsById = remember(parents) { parents.associateBy { it.id } }
     val groups = remember(leaves) { leaves.groupBy { it.parentId } }
-    val recents = remember(leaves) { leaves.sortedBy { it.sortOrder }.take(5) }
     val selected = leaves.firstOrNull { it.id == selectedCategoryId }
 
-    val normalizedQuery = query.trim().lowercase()
+    val normalizedQuery = query.trim()
+    // Resultados del DAO (searchLeavesByName, con debounce); fallback inmediato
+    // en memoria mientras llega la primera emisión.
     val matches = if (normalizedQuery.isBlank()) emptyList()
-    else leaves.filter { it.displayName.lowercase().contains(normalizedQuery) }.take(8)
+    else searchResults.ifEmpty {
+        leaves.filter { it.displayName.contains(normalizedQuery, ignoreCase = true) }.take(8)
+    }
+    val exactExists = normalizedQuery.isNotBlank() &&
+        leaves.any { it.displayName.equals(normalizedQuery, ignoreCase = true) }
 
     Card {
         Row(
@@ -473,7 +694,13 @@ private fun CategoryCard(
             verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                CapLabel("Categoría")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CapLabel("Categoría")
+                    if (pending) {
+                        Spacer(Modifier.width(8.dp))
+                        PendingBadge()
+                    }
+                }
                 Spacer(Modifier.height(3.dp))
                 Text(
                     "Empieza por las recientes o busca",
@@ -493,7 +720,8 @@ private fun CategoryCard(
                         selected.displayName,
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1, softWrap = false
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 160.dp)
                     )
                     Spacer(Modifier.width(6.dp))
                     Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
@@ -503,7 +731,7 @@ private fun CategoryCard(
 
         Spacer(Modifier.height(14.dp))
 
-        // Recientes
+        // Recientes REALES: últimas categorías usadas en gastos POSTED (A3 §3).
         if (recents.isNotEmpty()) {
             CapMicroLabel("Recientes")
             Spacer(Modifier.height(8.dp))
@@ -513,18 +741,22 @@ private fun CategoryCard(
             Spacer(Modifier.height(14.dp))
         }
 
-        // Búsqueda
+        // Búsqueda (con autocompletado anti-duplicados vía DAO)
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = {
+                query = it
+                createName = null
+                onQueryChange(it)
+            },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Buscar categoría…", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            placeholder = { Text("Buscar o crear categoría…", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             leadingIcon = { Icon(Icons.Filled.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
             singleLine = true,
             shape = RoundedCornerShape(18.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = if (pending) MaterialTheme.financeColors.warning else Color.Transparent,
                 focusedContainerColor = MaterialTheme.colorScheme.surface,
                 unfocusedContainerColor = MaterialTheme.colorScheme.surface
             )
@@ -533,12 +765,77 @@ private fun CategoryCard(
         Spacer(Modifier.height(12.dp))
 
         if (normalizedQuery.isNotBlank()) {
-            // Resultados de búsqueda
-            if (matches.isEmpty()) {
-                Text("Sin coincidencias", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    matches.forEach { cat -> CategoryChip(cat.displayName, cat.id == selectedCategoryId) { onSelect(cat.id) } }
+            AnimatedContent(
+                targetState = createName,
+                transitionSpec = {
+                    (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                        slideInVertically(animationSpec = captureSpring()) { it / 12 })
+                        .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium)))
+                        .using(SizeTransform(clip = false) { _, _ -> captureSpring() })
+                },
+                label = "categoryCreateFlow"
+            ) { creating ->
+                if (creating == null) {
+                    Column {
+                        // Resultados / "¿Quisiste decir…?" (anti-duplicados, A3 §4)
+                        if (matches.isNotEmpty()) {
+                            CapMicroLabel(if (exactExists) "Coincidencias" else "¿Quisiste decir…?")
+                            Spacer(Modifier.height(8.dp))
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                matches.forEach { cat -> CategoryChip(cat.displayName, cat.id == selectedCategoryId) { onSelect(cat.id) } }
+                            }
+                        } else {
+                            Text("Sin coincidencias", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        // Crear inline solo si NO hay match exacto.
+                        if (!exactExists) {
+                            Spacer(Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                                    .clickable { createName = normalizedQuery }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Filled.Add, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Crear \"$normalizedQuery\"",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Column {
+                        // Paso 2 de la creación: elegir el grupo padre.
+                        CapMicroLabel("Nueva: \"$creating\" — elige el grupo")
+                        Spacer(Modifier.height(8.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            parents.forEach { parent ->
+                                CategoryChip(parent.displayName, false) {
+                                    onCreateCategory(creating, parent.id)
+                                    createName = null
+                                    query = ""
+                                    onQueryChange("")
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Cancelar",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { createName = null }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
                 }
             }
         } else {
@@ -640,14 +937,16 @@ private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Wallets (fuente de pago)
+// Wallets (fuente de pago / cuenta destino)
 // ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WalletsCard(
+    title: String,
     wallets: List<PaymentMethodEntity>,
     selectedWalletId: String?,
+    pending: Boolean = false,
     onSelect: (String) -> Unit
 ) {
     Card {
@@ -656,7 +955,13 @@ private fun WalletsCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            CapLabel("Fuente de pago")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CapLabel(title)
+                if (pending) {
+                    Spacer(Modifier.width(8.dp))
+                    PendingBadge()
+                }
+            }
             CapLabel("Saldo")
         }
         Spacer(Modifier.height(12.dp))
@@ -705,6 +1010,7 @@ private fun WalletCard(wallet: PaymentMethodEntity, selected: Boolean, onClick: 
 private fun BeneficiaryCard(
     members: List<MemberEntity>,
     beneficiaryShares: Map<String, Int>,
+    pending: Boolean = false,
     onToggle: (String) -> Unit,
     onDelta: (String, Int) -> Unit,
     onSelectAll: () -> Unit,
@@ -719,7 +1025,13 @@ private fun BeneficiaryCard(
             verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                CapLabel("Beneficia a")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CapLabel("Beneficia a")
+                    if (pending) {
+                        Spacer(Modifier.width(8.dp))
+                        PendingBadge()
+                    }
+                }
                 Spacer(Modifier.height(3.dp))
                 Text("Quién consume este gasto", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -768,7 +1080,121 @@ private fun BeneficiaryCard(
 // "Revisión de atribuciones" (Feature B).
 
 // ─────────────────────────────────────────────────────────────────────────────
-// "Más" — Pagó (default = adulto dueño de la cuenta) + fecha (hoy) + notas
+// Modo Ingreso: miembro que genera + fecha (A3 §2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun IncomeMemberCard(
+    members: List<MemberEntity>,
+    selectedMemberId: String?,
+    onSelect: (String) -> Unit
+) {
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(26.dp).clip(CircleShape).background(MaterialTheme.financeColors.incomeContainer),
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Filled.Person, null, tint = MaterialTheme.financeColors.income, modifier = Modifier.size(15.dp)) }
+            Spacer(Modifier.width(8.dp))
+            Column {
+                CapLabel("Lo genera")
+                Spacer(Modifier.height(2.dp))
+                Text("Miembro que recibe este ingreso", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        if (members.isEmpty()) {
+            Text("Sin miembros.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                members.forEach { m ->
+                    CategoryChip(m.displayName, m.id == selectedMemberId) { onSelect(m.id) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IncomeDateCard(
+    selectedDate: LocalDate?,
+    onPickDate: () -> Unit,
+    onResetDate: () -> Unit
+) {
+    Card {
+        CapLabel("Fecha del ingreso")
+        Spacer(Modifier.height(10.dp))
+        DateRow(
+            selectedDate = selectedDate,
+            onPick = onPickDate,
+            onReset = onResetDate,
+            pending = false
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fecha compartida (gasto e ingreso) — abre el DatePicker M3
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun DateRow(
+    selectedDate: LocalDate?,
+    onPick: () -> Unit,
+    onReset: () -> Unit,
+    pending: Boolean
+) {
+    val formatter = remember { DateTimeFormatter.ofPattern("d MMM yyyy", Locale("es", "MX")) }
+    val label = selectedDate?.format(formatter)
+        ?: "Hoy · ${LocalDate.now().format(formatter)}"
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onPick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(26.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center
+        ) { Icon(Icons.Filled.Event, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(15.dp)) }
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CapMicroLabel("Fecha")
+                if (pending) {
+                    Spacer(Modifier.width(8.dp))
+                    PendingBadge()
+                }
+            }
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 2)
+        }
+        if (selectedDate != null) {
+            Text(
+                "Hoy",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(onClick = onReset)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(
+            "Cambiar",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 6.dp)
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Más" — Pagó (default = adulto dueño de la cuenta) + fecha (DatePicker) + notas
 // ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -779,13 +1205,28 @@ private fun MoreSection(
     onPayerToggle: (String) -> Unit,
     onPayerDelta: (String, Int) -> Unit,
     notes: String,
-    onNotesChange: (String) -> Unit
+    onNotesChange: (String) -> Unit,
+    selectedDate: LocalDate?,
+    onPickDate: () -> Unit,
+    onResetDate: () -> Unit,
+    datePending: Boolean = false,
+    payerPending: Boolean = false,
+    // Fase B/B3: "¿Quién pagó?" con tercero.
+    allMembers: List<MemberEntity> = emptyList(),
+    thirdPartyPayerId: String? = null,
+    thirdPartyMode: CaptureViewModel.ThirdPartyMode = CaptureViewModel.ThirdPartyMode.REIMBURSE,
+    onThirdPartySelected: (String?) -> Unit = {},
+    onThirdPartyMode: (CaptureViewModel.ThirdPartyMode) -> Unit = {},
+    onCreateExternalPayer: (String) -> Unit = {}
 ) {
-    // Abre por defecto si ya hay nota (p.ej. prellenada desde una captura NL), para
-    // que el usuario la vea sin tener que expandir.
-    var open by rememberSaveable(notes.isNotBlank()) { mutableStateOf(notes.isNotBlank()) }
+    // Abre por defecto si ya hay nota (p.ej. prellenada desde una captura NL), si
+    // hay campos por decidir aquí dentro (Review) o si pagó un tercero.
+    val autoOpen = notes.isNotBlank() || datePending || payerPending || thirdPartyPayerId != null
+    var open by rememberSaveable(autoOpen) { mutableStateOf(autoOpen) }
     val payerNames = members.filter { it.id in payerShares.keys }.joinToString(", ") { it.displayName }
-    val today = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale("es", "MX"))) }
+    val formatter = remember { DateTimeFormatter.ofPattern("d MMM yyyy", Locale("es", "MX")) }
+    val dateSummary = selectedDate?.format(formatter)
+        ?: "Hoy, ${LocalDate.now().format(formatter)}"
     val payerOk = payerShares.isNotEmpty() && payerShares.values.sum() == 100
 
     Column(
@@ -807,9 +1248,15 @@ private fun MoreSection(
                 Icon(Icons.Filled.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(10.dp))
                 Column {
-                    Text("Más", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Más", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface)
+                        if (datePending || payerPending) {
+                            Spacer(Modifier.width(8.dp))
+                            PendingBadge()
+                        }
+                    }
                     Text(
-                        (if (payerNames.isNotEmpty()) "Pagó: $payerNames" else "Pagó: definir") + " · Hoy, $today · Notas",
+                        (if (payerNames.isNotEmpty()) "Pagó: $payerNames" else "Pagó: definir") + " · $dateSummary · Notas",
                         style = MaterialTheme.typography.bodySmall,
                         color = if (payerOk) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.financeColors.warning,
                         maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -820,31 +1267,46 @@ private fun MoreSection(
         }
         AnimatedVisibility(visible = open) {
             Column {
-                AttributionDimension(
-                    icon = Icons.Filled.Payments,
-                    iconTint = MaterialTheme.colorScheme.onSurface,
-                    iconBg = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    title = "Pagó · adelantó",
-                    members = members,
-                    shares = payerShares,
-                    onToggle = onPayerToggle,
-                    onDelta = onPayerDelta,
-                    onSelectAll = null,
-                    onClearAll = null
+                if (payerPending) {
+                    PendingBadge()
+                    Spacer(Modifier.height(8.dp))
+                }
+                // Fase B/B3: ¿pagó un tercero? Con tercero seleccionado, ese tercero ES
+                // el pagador, así que el editor normal de % por miembro se oculta.
+                ThirdPartyPayerSection(
+                    allMembers = allMembers,
+                    selectedPayerId = thirdPartyPayerId,
+                    mode = thirdPartyMode,
+                    onSelected = onThirdPartySelected,
+                    onModeChange = onThirdPartyMode,
+                    onCreate = onCreateExternalPayer,
                 )
                 Spacer(Modifier.height(18.dp))
-                // Fecha — por defecto hoy (día del registro)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier.size(26.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                        contentAlignment = Alignment.Center
-                    ) { Icon(Icons.Filled.Event, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(15.dp)) }
-                    Spacer(Modifier.width(8.dp))
+                AnimatedVisibility(visible = thirdPartyPayerId == null) {
                     Column {
-                        CapMicroLabel("Fecha")
-                        Text("Hoy · $today", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                        AttributionDimension(
+                            icon = Icons.Filled.Payments,
+                            iconTint = MaterialTheme.colorScheme.onSurface,
+                            iconBg = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            title = "Pagó · adelantó",
+                            members = members,
+                            shares = payerShares,
+                            onToggle = onPayerToggle,
+                            onDelta = onPayerDelta,
+                            onSelectAll = null,
+                            onClearAll = null
+                        )
+                        Spacer(Modifier.height(18.dp))
                     }
                 }
+                // Fecha — por defecto hoy; el DatePicker M3 permite cambiarla y la
+                // quincena se resuelve determinista según la fecha (A3 §5).
+                DateRow(
+                    selectedDate = selectedDate,
+                    onPick = onPickDate,
+                    onReset = onResetDate,
+                    pending = datePending
+                )
                 Spacer(Modifier.height(18.dp))
                 // Notas libres (detalle que no es el concepto). Las captura NL puede
                 // prellenarlas desde la frase ("nota: aniversario").
@@ -858,8 +1320,6 @@ private fun MoreSection(
                     minLines = 1,
                     maxLines = 3,
                 )
-                Spacer(Modifier.height(12.dp))
-                Text("Elegir otra fecha: próximamente.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(16.dp))
             }
         }
@@ -867,26 +1327,165 @@ private fun MoreSection(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Footer: resumen vivo + Guardar
+// "¿Quién pagó?" con tercero (Fase B, B3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Selector opcional de tercero que adelantó el gasto. Sin selección = pago normal
+ * (wallet real). Al elegir un tercero (cualquier miembro, dependiente, EXTERNAL_* o
+ * uno nuevo tecleado), el gasto se carga al wallet virtual "Pagado por terceros" sin
+ * mover saldos reales, y aparece el toggle reembolsar / absorber.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ThirdPartyPayerSection(
+    allMembers: List<MemberEntity>,
+    selectedPayerId: String?,
+    mode: CaptureViewModel.ThirdPartyMode,
+    onSelected: (String?) -> Unit,
+    onModeChange: (CaptureViewModel.ThirdPartyMode) -> Unit,
+    onCreate: (String) -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val normalizedQuery = query.trim()
+    val matches = if (normalizedQuery.isBlank()) allMembers
+    else allMembers.filter { it.displayName.contains(normalizedQuery, ignoreCase = true) }
+    val exactExists = allMembers.any { it.displayName.equals(normalizedQuery, ignoreCase = true) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(26.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Filled.Groups, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(15.dp)) }
+            Spacer(Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                CapMicroLabel("Pagó un tercero")
+                Text(
+                    "Un hijo o alguien que no es cuenta del hogar",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // Chips de terceros + "Nadie" (pago normal).
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            CategoryChip("Nadie / cuenta del hogar", selectedPayerId == null) { onSelected(null) }
+            matches.take(8).forEach { m ->
+                CategoryChip(m.displayName, m.id == selectedPayerId) { onSelected(m.id) }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Buscar o crear un tercero…", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            leadingIcon = { Icon(Icons.Filled.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            )
+        )
+        if (normalizedQuery.isNotBlank() && !exactExists) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .clickable { onCreate(normalizedQuery); query = "" }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.Add, null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Añadir \"$normalizedQuery\" como tercero",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // Toggle reembolsar / absorber (solo con tercero seleccionado).
+        AnimatedVisibility(visible = selectedPayerId != null) {
+            Column {
+                Spacer(Modifier.height(12.dp))
+                CapMicroLabel("¿Se le repone?")
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CategoryChip(
+                        "Se le va a reembolsar",
+                        mode == CaptureViewModel.ThirdPartyMode.REIMBURSE
+                    ) { onModeChange(CaptureViewModel.ThirdPartyMode.REIMBURSE) }
+                    CategoryChip(
+                        "Lo absorbe él",
+                        mode == CaptureViewModel.ThirdPartyMode.ABSORB
+                    ) { onModeChange(CaptureViewModel.ThirdPartyMode.ABSORB) }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Footer: resumen vivo + Guardar (adaptado al modo, A3 §2)
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun CaptureFooter(
+    kind: CaptureKind,
     categories: List<CategoryEntity>,
     selectedCategoryId: String?,
     displayAmount: String,
     members: List<MemberEntity>,
     beneficiaryShares: Map<String, Int>,
+    incomeMemberId: String?,
+    wallets: List<PaymentMethodEntity>,
+    selectedWalletId: String?,
+    selectedDate: LocalDate?,
     enabled: Boolean,
     isLoading: Boolean,
     onRegister: () -> Unit
 ) {
-    val catName = categories.firstOrNull { it.id == selectedCategoryId }?.displayName
-    val beneficiaries = members.filter { it.id in beneficiaryShares.keys }.joinToString(", ") { it.displayName }
-    val summary = buildString {
-        append(catName ?: "Elige categoría")
-        if (displayAmount != "0.00" && displayAmount != "0") append(" · $").append(displayAmount)
-        if (beneficiaries.isNotEmpty()) append(" · ").append(beneficiaries)
+    val formatter = remember { DateTimeFormatter.ofPattern("d MMM", Locale("es", "MX")) }
+    val hasAmount = displayAmount != "0.00" && displayAmount != "0"
+    val summary = if (kind == CaptureKind.INCOME) {
+        val memberName = members.firstOrNull { it.id == incomeMemberId }?.displayName
+        val walletName = wallets.firstOrNull { it.id == selectedWalletId }?.displayName
+        buildString {
+            append("Ingreso")
+            if (hasAmount) append(" · $").append(displayAmount)
+            append(" · ").append(memberName ?: "¿Quién?")
+            append(" → ").append(walletName ?: "elige cuenta")
+            selectedDate?.let { append(" · ").append(it.format(formatter)) }
+        }
+    } else {
+        val catName = categories.firstOrNull { it.id == selectedCategoryId }?.displayName
+        val beneficiaries = members.filter { it.id in beneficiaryShares.keys }.joinToString(", ") { it.displayName }
+        buildString {
+            append(catName ?: "Elige categoría")
+            if (hasAmount) append(" · $").append(displayAmount)
+            if (beneficiaries.isNotEmpty()) append(" · ").append(beneficiaries)
+            selectedDate?.let { append(" · ").append(it.format(formatter)) }
+        }
     }
 
     Row(
@@ -929,10 +1528,6 @@ private fun CaptureFooter(
         }
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers de UI
-// ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Chip de sugerencia de atribución (Feature A, §F.4)
@@ -1007,6 +1602,37 @@ private fun AttributionSuggestionChip(
                 .background(MaterialTheme.colorScheme.primary)
                 .clickable(onClick = onApply)
                 .padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers de UI
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Distintivo "Por decidir" del modo Review (SP-A1): marca los campos que el
+ * origen no pudo determinar. Redundancia no-cromática: icono + texto, no solo
+ * color de énfasis.
+ */
+@Composable
+private fun PendingBadge() {
+    val warn = amountSemantic(FinancialTone.WARNING)
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(warn.container)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Filled.PriorityHigh, null, tint = warn.onContainer, modifier = Modifier.size(11.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(
+            "POR DECIDIR",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+            color = warn.onContainer,
+            letterSpacing = 1.2.sp,
+            maxLines = 1, softWrap = false
         )
     }
 }

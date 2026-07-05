@@ -1,0 +1,102 @@
+{
+  "_comment": "Plantilla de categorías base ofrecidas en el wizard de onboarding (paquete B2). El usuario marca/desmarca antes de sembrarlas. Cada grupo tiene un 'code' canónico raíz y sus hijos usan 'GRUPO.HOJA'. 'kind' sigue la naturaleza económica de CategoryEntity (EXPENSE_FIXED / EXPENSE_VARIABLE / SAVINGS). El icon es una clave Material resuelta por CategoryIcons; si no existe, cae al genérico. defaultOn=false = arranca desmarcada.",
+  "groups": [
+    {
+      "code": "FOOD",
+      "name": "Comida",
+      "icon": "restaurant",
+      "color": "#FB8C00",
+      "children": [
+        { "code": "FOOD.DESPENSA", "name": "Despensa", "kind": "EXPENSE_VARIABLE", "budget": 4000 },
+        { "code": "FOOD.RESTAURANTE", "name": "Restaurantes", "kind": "EXPENSE_VARIABLE" },
+        { "code": "FOOD.CAFE", "name": "Café / antojos", "kind": "EXPENSE_VARIABLE", "defaultOn": false }
+      ]
+    },
+    {
+      "code": "HOUSING",
+      "name": "Hogar",
+      "icon": "home",
+      "color": "#1E88E5",
+      "children": [
+        { "code": "HOUSING.RENTA", "name": "Renta / Hipoteca", "kind": "EXPENSE_FIXED" },
+        { "code": "HOUSING.ELECTRICIDAD", "name": "Electricidad", "kind": "EXPENSE_FIXED" },
+        { "code": "HOUSING.AGUA", "name": "Agua", "kind": "EXPENSE_FIXED" },
+        { "code": "HOUSING.GAS", "name": "Gas", "kind": "EXPENSE_FIXED" },
+        { "code": "HOUSING.INTERNET", "name": "Internet / TV", "kind": "EXPENSE_FIXED" },
+        { "code": "HOUSING.MANTENIMIENTO", "name": "Mantenimiento", "kind": "EXPENSE_VARIABLE", "defaultOn": false }
+      ]
+    },
+    {
+      "code": "TRANSPORT",
+      "name": "Transporte",
+      "icon": "directions_car",
+      "color": "#00897B",
+      "children": [
+        { "code": "TRANSPORT.GASOLINA", "name": "Gasolina", "kind": "EXPENSE_VARIABLE" },
+        { "code": "TRANSPORT.PUBLICO", "name": "Transporte público", "kind": "EXPENSE_VARIABLE" },
+        { "code": "TRANSPORT.MANTENIMIENTO", "name": "Servicio / mantenimiento", "kind": "EXPENSE_VARIABLE", "defaultOn": false }
+      ]
+    },
+    {
+      "code": "SERVICES",
+      "name": "Servicios",
+      "icon": "receipt_long",
+      "color": "#3949AB",
+      "children": [
+        { "code": "SERVICES.TELEFONO", "name": "Teléfono / celular", "kind": "EXPENSE_FIXED" },
+        { "code": "SERVICES.SUSCRIPCIONES", "name": "Suscripciones", "kind": "EXPENSE_FIXED" },
+        { "code": "SERVICES.SEGUROS", "name": "Seguros", "kind": "EXPENSE_FIXED", "defaultOn": false }
+      ]
+    },
+    {
+      "code": "HEALTH",
+      "name": "Salud",
+      "icon": "favorite",
+      "color": "#E53935",
+      "children": [
+        { "code": "HEALTH.MEDICO", "name": "Médico / consultas", "kind": "EXPENSE_VARIABLE" },
+        { "code": "HEALTH.FARMACIA", "name": "Farmacia", "kind": "EXPENSE_VARIABLE" }
+      ]
+    },
+    {
+      "code": "SCHOOL",
+      "name": "Escuela",
+      "icon": "school",
+      "color": "#8E24AA",
+      "children": [
+        { "code": "SCHOOL.COLEGIATURA", "name": "Colegiatura", "kind": "EXPENSE_FIXED" },
+        { "code": "SCHOOL.UTILES", "name": "Útiles / materiales", "kind": "EXPENSE_VARIABLE", "defaultOn": false }
+      ]
+    },
+    {
+      "code": "ENTERTAINMENT",
+      "name": "Entretenimiento",
+      "icon": "sports_esports",
+      "color": "#D81B60",
+      "children": [
+        { "code": "ENTERTAINMENT.SALIDAS", "name": "Salidas / cine", "kind": "EXPENSE_VARIABLE" },
+        { "code": "ENTERTAINMENT.HOBBIES", "name": "Hobbies", "kind": "EXPENSE_VARIABLE", "defaultOn": false }
+      ]
+    },
+    {
+      "code": "PERSONAL",
+      "name": "Personal",
+      "icon": "person",
+      "color": "#6D4C41",
+      "children": [
+        { "code": "PERSONAL.ROPA", "name": "Ropa", "kind": "EXPENSE_VARIABLE" },
+        { "code": "PERSONAL.CUIDADO", "name": "Cuidado personal", "kind": "EXPENSE_VARIABLE" }
+      ]
+    },
+    {
+      "code": "SAVINGS",
+      "name": "Ahorro",
+      "icon": "savings",
+      "color": "#43A047",
+      "children": [
+        { "code": "SAVINGS.META", "name": "Meta de ahorro", "kind": "SAVINGS" },
+        { "code": "SAVINGS.EMERGENCIA", "name": "Fondo de emergencia", "kind": "SAVINGS", "defaultOn": false }
+      ]
+    }
+  ]
+}

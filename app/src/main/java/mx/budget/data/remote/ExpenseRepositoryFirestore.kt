@@ -125,6 +125,55 @@ class ExpenseRepositoryFirestore(
         awaitClose { listener.remove() }
     }
 
+    // El dashboard lee SIEMPRE de Room (fuente de verdad); este lado nube es solo
+    // para sync. Stub consistente con observeSpendByMember/observePaidByMember.
+    override fun observePendingReimbursements(householdId: String): Flow<List<ExpenseWithDetails>> = callbackFlow {
+        val listener = firestore.collectionGroup("expenses")
+            .whereEqualTo("householdId", householdId)
+            .whereEqualTo("settlementStatus", "PENDING_REIMBURSEMENT")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { close(error); return@addSnapshotListener }
+                if (snapshot != null) trySend(emptyList())
+            }
+        awaitClose { listener.remove() }
+    }
+
+    override fun observePendingReimbursementTotals(
+        householdId: String
+    ): Flow<List<mx.budget.data.local.result.PendingReimbursementByPayer>> = callbackFlow {
+        val listener = firestore.collectionGroup("expenses")
+            .whereEqualTo("householdId", householdId)
+            .whereEqualTo("settlementStatus", "PENDING_REIMBURSEMENT")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { close(error); return@addSnapshotListener }
+                if (snapshot != null) trySend(emptyList())
+            }
+        awaitClose { listener.remove() }
+    }
+
+    // El repo PÚBLICO cableado es la impl Room (fuente de verdad); este método
+    // nunca se invoca por la ruta nube. Devuelve la entidad determinista sin
+    // persistir, por contrato de la interfaz.
+    override suspend fun ensureExternalWallet(
+        householdId: String
+    ): mx.budget.data.local.entity.PaymentMethodEntity =
+        mx.budget.data.local.entity.PaymentMethodEntity(
+            id = "external-$householdId",
+            householdId = householdId,
+            displayName = "Pagado por terceros",
+            kind = "EXTERNAL",
+            currentBalanceMxn = 0.0,
+            openingBalanceMxn = 0.0,
+            isActive = true,
+            updatedAt = 0L,
+        )
+
+    // Settlement (reembolso/absorción) lo resuelve la impl Room (fuente de verdad);
+    // el estado resultante llega a la nube por el push del gasto editado. No-op aquí.
+    override suspend fun reimburseFrom(expenseId: String, walletId: String) {}
+
+    override suspend fun markAbsorbed(expenseId: String) {}
+
     override suspend fun getById(id: String): ExpenseEntity? {
         val matches = firestore.collectionGroup("expenses").whereEqualTo("id", id).get().await()
         return matches.documents.firstOrNull()?.toObject(ExpenseEntity::class.java)

@@ -8,8 +8,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import mx.budget.data.local.dao.CategoryDao
 import mx.budget.data.local.dao.ExpenseAttributionDao
 import mx.budget.data.local.dao.ExpenseDao
+import mx.budget.data.local.dao.MemberDao
 import mx.budget.data.local.dao.IncomeSourceDao
 import mx.budget.data.local.dao.InstallmentPlanDao
 import mx.budget.data.local.dao.LoanDao
@@ -18,7 +20,9 @@ import mx.budget.data.local.dao.SavingsGoalDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.dao.WalletTransferDao
 import mx.budget.data.remote.LoanRepositoryFirestore
+import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.InstallmentRepository
 import mx.budget.data.repository.SavingsRepository
@@ -62,6 +66,12 @@ class SyncManager(
     private val remoteLoanRepository: LoanRepositoryFirestore? = null,
     private val installmentPlanDao: InstallmentPlanDao? = null,
     private val remoteInstallmentRepository: InstallmentRepository? = null,
+    // v13 — categorías con escritura local (alta inline, color).
+    private val categoryDao: CategoryDao? = null,
+    private val remoteCategoryRepository: CategoryRepository? = null,
+    // v14 — miembros con escritura local (wizard de onboarding, CRUD de maestros).
+    private val memberDao: MemberDao? = null,
+    private val remoteMemberRepository: MemberRepository? = null,
 ) {
 
     private val mutex = Mutex()
@@ -176,6 +186,26 @@ class SyncManager(
                         row.entityType == "LOAN" && row.operation == "DELETE" -> {
                             remoteLoanRepository?.deleteById(row.entityId)
                             syncQueueDao.delete(row.id)
+                        }
+
+                        row.entityType == "CATEGORY" && row.operation == "UPSERT" -> {
+                            val category = categoryDao?.getById(row.entityId)
+                            if (category == null || remoteCategoryRepository == null) {
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteCategoryRepository.insert(category)
+                                syncQueueDao.delete(row.id)
+                            }
+                        }
+
+                        row.entityType == "MEMBER" && row.operation == "UPSERT" -> {
+                            val member = memberDao?.getById(row.entityId)
+                            if (member == null || remoteMemberRepository == null) {
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteMemberRepository.insert(member)
+                                syncQueueDao.delete(row.id)
+                            }
                         }
 
                         row.entityType == "INSTALLMENT" && row.operation == "UPSERT" -> {

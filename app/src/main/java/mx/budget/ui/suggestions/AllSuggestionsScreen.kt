@@ -34,7 +34,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import mx.budget.data.capture.toReviewMode
 import mx.budget.ui.capture.CaptureBottomSheet
+import mx.budget.ui.capture.CaptureField
+import mx.budget.ui.capture.CapturePrefill
+import mx.budget.ui.capture.CaptureSheetMode
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardViewModel
 import mx.budget.ui.dashboard.SmartSuggestionCard
@@ -54,10 +58,16 @@ fun AllSuggestionsScreen(
 ) {
     val bankCaptures by dashboardViewModel.pendingBankCaptures.collectAsState()
     val proactiveSuggestions by dashboardViewModel.proactiveSuggestions.collectAsState()
-    var showCapture by remember { mutableStateOf(false) }
+    // Un solo punto de apertura del sheet con su modo (SP-A1): las sugerencias abren
+    // Review pre-llenado, nunca insertan directo. null = cerrado.
+    var captureMode by remember { mutableStateOf<CaptureSheetMode?>(null) }
 
-    if (showCapture) {
-        CaptureBottomSheet(viewModel = captureViewModel, onDismiss = { showCapture = false })
+    captureMode?.let { mode ->
+        CaptureBottomSheet(
+            viewModel = captureViewModel,
+            onDismiss = { captureMode = null },
+            mode = mode
+        )
     }
 
     val items = buildSuggestionItems(bankCaptures, proactiveSuggestions)
@@ -117,12 +127,28 @@ fun AllSuggestionsScreen(
                 items(items, key = { it.key }) { item ->
                     SmartSuggestionCard(
                         item = item,
-                        onConfirmCapture = dashboardViewModel::confirmBankCapture,
+                        // "Registrar" una captura pendiente → Review pre-llenado (no directo).
+                        onConfirmCapture = { id ->
+                            bankCaptures.firstOrNull { it.id == id }?.let { cap ->
+                                captureMode = cap.toReviewMode()
+                            }
+                        },
                         onDismissCapture = dashboardViewModel::dismissBankCapture,
+                        // "Registrar" una proactiva → Review con concepto+categoría y el
+                        // resto "Por decidir".
                         onRegisterSuggestion = { suggestion ->
-                            captureViewModel?.onConceptChange(suggestion.concept)
-                            captureViewModel?.onCategorySelected(suggestion.categoryId)
-                            showCapture = true
+                            captureMode = CaptureSheetMode.Review(
+                                prefill = CapturePrefill(
+                                    concept = suggestion.concept,
+                                    categoryId = suggestion.categoryId,
+                                ),
+                                missingFields = setOf(
+                                    CaptureField.AMOUNT,
+                                    CaptureField.WALLET,
+                                    CaptureField.BENEFICIARY,
+                                    CaptureField.PAYER,
+                                ),
+                            )
                         },
                         onDismissSuggestion = dashboardViewModel::dismissProactiveSuggestion
                     )

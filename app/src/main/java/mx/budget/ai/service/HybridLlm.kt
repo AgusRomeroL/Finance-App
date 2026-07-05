@@ -35,6 +35,20 @@ class HybridLlm(
         return lite
     }
 
+    /**
+     * Comprueba SOLO el motor AICore (Gemini Nano), sin tocar LiteRT-LM.
+     * Para caminos sensibles a memoria (captura por voz, paquete A2): cargar
+     * Gemma (3.7 GB, CPU) desde el pipeline de captura provocaba OOM-kill de la
+     * app. Si AICore está listo lo deja como motor activo para [generate];
+     * si no, devuelve `false` SIN intentar (ni disparar) la carga de Gemma.
+     */
+    suspend fun ensureAiCoreOnly(): Boolean {
+        val ok = runCatching { aiCore.ensureReady() }
+            .getOrNull() == AiCoreManager.Readiness.Available
+        if (ok) active = Active.AICORE
+        return ok
+    }
+
     override suspend fun generate(prompt: String): Result<String> = when (active) {
         Active.AICORE -> aiCore.generate(prompt)
         Active.LITERTLM -> liteRtLm.generate(prompt)

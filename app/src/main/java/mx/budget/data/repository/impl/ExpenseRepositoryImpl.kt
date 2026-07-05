@@ -8,9 +8,11 @@ import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
+import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.SyncQueueEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.MemberSpendByCategory
+import mx.budget.data.local.result.PendingReimbursementByPayer
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.local.result.TopExpense
 import mx.budget.data.repository.ExpenseRepository
@@ -47,6 +49,12 @@ class ExpenseRepositoryImpl(
 
     override fun observePaidByMember(quincenaId: String): Flow<List<SpendByMember>> =
         attributionDao.observeSpendByMember(quincenaId, "PAYER")
+
+    override fun observePendingReimbursements(householdId: String): Flow<List<ExpenseWithDetails>> =
+        dao.observePendingReimbursements(householdId)
+
+    override fun observePendingReimbursementTotals(householdId: String): Flow<List<PendingReimbursementByPayer>> =
+        dao.observePendingReimbursementTotals(householdId)
 
     override suspend fun getById(id: String): ExpenseEntity? =
         dao.getById(id)
@@ -224,13 +232,18 @@ class ExpenseRepositoryImpl(
 
     private val creditKinds = setOf("CREDIT_CARD", "DEPARTMENT_STORE_CARD", "BNPL_INSTALLMENT")
 
+    /** Kind del wallet virtual "Pagado por terceros" (Fase B, B3). */
+    private val externalKind = "EXTERNAL"
+
     /**
      * Aplica ([posting]=true) o revierte ([posting]=false) el efecto de un gasto
      * POSTED de [amount] sobre el saldo del wallet [paymentMethodId]. No-op si el
-     * wallet no existe.
+     * wallet no existe o si es el wallet virtual EXTERNAL (un gasto adelantado por un
+     * tercero NO mueve ningún saldo real; solo cuenta para presupuesto/beneficiarios).
      */
     private suspend fun applyToWallet(paymentMethodId: String, amount: Double, posting: Boolean) {
         val kind = db.paymentMethodDao().getById(paymentMethodId)?.kind ?: return
+        if (kind == externalKind) return  // Fase B: el wallet virtual no afecta saldos reales
         val effect = if (kind in creditKinds) amount else -amount  // crédito sube deuda; líquido baja
         db.paymentMethodDao().adjustBalance(paymentMethodId, if (posting) effect else -effect)
         // El saldo cambió: empuja el wallet a la nube (push-sync). FIFO deduplica: el
@@ -243,5 +256,71 @@ class ExpenseRepositoryImpl(
                 createdAt = System.currentTimeMillis()
             )
         )
+    }
+
+    // ── "Alguien más pagó" / reembolsos (Fase B, paquete B3) ────────────────────
+
+    override suspend fun ensureExternalWallet(householdId: String): PaymentMethodEntity {
+        val id = "external-$householdId"
+        val dao = db.paymentMethodDao()
+        dao.getById(id)?.let { return it }
+        val wallet = PaymentMethodEntity(
+            id = id,
+            householdId = householdId,
+            displayName = "Pagado por terceros",
+            kind = externalKind,
+            currentBalanceMxn = 0.0,
+            openingBalanceMxn = 0.0,
+            isActive = true,
+            updatedAt = System.currentTimeMillis(),
+        )
+        db.withTransaction {
+            dao.insert(wallet)
+            syncQueueDao.enqueue(
+                SyncQueueEntity(
+                    entityType = "WALLET",
+                    entityId = id,
+                    operation = "UPSERT",
+                    createdAt = System.currentTimeMillis(),
+                )
+            )
+        }
+        return wallet
+    }
+
+    override suspend fun reimburseFrom(expenseId: String, walletId: String) {
+        db.withTransaction {
+            val expense = dao.getById(expenseId) ?: return@withTransaction
+            // Revierte el efecto del wallet anterior (si POSTED). Si venía cargado al
+            // wallet virtual EXTERNAL, applyToWallet es no-op; si ya estaba en un wallet
+            // real, se revierte para no doble-contar al cambiar de cuenta.
+            if (expense.status == "POSTED") {
+                applyToWallet(expense.paymentMethodId, expense.amountMxn, posting = false)
+            }
+            val updated = expense.copy(
+                paymentMethodId = walletId,
+                settlementStatus = "REIMBURSED",
+                updatedAt = System.currentTimeMillis(),
+            )
+            dao.update(updated)
+            // Aplica el cargo al wallet real destino (EXTERNAL→real: aquí SÍ mueve saldo).
+            if (updated.status == "POSTED") {
+                applyToWallet(walletId, updated.amountMxn, posting = true)
+            }
+            enqueueSync(expenseId, "UPSERT")
+        }
+    }
+
+    override suspend fun markAbsorbed(expenseId: String) {
+        db.withTransaction {
+            val expense = dao.getById(expenseId) ?: return@withTransaction
+            dao.update(
+                expense.copy(
+                    settlementStatus = "ABSORBED",
+                    updatedAt = System.currentTimeMillis(),
+                )
+            )
+            enqueueSync(expenseId, "UPSERT")
+        }
     }
 }

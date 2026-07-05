@@ -3,7 +3,9 @@ package mx.budget.data.repository
 import kotlinx.coroutines.flow.Flow
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
+import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.result.ExpenseWithDetails
+import mx.budget.data.local.result.PendingReimbursementByPayer
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.local.result.MemberSpendByCategory
 import mx.budget.data.local.result.TopExpense
@@ -39,6 +41,21 @@ interface ExpenseRepository {
 
     /** Gasto por miembro (PAYER = quién paga) en la quincena activa. */
     fun observePaidByMember(quincenaId: String): Flow<List<SpendByMember>>
+
+    // ── "Alguien más pagó" / reembolsos (Fase B, paquete B3) ────────────────────
+
+    /**
+     * Gastos pendientes de reembolso del hogar (`settlement_status =
+     * PENDING_REIMBURSEMENT`), con detalles para tocar y abrir el detalle.
+     * Alimenta la sección "Por reembolsar" del dashboard.
+     */
+    fun observePendingReimbursements(householdId: String): Flow<List<ExpenseWithDetails>>
+
+    /**
+     * Totales de lo pendiente de reembolso agrupados por tercero
+     * (`external_payer_member_id`): cuánto le debe el hogar a cada quién.
+     */
+    fun observePendingReimbursementTotals(householdId: String): Flow<List<PendingReimbursementByPayer>>
 
     // ── Lectura ─────────────────────────────────────────────────
 
@@ -152,4 +169,28 @@ interface ExpenseRepository {
      * confirma con el monto previsto tal cual.
      */
     suspend fun confirmPlanned(expenseId: String, actualAmountMxn: Double? = null)
+
+    // ── "Alguien más pagó" / reembolsos (Fase B, paquete B3) ────────────────────
+
+    /**
+     * Devuelve el wallet virtual `kind="EXTERNAL"` del hogar (displayName
+     * "Pagado por terceros"), creándolo perezosamente si no existe. Id determinista
+     * `external-{householdId}`. Este wallet NO afecta saldos reales (guarda en
+     * `applyToWallet`) y se excluye de las listas de selección y de los KPIs de saldo.
+     */
+    suspend fun ensureExternalWallet(householdId: String): PaymentMethodEntity
+
+    /**
+     * Reembolsa/liquida un gasto que adelantó un tercero: lo re-asigna al wallet
+     * real [walletId] y marca `settlement_status = REIMBURSED`. Al pasar del wallet
+     * EXTERNAL (sin efecto) al real, el cargo SÍ se aplica al saldo real (reutiliza
+     * el flujo de edición de saldo). Encola push de sync. No-op si el gasto no existe.
+     */
+    suspend fun reimburseFrom(expenseId: String, walletId: String)
+
+    /**
+     * Marca un gasto pagado por un tercero como absorbido (`settlement_status =
+     * ABSORBED`): no se le repondrá. No toca saldos. Encola push de sync.
+     */
+    suspend fun markAbsorbed(expenseId: String)
 }

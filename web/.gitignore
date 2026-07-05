@@ -1,0 +1,27 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+*.local
+
+# Env — solo se commitea .env.example
+.env
+.env.local
+.env.*.local
+
+# Firebase
+.firebase
+firebase-debug.log
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store

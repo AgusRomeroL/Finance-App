@@ -8,8 +8,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -17,20 +19,32 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import mx.budget.ai.proactive.AttributionSuggestion
 import mx.budget.ai.proactive.RetroAttributionEngine
+import mx.budget.data.local.dao.CategoryDao
+import mx.budget.data.local.dao.ExpenseDao
+import mx.budget.data.local.dao.PendingCaptureDao
+import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
+import mx.budget.data.local.entity.IncomeSourceEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.PendingCaptureEntity
+import mx.budget.data.local.entity.QuincenaEntity
 import org.json.JSONObject
 import mx.budget.data.location.LocationProvider
 import mx.budget.data.location.LocationSource
 import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.WalletRepository
+import java.text.Normalizer
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Locale
 import java.util.UUID
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,8 +135,57 @@ class CaptureViewModel(
      * registrar un gasto que vino de una captura pendiente, marca esa captura como
      * CONFIRMED (y cancela su notificación). null = la hoja no nació de una captura.
      */
-    private val onPendingConfirmed: (suspend (String) -> Unit)? = null
+    private val onPendingConfirmed: (suspend (String) -> Unit)? = null,
+    /** Repo de ingresos (paquete A3): camino idéntico a WalletsViewModel.recordIncome. */
+    private val incomeRepository: IncomeRepository? = null,
+    /** DAO para las categorías recientes reales (v13, `observeRecentCategoryIds`). */
+    private val expenseDao: ExpenseDao? = null,
+    /** DAO para el autocompletado anti-duplicados (v13, `searchLeavesByName`). */
+    private val categoryDao: CategoryDao? = null,
+    /** DAO para resolver la quincena de una fecha arbitraria (DatePicker, A3). */
+    private val quincenaDao: QuincenaDao? = null,
+    /** Fallback para marcar CONFIRMED una pending_capture cuando no hay callback. */
+    private val pendingCaptureDao: PendingCaptureDao? = null,
 ) : ViewModel() {
+
+    /** Zona canónica del hogar (spec: America/Mexico_City). */
+    private val zone: ZoneId = ZoneId.of("America/Mexico_City")
+
+    // ── Tipo de movimiento (toggle Gasto/Ingreso) ──────────────────────────
+
+    private val _captureKind = MutableStateFlow(CaptureKind.EXPENSE)
+
+    /** Gasto o ingreso: conmuta el contenido del sheet y la ruta de registro. */
+    val captureKind: StateFlow<CaptureKind> = _captureKind.asStateFlow()
+
+    /** Cambia el tipo de movimiento (toggle del header). */
+    fun onKindChange(kind: CaptureKind) {
+        _captureKind.value = kind
+    }
+
+    // ── Miembro que genera el ingreso (solo modo INCOME) ───────────────────
+
+    private val _incomeMemberId = MutableStateFlow<String?>(null)
+
+    /** Miembro que genera el ingreso (Benjamín, Norma…); requerido en INCOME. */
+    val incomeMemberId: StateFlow<String?> = _incomeMemberId.asStateFlow()
+
+    /** Selecciona quién genera el ingreso. */
+    fun onIncomeMemberSelected(memberId: String) {
+        _incomeMemberId.value = memberId
+    }
+
+    // ── Fecha del movimiento (DatePicker M3) ───────────────────────────────
+
+    private val _selectedDate = MutableStateFlow<LocalDate?>(null)
+
+    /** Fecha elegida en el DatePicker; null = hoy (default). */
+    val selectedDate: StateFlow<LocalDate?> = _selectedDate.asStateFlow()
+
+    /** Fija la fecha del movimiento; null restablece "hoy". */
+    fun onDateSelected(date: LocalDate?) {
+        _selectedDate.value = date
+    }
 
     // ── Importe ingresado desde el numpad ──────────────────────────────────
     // Se mantiene como String para controlar exactamente la representación.
@@ -248,6 +311,110 @@ class CaptureViewModel(
     private val _selectedCategoryId = MutableStateFlow<String?>(null)
     val selectedCategoryId: StateFlow<String?> = _selectedCategoryId.asStateFlow()
 
+    // ── Recientes reales (A3): últimas categorías usadas en gastos POSTED ───
+
+    /**
+     * Categorías "recientes" reales: ids por último uso ([ExpenseDao.observeRecentCategoryIds],
+     * orden de recencia preservado) mapeados a entidades. Si hay menos de 5,
+     * completa con las hojas de menor `sortOrder` (fallback estable para el
+     * primer arranque).
+     */
+    val recentCategories: StateFlow<List<CategoryEntity>> = combine(
+        expenseDao?.observeRecentCategoryIds(householdId, RECENT_LIMIT)
+            ?.catch { emit(emptyList()) } ?: flowOf(emptyList()),
+        categories,
+    ) { recentIds, cats ->
+        val leaves = cats.filter { it.parentId != null }
+        val byId = leaves.associateBy { it.id }
+        val recents = recentIds.mapNotNull { byId[it] }
+        val fill = leaves
+            .filter { leaf -> recents.none { it.id == leaf.id } }
+            .sortedBy { it.sortOrder }
+        (recents + fill).take(RECENT_LIMIT)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // ── Autocompletado de categoría anti-duplicados (A3) ────────────────────
+
+    private val _categoryQuery = MutableStateFlow("")
+
+    /** Actualiza la búsqueda de categoría (alimenta [categorySearchResults]). */
+    fun onCategoryQueryChange(query: String) {
+        _categoryQuery.value = query
+    }
+
+    /**
+     * Sugerencias "¿Quisiste decir…?" para la búsqueda de categoría, vía
+     * [CategoryDao.searchLeavesByName] (LIKE sobre displayName entre hojas).
+     * Con debounce para no lanzar una query por pulsación.
+     */
+    @OptIn(FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val categorySearchResults: StateFlow<List<CategoryEntity>> = _categoryQuery
+        .debounce(150)
+        .map { it.trim() }
+        .distinctUntilChanged()
+        .mapLatest { query ->
+            if (query.isBlank()) emptyList()
+            else categoryDao?.searchLeavesByName(householdId, query, 8)
+                ?: categories.value
+                    .filter { it.parentId != null && it.displayName.contains(query, ignoreCase = true) }
+                    .take(8)
+        }
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Crea una categoría hoja inline y la deja seleccionada (A3 §4).
+     *
+     * - id UUID; code = `PADRE.NOMBRE_NORMALIZADO` (sin acentos, espacios→_,
+     *   uppercase) con sufijo numérico si colisiona (índice único household+code);
+     * - kind heredado del padre (o EXPENSE_VARIABLE);
+     * - sortOrder = max+1 del grupo.
+     *
+     * `categoryRepository.insert` ya estampa `updated_at` y encola CATEGORY al
+     * sync (infra A0), así que la sincronización ocurre sola.
+     */
+    fun onCreateCategory(displayName: String, parentId: String) {
+        val name = displayName.trim().take(48)
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val all = categories.value
+                val parent = all.firstOrNull { it.id == parentId }
+                val siblings = all.filter { it.parentId == parentId }
+                val baseCode = "${parent?.code ?: "OTROS"}.${normalizeCodeSegment(name)}"
+                val existingCodes = all.map { it.code }.toSet()
+                var code = baseCode
+                var suffix = 2
+                while (code in existingCodes) code = "${baseCode}_${suffix++}"
+
+                val entity = CategoryEntity(
+                    id = UUID.randomUUID().toString(),
+                    householdId = householdId,
+                    parentId = parentId,
+                    code = code,
+                    displayName = name,
+                    kind = parent?.kind ?: "EXPENSE_VARIABLE",
+                    sortOrder = (siblings.maxOfOrNull { it.sortOrder } ?: 0) + 1,
+                )
+                categoryRepository.insert(entity)
+                _selectedCategoryId.value = entity.id
+            } catch (e: Exception) {
+                _operationState.value = CaptureOperationState.Error(
+                    e.message ?: "No se pudo crear la categoría."
+                )
+            }
+        }
+    }
+
+    /** "Niños & Juguetes" → "NINOS_JUGUETES" (sin acentos ni símbolos). */
+    private fun normalizeCodeSegment(name: String): String =
+        Normalizer.normalize(name, Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .replace(Regex("[^A-Za-z0-9]+"), "_")
+            .trim('_')
+            .uppercase(Locale.ROOT)
+            .ifBlank { "CATEGORIA" }
+
     // ── Wallets (fuentes de pago) ──────────────────────────────────────────
 
     /**
@@ -256,6 +423,10 @@ class CaptureViewModel(
      */
     val wallets: StateFlow<List<PaymentMethodEntity>> = walletRepository
         .observeActive(householdId)
+        // El wallet virtual "Pagado por terceros" (kind=EXTERNAL, Fase B/B3) NO es una
+        // fuente de pago normal: se selecciona vía el toggle "pagó un tercero", no en
+        // el carrusel de cuentas.
+        .map { list -> list.filter { it.kind != "EXTERNAL" } }
         .catch { emit(emptyList()) }
         .stateIn(
             scope = viewModelScope,
@@ -286,6 +457,83 @@ class CaptureViewModel(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList()
         )
+
+    /**
+     * TODOS los miembros activos (incluidos dependientes y EXTERNAL_*), para el
+     * selector de "¿Quién pagó?" con tercero (Fase B, B3). El caso normal usa
+     * [members] (solo adultos/dependientes del hogar para atribución de beneficio).
+     */
+    val allMembers: StateFlow<List<MemberEntity>> = memberRepository
+        .observeActiveMembers(householdId)
+        .catch { emit(emptyList()) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList()
+        )
+
+    // ── "¿Quién pagó?" con tercero (Fase B, B3) ─────────────────────────────────
+    //
+    // Cuando el gasto lo adelanta alguien que NO es una cuenta del hogar (un hijo,
+    // un familiar, un tercero), se registra contra el wallet virtual EXTERNAL sin
+    // mover saldos reales. El usuario elige si se le reembolsará o si lo absorbe.
+
+    /** Cómo se salda un gasto pagado por un tercero. */
+    enum class ThirdPartyMode { REIMBURSE, ABSORB }
+
+    private val _thirdPartyPayerId = MutableStateFlow<String?>(null)
+
+    /** Miembro/tercero que adelantó el gasto (null = pago normal con wallet real). */
+    val thirdPartyPayerId: StateFlow<String?> = _thirdPartyPayerId.asStateFlow()
+
+    private val _thirdPartyMode = MutableStateFlow(ThirdPartyMode.REIMBURSE)
+
+    /** Se le reembolsará (default) o lo absorbe; solo aplica si hay tercero. */
+    val thirdPartyMode: StateFlow<ThirdPartyMode> = _thirdPartyMode.asStateFlow()
+
+    /** Selecciona/deselecciona el tercero que pagó (null limpia y vuelve a pago normal). */
+    fun onThirdPartyPayerSelected(memberId: String?) {
+        _thirdPartyPayerId.value = memberId
+    }
+
+    /** Cambia el modo de liquidación del tercero (reembolsar / absorber). */
+    fun onThirdPartyModeChange(mode: ThirdPartyMode) {
+        _thirdPartyMode.value = mode
+    }
+
+    /**
+     * Crea un tercero nuevo (rol EXTERNAL_DEBTOR) desde el texto que tecleó el usuario
+     * y lo deja seleccionado como pagador tercero. Idempotente por nombre: si ya existe
+     * un miembro con ese displayName, lo reutiliza (el índice único household+display_name
+     * lo impediría de todas formas).
+     */
+    fun onCreateExternalPayer(name: String) {
+        val trimmed = name.trim().take(48)
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val existing = allMembers.value.firstOrNull { it.displayName.equals(trimmed, ignoreCase = true) }
+                if (existing != null) {
+                    _thirdPartyPayerId.value = existing.id
+                    return@launch
+                }
+                val member = MemberEntity(
+                    id = UUID.randomUUID().toString(),
+                    householdId = householdId,
+                    displayName = trimmed,
+                    role = "EXTERNAL_DEBTOR",
+                    isActive = true,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                memberRepository.insert(member)
+                _thirdPartyPayerId.value = member.id
+            } catch (e: Exception) {
+                _operationState.value = CaptureOperationState.Error(
+                    e.message ?: "No se pudo crear el tercero."
+                )
+            }
+        }
+    }
 
     // Atribución en DOS dimensiones, como mapas memberId → porcentaje (0-100).
     // Cada dimensión debe sumar 100 para registrar. Convertimos a basis points
@@ -345,23 +593,116 @@ class CaptureViewModel(
      */
     val operationState: StateFlow<CaptureOperationState> = _operationState.asStateFlow()
 
+    // ── Modo Review (SP-A1): prellenado + campos "Por decidir" ───────────────
+
+    private val _reviewMissing = MutableStateFlow<Set<CaptureField>>(emptySet())
+
+    /**
+     * Campos declarados faltantes por el origen ([CaptureSheetMode.Review]) que
+     * el usuario AÚN no resuelve. Vacío fuera de Review o cuando todo quedó
+     * decidido. La UI los marca "Por decidir" y [canRegister] los bloquea.
+     */
+    val unresolvedFields: StateFlow<Set<CaptureField>> = combine(
+        _reviewMissing, _rawAmount, _concept, _selectedCategoryId,
+        _selectedWalletId, _beneficiaryShares, _payerShares, _selectedDate,
+    ) { values: Array<Any?> ->
+        @Suppress("UNCHECKED_CAST")
+        val missing = values[0] as Set<CaptureField>
+        if (missing.isEmpty()) emptySet()
+        else buildSet {
+            val amount = (values[1] as String).replace(",", "").toDoubleOrNull() ?: 0.0
+            if (CaptureField.AMOUNT in missing && amount <= 0) add(CaptureField.AMOUNT)
+            if (CaptureField.CONCEPT in missing && (values[2] as String).isBlank()) add(CaptureField.CONCEPT)
+            if (CaptureField.CATEGORY in missing && values[3] == null) add(CaptureField.CATEGORY)
+            if (CaptureField.WALLET in missing && values[4] == null) add(CaptureField.WALLET)
+            @Suppress("UNCHECKED_CAST")
+            val benef = values[5] as Map<String, Int>
+            if (CaptureField.BENEFICIARY in missing && benef.values.sum() != 100) add(CaptureField.BENEFICIARY)
+            @Suppress("UNCHECKED_CAST")
+            val payer = values[6] as Map<String, Int>
+            if (CaptureField.PAYER in missing && payer.values.sum() != 100) add(CaptureField.PAYER)
+            if (CaptureField.DATE in missing && values[7] == null) add(CaptureField.DATE)
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /**
+     * Aplica el modo con el que se abrió la hoja (SP-A1). Idempotente por modo:
+     * la UI lo invoca en un `LaunchedEffect(mode)`. [CaptureSheetMode.New] e
+     * [CaptureSheetMode.Income] solo fijan el tipo (no pisan un prellenado hecho
+     * vía [prefillFromPending]); [CaptureSheetMode.Review] prellena y marca los
+     * campos por decidir.
+     */
+    fun applyMode(mode: CaptureSheetMode) {
+        when (mode) {
+            CaptureSheetMode.New -> _captureKind.value = CaptureKind.EXPENSE
+            CaptureSheetMode.Income -> _captureKind.value = CaptureKind.INCOME
+            is CaptureSheetMode.Review -> {
+                _captureKind.value = CaptureKind.EXPENSE
+                _reviewMissing.value = mode.missingFields
+                val p = mode.prefill
+                p.amountMxn?.takeIf { it > 0 }?.let { _rawAmount.value = formatRawAmount(it) }
+                p.concept?.let { _concept.value = it.take(64) }
+                p.categoryId?.let { _selectedCategoryId.value = it }
+                p.walletId?.let { _selectedWalletId.value = it }
+                p.occurredAt?.let {
+                    _selectedDate.value = Instant.ofEpochMilli(it).atZone(zone).toLocalDate()
+                }
+                p.beneficiaryBps?.takeIf { it.isNotEmpty() }
+                    ?.let { _beneficiaryShares.value = bpsToPercent(it) }
+                p.payerBps?.takeIf { it.isNotEmpty() }
+                    ?.let { _payerShares.value = bpsToPercent(it) }
+                p.notes?.let { _notes.value = it.take(280) }
+                pendingCaptureId = p.pendingCaptureId
+            }
+        }
+    }
+
+    /** 45.0 → "45"; 45.5 → "45.5" (formato del numpad). */
+    private fun formatRawAmount(amount: Double): String =
+        if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
+
     // ── Validación ─────────────────────────────────────────────────────────
 
     /**
      * `true` si el formulario es válido para registrar (brief C11 — campos mínimos):
-     * - Importe > 0, wallet y categoría seleccionados.
-     * - Beneficiarios y pagadores cada uno **sumando exactamente 100%**.
+     * - EXPENSE: importe > 0, wallet y categoría seleccionados; beneficiarios y
+     *   pagadores cada uno **sumando exactamente 100%**; y en modo Review, sin
+     *   campos "Por decidir" pendientes ([unresolvedFields] vacío).
+     * - INCOME: importe > 0, cuenta destino y miembro que genera el ingreso.
      *
-     * El concepto es OPCIONAL (vive bajo "Más"); si se omite, se usa el nombre
-     * de la categoría como default en [onRegisterExpense].
+     * El concepto es OPCIONAL; si se omite, se usa el nombre de la categoría
+     * (gasto) o "Ingreso" como default.
      */
     val canRegister: StateFlow<Boolean> = combine(
-        _rawAmount, _selectedWalletId, _selectedCategoryId, _beneficiaryShares, _payerShares
-    ) { amount, walletId, categoryId, benef, payer ->
-        val amountNum = amount.replace(",", "").toDoubleOrNull() ?: 0.0
-        amountNum > 0 && walletId != null && categoryId != null &&
-            benef.isNotEmpty() && benef.values.sum() == 100 &&
-            payer.isNotEmpty() && payer.values.sum() == 100
+        combine(
+            _captureKind, _rawAmount, _selectedWalletId, _selectedCategoryId,
+        ) { k, a, w, c -> arrayOf(k, a, w, c) },
+        combine(
+            _beneficiaryShares, _payerShares, _incomeMemberId, unresolvedFields,
+        ) { b, p, m, u -> arrayOf(b, p, m, u) },
+        _thirdPartyPayerId,
+    ) { g1, g2, thirdPartyId ->
+        val kind = g1[0] as CaptureKind
+        val amountNum = (g1[1] as String).replace(",", "").toDoubleOrNull() ?: 0.0
+        val walletId = g1[2] as String?
+        when (kind) {
+            CaptureKind.INCOME -> amountNum > 0 && walletId != null && g2[2] != null
+            CaptureKind.EXPENSE -> {
+                @Suppress("UNCHECKED_CAST")
+                val benef = g2[0] as Map<String, Int>
+                @Suppress("UNCHECKED_CAST")
+                val payer = g2[1] as Map<String, Int>
+                @Suppress("UNCHECKED_CAST")
+                val unresolved = g2[3] as Set<CaptureField>
+                // Con tercero (Fase B/B3): el wallet lo pone el sistema (EXTERNAL) y el
+                // PAYER es el tercero, así que no se exigen ni wallet ni payer del form.
+                val walletOk = thirdPartyId != null || walletId != null
+                val payerOk = thirdPartyId != null || (payer.isNotEmpty() && payer.values.sum() == 100)
+                amountNum > 0 && walletOk && g1[3] != null &&
+                    benef.isNotEmpty() && benef.values.sum() == 100 &&
+                    payerOk && unresolved.isEmpty()
+            }
+        }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -503,13 +844,20 @@ class CaptureViewModel(
             _operationState.value = CaptureOperationState.Loading
 
             try {
-                // 1. Quincena activa
-                val quincena = quincenaRepository.getActive(householdId)
-                    ?: throw IllegalStateException("No hay quincena activa para el hogar.")
+                // 1. Quincena de la fecha elegida (default hoy → la activa).
+                val chosenDate = _selectedDate.value
+                val quincena = resolveQuincena(chosenDate)
 
-                // 2. Wallet seleccionado
-                val walletId = _selectedWalletId.value
-                    ?: throw IllegalStateException("Selecciona un método de pago.")
+                // 2. Wallet seleccionado. Si pagó un tercero (Fase B/B3), el gasto se
+                // carga al wallet virtual EXTERNAL (no mueve saldos reales) en vez de
+                // la cuenta del carrusel.
+                val thirdPartyId = _thirdPartyPayerId.value
+                val walletId = if (thirdPartyId != null) {
+                    expenseRepository.ensureExternalWallet(householdId).id
+                } else {
+                    _selectedWalletId.value
+                        ?: throw IllegalStateException("Selecciona un método de pago.")
+                }
 
                 // 3. Categoría seleccionada
                 val categoryId = _selectedCategoryId.value
@@ -522,6 +870,11 @@ class CaptureViewModel(
                 // 5. Construir ExpenseEntity (concepto opcional → default = nombre de categoría)
                 val expenseId = UUID.randomUUID().toString()
                 val nowEpoch = System.currentTimeMillis()
+                // Fecha elegida → mediodía local (evita brincos de quincena por TZ);
+                // sin fecha explícita → instante actual (comportamiento original).
+                val occurredEpoch = chosenDate
+                    ?.atTime(12, 0)?.atZone(zone)?.toInstant()?.toEpochMilli()
+                    ?: nowEpoch
                 val categoryName = categories.value.firstOrNull { it.id == categoryId }?.displayName
                 val conceptValue = _concept.value.trim().ifBlank { categoryName ?: "Gasto" }.take(64)
 
@@ -530,10 +883,18 @@ class CaptureViewModel(
                 // captura procede igual.
                 val fix = locationProvider.currentFix(requireForeground = true)
 
+                // Estado de liquidación (Fase B/B3): NONE en el caso normal; si pagó un
+                // tercero, PENDING_REIMBURSEMENT (se le repondrá) o ABSORBED (no).
+                val settlementStatus = when {
+                    thirdPartyId == null -> "NONE"
+                    _thirdPartyMode.value == ThirdPartyMode.ABSORB -> "ABSORBED"
+                    else -> "PENDING_REIMBURSEMENT"
+                }
+
                 val expense = ExpenseEntity(
                     id = expenseId,
                     householdId = householdId,
-                    occurredAt = nowEpoch,
+                    occurredAt = occurredEpoch,
                     quincenaId = quincena.id,
                     categoryId = categoryId,
                     concept = conceptValue,
@@ -546,11 +907,16 @@ class CaptureViewModel(
                     longitude = fix?.longitude,
                     placeLabel = fix?.placeLabel,
                     locationSource = if (fix != null) LocationSource.CAPTURE else LocationSource.NONE,
+                    settlementStatus = settlementStatus,
+                    externalPayerMemberId = thirdPartyId,
                 )
 
                 // 6. Construir atribuciones de AMBAS dimensiones desde los shares (%).
                 val beneficiaryShares = _beneficiaryShares.value
-                val payerShares = _payerShares.value
+                // El PAYER: si pagó un tercero, la dimensión PAYER es ese tercero al 100%
+                // (quién desembolsó); si no, los shares del formulario.
+                val payerShares = if (thirdPartyId != null) mapOf(thirdPartyId to 100)
+                else _payerShares.value
                 if (beneficiaryShares.isEmpty() || beneficiaryShares.values.sum() != 100) {
                     throw IllegalArgumentException("La atribución de beneficiarios debe sumar 100%.")
                 }
@@ -582,10 +948,15 @@ class CaptureViewModel(
                 // 7. Inserción atómica (valida bps internamente)
                 expenseRepository.insertWithAttributions(expense, attributions)
 
-                // 8. Si la hoja nació de una captura pendiente (§G.3), márcala
-                // CONFIRMED para sacarla de la bandeja (el gasto ya se registró aquí).
+                // 8. Si la hoja nació de una captura pendiente (§G.3 / Review SP-A1),
+                // márcala CONFIRMED para sacarla de la bandeja. Con callback
+                // (BankCaptureManager cancela también la notificación) o, si no
+                // hay, directo vía PendingCaptureDao.
                 pendingCaptureId?.let { id ->
-                    runCatching { onPendingConfirmed?.invoke(id) }
+                    runCatching {
+                        if (onPendingConfirmed != null) onPendingConfirmed.invoke(id)
+                        else pendingCaptureDao?.updateStatus(id, "CONFIRMED")
+                    }
                     pendingCaptureId = null
                 }
 
@@ -597,6 +968,117 @@ class CaptureViewModel(
                 )
             }
         }
+    }
+
+    /**
+     * Registra un ingreso POSTED (modo INCOME del sheet). MISMO camino que
+     * `WalletsViewModel.recordIncome`: [IncomeRepository.insert] crea el
+     * `income_source` POSTED, acredita el saldo de la cuenta destino y encola
+     * INCOME+WALLET en `sync_queue` (todo en una transacción del repo impl).
+     * La quincena se resuelve por la fecha elegida (default hoy → activa).
+     */
+    fun onRegisterIncome() {
+        if (_operationState.value is CaptureOperationState.Loading) return
+
+        viewModelScope.launch {
+            _operationState.value = CaptureOperationState.Loading
+            try {
+                val repo = incomeRepository
+                    ?: throw IllegalStateException("El registro de ingresos no está disponible aquí.")
+                val walletId = _selectedWalletId.value
+                    ?: throw IllegalStateException("Selecciona la cuenta destino.")
+                val memberId = _incomeMemberId.value
+                    ?: throw IllegalStateException("Selecciona quién genera el ingreso.")
+                val amount = parsedAmount
+                if (amount <= 0) throw IllegalArgumentException("El importe debe ser mayor a $0.")
+
+                val chosenDate = _selectedDate.value
+                val quincena = resolveQuincena(chosenDate)
+                val date = chosenDate ?: LocalDate.now(zone)
+
+                val income = IncomeSourceEntity(
+                    id = UUID.randomUUID().toString(),
+                    householdId = householdId,
+                    quincenaId = quincena.id,
+                    memberId = memberId,
+                    label = _concept.value.trim().ifBlank { "Ingreso" }.take(64),
+                    amountMxn = amount,
+                    cadence = "IRREGULAR",
+                    expectedDate = date.toString(),
+                    paymentMethodId = walletId,
+                    status = "POSTED",
+                    createdAt = System.currentTimeMillis(),
+                )
+                repo.insert(income)
+
+                _operationState.value = CaptureOperationState.Success(income.id)
+            } catch (e: Exception) {
+                _operationState.value = CaptureOperationState.Error(
+                    e.message ?: "Error al registrar el ingreso. Intenta de nuevo."
+                )
+            }
+        }
+    }
+
+    /** Punto de entrada único del CTA: despacha por [captureKind]. */
+    fun onRegister() = when (_captureKind.value) {
+        CaptureKind.INCOME -> onRegisterIncome()
+        CaptureKind.EXPENSE -> onRegisterExpense()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Resolución de quincena por fecha (DatePicker, A3 §5)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Quincena que corresponde a [date] (null = hoy → la ACTIVE).
+     *
+     * Mismo contrato que `QuincenaRollover`: si la fecha cae en la activa se usa
+     * esa; si existe otra en Room (histórica/PROVISIONED) se usa; si no, se crea
+     * con **id determinista** `q-YYYY-MM-FIRST|SECOND` (día 1-15 = FIRST, 16+ =
+     * SECOND) y status PROVISIONED — convergente entre dispositivos, sin romper
+     * la FK `expense.quincena_id`. Sin [quincenaDao] cae a la activa.
+     */
+    private suspend fun resolveQuincena(date: LocalDate?): QuincenaEntity {
+        val active = quincenaRepository.getActive(householdId)
+        if (date == null) {
+            return active ?: throw IllegalStateException("No hay quincena activa para el hogar.")
+        }
+        val iso = date.toString()
+        if (active != null && active.startDate <= iso && active.endDate >= iso) return active
+
+        val dao = quincenaDao
+            ?: return active ?: throw IllegalStateException("No hay quincena activa para el hogar.")
+        dao.getForDate(householdId, iso)?.let { return it }
+
+        val built = buildQuincena(date)
+        dao.insert(built)
+        return built
+    }
+
+    /**
+     * Builder determinista de quincena — réplica 1:1 de
+     * `QuincenaRollover.buildQuincena` (privado allá): id `q-YYYY-MM-HALF`,
+     * status PROVISIONED (aquí NO se activa: la activa de hoy no cambia).
+     */
+    private fun buildQuincena(date: LocalDate): QuincenaEntity {
+        val year = date.year
+        val month = date.monthValue
+        val first = date.dayOfMonth <= 15
+        val half = if (first) "FIRST" else "SECOND"
+        val start = LocalDate.of(year, month, if (first) 1 else 16)
+        val end = if (first) LocalDate.of(year, month, 15) else start.withDayOfMonth(start.lengthOfMonth())
+        return QuincenaEntity(
+            id = "q-%04d-%02d-%s".format(year, month, half),
+            householdId = householdId,
+            year = year,
+            month = month,
+            half = half,
+            startDate = start.toString(),
+            endDate = end.toString(),
+            label = "${if (first) "Q1" else "Q2"} ${MONTH_NAMES[month - 1]} $year",
+            status = "PROVISIONED",
+        )
     }
 
     /**
@@ -618,6 +1100,13 @@ class CaptureViewModel(
         _selectedCategoryId.value = null
         _beneficiaryShares.value = emptyMap()
         _payerShares.value = emptyMap()
+        _captureKind.value = CaptureKind.EXPENSE
+        _incomeMemberId.value = null
+        _selectedDate.value = null
+        _reviewMissing.value = emptySet()
+        _categoryQuery.value = ""
+        _thirdPartyPayerId.value = null
+        _thirdPartyMode.value = ThirdPartyMode.REIMBURSE
         pendingCaptureId = null
         _operationState.value = CaptureOperationState.Idle
     }
@@ -629,15 +1118,14 @@ class CaptureViewModel(
          * solo sugerimos, nunca aplicamos solos, así que el listón es más bajo.
          */
         const val SUGGEST_THRESHOLD = 0.5
-    }
 
-    // ── Extensión privada para combine con 5 flows ────────────────────────────
-    private fun <T1, T2, T3, T4, T5, R> combine(
-        flow1: StateFlow<T1>,
-        flow2: StateFlow<T2>,
-        flow3: StateFlow<T3>,
-        flow4: StateFlow<T4>,
-        flow5: StateFlow<T5>,
-        transform: suspend (T1, T2, T3, T4, T5) -> R
-    ) = kotlinx.coroutines.flow.combine(flow1, flow2, flow3, flow4, flow5, transform)
+        /** Cuántas categorías "recientes" mostrar en el sheet. */
+        const val RECENT_LIMIT = 5
+
+        /** Nombres de mes para el label de quincena (mismo formato que QuincenaRollover). */
+        private val MONTH_NAMES = listOf(
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+        )
+    }
 }

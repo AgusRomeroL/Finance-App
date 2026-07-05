@@ -236,10 +236,12 @@ class RecurrenceViewModel(
     // ── Inferencia bajo autorización (Fase 5) ──────────────────────────────────────
 
     /**
-     * Crea la plantilla sugerida (solo al aceptar). Infiere los splits con el
-     * [RetroAttributionEngine] (mismo motor que Feature B); fallback conservador.
-     * Guarda `confidence_score` y `learned_from_expense_ids` para trazabilidad y
-     * materializa la quincena activa para reflejar el PLANNED.
+     * Aceptar una sugerencia de plantilla NUNCA la inserta directo (patrón central
+     * A4): abre el **editor de plantilla pre-llenado** con los valores inferidos
+     * (concepto, monto, categoría, wallet, cadencia, día y splits vía
+     * [RetroAttributionEngine], con fallback conservador) para que el usuario los
+     * revise/ajuste y confirme con "Guardar". La confianza y `learned_from_expense_ids`
+     * de la sugerencia se conservan como metadata de la plantilla que se guardará.
      */
     fun acceptSuggestion(s: RecurrenceSuggestion) {
         viewModelScope.launch {
@@ -248,29 +250,35 @@ class RecurrenceViewModel(
                 ?.takeIf { it.isNotEmpty() } ?: equalSplitBps(active.map { it.id })
             val payerBps = retroAttributionEngine.suggestForKey(s.canonicalKey, "PAYER")?.distribution
                 ?.takeIf { it.isNotEmpty() } ?: defaultPayerBps(s.paymentMethodId, active)
-            if (benefBps.isEmpty() || payerBps.isEmpty()) return@launch
 
-            val detail = JSONObject()
-                .put("day_of_month", s.dayOfMonth.coerceIn(1, 31))
-                .put("reminder_lead_days", 2)
-            val template = RecurrenceTemplateEntity(
-                id = UUID.randomUUID().toString(),
-                householdId = householdId,
-                concept = s.concept.take(64),
-                categoryId = s.categoryId,
-                defaultAmountMxn = s.amountMxn,
-                defaultPaymentMethodId = s.paymentMethodId,
-                cadence = s.cadence,
-                cadenceDetail = detail.toString(),
-                defaultBeneficiaryIds = bpsMapToJson(benefBps),
-                defaultPayerSplit = bpsMapToJson(payerBps),
-                isActive = true,
-                confidenceScore = s.confidence,
-                learnedFromExpenseIds = JSONArray(s.learnedFromExpenseIds).toString(),
-            )
-            recurrenceRepository.insert(template)
-            runCatching { quincenaRepository.getActive(householdId)?.let { materializer.materialize(it) } }
+            // Prefill del editor (id nuevo → save() insertará). La sugerencia solo
+            // propone; nada se crea hasta que el usuario confirme en el formulario.
+            editingId = null
+            editingConfidence = s.confidence
+            editingLearned = JSONArray(s.learnedFromExpenseIds).toString()
+            _concept.value = s.concept.take(64)
+            _amountText.value = s.amountMxn.toLong().toString()
+            _categoryId.value = s.categoryId
+            _walletId.value = s.paymentMethodId
+            _cadence.value = Cadence.fromCode(s.cadence)
+            _dayText.value = s.dayOfMonth.coerceIn(1, 31).toString()
+            _leadDays.value = 2
+            _leadQuincenaStart.value = false
+            _beneficiaryShares.value = bpsToPercent(benefBps)
+            _payerShares.value = bpsToPercent(payerBps)
+            _saveState.value = TemplateSaveState.Idle
+            _editorVisible.value = true
         }
+    }
+
+    /** Convierte bps (suman 10,000) a % (suman 100); el último absorbe el residuo. */
+    private fun bpsToPercent(bps: Map<String, Int>): Map<String, Int> {
+        if (bps.isEmpty()) return emptyMap()
+        val entries = bps.entries.toList()
+        var assigned = 0
+        return entries.mapIndexed { i, (id, v) ->
+            id to if (i == entries.lastIndex) (100 - assigned) else (v / 100).also { assigned += it }
+        }.toMap()
     }
 
     /** Descarta una sugerencia (persistente): no vuelve a proponerse. */
@@ -290,12 +298,6 @@ class RecurrenceViewModel(
         val base = 10_000 / ids.size
         val rem = 10_000 - base * ids.size
         return ids.mapIndexed { i, id -> id to if (i == ids.lastIndex) base + rem else base }.toMap()
-    }
-
-    private fun bpsMapToJson(bps: Map<String, Int>): String {
-        val obj = JSONObject()
-        bps.forEach { (id, v) -> obj.put(id, v) }
-        return obj.toString()
     }
 
     companion object {

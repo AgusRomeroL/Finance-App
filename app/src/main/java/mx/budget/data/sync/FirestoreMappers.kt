@@ -68,6 +68,8 @@ fun DocumentSnapshot.toExpenseEntity(): ExpenseEntity? {
         longitude = dbl("longitude", "longitude"),
         placeLabel = str("placeLabel", "place_label"),
         locationSource = str("locationSource", "location_source"),
+        settlementStatus = str("settlementStatus", "settlement_status") ?: "NONE",
+        externalPayerMemberId = str("externalPayerMemberId", "external_payer_member_id"),
         updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }
@@ -96,6 +98,7 @@ fun DocumentSnapshot.toCategoryEntity(): CategoryEntity? {
         kind = str("kind", "kind") ?: return null,
         budgetDefaultMxn = dbl("budgetDefaultMxn", "budget_default_mxn"),
         sortOrder = int("sortOrder", "sort_order") ?: 0,
+        updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }
 
@@ -109,6 +112,7 @@ fun DocumentSnapshot.toMemberEntity(): MemberEntity? {
         isActive = bool("isActive", "is_active") ?: true,
         defaultIncomeMxn = dbl("defaultIncomeMxn", "default_income_mxn"),
         meta = str("meta", "meta") ?: "{}",
+        updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }
 
@@ -148,6 +152,7 @@ fun DocumentSnapshot.toQuincenaEntity(): QuincenaEntity? {
         actualExpensesMxn = dbl("actualExpensesMxn", "actual_expenses_mxn") ?: 0.0,
         status = str("status", "status") ?: "PROVISIONED",
         closedAt = lng("closedAt", "closed_at"),
+        updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }
 

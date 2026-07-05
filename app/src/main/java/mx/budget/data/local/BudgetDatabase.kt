@@ -21,6 +21,7 @@ import mx.budget.data.local.dao.PaymentMethodDao
 import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.local.dao.RecurrenceTemplateDao
+import mx.budget.data.local.dao.StatementImportDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.dao.WalletTransferDao
 import mx.budget.data.local.entity.AttributionReviewEntity
@@ -37,6 +38,7 @@ import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
 import mx.budget.data.local.entity.SavingsGoalEntity
+import mx.budget.data.local.entity.StatementImportEntity
 import mx.budget.data.local.entity.SyncQueueEntity
 import mx.budget.data.local.entity.WalletTransferEntity
 
@@ -67,9 +69,10 @@ import mx.budget.data.local.entity.WalletTransferEntity
         SyncQueueEntity::class,
         AttributionReviewEntity::class,
         PendingCaptureEntity::class,
-        WalletTransferEntity::class
+        WalletTransferEntity::class,
+        StatementImportEntity::class
     ],
-    version = 12,
+    version = 15,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -110,6 +113,9 @@ abstract class BudgetDatabase : RoomDatabase() {
     abstract fun loanDao(): LoanDao
 
     abstract fun savingsGoalDao(): SavingsGoalDao
+
+    // Fase C (paquete C1): auditoría de estados de cuenta importados.
+    abstract fun statementImportDao(): StatementImportDao
 
     companion object {
         /**
@@ -314,6 +320,73 @@ abstract class BudgetDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `savings_goal` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `loan` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `installment_plan` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v12 → v13: **MVP Fase A (A0)**. Tres columnas nuevas por
+         * `ALTER TABLE ADD COLUMN` (Room valida columnas por nombre/tipo, no por
+         * orden), coincidentes con los `@ColumnInfo(defaultValue = ...)` de sus
+         * entidades para que el identityHash de `app/schemas/13.json` valide:
+         *
+         * - `pending_capture.enrich_status` (`NOT NULL DEFAULT 'READY'`): estado
+         *   del enriquecimiento async de la captura por voz/NL — la tarjeta nace
+         *   inmediata como `ENRICHING` (acciones bloqueadas) y pasa a `READY`.
+         * - `income_source.color_hex` (nullable): color de identidad visual.
+         * - `category.updated_at` (`NOT NULL DEFAULT 0`): LWW del sync — la app
+         *   ahora escribe categorías localmente (alta inline en captura, edición
+         *   de color), así que el pull debe gatearse como expense/payment_method.
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pending_capture` ADD COLUMN `enrich_status` TEXT NOT NULL DEFAULT 'READY'")
+                db.execSQL("ALTER TABLE `income_source` ADD COLUMN `color_hex` TEXT")
+                db.execSQL("ALTER TABLE `category` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v13 → v14: **MVP Fase B (B0)**. Soporte de "alguien más pagó" + LWW para
+         * los maestros que la Fase B escribe localmente (wizard/CRUD). Columnas por
+         * `ALTER TABLE ADD COLUMN` coincidentes con los `@ColumnInfo(defaultValue)`
+         * de sus entidades para que el identityHash de `app/schemas/14.json` valide:
+         *
+         * - `expense.settlement_status` (`NOT NULL DEFAULT 'NONE'`): NONE |
+         *   PENDING_REIMBURSEMENT | ABSORBED | REIMBURSED.
+         * - `expense.external_payer_member_id` (nullable, index — sin FK, mismo
+         *   criterio que sync_queue): tercero que desembolsó.
+         * - `updated_at` (`NOT NULL DEFAULT 0`) en `member`, `quincena` y
+         *   `household`: LWW del sync (antes solo-pull con REPLACE).
+         *
+         * `pending_capture.source` admite ahora `'REMOTE'` (propuestas de
+         * colaboradores) sin cambio de esquema — es texto libre.
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `expense` ADD COLUMN `settlement_status` TEXT NOT NULL DEFAULT 'NONE'")
+                db.execSQL("ALTER TABLE `expense` ADD COLUMN `external_payer_member_id` TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_expense_external_payer_member_id` ON `expense` (`external_payer_member_id`)")
+                db.execSQL("ALTER TABLE `member` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `quincena` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `household` ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v14 → v15: **Fase C, paquete C1** — importación de estados de cuenta
+         * bancarios con LLM cloud. Crea la tabla LOCAL-ONLY `statement_import`
+         * (auditoría de cada import) + índice por hogar. Sin FK (mismo criterio que
+         * `sync_queue` / `pending_capture`): el import se registra antes de elegir
+         * wallet y sobrevive al borrado de éste.
+         *
+         * El CREATE TABLE y el índice se copiaron LITERAL del `createSql` que KSP
+         * genera en `app/schemas/mx.budget.data.local.BudgetDatabase/15.json`;
+         * cualquier divergencia rompe el identityHash. El asset se queda en v1.
+         */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `statement_import` (`id` TEXT NOT NULL, `household_id` TEXT NOT NULL, `wallet_id` TEXT, `emisor` TEXT, `last4` TEXT, `periodo_inicio` TEXT, `periodo_fin` TEXT, `fecha_corte` TEXT, `fecha_limite_pago` TEXT, `saldo_total` REAL, `pago_minimo` REAL, `pago_no_intereses` REAL, `tasa_anual` REAL, `payload_json` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `applied_at` INTEGER, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_import_household_id` ON `statement_import` (`household_id`)")
             }
         }
     }

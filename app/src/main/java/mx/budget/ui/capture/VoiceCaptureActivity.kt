@@ -41,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import mx.budget.BudgetApplication
 import mx.budget.ui.search.SpeechRecognizerController
+import mx.budget.ui.search.SpeechState
 import mx.budget.ui.theme.BudgetAppTheme
 
 /**
@@ -124,9 +126,11 @@ private fun VoiceCaptureOverlay(
 ) {
     val context = LocalContext.current
     val controller = remember { SpeechRecognizerController(context) }
+    val speechState by controller.state.collectAsState()
+    val rmsLevel by controller.rmsLevel.collectAsState()
+    val listening = speechState is SpeechState.Listening || speechState is SpeechState.Preparing
 
     var transcript by remember { mutableStateOf("") }
-    var listening by remember { mutableStateOf(false) }
     var hasAudioPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -135,12 +139,10 @@ private fun VoiceCaptureOverlay(
     }
 
     fun startListening() {
-        if (!controller.isAvailable || listening) return
-        listening = true
+        if (!controller.isAvailable || controller.isActive) return
         controller.start(
             onPartial = { transcript = it },
             onFinal = { transcript = it },
-            onEnd = { listening = false },
         )
     }
 
@@ -188,11 +190,23 @@ private fun VoiceCaptureOverlay(
             Column(Modifier.padding(20.dp)) {
                 Text("Captura por voz", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
+                // Feedback en vivo del dictado (el bug reportado era "parece
+                // activarse pero no reconoce" sin ninguna señal visible).
+                val (statusText, statusIsError) = when (val s = speechState) {
+                    is SpeechState.Preparing -> "Preparando micrófono…" to false
+                    is SpeechState.Listening -> "Escuchando… habla ahora" to false
+                    is SpeechState.Processing -> "Procesando…" to false
+                    is SpeechState.Error -> s.message to true
+                    else -> (
+                        if (controller.isAvailable) "Di o escribe tu gasto, ej. “gasté 200 en gasolina”"
+                        else "Escribe tu gasto, ej. “gasté 200 en gasolina”"
+                        ) to false
+                }
                 Text(
-                    if (controller.isAvailable) "Di o escribe tu gasto, ej. “gasté 200 en gasolina”"
-                    else "Escribe tu gasto, ej. “gasté 200 en gasolina”",
+                    statusText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (statusIsError) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(16.dp))
 
@@ -213,13 +227,14 @@ private fun VoiceCaptureOverlay(
                         FilledTonalIconButton(
                             onClick = {
                                 if (listening) {
-                                    controller.stop(); listening = false
+                                    controller.stop()
                                 } else if (hasAudioPermission) {
                                     startListening()
                                 } else {
                                     permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                 }
                             },
+                            modifier = Modifier.scale(if (listening) 1f + 0.12f * rmsLevel else 1f),
                             colors = if (listening)
                                 IconButtonDefaults.filledTonalIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.primary,

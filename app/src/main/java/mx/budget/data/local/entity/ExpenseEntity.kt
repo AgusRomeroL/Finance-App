@@ -71,7 +71,8 @@ import androidx.room.PrimaryKey
         Index(value = ["recurrence_template_id"]),
         Index(value = ["installment_plan_id"]),
         Index(value = ["created_by_member_id"]),
-        Index(value = ["concept_canonical"])
+        Index(value = ["concept_canonical"]),
+        Index(value = ["external_payer_member_id"])
     ]
 )
 data class ExpenseEntity(
@@ -169,6 +170,29 @@ data class ExpenseEntity(
     /** `CAPTURE | CONFIRM | MANUAL | NONE` — procedencia de la ubicación (§G.4.2). */
     @ColumnInfo(name = "location_source")
     val locationSource: String? = null,
+
+    // ── "Alguien más pagó" (v13→v14, Fase B) ────────────────────────────────────
+    // Un gasto puede haberlo pagado un tercero (un hijo, un familiar) que NO es una
+    // cuenta del hogar. Cuenta para presupuesto/beneficiarios pero se carga a un
+    // wallet sintético kind='EXTERNAL' que NO afecta saldos reales.
+
+    /**
+     * Estado de liquidación del gasto pagado por un tercero:
+     * - `NONE`: gasto normal, pagado desde un wallet real (caso por defecto).
+     * - `PENDING_REIMBURSEMENT`: lo pagó un tercero; el hogar aún no decide.
+     * - `ABSORBED`: lo pagó un tercero y NO se le repondrá (queda informativo).
+     * - `REIMBURSED`: el hogar ya le repuso (el gasto se movió a un wallet real).
+     */
+    @ColumnInfo(name = "settlement_status", defaultValue = "'NONE'")
+    val settlementStatus: String = "NONE",
+
+    /**
+     * Miembro (típicamente EXTERNAL_* o un dependiente) que desembolsó el dinero
+     * cuando `settlement_status != NONE`. Sin FK a propósito (mismo criterio que
+     * `sync_queue`): el gasto debe sobrevivir aunque el miembro se elimine.
+     */
+    @ColumnInfo(name = "external_payer_member_id")
+    val externalPayerMemberId: String? = null,
 
     /**
      * Última modificación local (epoch millis) — base de la resolución de

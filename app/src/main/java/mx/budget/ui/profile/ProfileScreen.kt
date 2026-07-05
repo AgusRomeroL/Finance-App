@@ -23,11 +23,16 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Rule
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -67,7 +72,15 @@ fun ProfileScreen(
     calendarMirrorEnabled: Boolean = false,
     onCalendarMirrorToggle: (Boolean) -> Unit = {},
     locationLevel: String = "NONE",
-    onLocationLevelChange: (String) -> Unit = {}
+    onLocationLevelChange: (String) -> Unit = {},
+    onOpenHousehold: (() -> Unit)? = null,
+    onManageMembers: (() -> Unit)? = null,
+    onManageCategories: (() -> Unit)? = null,
+    onManageIncome: (() -> Unit)? = null,
+    onManageWallets: (() -> Unit)? = null,
+    nvidiaApiKey: String = "",
+    onNvidiaApiKeyChange: (String) -> Unit = {},
+    onImportStatement: (() -> Unit)? = null,
 ) {
     var showLeadDialog by remember { mutableStateOf(false) }
     var showLocationDialog by remember { mutableStateOf(false) }
@@ -122,6 +135,93 @@ fun ProfileScreen(
         }
 
         Spacer(Modifier.height(28.dp))
+
+        // Card de cuenta y grupos (Fase B — multi-tenant).
+        if (onOpenHousehold != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(22.dp)
+            ) {
+                Text(
+                    "CUENTA Y GRUPOS",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    letterSpacing = 1.6.sp
+                )
+                Spacer(Modifier.height(14.dp))
+                SettingRow(
+                    icon = Icons.Filled.Group,
+                    title = "Compartir el hogar",
+                    subtitle = "Inicia sesión con Google, crea o únete a un grupo y comparte tu presupuesto",
+                    trailingBadge = null,
+                    onClick = onOpenHousehold
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+        }
+
+        // Card de administración de maestros (paquete B2): miembros, categorías,
+        // ingresos y cuentas. Cada fila abre su pantalla CRUD.
+        if (onManageMembers != null || onManageCategories != null || onManageIncome != null || onManageWallets != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(22.dp)
+            ) {
+                Text(
+                    "ADMINISTRAR",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    letterSpacing = 1.6.sp
+                )
+                Spacer(Modifier.height(14.dp))
+                if (onManageMembers != null) {
+                    SettingRow(
+                        icon = Icons.Filled.Group,
+                        title = "Miembros",
+                        subtitle = "Personas del hogar y sus roles",
+                        trailingBadge = null,
+                        onClick = onManageMembers
+                    )
+                }
+                if (onManageCategories != null) {
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow(
+                        icon = Icons.Filled.Category,
+                        title = "Categorías",
+                        subtitle = "Grupos, colores y presupuestos",
+                        trailingBadge = null,
+                        onClick = onManageCategories
+                    )
+                }
+                if (onManageIncome != null) {
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow(
+                        icon = Icons.Filled.AttachMoney,
+                        title = "Ingresos",
+                        subtitle = "Fuentes de ingreso de la quincena",
+                        trailingBadge = null,
+                        onClick = onManageIncome
+                    )
+                }
+                if (onManageWallets != null) {
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow(
+                        icon = Icons.Filled.AccountBalanceWallet,
+                        title = "Cuentas",
+                        subtitle = "Saldos, tarjetas y efectivo",
+                        trailingBadge = null,
+                        onClick = onManageWallets
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+        }
 
         // Card de apariencia
         Column(
@@ -285,6 +385,70 @@ fun ProfileScreen(
         }
 
         Spacer(Modifier.height(20.dp))
+
+        // Card de importación de estados de cuenta (Fase C, paquete C1). API key de
+        // NVIDIA (guardada en DataStore privado) + entrada a la pantalla de import.
+        if (onImportStatement != null) {
+            var apiKeyDraft by remember(nvidiaApiKey) { mutableStateOf(nvidiaApiKey) }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(22.dp)
+            ) {
+                Text(
+                    "ESTADOS DE CUENTA",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    letterSpacing = 1.6.sp
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Pega tu API key de NVIDIA para analizar estados de cuenta con IA. " +
+                        "Se guarda solo en este teléfono. El archivo nunca sale del " +
+                        "dispositivo: solo el texto extraído se envía a la nube.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = apiKeyDraft,
+                    onValueChange = { apiKeyDraft = it },
+                    label = { Text("API key de NVIDIA") },
+                    placeholder = { Text("nvapi-…") },
+                    singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Password
+                    ),
+                    trailingIcon = {
+                        if (apiKeyDraft != nvidiaApiKey) {
+                            androidx.compose.material3.TextButton(onClick = { onNvidiaApiKeyChange(apiKeyDraft) }) {
+                                Text("Guardar")
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    if (nvidiaApiKey.isBlank()) "Sin key configurada"
+                    else "Key guardada (${nvidiaApiKey.take(6)}…)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+                SettingRow(
+                    icon = Icons.Filled.UploadFile,
+                    title = "Importar estado de cuenta",
+                    subtitle = "Sube un PDF o imagen y reconcilia corte, límite y planes a meses",
+                    trailingBadge = null,
+                    onClick = onImportStatement
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+        }
 
         // Card de recordatorios (Fase 4 inc. 2d) — lead global de los avisos de PLANNED.
         Column(

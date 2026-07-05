@@ -31,6 +31,17 @@ data class ExpenseWithDetails(
 )
 
 /**
+ * Total que el hogar debe a un tercero (Fase B, paquete B3): agregado de los
+ * gastos con `settlement_status = 'PENDING_REIMBURSEMENT'` por
+ * `external_payer_member_id`. Alimenta la sección "Por reembolsar" del dashboard.
+ */
+data class PendingReimbursementByPayer(
+    val externalPayerMemberId: String?,
+    val totalMxn: Double,
+    val expenseCount: Int,
+)
+
+/**
  * Gasto por categoría: proyectado vs ejecutado con restante.
  * Alimenta el dashboard quincenal y el contexto RAG del asistente IA.
  */

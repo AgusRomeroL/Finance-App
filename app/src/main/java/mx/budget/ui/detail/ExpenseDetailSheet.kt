@@ -3,11 +3,14 @@ package mx.budget.ui.detail
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +28,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -49,6 +53,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -56,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.ui.capture.AttributionDimension
+import mx.budget.ui.common.ColorPickerDialog
 import mx.budget.ui.theme.financeColors
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -90,6 +97,13 @@ fun ExpenseDetailSheet(
     val dateTimeFmt = remember { SimpleDateFormat("EEE d MMM yyyy, HH:mm", Locale("es", "MX")) }
 
     var confirmDelete by remember { mutableStateOf(false) }
+    // Diálogo de color de la categoría (paquete A4): repinta todas las filas de la categoría.
+    var showColorPicker by remember { mutableStateOf(false) }
+    // Categoría actual del gasto, para el título y el color preseleccionado del diálogo.
+    val currentCategory = remember(categories, detail.entity, detail.row.categoryId) {
+        val id = detail.entity?.categoryId ?: detail.row.categoryId
+        categories.firstOrNull { it.id == id }
+    }
 
     ModalBottomSheet(
         onDismissRequest = { viewModel.dismiss() },
@@ -116,16 +130,32 @@ fun ExpenseDetailSheet(
                     detail = detail,
                     viewModel = viewModel,
                     members = members,
+                    wallets = wallets,
                     money = money,
                     dateTimeFmt = dateTimeFmt,
+                    categoryColorHex = currentCategory?.colorHex,
                     onEdit = viewModel::startEdit,
                     onDeleteRequest = { confirmDelete = true },
+                    onPickColor = { showColorPicker = true },
                     onPickDateTime = {
                         showDateTimePicker(context, detail.occurredAt, viewModel::setOccurredAt)
                     },
                 )
             }
         }
+    }
+
+    if (showColorPicker) {
+        val label = currentCategory?.displayName ?: detail.row.categoryName
+        ColorPickerDialog(
+            title = "Color de \"$label\"",
+            selectedHex = currentCategory?.colorHex,
+            onSelect = { hex ->
+                viewModel.setCategoryColor(hex)
+                showColorPicker = false
+            },
+            onDismiss = { showColorPicker = false },
+        )
     }
 
     if (confirmDelete) {
@@ -166,10 +196,13 @@ private fun ViewModeContent(
     detail: ExpenseDetailState,
     viewModel: ExpenseDetailViewModel,
     members: List<MemberEntity>,
+    wallets: List<mx.budget.data.local.entity.PaymentMethodEntity>,
     money: NumberFormat,
     dateTimeFmt: SimpleDateFormat,
+    categoryColorHex: String?,
     onEdit: () -> Unit,
     onDeleteRequest: () -> Unit,
+    onPickColor: () -> Unit,
     onPickDateTime: () -> Unit,
 ) {
     Column(
@@ -231,6 +264,50 @@ private fun ViewModeContent(
             actionIcon = Icons.Filled.Edit,
             onAction = onPickDateTime,
         )
+
+        Spacer(Modifier.height(16.dp))
+
+        // ── Color de la categoría (paquete A4) ─────────────────────────────
+        // Cambia category.color_hex → repinta el círculo de TODAS las filas de esa
+        // categoría (TransactionRow lee categoryColorHex). El punto muestra el color
+        // actual (o el primary del tema como fallback, igual que el avatar de la fila).
+        val dotColor = remember(categoryColorHex) {
+            runCatching { categoryColorHex?.let { Color(android.graphics.Color.parseColor(it)) } }
+                .getOrNull()
+        } ?: MaterialTheme.colorScheme.primary
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(dotColor),
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        "Color de la categoría",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        detail.row.categoryName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+            TextButton(onClick = onPickColor) {
+                Icon(Icons.Filled.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Cambiar")
+            }
+        }
 
         Spacer(Modifier.height(16.dp))
 
@@ -300,6 +377,23 @@ private fun ViewModeContent(
             }
         }
 
+        // ── Reembolso / liquidación (Fase B, B3) ──────────────────────────
+        // Solo para gastos que adelantó un tercero y siguen pendientes.
+        val settlement = detail.entity?.settlementStatus ?: "NONE"
+        if (settlement == "PENDING_REIMBURSEMENT" || settlement == "ABSORBED" || settlement == "REIMBURSED") {
+            Spacer(Modifier.height(20.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+            SettlementSection(
+                settlement = settlement,
+                payerName = members.firstOrNull { it.id == detail.entity?.externalPayerMemberId }?.displayName,
+                wallets = wallets.filter { it.kind != "EXTERNAL" },
+                saving = detail.saving,
+                onReimburse = viewModel::reimburseFrom,
+                onAbsorb = viewModel::markAbsorbed,
+            )
+        }
+
         Spacer(Modifier.height(20.dp))
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
@@ -334,6 +428,88 @@ private fun ViewModeContent(
                 Text("Editar")
             }
         }
+    }
+}
+
+/**
+ * Sección de liquidación de un gasto pagado por un tercero (Fase B, B3).
+ * - PENDING_REIMBURSEMENT: acciones "Reembolsar desde…" (elige wallet real → aplica
+ *   el cargo a ese saldo y marca REIMBURSED) y "Marcar como absorbido".
+ * - ABSORBED / REIMBURSED: solo informa el estado final.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun SettlementSection(
+    settlement: String,
+    payerName: String?,
+    wallets: List<mx.budget.data.local.entity.PaymentMethodEntity>,
+    saving: Boolean,
+    onReimburse: (String) -> Unit,
+    onAbsorb: () -> Unit,
+) {
+    var pickWallet by remember { mutableStateOf(false) }
+    val who = payerName ?: "un tercero"
+    val (label, detail) = when (settlement) {
+        "PENDING_REIMBURSEMENT" -> "Pagado por $who" to "Pendiente de reembolso"
+        "ABSORBED" -> "Pagado por $who" to "Absorbido (no se repone)"
+        "REIMBURSED" -> "Pagado por $who" to "Ya reembolsado"
+        else -> who to settlement
+    }
+    Text(
+        "Liquidación",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(4.dp))
+    Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+    Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+    if (settlement == "PENDING_REIMBURSEMENT") {
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(
+                onClick = onAbsorb,
+                enabled = !saving,
+                modifier = Modifier.weight(1f),
+            ) { Text("Marcar absorbido") }
+            Button(
+                onClick = { pickWallet = true },
+                enabled = !saving && wallets.isNotEmpty(),
+                modifier = Modifier.weight(1f),
+            ) { Text("Reembolsar desde…") }
+        }
+    }
+
+    if (pickWallet) {
+        AlertDialog(
+            onDismissRequest = { pickWallet = false },
+            title = { Text("Reembolsar desde…") },
+            text = {
+                Column {
+                    Text(
+                        "El cargo se aplicará al saldo de la cuenta que elijas.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    var selected by remember { mutableStateOf<String?>(null) }
+                    EntityPicker(
+                        label = "Cuenta",
+                        options = wallets.map { it.id to it.displayName },
+                        selectedId = selected,
+                        onSelect = { selected = it },
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = { selected?.let { onReimburse(it); pickWallet = false } },
+                        enabled = selected != null,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Confirmar reembolso") }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { pickWallet = false }) { Text("Cancelar") } },
+        )
     }
 }
 

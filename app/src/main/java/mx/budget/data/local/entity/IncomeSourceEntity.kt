@@ -82,6 +82,10 @@ data class IncomeSourceEntity(
     /** PLANNED o POSTED. */
     val status: String = "PLANNED",
 
+    /** Color hex de identidad visual del ingreso ("#4CAF50"), o null (v12→v13). */
+    @ColumnInfo(name = "color_hex")
+    val colorHex: String? = null,
+
     @ColumnInfo(name = "created_at")
     val createdAt: Long,
 

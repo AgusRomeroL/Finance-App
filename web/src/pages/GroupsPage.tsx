@@ -1,0 +1,176 @@
+import { useState } from 'react'
+import { useAuth } from '../context/AuthContext'
+import { useHousehold } from '../context/HouseholdContext'
+import { Button, Card, EmptyState, ErrorState, LoadingState } from '../components/ui'
+import { createHousehold, joinByCode } from '../lib/repository'
+
+export default function GroupsPage() {
+  const { user } = useAuth()
+  const { households, active, loading, error, reload, selectHousehold } = useHousehold()
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">Mis grupos</h2>
+        {loading ? (
+          <LoadingState label="Cargando tus grupos…" />
+        ) : error ? (
+          <ErrorState message={error} onRetry={() => void reload()} />
+        ) : households.length === 0 ? (
+          <EmptyState
+            title="Aún no perteneces a ningún grupo"
+            hint="Crea uno nuevo o únete con un código de invitación."
+          />
+        ) : (
+          <ul className="space-y-2">
+            {households.map((h) => {
+              const isActive = active?.id === h.id
+              return (
+                <li key={h.id}>
+                  <button
+                    onClick={() => void selectHousehold(h.id)}
+                    className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${
+                      isActive
+                        ? 'border-brand bg-brand/5'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-gray-900">{h.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {h.role === 'OWNER' ? 'Titular' : 'Colaborador'} · {h.currency}
+                      </p>
+                    </div>
+                    {isActive && (
+                      <span className="shrink-0 rounded-full bg-brand px-2.5 py-0.5 text-xs font-medium text-white">
+                        Activo
+                      </span>
+                    )}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+
+      {user && (
+        <>
+          <JoinGroup onJoined={reload} />
+          <CreateGroup uid={user.uid} onCreated={reload} />
+        </>
+      )}
+    </div>
+  )
+}
+
+function JoinGroup({ onJoined }: { onJoined: () => Promise<void> }) {
+  const { user } = useAuth()
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!user) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const displayName = user.displayName ?? user.email ?? 'Colaborador'
+      const result = await joinByCode(user, code, displayName)
+      setMsg({ kind: 'ok', text: `Te uniste como ${result.role === 'OWNER' ? 'titular' : 'colaborador'}.` })
+      setCode('')
+      await onJoined()
+    } catch (err) {
+      setMsg({ kind: 'err', text: err instanceof Error ? err.message : 'No se pudo unir al grupo.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card>
+      <h3 className="mb-1 font-semibold text-gray-900">Unirse con código</h3>
+      <p className="mb-3 text-xs text-gray-500">
+        Pide al titular su código de invitación (formato <code className="rounded bg-gray-100 px-1">IDGRUPO.CODIGO</code>).
+      </p>
+      <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row">
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="ej. AbC123xy.7QK9M2ZP"
+          className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <Button type="submit" loading={busy} disabled={!code.trim()}>
+          Unirme
+        </Button>
+      </form>
+      {msg && (
+        <p
+          className={`mt-3 rounded-lg px-3 py-2 text-xs ${
+            msg.kind === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+          }`}
+          role="alert"
+        >
+          {msg.text}
+        </p>
+      )}
+    </Card>
+  )
+}
+
+function CreateGroup({ uid, onCreated }: { uid: string; onCreated: () => Promise<void> }) {
+  const { user } = useAuth()
+  const { selectHousehold } = useHousehold()
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!user) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const displayName = user.displayName ?? user.email ?? 'Titular'
+      const hid = await createHousehold(uid, name, displayName)
+      setName('')
+      await onCreated()
+      await selectHousehold(hid)
+      setMsg({ kind: 'ok', text: 'Grupo creado. Ya es tu grupo activo.' })
+    } catch (err) {
+      setMsg({ kind: 'err', text: err instanceof Error ? err.message : 'No se pudo crear el grupo.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card>
+      <h3 className="mb-3 font-semibold text-gray-900">Crear un grupo nuevo</h3>
+      <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nombre del hogar (ej. Casa Romero)"
+          className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+        />
+        <Button type="submit" loading={busy} disabled={!name.trim()}>
+          Crear
+        </Button>
+      </form>
+      {msg && (
+        <p
+          className={`mt-3 rounded-lg px-3 py-2 text-xs ${
+            msg.kind === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+          }`}
+          role="alert"
+        >
+          {msg.text}
+        </p>
+      )}
+    </Card>
+  )
+}
