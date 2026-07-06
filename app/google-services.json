@@ -12,7 +12,20 @@
           "package_name": "mx.budget"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "318390629591-1hesb4ivp23qj51goio2t9qf7t9hq2kg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "mx.budget",
+            "certificate_hash": "c5052dab01a92ec199b86af8b813363d66b83755"
+          }
+        },
+        {
+          "client_id": "318390629591-rciqtqbdg4588vafmb25q1176iuic2od.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBPv01mYVEpURyvHilB982y7ILiFiF2zjw"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "318390629591-rciqtqbdg4588vafmb25q1176iuic2od.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

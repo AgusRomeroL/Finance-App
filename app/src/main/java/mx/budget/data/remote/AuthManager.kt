@@ -139,6 +139,7 @@ class AuthManager(context: Context? = null) {
          * Firebase Auth y pegue aquí su value. Con este placeholder el sign-in
          * real de Google fallará (se loguea y devuelve null) SIN crashear.
          */
-        const val WEB_CLIENT_ID = "TODO_WEB_CLIENT_ID"
+        const val WEB_CLIENT_ID =
+            "318390629591-rciqtqbdg4588vafmb25q1176iuic2od.apps.googleusercontent.com"
     }
 }
