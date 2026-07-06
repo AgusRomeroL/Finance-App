@@ -133,8 +133,10 @@ class MembershipRepository(
         val hid = "hh_" + UUID.randomUUID().toString().take(8)
         val now = System.currentTimeMillis()
 
+        // `createdBy` ancla la propiedad: la regla de seguridad solo permite el
+        // rol OWNER a quien figura aquí (cierra el bypass de auto-asignarse OWNER).
         households().document(hid).set(
-            mapOf("name" to name, "updatedAt" to now)
+            mapOf("name" to name, "updatedAt" to now, "createdBy" to uid)
         ).await()
 
         households().document(hid).collection("roles").document(uid).set(
@@ -187,8 +189,11 @@ class MembershipRepository(
     ) {
         val now = System.currentTimeMillis()
         runCatching {
+            // Estampa `createdBy` (queda a nombre del reclamante): la regla solo lo
+            // permite si el hogar aún no tenía dueño (primer reclamo gana), y solo
+            // así la creación del rol OWNER de abajo es válida.
             households().document(householdId).set(
-                mapOf("name" to householdName, "updatedAt" to now),
+                mapOf("name" to householdName, "updatedAt" to now, "createdBy" to uid),
                 com.google.firebase.firestore.SetOptions.merge(),
             ).await()
 
@@ -265,8 +270,16 @@ class MembershipRepository(
             val role = invite.getString("role") ?: ROLE_COLLABORATOR
             val now = System.currentTimeMillis()
 
+            // `inviteCode` queda en el doc de rol: la regla valida que exista ese
+            // invite y que su `role` coincida (así el colaborador solo obtiene el
+            // rol que el invite otorga, no uno arbitrario).
             households().document(hid).collection("roles").document(uid).set(
-                mapOf("role" to role, "displayName" to displayName, "linkedMemberId" to null)
+                mapOf(
+                    "role" to role,
+                    "displayName" to displayName,
+                    "linkedMemberId" to null,
+                    "inviteCode" to code,
+                )
             ).await()
             users().document(uid).collection("households").document(hid).set(
                 mapOf("role" to role, "joinedAt" to now, "displayName" to hid)

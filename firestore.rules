@@ -50,36 +50,52 @@ service cloud.firestore {
     }
 
     // ── households/{hid} ────────────────────────────────────────────────────
+    // La PROPIEDAD del hogar se ancla en el campo `createdBy` del doc del hogar:
+    //   - Al FUNDAR un hogar (createHousehold) el cliente escribe createdBy = su uid.
+    //   - Al RECLAMAR un hogar sin dueño (migración de la semilla, p. ej.
+    //     default_household) el primer autenticado que estampa `createdBy` (cuando
+    //     está vacío) queda como dueño; después ya no se puede cambiar.
+    // Esto cierra el bypass anterior donde CUALQUIER usuario podía auto-asignarse
+    // OWNER en CUALQUIER hogar (tomar control de hogares ajenos).
     match /households/{hid} {
-      // El doc del hogar: los miembros lo leen; el dueño lo escribe. La CREACIÓN
-      // la hace quien lo funda (createHousehold) — cualquier autenticado puede
-      // crear un hogar nuevo (a continuación se auto-asigna el rol OWNER).
       allow read: if isMember(hid);
-      allow create: if signedIn();
-      allow update, delete: if isOwner(hid);
+      // Crear un hogar nuevo: debe quedar a nombre de quien lo crea.
+      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+      // Actualizar/borrar: el dueño; o reclamar uno SIN dueño estampando createdBy.
+      allow update: if isOwner(hid) || (
+        signedIn() &&
+        !("createdBy" in resource.data) &&
+        request.resource.data.createdBy == request.auth.uid
+      );
+      allow delete: if isOwner(hid);
 
-      // roles/{memberUid}: leer si eres miembro. Crear SOLO tu propio doc de rol
-      // y solo si existe un invite en este hogar cuyo `role` coincide con el que
-      // te asignas (canje de invitación) — o si eres el fundador (isOwner ya lo
-      // permite en el update). El dueño puede administrar cualquier rol.
+      // roles/{memberUid}: leer si eres miembro. Crear SOLO tu propio doc de rol,
+      // y solo de forma legítima:
+      //   - OWNER: únicamente si el hogar quedó a tu nombre (createdBy == tu uid).
+      //   - No-OWNER: únicamente con un invite REAL de este hogar cuyo `role`
+      //     coincide con el que te asignas (el cliente guarda `inviteCode`).
+      // El dueño puede administrar cualquier rol.
       match /roles/{memberUid} {
         allow read: if isMember(hid);
         allow create: if isSelf(memberUid) && (
-          isOwner(hid) ||
-          request.resource.data.role == 'OWNER' ||  // fundador auto-asignándose OWNER
-          exists(/databases/$(database)/documents/households/$(hid)/invites/*)
+          (request.resource.data.role == 'OWNER' &&
+            get(/databases/$(database)/documents/households/$(hid)).data.createdBy == request.auth.uid) ||
+          (request.resource.data.role != 'OWNER' &&
+            exists(/databases/$(database)/documents/households/$(hid)/invites/$(request.resource.data.inviteCode)) &&
+            get(/databases/$(database)/documents/households/$(hid)/invites/$(request.resource.data.inviteCode)).data.role == request.resource.data.role)
         );
         allow update, delete: if isOwner(hid);
       }
 
       // invites/{code}: cualquier autenticado puede LEER un invite por su código
-      // (el código es el secreto). Crear/borrar solo el dueño. Actualizar (uses++)
-      // lo permite cualquier autenticado (canje incrementa el contador).
+      // (el código es el secreto). Crear/borrar solo el dueño. El canje solo puede
+      // INCREMENTAR `uses` (no alterar rol/vigencia): update limitado a esa clave.
       match /invites/{code} {
         allow get: if signedIn();
         allow list: if isOwner(hid);
         allow create, delete: if isOwner(hid);
-        allow update: if signedIn();
+        allow update: if signedIn() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uses']);
       }
 
       // proposals/{id}: un COLABORADOR (o el dueño) crea propuestas; los miembros
