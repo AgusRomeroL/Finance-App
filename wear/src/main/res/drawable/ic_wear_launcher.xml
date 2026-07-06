@@ -1,14 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ícono del reloj: disco verde de marca + las tres capas del "Architectural
+  Ledger" en blancos tonales (misma geometría que el ícono del teléfono,
+  adaptada a la pantalla redonda del Wear).
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Disco verde sembrado -->
+    <!-- Disco verde de marca (a sangre) -->
     <path
         android:fillColor="#016E3E"
         android:pathData="M54,0 A54,54 0 1 0 54,108 A54,54 0 1 0 54,0 Z" />
-    <!-- Anillo blanco (moneda) -->
+    <!-- Capa superior (atrás), blanco tenue -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,28 A26,26 0 1 0 54,80 A26,26 0 1 0 54,28 Z M54,38 A16,16 0 1 1 54,70 A16,16 0 1 1 54,38 Z" />
+        android:fillAlpha="0.55"
+        android:pathData="M46.75,26.38 Q54.00,23.00 61.25,26.38 L76.75,33.62 Q84.00,37.00 76.75,40.38 L61.25,47.62 Q54.00,51.00 46.75,47.62 L31.25,40.38 Q24.00,37.00 31.25,33.62 L46.75,26.38 Z" />
+    <!-- Capa media, blanco medio -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.82"
+        android:pathData="M46.75,40.38 Q54.00,37.00 61.25,40.38 L76.75,47.62 Q84.00,51.00 76.75,54.38 L61.25,61.62 Q54.00,65.00 46.75,61.62 L31.25,54.38 Q24.00,51.00 31.25,47.62 L46.75,40.38 Z" />
+    <!-- Chevron inferior, blanco sólido -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="11"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M30.00,68.00 L54.00,80.00 L78.00,68.00" />
 </vector>

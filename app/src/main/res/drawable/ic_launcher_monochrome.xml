@@ -1,25 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Foreground del ícono — "The Architectural Ledger": tres capas apiladas
-  (dos rombos isométricos + chevron) en verdes tonales. Geometría limpia
-  redibujada del logo entregado (viewport 108, dentro de la zona segura).
+  Variante monocroma (themed icons, Android 13+): silueta de una sola tinta
+  que el sistema recolorea según el tema. Mismas 3 capas del logo, en un color
+  uniforme (el sistema aplica su propio tinte).
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Capa superior (atrás), verde claro -->
     <path
-        android:fillColor="#5BA981"
+        android:fillColor="#000000"
         android:pathData="M46.75,26.38 Q54.00,23.00 61.25,26.38 L76.75,33.62 Q84.00,37.00 76.75,40.38 L61.25,47.62 Q54.00,51.00 46.75,47.62 L31.25,40.38 Q24.00,37.00 31.25,33.62 L46.75,26.38 Z" />
-    <!-- Capa media, verde medio -->
     <path
-        android:fillColor="#1C7E51"
+        android:fillColor="#000000"
         android:pathData="M46.75,40.38 Q54.00,37.00 61.25,40.38 L76.75,47.62 Q84.00,51.00 76.75,54.38 L61.25,61.62 Q54.00,65.00 46.75,61.62 L31.25,54.38 Q24.00,51.00 31.25,47.62 L46.75,40.38 Z" />
-    <!-- Chevron inferior, verde marca oscuro -->
     <path
-        android:strokeColor="#05502F"
+        android:strokeColor="#000000"
         android:strokeWidth="11"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
