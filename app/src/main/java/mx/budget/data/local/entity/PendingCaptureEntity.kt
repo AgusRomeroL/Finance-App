@@ -51,6 +51,15 @@ data class PendingCaptureEntity(
     /** "PENDING", "CONFIRMED", "DISMISSED". */
     val status: String = "PENDING",
 
+    /**
+     * `ENRICHING` mientras el worker de enriquecimiento (atribución/categoría
+     * inferidas async) sigue trabajando — la tarjeta se muestra como "creando…"
+     * con acciones bloqueadas; `READY` cuando ya se puede confirmar/descartar
+     * (v12→v13). Las capturas que no pasan por enriquecimiento nacen READY.
+     */
+    @ColumnInfo(name = "enrich_status", defaultValue = "'READY'")
+    val enrichStatus: String = "READY",
+
     @ColumnInfo(name = "created_at")
     val createdAt: Long,
 

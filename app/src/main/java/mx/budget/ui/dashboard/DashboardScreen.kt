@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -88,12 +90,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.data.local.entity.PendingCaptureEntity
-import mx.budget.data.local.entity.hasRichCapture
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
+import mx.budget.data.capture.toReviewMode
 import mx.budget.ui.capture.CaptureBottomSheet
+import mx.budget.ui.capture.CaptureField
+import mx.budget.ui.capture.CapturePrefill
+import mx.budget.ui.capture.CaptureSheetMode
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.theme.FinancialTone
 import mx.budget.ui.theme.amountSemantic
@@ -228,14 +233,22 @@ fun DashboardScreen(
     val bankCaptures by viewModel.pendingBankCaptures.collectAsState()
     val groups by viewModel.groups.collectAsState()
     val selectedGroups by viewModel.selectedGroupIds.collectAsState()
+    // Fase B/B3: "Por reembolsar" + dashboard single-member.
+    val pendingReimbursements by viewModel.pendingReimbursements.collectAsState()
+    val reimbursementTotals by viewModel.pendingReimbursementTotals.collectAsState()
+    val members by viewModel.members.collectAsState()
+    val singleMember by viewModel.singleMember.collectAsState()
     val isExpanded = windowWidthDp >= 600.dp
-    var showCapture by remember { mutableStateOf(false) }
+    // Un único punto de apertura del CaptureBottomSheet con su modo (SP-A1): "+" abre
+    // New; las sugerencias/capturas abren Review pre-llenado. null = cerrado.
+    var captureMode by remember { mutableStateOf<CaptureSheetMode?>(null) }
     var showFilterSheet by remember { mutableStateOf(false) }
 
-    if (showCapture) {
+    captureMode?.let { mode ->
         CaptureBottomSheet(
             viewModel = captureViewModel,
-            onDismiss = { showCapture = false }
+            onDismiss = { captureMode = null },
+            mode = mode
         )
     }
 
@@ -268,26 +281,42 @@ fun DashboardScreen(
         onOpenSheet = { showFilterSheet = true }
     )
 
-    // [Registrar] de la sugerencia: prefila concepto + categoría en la captura
-    // (el concepto dispara además el chip de atribución de Feature A) y abre el sheet.
+    // [Registrar] de una sugerencia proactiva (Feature C): NUNCA inserta directo —
+    // abre la hoja en Review pre-llenado con lo que sabe (concepto + categoría) y
+    // marca "Por decidir" lo que falta (monto, atribución, wallet) para que el usuario
+    // lo complete. Patrón central del paquete A4.
     val onRegisterSuggestion: (ProactiveSuggestion) -> Unit = { suggestion ->
-        captureViewModel?.onConceptChange(suggestion.concept)
-        captureViewModel?.onCategorySelected(suggestion.categoryId)
-        showCapture = true
+        captureMode = CaptureSheetMode.Review(
+            prefill = CapturePrefill(
+                concept = suggestion.concept,
+                categoryId = suggestion.categoryId,
+            ),
+            // El motor proactivo no aporta monto/atribución/wallet: quedan por decidir.
+            missingFields = setOf(
+                CaptureField.AMOUNT,
+                CaptureField.WALLET,
+                CaptureField.BENEFICIARY,
+                CaptureField.PAYER,
+            ),
+        )
     }
 
-    // Confirmar una captura de la bandeja (§G.3): si trae datos ricos (beneficiarios/
-    // pagadores/notas extraídos por el LLM), abre la hoja PRELLENADA para revisar antes
-    // de registrar; si es simple (banco, o NL sin atribución), se confirma directo.
+    // "Registrar" una captura de la bandeja (§G.3): SIEMPRE abre la hoja en Review
+    // pre-llenado (nunca confirma directo). `toReviewMode()` arma el prefill completo
+    // y marca CATEGORY/WALLET como "Por decidir" si la fuente no los resolvió; al
+    // registrar, el VM de captura marca la pending CONFIRMED (via pendingCaptureId).
     val onConfirmCapture: (String) -> Unit = { id ->
-        val cap = bankCaptures.firstOrNull { it.id == id }
-        if (cap != null && cap.hasRichCapture && captureViewModel != null) {
-            captureViewModel.prefillFromPending(cap)
-            showCapture = true
-        } else {
-            viewModel.confirmBankCapture(id)
+        bankCaptures.firstOrNull { it.id == id }?.let { cap ->
+            captureMode = cap.toReviewMode()
         }
     }
+
+    val reimbursementUi = ReimbursementUi(
+        totals = reimbursementTotals,
+        rows = pendingReimbursements,
+        memberNames = remember(members) { members.associate { it.id to it.displayName } },
+        singleMember = singleMember,
+    )
 
     androidx.compose.runtime.CompositionLocalProvider(
         LocalExpenseRowClick provides { tx -> detailViewModel?.open(tx) }
@@ -297,7 +326,7 @@ fun DashboardScreen(
                 state = uiState,
                 currentRoute = currentRoute,
                 onNavigate = onNavigate,
-                onCapture = { showCapture = true },
+                onCapture = { captureMode = CaptureSheetMode.New },
                 onOpenSearch = onOpenSearch,
                 pendingReviewCount = pendingReviewCount,
                 onOpenReview = onOpenReview,
@@ -309,14 +338,15 @@ fun DashboardScreen(
                 onOpenSuggestions = onOpenSuggestions,
                 bankCaptures = bankCaptures,
                 onConfirmCapture = onConfirmCapture,
-                onDismissCapture = viewModel::dismissBankCapture
+                onDismissCapture = viewModel::dismissBankCapture,
+                reimbursementUi = reimbursementUi
             )
         } else {
             CompactDashboard(
                 state = uiState,
                 currentRoute = currentRoute,
                 onNavigate = onNavigate,
-                onCapture = { showCapture = true },
+                onCapture = { captureMode = CaptureSheetMode.New },
                 onOpenSearch = onOpenSearch,
                 pendingReviewCount = pendingReviewCount,
                 onOpenReview = onOpenReview,
@@ -328,7 +358,8 @@ fun DashboardScreen(
                 onOpenSuggestions = onOpenSuggestions,
                 bankCaptures = bankCaptures,
                 onConfirmCapture = onConfirmCapture,
-                onDismissCapture = viewModel::dismissBankCapture
+                onDismissCapture = viewModel::dismissBankCapture,
+                reimbursementUi = reimbursementUi
             )
         }
     }
@@ -347,6 +378,14 @@ private data class FilterUi(
     val selected: Set<String>,
     val onToggle: (String) -> Unit,
     val onOpenSheet: () -> Unit
+)
+
+/** "Por reembolsar" (Fase B/B3): totales por tercero + filas tappables + single-member. */
+private data class ReimbursementUi(
+    val totals: List<mx.budget.data.local.result.PendingReimbursementByPayer>,
+    val rows: List<ExpenseWithDetails>,
+    val memberNames: Map<String, String>,
+    val singleMember: Boolean,
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -370,7 +409,8 @@ private fun ExpandedDashboard(
     onOpenSuggestions: () -> Unit,
     bankCaptures: List<PendingCaptureEntity>,
     onConfirmCapture: (String) -> Unit,
-    onDismissCapture: (String) -> Unit
+    onDismissCapture: (String) -> Unit,
+    reimbursementUi: ReimbursementUi
 ) {
     Row(
         modifier = Modifier
@@ -413,6 +453,10 @@ private fun ExpandedDashboard(
                                 onDismissSuggestion = onDismissSuggestion
                             )
                         }
+                        if (reimbursementUi.rows.isNotEmpty()) {
+                            Spacer(Modifier.height(18.dp))
+                            ReimbursementSection(ui = reimbursementUi)
+                        }
                         if (state.viewingActive) {
                             Spacer(Modifier.height(18.dp))
                             FilterPillsRow(
@@ -423,7 +467,11 @@ private fun ExpandedDashboard(
                             )
                         }
                         Spacer(Modifier.height(22.dp))
-                        BentoPanes(state = state, modifier = Modifier.fillMaxSize())
+                        BentoPanes(
+                            state = state,
+                            singleMember = reimbursementUi.singleMember,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                     // Barra inferior: búsqueda + mic + "+" (reemplaza el FAB).
                     BottomActionBar(
@@ -453,7 +501,11 @@ private fun ExpandedDashboard(
  * el panel de transacciones tan angosto que los conceptos se cortaban a "Com…".)
  */
 @Composable
-private fun BentoPanes(state: DashboardUiState.Success, modifier: Modifier = Modifier) {
+private fun BentoPanes(
+    state: DashboardUiState.Success,
+    singleMember: Boolean = false,
+    modifier: Modifier = Modifier
+) {
     var fraction by rememberSaveable { mutableStateOf(0.55f) }
     BoxWithConstraints(modifier = modifier) {
         val totalPx = constraints.maxWidth.toFloat()
@@ -463,6 +515,7 @@ private fun BentoPanes(state: DashboardUiState.Success, modifier: Modifier = Mod
         Row(modifier = Modifier.fillMaxSize()) {
             MainHealthPane(
                 state = state,
+                singleMember = singleMember,
                 modifier = Modifier.weight(fraction).fillMaxHeight()
             )
             PaneDragHandle(dragState)
@@ -516,7 +569,8 @@ private fun CompactDashboard(
     onOpenSuggestions: () -> Unit,
     bankCaptures: List<PendingCaptureEntity>,
     onConfirmCapture: (String) -> Unit,
-    onDismissCapture: (String) -> Unit
+    onDismissCapture: (String) -> Unit,
+    reimbursementUi: ReimbursementUi
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -567,6 +621,11 @@ private fun CompactDashboard(
                                     onRegisterSuggestion = onRegisterSuggestion,
                                     onDismissSuggestion = onDismissSuggestion
                                 )
+                            }
+                        }
+                        if (reimbursementUi.rows.isNotEmpty()) {
+                            item(key = "reimbursements") {
+                                ReimbursementSection(ui = reimbursementUi)
                             }
                         }
                         item { CollapsedHealthCard(state = state) }
@@ -935,20 +994,33 @@ private fun Eyebrow(
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun MainHealthPane(state: DashboardUiState.Success, modifier: Modifier = Modifier) {
+private fun MainHealthPane(
+    state: DashboardUiState.Success,
+    singleMember: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    // Scroll vertical: en pantalla casi cuadrada del Fold + fontScale 1.3 + bold, el
+    // KPI héroe + las barras por miembro exceden el alto del panel. Sin scroll el pie
+    // (barras del último miembro + "Ver desglose") quedaba cortado sin poder verse.
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
+            .verticalScroll(rememberScrollState())
             .padding(36.dp)
     ) {
         HeroKpi(state = state)
-        Spacer(Modifier.height(24.dp))
-        MemberDistributionSection(
-            beneficiary = state.beneficiaryDistribution,
-            payer = state.payerDistribution,
-            modifier = Modifier.weight(1f)
-        )
+        // Fase B/B3: en un hogar de una sola persona el desglose por miembro (toggle
+        // Beneficiario/Pagador + barras) no aporta; se oculta.
+        if (!singleMember) {
+            Spacer(Modifier.height(24.dp))
+            // Sin weight(1f): dentro de una Column scrollable el contenido fluye a su alto
+            // natural (weight exigiría alto acotado y colapsaría la sección).
+            MemberDistributionSection(
+                beneficiary = state.beneficiaryDistribution,
+                payer = state.payerDistribution
+            )
+        }
     }
 }
 
@@ -1300,8 +1372,13 @@ private fun SuggestionActionRow(
     secondaryLabel: String,
     onSecondary: () -> Unit,
     secondaryContentColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
+    // Atenúa el primario cuando está deshabilitado (p. ej. captura enriqueciéndose);
+    // la redundancia no-cromática la da el clickable(enabled=false) + el copy "Creando…".
+    val primaryBg = if (enabled) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1310,8 +1387,8 @@ private fun SuggestionActionRow(
             modifier = Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.primary)
-                .clickable(onClick = onPrimary)
+                .background(primaryBg)
+                .clickable(enabled = enabled, onClick = onPrimary)
                 .padding(vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -1327,8 +1404,8 @@ private fun SuggestionActionRow(
             modifier = Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(14.dp))
-                .background(secondaryContentColor.copy(alpha = 0.12f))
-                .clickable(onClick = onSecondary)
+                .background(secondaryContentColor.copy(alpha = if (enabled) 0.12f else 0.06f))
+                .clickable(enabled = enabled, onClick = onSecondary)
                 .padding(vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -1336,7 +1413,7 @@ private fun SuggestionActionRow(
                 secondaryLabel,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Medium,
-                color = secondaryContentColor,
+                color = secondaryContentColor.copy(alpha = if (enabled) 1f else 0.5f),
                 maxLines = 1, textAlign = TextAlign.Center
             )
         }
@@ -1372,11 +1449,17 @@ private fun BankCaptureChip(
             "Cargo bancario",
         )
     }
+    // Estado de enriquecimiento (§G.3): mientras el worker enriquece la captura
+    // (categoría/atribución sugeridas) mostramos "Creando…" con spinner y acciones
+    // deshabilitadas. observePending() es reactivo → al pasar a READY el chip se
+    // habilita solo; animateContentSize hace la transición con resorte M3.
+    val enriching = capture.enrichStatus == "ENRICHING"
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .animateContentSize(spring(dampingRatio = 0.8f, stiffness = 380f))
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1385,10 +1468,18 @@ private fun BankCaptureChip(
                     .background(MaterialTheme.colorScheme.tertiary),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    chipIcon, iconDesc,
-                    tint = MaterialTheme.colorScheme.onTertiary, modifier = Modifier.size(18.dp)
-                )
+                if (enriching) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onTertiary
+                    )
+                } else {
+                    Icon(
+                        chipIcon, iconDesc,
+                        tint = MaterialTheme.colorScheme.onTertiary, modifier = Modifier.size(18.dp)
+                    )
+                }
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -1402,7 +1493,7 @@ private fun BankCaptureChip(
                     maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    "¿Registrar este gasto?",
+                    if (enriching) "Creando…" else "¿Registrar este gasto?",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.78f),
                     minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis
@@ -1415,7 +1506,8 @@ private fun BankCaptureChip(
             onPrimary = onConfirm,
             secondaryLabel = "Descartar",
             onSecondary = onDismiss,
-            secondaryContentColor = MaterialTheme.colorScheme.onTertiaryContainer
+            secondaryContentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            enabled = !enriching
         )
     }
 }
@@ -1565,6 +1657,78 @@ private fun RitmoCard(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// "Por reembolsar" (Fase B, B3): gastos que adelantó un tercero
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Sección con los gastos pendientes de reembolso, agrupados con un resumen del total
+ * que el hogar debe a cada tercero. Cada fila abre el detalle (LocalExpenseRowClick),
+ * donde se puede reembolsar o marcar absorbido.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReimbursementSection(ui: ReimbursementUi) {
+    val warn = amountSemantic(FinancialTone.WARNING)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(warn.container)
+            .padding(20.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.AutoMirrored.Filled.ReceiptLong, null,
+                tint = warn.onContainer, modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Por reembolsar",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = warn.onContainer, maxLines = 1
+                )
+                Text(
+                    "Gastos que adelantó alguien más",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = warn.onContainer.copy(alpha = 0.8f), maxLines = 2
+                )
+            }
+        }
+        // Resumen por tercero: "David $500 · Jaudiel $120".
+        val summaries = ui.totals
+            .filter { it.totalMxn > 0 }
+            .map { t ->
+                val name = t.externalPayerMemberId?.let { ui.memberNames[it] } ?: "Tercero"
+                "$name ${t.totalMxn.toMxn()}"
+            }
+        if (summaries.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                summaries.forEach { s ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(warn.onContainer.copy(alpha = 0.12f))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            s,
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+                            color = warn.onContainer, maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ui.rows.take(6).forEach { tx -> TransactionRow(tx) }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Distribución por miembro: barras horizontales ordenadas + toggle
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1618,7 +1782,9 @@ private fun MemberDistributionSection(
                     )
                 }
             }
-            Spacer(Modifier.weight(1f))
+            // Antes Spacer(weight(1f)) empujaba el pie al fondo del panel fijo; en Column
+            // scrollable el contenido fluye, así que un espacio fijo mantiene la separación.
+            Spacer(Modifier.height(22.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

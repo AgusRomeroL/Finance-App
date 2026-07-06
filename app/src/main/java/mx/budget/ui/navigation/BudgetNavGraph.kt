@@ -56,6 +56,12 @@ object BudgetDestinations {
     const val ATTRIBUTION_REVIEW = "attribution_review"
     const val SEARCH = "search"
     const val SUGGESTIONS = "suggestions"
+    const val HOUSEHOLD = "household"
+    const val ONBOARDING = "onboarding"
+    const val MASTERS_MEMBERS = "masters_members"
+    const val MASTERS_CATEGORIES = "masters_categories"
+    const val MASTERS_INCOME = "masters_income"
+    const val STATEMENTS = "statements"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,7 +99,16 @@ fun BudgetNavGraph(
     calendarMirrorEnabled: Boolean = false,
     onCalendarMirrorToggle: (Boolean) -> Unit = {},
     locationLevel: String = "NONE",
-    onLocationLevelChange: (String) -> Unit = {}
+    onLocationLevelChange: (String) -> Unit = {},
+    householdViewModel: mx.budget.ui.household.HouseholdViewModel? = null,
+    onboardingViewModel: mx.budget.ui.onboarding.OnboardingViewModel? = null,
+    membersMasterViewModel: mx.budget.ui.masters.MembersMasterViewModel? = null,
+    categoriesMasterViewModel: mx.budget.ui.masters.CategoriesMasterViewModel? = null,
+    incomeSourcesMasterViewModel: mx.budget.ui.masters.IncomeSourcesMasterViewModel? = null,
+    startOnboarding: Boolean = false,
+    statementImportViewModel: mx.budget.ui.statements.StatementImportViewModel? = null,
+    nvidiaApiKey: String = "",
+    onNvidiaApiKeyChange: (String) -> Unit = {},
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -114,8 +129,23 @@ fun BudgetNavGraph(
 
     NavHost(
         navController = navController,
-        startDestination = BudgetDestinations.DASHBOARD
+        startDestination = if (startOnboarding && onboardingViewModel != null)
+            BudgetDestinations.ONBOARDING else BudgetDestinations.DASHBOARD
     ) {
+        composable(route = BudgetDestinations.ONBOARDING) {
+            if (onboardingViewModel != null) {
+                mx.budget.ui.onboarding.OnboardingScreen(
+                    viewModel = onboardingViewModel,
+                    onFinished = {
+                        navController.navigate(BudgetDestinations.DASHBOARD) {
+                            popUpTo(BudgetDestinations.ONBOARDING) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    },
+                )
+            }
+        }
+
         composable(route = BudgetDestinations.DASHBOARD) {
             DashboardScreen(
                 viewModel = dashboardViewModel,
@@ -224,8 +254,76 @@ fun BudgetNavGraph(
                 calendarMirrorEnabled = calendarMirrorEnabled,
                 onCalendarMirrorToggle = onCalendarMirrorToggle,
                 locationLevel = locationLevel,
-                onLocationLevelChange = onLocationLevelChange
+                onLocationLevelChange = onLocationLevelChange,
+                onOpenHousehold = if (householdViewModel != null) {
+                    { onNavigate(BudgetDestinations.HOUSEHOLD) }
+                } else null,
+                onManageMembers = if (membersMasterViewModel != null) {
+                    { onNavigate(BudgetDestinations.MASTERS_MEMBERS) }
+                } else null,
+                onManageCategories = if (categoriesMasterViewModel != null) {
+                    { onNavigate(BudgetDestinations.MASTERS_CATEGORIES) }
+                } else null,
+                onManageIncome = if (incomeSourcesMasterViewModel != null) {
+                    { onNavigate(BudgetDestinations.MASTERS_INCOME) }
+                } else null,
+                onManageWallets = { onNavigate(BudgetDestinations.WALLETS) },
+                nvidiaApiKey = nvidiaApiKey,
+                onNvidiaApiKeyChange = onNvidiaApiKeyChange,
+                onImportStatement = if (statementImportViewModel != null) {
+                    { onNavigate(BudgetDestinations.STATEMENTS) }
+                } else null,
             )
+        }
+
+        composable(route = BudgetDestinations.STATEMENTS) {
+            if (statementImportViewModel != null) {
+                mx.budget.ui.statements.StatementImportScreen(
+                    viewModel = statementImportViewModel,
+                    onBack = { onNavigate(BudgetDestinations.PROFILE) },
+                    onOpenProfile = { onNavigate(BudgetDestinations.PROFILE) },
+                )
+            } else {
+                PlaceholderScreen("Importar estado de cuenta", onNavigate)
+            }
+        }
+
+        composable(route = BudgetDestinations.MASTERS_MEMBERS) {
+            if (membersMasterViewModel != null) {
+                mx.budget.ui.masters.MembersScreen(
+                    viewModel = membersMasterViewModel,
+                    onBack = { onNavigate(BudgetDestinations.PROFILE) },
+                )
+            }
+        }
+
+        composable(route = BudgetDestinations.MASTERS_CATEGORIES) {
+            if (categoriesMasterViewModel != null) {
+                mx.budget.ui.masters.CategoriesScreen(
+                    viewModel = categoriesMasterViewModel,
+                    onBack = { onNavigate(BudgetDestinations.PROFILE) },
+                )
+            }
+        }
+
+        composable(route = BudgetDestinations.MASTERS_INCOME) {
+            if (incomeSourcesMasterViewModel != null) {
+                mx.budget.ui.masters.IncomeSourcesScreen(
+                    viewModel = incomeSourcesMasterViewModel,
+                    onBack = { onNavigate(BudgetDestinations.PROFILE) },
+                )
+            }
+        }
+
+        composable(route = BudgetDestinations.HOUSEHOLD) {
+            if (householdViewModel != null) {
+                mx.budget.ui.household.HouseholdScreen(
+                    viewModel = householdViewModel,
+                    onBack = { onNavigate(BudgetDestinations.PROFILE) },
+                )
+            } else {
+                PlaceholderScreen("Cuenta y grupos", onNavigate)
+            }
         }
     }
 }

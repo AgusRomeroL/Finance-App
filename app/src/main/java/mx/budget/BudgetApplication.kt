@@ -120,6 +120,14 @@ class BudgetApplication : Application() {
     lateinit var savingsRepository: mx.budget.data.repository.SavingsRepository
         private set
 
+    /**
+     * Importación de estados de cuenta bancarios (Fase C, paquete C1). Extrae
+     * texto local, lo analiza con LLM cloud (NVIDIA NIM) y reconcilia contra
+     * wallet + planes MSI. La reconciliación NUNCA reescribe los gastos.
+     */
+    lateinit var statementImportManager: mx.budget.data.statements.StatementImportManager
+        private set
+
     /** Implementación Firestore del repositorio de gastos (solo para push). */
     lateinit var remoteExpenseRepository: ExpenseRepository
         private set
@@ -138,11 +146,19 @@ class BudgetApplication : Application() {
      * asumir el literal. Ya está resuelto y listo cuando MainActivity crea los
      * ViewModels (onCreate corre antes que cualquier Activity).
      */
-    lateinit var householdId: String
+    var householdId: String = "default_household"
         private set
 
     /** Preferencias de usuario (toggle de color dinámico, etc.). */
     lateinit var settingsRepository: SettingsRepository
+        private set
+
+    /** Autenticación Firebase (anónima + Google), Fase B. */
+    lateinit var authManager: mx.budget.data.remote.AuthManager
+        private set
+
+    /** Pertenencia multi-hogar (roles, invites, propuestas) sobre Firestore, Fase B. */
+    lateinit var membershipRepository: mx.budget.data.remote.MembershipRepository
         private set
 
     /**
@@ -208,8 +224,21 @@ class BudgetApplication : Application() {
     var initialDynamicColor: Boolean = true
         private set
 
+    /**
+     * `true` si la instalación está vacía (sin hogar/miembros/gastos) y hay que
+     * mostrar el **wizard de onboarding** (paquete B2). Resuelto síncrono en
+     * [onCreate] (mismo patrón que [householdId]); lo lee [MainActivity] para
+     * decidir el `startDestination` del NavHost. La instalación de Norma (semilla
+     * de 793 gastos) NUNCA lo dispara: entra directo al dashboard.
+     */
+    var needsOnboarding: Boolean = false
+        private set
+
     /** Scope de larga vida para tareas de sincronización en background. */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Instancia Firestore compartida (guardada para re-anclar el sync, Fase B). */
+    private lateinit var firestore: com.google.firebase.firestore.FirebaseFirestore
 
     override fun onCreate() {
         super.onCreate()
@@ -231,23 +260,29 @@ class BudgetApplication : Application() {
                 BudgetDatabase.MIGRATION_8_9,
                 BudgetDatabase.MIGRATION_9_10,
                 BudgetDatabase.MIGRATION_10_11,
-                BudgetDatabase.MIGRATION_11_12
+                BudgetDatabase.MIGRATION_11_12,
+                BudgetDatabase.MIGRATION_12_13,
+                BudgetDatabase.MIGRATION_13_14,
+                BudgetDatabase.MIGRATION_14_15
             )
             .build()
-
-        // Resolución del household activo (un solo household por instalación).
-        // runBlocking es aceptable aquí: es una única query de una fila por
-        // clave primaria (instantánea) que corre una sola vez durante onCreate,
-        // ANTES de que exista cualquier Activity/ViewModel, así que no bloquea
-        // ninguna UI ni se ejecuta en un hot path. Fallback al literal histórico
-        // por si la DB aún no tuviera datos sembrados.
-        householdId = runBlocking { database.householdDao().getSingleId() }
-            ?: "default_household"
 
         // Preferencias persistidas + lectura inicial síncrona (una sola vez, antes
         // de cualquier Activity) para que el tema arranque sin parpadeo.
         settingsRepository = SettingsRepository(this)
         initialDynamicColor = runBlocking { settingsRepository.dynamicColor.first() }
+
+        // Resolución del household activo (Fase B — multi-tenant):
+        // 1) si el usuario eligió un hogar activo (DataStore), se usa ese;
+        // 2) si no, el fallback histórico: el único hogar sembrado (getSingleId),
+        //    y en última instancia el literal "default_household".
+        // runBlocking es aceptable aquí: consultas instantáneas que corren una
+        // sola vez durante onCreate, ANTES de cualquier Activity/ViewModel.
+        householdId = runBlocking {
+            settingsRepository.getActiveHouseholdId()
+                ?: database.householdDao().getSingleId()
+                ?: "default_household"
+        }
 
         // DAOs de la fuente de verdad local.
         val expenseDao = database.expenseDao()
@@ -256,13 +291,25 @@ class BudgetApplication : Application() {
 
         // Repositorios públicos = implementaciones Room (offline-first).
         quincenaRepository = QuincenaRepositoryImpl(database.quincenaDao())
-        memberRepository = MemberRepositoryImpl(database.memberDao())
+        // Desde v14 los miembros se escriben localmente (wizard, CRUD de maestros):
+        // el repo estampa updated_at y encola MEMBER en el outbox.
+        memberRepository = MemberRepositoryImpl(
+            dao = database.memberDao(),
+            syncQueueDao = syncQueueDao,
+            db = database
+        )
         walletRepository = WalletRepositoryImpl(
             dao = database.paymentMethodDao(),
             syncQueueDao = syncQueueDao,
             db = database
         )
-        categoryRepository = CategoryRepositoryImpl(database.categoryDao())
+        // Desde v13 las categorías se escriben localmente (alta inline, color):
+        // el repo estampa updated_at y encola CATEGORY en el outbox.
+        categoryRepository = CategoryRepositoryImpl(
+            dao = database.categoryDao(),
+            syncQueueDao = syncQueueDao,
+            db = database
+        )
         recurrenceRepository = RecurrenceRepositoryImpl(database.recurrenceTemplateDao())
         transferRepository = TransferRepositoryImpl(
             transferDao = database.walletTransferDao(),
@@ -289,6 +336,20 @@ class BudgetApplication : Application() {
             db = database
         )
 
+        // Fase C (paquete C1): importar estados de cuenta con LLM cloud. Extractor
+        // local (PDFBox/ML Kit) + cliente NVIDIA NIM (la key se lee del DataStore
+        // en cada llamada, nunca hardcodeada) + reconciliación contra wallet/MSI.
+        statementImportManager = mx.budget.data.statements.StatementImportManager(
+            extractor = mx.budget.data.statements.StatementTextExtractor(this),
+            nimClient = mx.budget.data.statements.NvidiaNimClient(
+                apiKeyProvider = { settingsRepository.getNvidiaApiKey() },
+            ),
+            walletRepository = walletRepository,
+            installmentRepository = installmentRepository,
+            statementImportDao = database.statementImportDao(),
+            householdId = householdId,
+        )
+
         // Motor de atribución para la captura en vivo (Feature A). Se construye
         // igual que dentro del RetroAttributionWorker: el canonicalizer toma un
         // snapshot de los miembros del hogar (estables en runtime). runBlocking es
@@ -299,6 +360,16 @@ class BudgetApplication : Application() {
             attributionDao = attributionDao,
             canonicalizer = ConceptCanonicalizer(activeMembers)
         )
+
+        // Detección de primer arranque (paquete B2). La DB está "efectivamente
+        // vacía" si NO hay hogar poblado, NO hay miembros activos y NO hay gastos.
+        // Con la semilla (793 gastos, hogar + miembros) esto es false → dashboard
+        // directo (caso Norma). runBlocking: 3 consultas instantáneas, una sola vez.
+        needsOnboarding = runBlocking {
+            val hasHousehold = database.householdDao().count() > 0
+            val hasExpenses = expenseDao.getAll(householdId).isNotEmpty()
+            !hasHousehold && activeMembers.isEmpty() && !hasExpenses
+        }
 
         // Captura desde notificaciones bancarias (Feature D, §F.6). El parser lee la
         // allowlist/plantillas del asset; si falla, queda null y la feature se desactiva.
@@ -368,6 +439,9 @@ class BudgetApplication : Application() {
 
         // Lado nube (Firestore) — usado únicamente por el SyncManager para push.
         val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        this.firestore = firestore
+        authManager = mx.budget.data.remote.AuthManager(this)
+        membershipRepository = mx.budget.data.remote.MembershipRepository(firestore)
         remoteExpenseRepository = mx.budget.data.remote.ExpenseRepositoryFirestore(firestore, householdId)
         val remoteWalletRepository = mx.budget.data.remote.WalletRepositoryFirestore(firestore)
         val remoteTransferRepository = mx.budget.data.remote.TransferRepositoryFirestore(firestore)
@@ -376,6 +450,10 @@ class BudgetApplication : Application() {
         val remoteSavingsRepository = mx.budget.data.remote.SavingsRepositoryFirestore(firestore)
         val remoteLoanRepository = mx.budget.data.remote.LoanRepositoryFirestore(firestore, householdId)
         val remoteInstallmentRepository = mx.budget.data.remote.InstallmentRepositoryFirestore(firestore)
+        // Categorías (v13): push de altas/ediciones locales (color, alta inline).
+        val remoteCategoryRepository = mx.budget.data.remote.CategoryRepositoryFirestore(firestore)
+        // Miembros (v14): push de altas/ediciones locales (wizard, CRUD de maestros).
+        val remoteMemberRepository = mx.budget.data.remote.MemberRepositoryFirestore(firestore)
 
         // Arranca el drenado del outbox (por conectividad + intento inicial).
         syncManager = SyncManager(
@@ -396,7 +474,11 @@ class BudgetApplication : Application() {
             loanDao = database.loanDao(),
             remoteLoanRepository = remoteLoanRepository,
             installmentPlanDao = database.installmentPlanDao(),
-            remoteInstallmentRepository = remoteInstallmentRepository
+            remoteInstallmentRepository = remoteInstallmentRepository,
+            categoryDao = database.categoryDao(),
+            remoteCategoryRepository = remoteCategoryRepository,
+            memberDao = database.memberDao(),
+            remoteMemberRepository = remoteMemberRepository
         )
 
         // Dirección PULL (Firestore → Room). Comparte `appScope` y la misma
@@ -414,7 +496,7 @@ class BudgetApplication : Application() {
         // después registramos los listeners del pull y drenamos el outbox del
         // push. Firestore cachea offline, así que es seguro aunque no haya red.
         appScope.launch {
-            mx.budget.data.remote.AuthManager().signInAnonymously()
+            authManager.signInAnonymously()
             remotePullSync.start()
             syncManager.drain()
         }
@@ -457,6 +539,89 @@ class BudgetApplication : Application() {
      */
     fun captureNaturalLanguage(rawText: String, source: String) {
         appScope.launch { bankCaptureManager.ingestText(rawText, source) }
+    }
+
+    // ── Fase B: multi-tenant (Google Sign-In + re-anclaje de sync) ──────────────
+
+    /**
+     * Re-ancla la sincronización al [newHouseholdId] elegido por el usuario y lo
+     * persiste como hogar activo.
+     *
+     * **Qué queda REACTIVO sin reiniciar la app:** la dirección PULL (Firestore →
+     * Room) — se paran los listeners viejos y se arranca un [RemotePullSync] nuevo
+     * apuntado al hogar nuevo; y el DRAIN del push, que reintenta el outbox.
+     *
+     * **Qué requiere REINICIO de la app:** `app.householdId` es un valor leído por
+     * MUCHÍSIMos constructores de repos/ViewModels en onCreate/MainActivity, así
+     * que las pantallas ya montadas siguen consultando Room con el hogar anterior
+     * hasta que el proceso se recree. Por eso, además de re-anclar el sync, se
+     * actualiza el campo y se recomienda relanzar la Activity (la UI de selector
+     * lo hace tras llamar aquí). Documentado en el reporte del paquete B1.
+     */
+    fun switchActiveHousehold(newHouseholdId: String) {
+        if (newHouseholdId == householdId) return
+        householdId = newHouseholdId
+        appScope.launch {
+            settingsRepository.setActiveHouseholdId(newHouseholdId)
+            // Re-ancla el PULL al nuevo hogar (stop viejo → new(hid).start()).
+            runCatching { remotePullSync.stop() }
+            remotePullSync = RemotePullSync(
+                firestore = firestore,
+                db = database,
+                scope = appScope,
+                householdId = newHouseholdId,
+            )
+            remotePullSync.start()
+            // Reintenta el outbox; los pushes derivan la colección del propio
+            // entity.householdId, así que no requieren reconstruir el SyncManager.
+            runCatching { syncManager.drain() }
+        }
+    }
+
+    /**
+     * Vincula la cuenta de Google (desde Perfil) y migra la pertenencia: registra
+     * al uid como OWNER del hogar activo y fija su perfil. Conserva el uid anónimo
+     * si es posible (link) para no perder la propiedad de `default_household`.
+     *
+     * @param activityContext contexto de Activity (Credential Manager necesita ventana).
+     * @return `true` si quedó autenticado con Google.
+     */
+    suspend fun linkGoogleAccount(activityContext: android.content.Context): Boolean {
+        val user = authManager.signInWithGoogle(activityContext) ?: return false
+        val uid = user.uid
+        val displayName = user.displayName ?: user.email ?: "Yo"
+        membershipRepository.upsertUserProfile(
+            uid = uid,
+            displayName = user.displayName,
+            email = user.email,
+            photoUrl = user.photoUrl?.toString(),
+        )
+        // Migración de la instalación de Norma: el hogar activo (típicamente el
+        // sembrado) queda reclamado por este uid como OWNER.
+        membershipRepository.claimExistingHousehold(
+            householdId = householdId,
+            uid = uid,
+            displayName = displayName,
+        )
+        return true
+    }
+
+    /**
+     * Registra el hogar recién creado en el wizard de onboarding (paquete B2) en la
+     * nube, SOLO si el usuario ya vinculó su cuenta de Google. Si sigue anónimo, es
+     * no-op: el hogar vive local (Room) y se subirá cuando vincule la cuenta desde
+     * Perfil (`linkGoogleAccount` reclama el hogar activo). Best-effort.
+     */
+    suspend fun registerOnboardingHouseholdInCloud(name: String) {
+        val user = authManager.getCurrentUser() ?: return
+        if (user.isAnonymous) return
+        runCatching {
+            membershipRepository.createHousehold(
+                name = name,
+                uid = user.uid,
+                displayName = user.displayName ?: user.email ?: "Yo",
+            )
+        }
     }
 
     /**

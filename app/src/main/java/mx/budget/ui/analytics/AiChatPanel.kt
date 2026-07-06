@@ -1,6 +1,15 @@
 package mx.budget.ui.analytics
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,23 +20,29 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -35,12 +50,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import mx.budget.ai.AiAssistantUiState
 import mx.budget.ai.AiAssistantViewModel
@@ -51,9 +68,11 @@ import java.text.NumberFormat
 import java.util.Locale
 
 /**
- * Chat del asistente reactivo (MVP Fase 4), hospedado como bottom sheet desde
- * Analíticas. Con LLM disponible acepta pregunta libre; sin LLM (emulador)
- * ofrece chips predefinidos que van directo al dispatcher determinista.
+ * Chat del asistente reactivo (MVP Fase 4 + paquete A1), hospedado como bottom
+ * sheet desde Analíticas. Con LLM disponible la pregunta libre corre el
+ * pipeline RAG completo; sin LLM (emulador) la misma caja usa la heurística
+ * determinista + la ruta OPEN_ANALYSIS local — el chat siempre responde algo
+ * con datos reales.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,27 +113,50 @@ fun AiChatSheet(
             )
             Text(
                 if (llmAvailable) "Pregunta libre (LLM on-device) o usa un atajo."
-                else "Sin LLM en este dispositivo — usa los atajos deterministas.",
+                else "Sin LLM en este dispositivo — respuestas deterministas con tus datos.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(10.dp))
 
-            // Historial.
+            // Historial — cada mensaje nuevo aparece con resorte M3.
             LazyColumn(
                 state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 120.dp, max = 420.dp),
+                    .heightIn(min = 160.dp, max = 420.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(history, key = { it.id }) { msg -> ChatBubble(msg, money) }
+                items(history, key = { it.id }) { msg ->
+                    ChatBubble(
+                        msg = msg,
+                        money = money,
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                            placementSpec = spring(
+                                dampingRatio = 0.8f,
+                                stiffness = 380f,
+                                visibilityThreshold = IntOffset.VisibilityThreshold,
+                            ),
+                            fadeOutSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                        ),
+                    )
+                }
             }
 
-            if (uiState is AiAssistantUiState.Thinking) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp)
+            // Indicador "Pensando…" con entrada/salida animada por resorte.
+            AnimatedVisibility(
+                visible = uiState is AiAssistantUiState.Thinking,
+                enter = fadeIn(spring(dampingRatio = 0.8f, stiffness = 380f)) +
+                    expandVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+                exit = fadeOut(spring(dampingRatio = 0.8f, stiffness = 380f)) +
+                    shrinkVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp))
                     Text("Pensando…", style = MaterialTheme.typography.bodySmall)
                 }
@@ -122,47 +164,52 @@ fun AiChatSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            // Atajos deterministas (sin args) — una sola fila horizontal
-            // desplazable, como los chips de filtro (no crecen en vertical).
+            // Atajos — pills completos (mismo lenguaje visual que los filtros
+            // del dashboard), en una sola fila horizontal desplazable.
+            val thinking = uiState is AiAssistantUiState.Thinking
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                ShortcutPill(
+                    label = "¿Algún patrón inusual?",
+                    enabled = !thinking,
+                    onClick = {
+                        viewModel.sendOpenAnalysis("¿Qué patrón no sobresale a simple vista en mis gastos?")
+                    },
+                )
                 predefinedChips.forEach { (label, intent) ->
-                    AssistChip(
+                    ShortcutPill(
+                        label = label,
+                        enabled = !thinking,
                         onClick = {
                             viewModel.sendPredefined(
                                 label,
                                 AssistantResponse(intent = intent, args = AssistantResponse.Args(), reason = ""),
                             )
                         },
-                        label = { Text(label, maxLines = 1) },
                     )
                 }
             }
 
-            // Pregunta libre — solo con LLM disponible.
-            if (llmAvailable) {
-                Spacer(Modifier.height(10.dp))
-                var input by remember { mutableStateOf("") }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = input,
-                        onValueChange = { input = it },
-                        placeholder = { Text("¿Cuánto queda en Comida?") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(
-                        onClick = { viewModel.sendQuery(input); input = "" },
-                        enabled = input.isNotBlank() && uiState !is AiAssistantUiState.Thinking,
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Enviar")
-                    }
+            // Pregunta libre — siempre disponible: con LLM corre el RAG; sin
+            // LLM cae a la heurística determinista + análisis local.
+            Spacer(Modifier.height(10.dp))
+            var input by remember { mutableStateOf("") }
+            val send: () -> Unit = {
+                if (input.isNotBlank() && !thinking) {
+                    viewModel.sendQuery(input)
+                    input = ""
                 }
             }
+            ChatInputPill(
+                value = input,
+                onValueChange = { input = it },
+                onSend = send,
+                sendEnabled = input.isNotBlank() && !thinking,
+            )
         }
     }
 }
@@ -175,28 +222,140 @@ private val predefinedChips = listOf(
     "Cuotas pendientes" to AssistantResponse.Intent.LIST_UPCOMING_INSTALLMENTS,
 )
 
+/** Pill de atajo con shape circular completo, como los filtros del dashboard. */
 @Composable
-private fun ChatBubble(msg: ChatMessage, money: NumberFormat) {
+private fun ShortcutPill(label: String, enabled: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .heightIn(min = 40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * Input de pregunta libre con el look del SearchPill del dashboard: Surface
+ * pill tonal con el botón de enviar integrado a la derecha.
+ */
+@Composable
+private fun ChatInputPill(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onSend: () -> Unit,
+    sendEnabled: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(start = 18.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (value.isEmpty()) {
+                Text(
+                    "Pregunta sobre tus finanzas",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+                )
+            }
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { onSend() }),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(
+                    if (sendEnabled) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+                .clickable(enabled = sendEnabled, onClick = onSend),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.Send,
+                contentDescription = "Enviar",
+                tint = if (sendEnabled) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChatBubble(msg: ChatMessage, money: NumberFormat, modifier: Modifier = Modifier) {
     val isUser = msg.role == ChatMessage.Role.USER
-    Box(Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
+    val openAnalysis = msg.result as? DispatchResult.OpenAnalysis
+    Box(
+        modifier.fillMaxWidth(),
+        contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart,
+    ) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = if (isUser) RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)
+            else RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp),
             color = when (msg.role) {
                 ChatMessage.Role.USER -> MaterialTheme.colorScheme.primaryContainer
                 ChatMessage.Role.ERROR -> MaterialTheme.colorScheme.errorContainer
                 else -> MaterialTheme.colorScheme.surfaceContainerHigh
             },
         ) {
-            Text(
-                text = msg.result?.let { formatResult(it, money) } ?: msg.text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = when (msg.role) {
-                    ChatMessage.Role.USER -> MaterialTheme.colorScheme.onPrimaryContainer
-                    ChatMessage.Role.ERROR -> MaterialTheme.colorScheme.onErrorContainer
-                    else -> MaterialTheme.colorScheme.onSurface
-                },
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            )
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                // Badge de la ruta OPEN_ANALYSIS: distingue la respuesta
+                // redactada por el LLM del insight determinista local.
+                if (openAnalysis != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.AutoAwesome,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            if (openAnalysis.deterministic) "Análisis local" else "Análisis IA",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
+                Text(
+                    text = msg.result?.let { formatResult(it, money) } ?: msg.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = when (msg.role) {
+                        ChatMessage.Role.USER -> MaterialTheme.colorScheme.onPrimaryContainer
+                        ChatMessage.Role.ERROR -> MaterialTheme.colorScheme.onErrorContainer
+                        else -> MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
         }
     }
 }
@@ -255,31 +414,19 @@ private fun formatResult(result: DispatchResult, money: NumberFormat): String = 
             "diferencia ${money.format(savingsMxn)}."
     }
 
-    // Pregunta fuera del dominio financiero (saludo, charla): en vez de un
-    // seco "no pude resolverlo", el asistente se ofrece proactivamente y guía.
-    DispatchResult.OutOfScope -> ASSISTANT_CAPABILITIES
+    // Ruta OPEN_ANALYSIS: el texto ya viene redactado (LLM o plantillas).
+    is DispatchResult.OpenAnalysis -> result.text
+
+    // Estos tres casos los intercepta el ViewModel (needsOpenAnalysis) antes de
+    // llegar aquí; se dejan textos honestos por exhaustividad del `when`.
+    DispatchResult.OutOfScope ->
+        "Eso queda fuera de lo que puedo ver en el presupuesto, pero pregúntame sobre tus gastos y te ayudo."
 
     is DispatchResult.Unknown ->
-        // Errores internos con dato concreto (sin quincena activa, miembro no
-        // hallado, etc.) se muestran tal cual; si viene vacío, guía proactiva.
-        result.reason.ifBlank { ASSISTANT_CAPABILITIES }
+        result.reason.ifBlank { "No pude resolverlo con los datos disponibles. Intenta reformular la pregunta." }
 
     is DispatchResult.ParseError ->
-        "No estoy seguro de haber entendido eso. $ASSISTANT_CAPABILITIES"
+        "No estoy seguro de haber entendido eso. Intenta reformular la pregunta."
 
     is DispatchResult.MissingArg -> "Me faltó un dato (${result.argumentName}). Especifica a qué te refieres."
 }
-
-/**
- * Mensaje proactivo del asistente cuando la pregunta cae fuera de su dominio o
- * no se pudo mapear. No está cableado a detectar saludos: es la manera general
- * de decirle al usuario en qué SÍ puede ayudar, invitándolo a preguntar.
- */
-private const val ASSISTANT_CAPABILITIES =
-    "Estoy aquí para ayudarte con tus finanzas. Puedes preguntarme, por ejemplo:\n" +
-        "· En qué gastas más\n" +
-        "· Cuánto queda en una categoría\n" +
-        "· Quién gasta más\n" +
-        "· El saldo de una cuenta\n" +
-        "· Cómo va la quincena\n" +
-        "· Tus cuotas pendientes"

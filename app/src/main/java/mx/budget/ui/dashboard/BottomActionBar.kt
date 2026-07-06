@@ -1,8 +1,5 @@
 package mx.budget.ui.dashboard
 
-import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,8 +22,6 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,16 +32,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import android.content.Intent
 import mx.budget.ui.capture.VoiceCaptureActivity
-import mx.budget.ui.search.SpeechRecognizerController
 
 /**
- * Barra de acción inferior estilo Pixel Screenshots: pill de búsqueda (con
- * micrófono) + botón "+" de captura. FIJA abajo.
+ * Barra de acción inferior estilo Pixel Screenshots: pill de búsqueda (solo
+ * texto) + botón de micrófono de captura por voz + botón "+" de captura. FIJA abajo.
  *
  * - [readOnly] = true (dashboard): el pill es un botón que navega a la pantalla de
- *   búsqueda ([onActivate]); el micrófono también navega y arranca el dictado allá.
- * - [readOnly] = false (pantalla de búsqueda): input real enlazado a [query]/[onQueryChange]
- *   con dictado por voz in situ.
+ *   búsqueda ([onActivate]).
+ * - [readOnly] = false (pantalla de búsqueda): input real enlazado a [query]/[onQueryChange].
+ *
+ * La búsqueda es SOLO texto: el micrófono de captura por voz (a la derecha) es el
+ * único punto de dictado, para no confundir "dictar búsqueda" con "capturar gasto".
  */
 @Composable
 fun BottomActionBar(
@@ -115,19 +111,6 @@ private fun SearchPill(
     onActivate: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val voice = remember { SpeechRecognizerController(context) }
-    DisposableEffect(Unit) { onDispose { voice.destroy() } }
-
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) voice.start(onPartial = onQueryChange, onFinal = onQueryChange, onEnd = {})
-    }
-
-    val onMic: () -> Unit = {
-        if (readOnly) onActivate()
-        else micPermission.launch(Manifest.permission.RECORD_AUDIO)
-    }
-
     Row(
         modifier = modifier
             .height(56.dp)
@@ -168,18 +151,6 @@ private fun SearchPill(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1
-                )
-            }
-        }
-        if (voice.isAvailable) {
-            Box(
-                modifier = Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onMic),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Filled.Mic, "Dictar búsqueda",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp)
                 )
             }
         }

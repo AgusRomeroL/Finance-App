@@ -83,5 +83,14 @@ data class CategoryEntity(
     val budgetDefaultMxn: Double? = null,
 
     @ColumnInfo(name = "sort_order")
-    val sortOrder: Int = 0
+    val sortOrder: Int = 0,
+
+    /**
+     * Última modificación local (epoch millis), para LWW del sync (v12→v13).
+     * Desde que la captura permite crear categorías y el dashboard editar su
+     * color, category se escribe localmente y el pull debe gatearse igual que
+     * expense/payment_method. Seed/legados quedan en 0 (nunca pisan).
+     */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0
 )

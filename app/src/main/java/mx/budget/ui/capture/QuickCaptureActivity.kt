@@ -31,6 +31,13 @@ class QuickCaptureActivity : ComponentActivity() {
                 app.retroAttributionEngine,
                 app.locationProvider,
                 app.householdId,
+                // A3: paridad con MainActivity (ingresos, recientes reales,
+                // autocompletado de categoría y quincena por fecha).
+                incomeRepository = app.incomeRepository,
+                expenseDao = app.database.expenseDao(),
+                categoryDao = app.database.categoryDao(),
+                quincenaDao = app.database.quincenaDao(),
+                pendingCaptureDao = app.database.pendingCaptureDao(),
             ),
         )[CaptureViewModel::class.java]
     }

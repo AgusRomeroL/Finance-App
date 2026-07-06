@@ -13,23 +13,33 @@ import mx.budget.ai.dispatch.IntentDispatcher
 import mx.budget.ai.domain.AssistantResponse
 import mx.budget.ai.domain.DispatchResult
 import mx.budget.ai.rag.LedgerRagUseCase
+import mx.budget.ai.rag.OpenAnalysisAnswerer
+import mx.budget.ai.rag.QuestionClassifier
 import mx.budget.ai.service.LlmReadiness
 import mx.budget.ai.service.OnDeviceLlm
 
 /**
- * ViewModel del asistente reactivo (MVP Fase 4). Orquesta el pipeline RAG
- * (pregunta libre → LLM on-device → intent JSON → dispatcher determinista) y
- * mantiene el historial para la UI.
+ * ViewModel del asistente reactivo (MVP Fase 4 + ruta OPEN_ANALYSIS). Orquesta
+ * el pipeline RAG (pregunta libre → LLM on-device → intent JSON → dispatcher
+ * determinista) y mantiene el historial para la UI.
+ *
+ * **Ruta OPEN_ANALYSIS (paquete A1)**: las preguntas abiertas/analíticas se
+ * detectan ANTES de intentar el intent schema ([QuestionClassifier.isOpenAnalysis])
+ * y van directo al [OpenAnalysisAnswerer]; además, cuando el dispatch se rinde
+ * (OutOfScope/ParseError/Unknown sin razón) se corre una segunda pasada por la
+ * misma ruta en vez de mostrar el texto enlatado de capacidades.
  *
  * **Fallback determinista sin LLM**: si el [OnDeviceLlm] no está disponible
- * (emulador, sin AICore/Gemma), [llmAvailable] queda en false y la UI ofrece
- * chips de preguntas predefinidas que van directo al [IntentDispatcher] vía
- * [sendPredefined] — el chat sigue siendo útil con datos reales.
+ * (emulador, sin AICore/Gemma), [llmAvailable] queda en false pero la pregunta
+ * libre SIGUE funcionando: se adivina el intent con la heurística del
+ * [IntentDispatcher] y, si no aplica, el [OpenAnalysisAnswerer] responde con
+ * un insight determinista por plantillas — nunca el texto de capacidades.
  */
 class AiAssistantViewModel(
     private val llm: OnDeviceLlm,
     private val ledgerRagUseCase: LedgerRagUseCase,
     private val dispatcher: IntentDispatcher,
+    private val openAnalysisAnswerer: OpenAnalysisAnswerer,
     private val defaultHouseholdId: String
 ) : ViewModel() {
 
@@ -53,6 +63,17 @@ class AiAssistantViewModel(
 
     init {
         ensureLlmReadinessChecked()
+        seedWelcome()
+    }
+
+    /**
+     * El historial NUNCA arranca vacío: el asistente saluda primero y las
+     * pills de atajo quedan debajo — sin pantalla en blanco al abrir el chat.
+     */
+    private fun seedWelcome() {
+        _chatHistory.value = listOf(
+            ChatMessage(role = ChatMessage.Role.ASSISTANT, text = WELCOME_MESSAGE)
+        )
     }
 
     /**
@@ -100,10 +121,14 @@ class AiAssistantViewModel(
         }
     }
 
-    /** Pregunta libre → pipeline RAG completo (requiere LLM disponible). */
+    /**
+     * Pregunta libre. Con LLM → pipeline RAG completo; sin LLM → heurística
+     * determinista del dispatcher. En ambos casos, si la pregunta es abierta o
+     * el dispatch se rinde, la ruta OPEN_ANALYSIS responde con un análisis
+     * real (LLM sobre digest, o plantillas locales).
+     */
     fun sendQuery(question: String) {
         if (question.isBlank()) return
-        if (!_llmAvailable.value) return
 
         _chatHistory.update { it + ChatMessage(role = ChatMessage.Role.USER, text = question) }
 
@@ -111,20 +136,50 @@ class AiAssistantViewModel(
             _uiState.value = AiAssistantUiState.Thinking
             val startMs = System.currentTimeMillis()
 
-            ledgerRagUseCase.invoke(question, defaultHouseholdId).fold(
-                onSuccess = { rawJson ->
-                    // La pregunta original habilita el fallback heurístico del
-                    // dispatcher cuando la salida del LLM no parsea como intent.
-                    val dispatchResult = dispatcher.dispatch(rawJson, originalQuestion = question)
-                    finish(dispatchResult, System.currentTimeMillis() - startMs)
-                },
-                onFailure = { error ->
-                    _uiState.value = AiAssistantUiState.Error(error.message ?: "Malla de razonamiento fallida")
-                    _chatHistory.update {
-                        it + ChatMessage(role = ChatMessage.Role.ERROR, text = "Lo siento, ocurrió un error interno.")
+            // Pregunta abierta/analítica → directo a OPEN_ANALYSIS, sin gastar
+            // una pasada del LLM (lento) intentando el intent schema primero.
+            if (QuestionClassifier.isOpenAnalysis(question)) {
+                runOpenAnalysis(question, startMs)
+                return@launch
+            }
+
+            if (_llmAvailable.value) {
+                ledgerRagUseCase.invoke(question, defaultHouseholdId).fold(
+                    onSuccess = { rawJson ->
+                        // La pregunta original habilita el fallback heurístico del
+                        // dispatcher cuando la salida del LLM no parsea como intent.
+                        val result = dispatcher.dispatch(rawJson, originalQuestion = question)
+                        if (needsOpenAnalysis(result)) runOpenAnalysis(question, startMs)
+                        else finish(result, System.currentTimeMillis() - startMs)
+                    },
+                    onFailure = {
+                        // El RAG de intents falló (p. ej. generate() roto):
+                        // la segunda pasada aún puede salvar la respuesta.
+                        runOpenAnalysis(question, startMs)
                     }
-                }
-            )
+                )
+            } else {
+                // Sin LLM: dispatch con salida vacía → cae directo al
+                // HeuristicIntentGuesser sobre la pregunta original.
+                val result = runCatching { dispatcher.dispatch("", originalQuestion = question) }
+                    .getOrElse { DispatchResult.Unknown(it.message ?: "Error interno") }
+                if (needsOpenAnalysis(result)) runOpenAnalysis(question, startMs)
+                else finish(result, System.currentTimeMillis() - startMs)
+            }
+        }
+    }
+
+    /**
+     * Atajo de análisis abierto (chip "¿Algún patrón inusual?"): va directo a
+     * la ruta OPEN_ANALYSIS. Funciona con y sin LLM (sin LLM → insight
+     * determinista por plantillas).
+     */
+    fun sendOpenAnalysis(question: String) {
+        if (question.isBlank()) return
+        _chatHistory.update { it + ChatMessage(role = ChatMessage.Role.USER, text = question) }
+        viewModelScope.launch {
+            _uiState.value = AiAssistantUiState.Thinking
+            runOpenAnalysis(question, System.currentTimeMillis())
         }
     }
 
@@ -143,6 +198,37 @@ class AiAssistantViewModel(
         }
     }
 
+    /** El dispatch se rindió sin nada útil que decir → segunda pasada. */
+    private fun needsOpenAnalysis(result: DispatchResult): Boolean = when (result) {
+        DispatchResult.OutOfScope -> true
+        is DispatchResult.ParseError -> true
+        is DispatchResult.Unknown -> result.reason.isBlank()
+        else -> false
+    }
+
+    private suspend fun runOpenAnalysis(question: String, startMs: Long) {
+        val answer = runCatching {
+            openAnalysisAnswerer.answer(question, defaultHouseholdId, useLlm = _llmAvailable.value)
+        }.getOrElse { OpenAnalysisAnswerer.Answer.Failed(it.message ?: "Error interno") }
+
+        when (answer) {
+            is OpenAnalysisAnswerer.Answer.Llm -> finish(
+                DispatchResult.OpenAnalysis(answer.text, deterministic = false),
+                System.currentTimeMillis() - startMs,
+            )
+            is OpenAnalysisAnswerer.Answer.Deterministic -> finish(
+                DispatchResult.OpenAnalysis(answer.text, deterministic = true),
+                System.currentTimeMillis() - startMs,
+            )
+            is OpenAnalysisAnswerer.Answer.Failed -> {
+                _uiState.value = AiAssistantUiState.Error(answer.reason)
+                _chatHistory.update {
+                    it + ChatMessage(role = ChatMessage.Role.ERROR, text = answer.reason)
+                }
+            }
+        }
+    }
+
     private fun finish(result: DispatchResult, latencyMs: Long) {
         _chatHistory.update {
             it + ChatMessage(role = ChatMessage.Role.ASSISTANT, text = "", result = result)
@@ -156,7 +242,7 @@ class AiAssistantViewModel(
     }
 
     fun clearHistory() {
-        _chatHistory.value = emptyList()
+        seedWelcome()
         _lastResult.value = null
         _uiState.value = AiAssistantUiState.Idle
     }
@@ -168,5 +254,19 @@ class AiAssistantViewModel(
     private companion object {
         const val LLM_POLL_INITIAL_DELAY_MS = 2_000L
         const val LLM_POLL_MAX_DELAY_MS = 15_000L
+
+        /**
+         * Único lugar donde vive la guía de capacidades: como bienvenida, nunca
+         * como respuesta a una pregunta.
+         */
+        const val WELCOME_MESSAGE =
+            "Hola, soy tu asistente del presupuesto. Pregúntame lo que quieras sobre " +
+                "tus finanzas — por ejemplo:\n" +
+                "· En qué gastan más\n" +
+                "· Cuánto queda en una categoría\n" +
+                "· Quién gasta más\n" +
+                "· El saldo de una cuenta\n" +
+                "· Cómo va la quincena\n" +
+                "O prueba uno de los atajos de abajo."
     }
 }

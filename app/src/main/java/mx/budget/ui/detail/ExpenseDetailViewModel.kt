@@ -271,6 +271,44 @@ class ExpenseDetailViewModel(
         }
     }
 
+    // ── Reembolso / liquidación de gastos pagados por un tercero (Fase B, B3) ────
+
+    /**
+     * Reembolsa/liquida un gasto `PENDING_REIMBURSEMENT` desde un wallet real
+     * [walletId]: lo re-asigna a esa cuenta y marca `REIMBURSED`; el cargo pasa del
+     * wallet virtual EXTERNAL (sin efecto) al real, moviendo su saldo. Cierra la hoja
+     * al terminar (el saldo/movimiento ya vive en el wallet real).
+     */
+    fun reimburseFrom(walletId: String) {
+        val current = _state.value ?: return
+        if (current.saving) return
+        _state.update { it?.copy(saving = true, editError = null) }
+        viewModelScope.launch {
+            try {
+                expenseRepository.reimburseFrom(current.row.expenseId, walletId)
+                _state.value = null
+            } catch (e: Exception) {
+                _state.update { it?.copy(saving = false, editError = e.message ?: "No se pudo reembolsar") }
+            }
+        }
+    }
+
+    /** Marca el gasto como absorbido por el tercero (no se le repone). No toca saldos. */
+    fun markAbsorbed() {
+        val current = _state.value ?: return
+        if (current.saving) return
+        _state.update { it?.copy(saving = true, editError = null) }
+        viewModelScope.launch {
+            try {
+                expenseRepository.markAbsorbed(current.row.expenseId)
+                val fresh = expenseRepository.getById(current.row.expenseId)
+                _state.update { it?.copy(saving = false, entity = fresh ?: it.entity) }
+            } catch (e: Exception) {
+                _state.update { it?.copy(saving = false, editError = e.message ?: "No se pudo marcar absorbido") }
+            }
+        }
+    }
+
     /**
      * Elimina el gasto revirtiendo su efecto en el saldo del wallet (si POSTED) y
      * encolando el DELETE de sync. Cierra la hoja al terminar.
@@ -337,6 +375,22 @@ class ExpenseDetailViewModel(
             _state.update {
                 it?.copy(latitude = null, longitude = null, placeLabel = null, locationSource = LocationSource.NONE)
             }
+        }
+    }
+
+    /**
+     * Cambia el color de identidad de la categoría del gasto (paquete A4). Persiste
+     * `category.color_hex` vía [CategoryRepository.update] (estampa `updated_at` y
+     * encola CATEGORY al sync). Se refleja en TODAS las filas de esa categoría porque
+     * [TransactionRow] lee `categoryColorHex`. `hex` = "#RRGGBB" o null (quitar color).
+     */
+    fun setCategoryColor(hex: String?) {
+        val current = _state.value ?: return
+        val categoryId = current.entity?.categoryId ?: current.row.categoryId
+        viewModelScope.launch {
+            val category = categories.value.firstOrNull { it.id == categoryId }
+                ?: categoryRepository.getById(categoryId) ?: return@launch
+            categoryRepository.update(category.copy(colorHex = hex))
         }
     }
 

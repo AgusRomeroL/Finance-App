@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Red: solo la usa la importación de estados de cuenta (Fase C, paquete C1),
+         que envía el TEXTO extraído localmente al LLM cloud de NVIDIA NIM. El PDF
+         crudo nunca sale del dispositivo. El resto de la app es offline-first. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Notificaciones y alarmas -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />

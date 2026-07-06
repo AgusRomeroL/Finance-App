@@ -118,61 +118,160 @@ class BankCaptureManager(
     }
 
     /**
-     * Productor de **lenguaje natural** (Apéndice G.3): voz in-app, widget, reloj.
-     * Convierte el texto dictado/escrito en una propuesta `PENDING`, resolviendo
-     * categoría (modal por concepto histórico) y wallet (primer activo) igual que
-     * [ingest]. El [NlCaptureExtractor] intenta el LLM y cae al parser determinista.
-     * Devuelve sin efecto si no se logra extraer un monto > 0.
+     * Productor de **lenguaje natural** (Apéndice G.3, rediseño A2): voz in-app,
+     * widget, reloj. Flujo **crear-inmediato + enriquecer-async (D1)**:
+     *
+     *  1. SÍNCRONO (<1 s, sin LLM): corre solo el parser determinista
+     *     ([NlCaptureExtractor.extractFast] — monto/concepto/fecha) e inserta la
+     *     propuesta `PENDING` con `enrichStatus="ENRICHING"`. **Sin defaults
+     *     silenciosos**: wallet/categoría solo si hay evidencia real (mención
+     *     explícita en la frase, o —para categoría— match del historial); si no,
+     *     `null` y la revisión los pedirá ("Por decidir").
+     *  2. ASYNC: encola [EnrichCaptureWorker], que completa categoría/atribución
+     *     con heurísticas y (solo si AICore está disponible) la pasada LLM rica,
+     *     y termina marcando `READY`.
      *
      * @param source `VOICE | WIDGET | WATCH` (§G.1).
-     * @param occurredAt si se provee, anula la fecha inferida del texto.
+     * @param spokenAtEpochMs el **momento del dictado** (no el de confirmación):
+     *   ancla de "hoy/ayer/antier" del parser.
+     * @return el id de la captura creada, o `null` si no se extrajo un monto > 0
+     *   (no se crea nada; el overlay avisa al usuario).
      */
-    suspend fun ingestText(rawText: String, source: String, occurredAt: Long? = null) {
-        // Roster del hogar para (a) darle contexto al LLM y (b) resolver nombres→IDs.
-        // Excluimos EXTERNAL_* de la atribución (igual que [confirm]).
-        val members = memberDao.getActiveMembers(householdId)
-            .filter { !it.role.startsWith("EXTERNAL_") }
-        val categories = categoryDao.getAll(householdId)
+    suspend fun ingestText(
+        rawText: String,
+        source: String,
+        spokenAtEpochMs: Long = System.currentTimeMillis(),
+    ): String? {
+        val parsed = nlCaptureExtractor.extractFast(rawText, spokenAtEpochMs) ?: return null
+
+        // Evidencia real, nada de "primer wallet / primera categoría":
+        //  - wallet: solo si la frase menciona el nombre de un método de pago.
+        //  - categoría: mención explícita del nombre, o modal del historial.
         val wallets = paymentMethodDao.getActive(householdId)
-
-        val context = CaptureContext(
-            memberNames = members.map { it.displayName },
-            categoryNames = categories.map { it.displayName },
-            walletNames = wallets.map { it.displayName },
-        )
-        val parsed = nlCaptureExtractor.extract(rawText, context) ?: return
-
-        // Resolución determinista de los nombres crudos del LLM → IDs reales.
-        val resolver = AliasResolver(members = members, categories = categories, wallets = wallets)
-        val beneficiaryBps = resolveShares(parsed.beneficiaries, resolver, members)
-        val payerBps = resolveShares(parsed.payers, resolver, members)
-        val categoryId = parsed.categoryHint?.let { resolver.resolveCategory(it)?.id }
-            ?: resolveCategory(parsed.concept)
-        val walletId = parsed.walletHint?.let { resolver.resolveWallet(it)?.id }
-            ?: wallets.firstOrNull()?.id
-
-        Log.d(
-            "NlCapture",
-            "resuelto: categoría=$categoryId wallet=$walletId notas='${parsed.notes}' " +
-                "beneficiarios=$beneficiaryBps pagadores=$payerBps",
-        )
+        val categories = categoryDao.getAll(householdId)
+        val walletId = findMentioned(rawText, wallets.map { it.id to it.displayName })
+        val categoryId = findMentioned(rawText, categories.map { it.id to it.displayName })
+            ?: resolveCategoryFromHistory(parsed.concept)
 
         val capture = PendingCaptureEntity(
             id = UUID.randomUUID().toString(),
             source = source,
             amountMxn = parsed.amountMxn,
             concept = parsed.concept,
-            occurredAt = occurredAt ?: parsed.occurredAt,
+            occurredAt = parsed.occurredAt,
             suggestedWalletId = walletId,
             suggestedCategoryId = categoryId,
             status = "PENDING",
+            enrichStatus = "ENRICHING",
             createdAt = System.currentTimeMillis(),
             rawText = rawText,
-            suggestedBeneficiaryJson = bpsToJson(beneficiaryBps),
-            suggestedPayerJson = bpsToJson(payerBps),
-            notes = parsed.notes,
+        )
+        Log.d(
+            "NlCapture",
+            "captura inmediata: monto=${parsed.amountMxn} concepto='${parsed.concept}' " +
+                "wallet=$walletId categoría=$categoryId (evidencia; null = por decidir)",
         )
         enqueue(capture)
+        EnrichCaptureWorker.enqueue(context, capture.id)
+        return capture.id
+    }
+
+    /**
+     * Fase 2 del flujo D1 (la llama [EnrichCaptureWorker], bajo su watchdog):
+     * enriquece una captura `ENRICHING` sin bloquear al usuario.
+     *
+     *  1. **LLM rica** — SOLO si AICore/Gemini Nano está disponible (el gate vive
+     *     en [NlCaptureExtractor.enrich]; LiteRT-LM/Gemma queda PROHIBIDO en este
+     *     camino — su carga de 3.7 GB era la causa del OOM-kill tras dictar):
+     *     beneficiarios/pagadores/notas/hints de categoría y wallet.
+     *  2. **Heurísticas deterministas** para lo que siga faltando: categoría por
+     *     historial y atribución modal por concepto ([RetroAttributionEngine]).
+     *
+     * No inventa evidencia: lo que no se pueda inferir queda `null` y la revisión
+     * lo marca "Por decidir". Termina siempre con `enrich_status='READY'` (vía
+     * [PendingCaptureDao.updateEnrichment]); si esta corrida muere a medias, el
+     * worker tiene además su [PendingCaptureDao.markEnrichReady] de seguridad.
+     */
+    suspend fun enrichCapture(captureId: String) {
+        val row = pendingDao.getById(captureId) ?: return
+        if (row.status != "PENDING" || row.enrichStatus != "ENRICHING") return
+
+        var walletId: String? = null
+        var categoryId: String? = null
+        var beneficiaryJson: String? = null
+        var payerJson: String? = null
+        var notes: String? = null
+
+        runCatching {
+            val members = memberDao.getActiveMembers(householdId)
+                .filter { !it.role.startsWith("EXTERNAL_") }
+            val categories = categoryDao.getAll(householdId)
+            val wallets = paymentMethodDao.getActive(householdId)
+            val resolver = AliasResolver(members = members, categories = categories, wallets = wallets)
+
+            // 1) Pasada LLM rica (solo AICore; nunca carga Gemma).
+            val rich = row.rawText?.let { raw ->
+                nlCaptureExtractor.enrich(
+                    rawText = raw,
+                    context = CaptureContext(
+                        memberNames = members.map { it.displayName },
+                        categoryNames = categories.map { it.displayName },
+                        walletNames = wallets.map { it.displayName },
+                    ),
+                    // La fecha ya quedó resuelta al dictar; esto solo ancla al parser.
+                    nowEpochMs = row.createdAt,
+                )
+            }
+            if (rich != null) {
+                categoryId = rich.categoryHint?.let { resolver.resolveCategory(it)?.id }
+                walletId = rich.walletHint?.let { resolver.resolveWallet(it)?.id }
+                beneficiaryJson = bpsToJson(resolveShares(rich.beneficiaries, resolver, members))
+                payerJson = bpsToJson(resolveShares(rich.payers, resolver, members))
+                notes = rich.notes
+            }
+
+            // 2) Heurísticas deterministas para lo que el LLM no aportó.
+            if (categoryId == null && row.suggestedCategoryId == null) {
+                categoryId = resolveCategoryFromHistory(row.concept)
+            }
+            if (beneficiaryJson == null && row.suggestedBeneficiaryJson == null) {
+                beneficiaryJson = engine.suggest(row.concept, "BENEFICIARY")
+                    ?.distribution?.let { bpsToJson(it) }
+            }
+            if (payerJson == null && row.suggestedPayerJson == null) {
+                payerJson = engine.suggest(row.concept, "PAYER")
+                    ?.distribution?.let { bpsToJson(it) }
+            }
+        }.onFailure { Log.w("NlCapture", "enriquecimiento de $captureId falló (best-effort)", it) }
+
+        // COALESCE en el DAO: los null conservan lo ya resuelto al insertar.
+        pendingDao.updateEnrichment(
+            id = captureId,
+            walletId = walletId,
+            categoryId = categoryId,
+            beneficiaryJson = beneficiaryJson,
+            payerJson = payerJson,
+            notes = notes,
+        )
+        Log.d(
+            "NlCapture",
+            "enriquecida $captureId: wallet=$walletId categoría=$categoryId " +
+                "benef=${beneficiaryJson != null} pagador=${payerJson != null}",
+        )
+    }
+
+    /**
+     * Evidencia por mención explícita: devuelve el id cuyo `displayName` (≥3
+     * caracteres, sin acentos, case-insensitive) aparece dentro de la frase.
+     * Es deliberadamente conservador — mejor `null` (→ "Por decidir") que un
+     * default silencioso equivocado.
+     */
+    private fun findMentioned(rawText: String, idToName: List<Pair<String, String>>): String? {
+        val haystack = rawText.lowercase().unaccent()
+        return idToName.firstOrNull { (_, name) ->
+            val needle = name.trim().lowercase().unaccent()
+            needle.length >= 3 && needle in haystack
+        }?.first
     }
 
     /** Serializa `{memberId: bps}` a JSON, o null si no hay atribución. */
@@ -316,23 +415,35 @@ class BankCaptureManager(
         return byIssuer?.id
     }
 
-    /** Categoría modal entre gastos históricos del mismo comercio; fallback a "otros"/primera. */
+    /**
+     * Categoría modal entre gastos históricos del mismo comercio; fallback a
+     * "otros"/primera. Solo la ruta BANK usa este fallback laxo (el comercio
+     * viene de una notificación real); la ruta NL usa [resolveCategoryFromHistory]
+     * a secas para no inventar evidencia.
+     */
     private suspend fun resolveCategory(merchant: String): String? {
-        val key = merchant.trim().lowercase()
-        if (key.isNotEmpty()) {
-            val history = runCatching { expenseDao.getAll(householdId) }.getOrDefault(emptyList())
-            val modal = history
-                .filter { it.status == "POSTED" && it.concept.lowercase().contains(key) }
-                .groupingBy { it.categoryId }.eachCount()
-                .maxByOrNull { it.value }?.key
-            if (modal != null) return modal
-        }
+        resolveCategoryFromHistory(merchant)?.let { return it }
         val categories = categoryDao.getAll(householdId)
         val misc = categories.firstOrNull { c ->
             val s = "${c.displayName} ${c.code}".lowercase()
             listOf("otro", "vari", "sin categor", "misc", "general").any { it in s }
         }
         return misc?.id ?: categories.firstOrNull()?.id
+    }
+
+    /**
+     * Evidencia de historial: categoría modal entre los gastos POSTED cuyo
+     * concepto contiene el texto. SIN fallback — `null` si el historial no dice
+     * nada (la captura queda "Por decidir" en vez de asumir una categoría).
+     */
+    private suspend fun resolveCategoryFromHistory(merchant: String): String? {
+        val key = merchant.trim().lowercase()
+        if (key.isEmpty()) return null
+        val history = runCatching { expenseDao.getAll(householdId) }.getOrDefault(emptyList())
+        return history
+            .filter { it.status == "POSTED" && it.concept.lowercase().contains(key) }
+            .groupingBy { it.categoryId }.eachCount()
+            .maxByOrNull { it.value }?.key
     }
 
     // ── Helpers de atribución (mismo invariante que CaptureViewModel) ────────────

@@ -93,5 +93,9 @@ data class QuincenaEntity(
      * Una vez cerrada, todos los Expense vinculados son inmutables.
      */
     @ColumnInfo(name = "closed_at")
-    val closedAt: Long? = null
+    val closedAt: Long? = null,
+
+    /** Última modificación local (epoch millis) para LWW del sync (v13→v14). */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0
 )

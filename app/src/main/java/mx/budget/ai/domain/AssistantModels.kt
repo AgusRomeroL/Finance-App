@@ -78,6 +78,17 @@ sealed class DispatchResult {
         val summary: QuincenaSnapshot
     ) : DispatchResult()
 
+    /**
+     * Respuesta redactada por la ruta OPEN_ANALYSIS (segunda pasada sobre un
+     * digest determinista del estado financiero). [deterministic] = true si la
+     * generó el motor de plantillas local (sin LLM); false si la redactó el
+     * LLM on-device. La UI la marca con un badge "Análisis IA"/"Análisis local".
+     */
+    data class OpenAnalysis(
+        val text: String,
+        val deterministic: Boolean
+    ) : DispatchResult()
+
     data class Unknown(
         val reason: String
     ) : DispatchResult()

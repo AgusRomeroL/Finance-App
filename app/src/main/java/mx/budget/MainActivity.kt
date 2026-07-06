@@ -175,6 +175,50 @@ class MainActivity : ComponentActivity() {
         ))[mx.budget.ui.detail.ExpenseDetailViewModel::class.java]
     }
 
+    private val householdViewModel: mx.budget.ui.household.HouseholdViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, HouseholdViewModelFactory(
+            authManager = app.authManager,
+            membershipRepository = app.membershipRepository,
+            activeHouseholdId = app.householdId,
+            onSignInWithGoogle = { app.linkGoogleAccount(this@MainActivity) },
+            onSwitchHousehold = { hid ->
+                // Re-ancla el sync en caliente y recrea la Activity para que todos
+                // los ViewModels lean Room con el hogar nuevo (householdId es un
+                // valor capturado en onCreate por muchos constructores).
+                app.switchActiveHousehold(hid)
+                recreate()
+            },
+        ))[mx.budget.ui.household.HouseholdViewModel::class.java]
+    }
+
+    private val onboardingViewModel: mx.budget.ui.onboarding.OnboardingViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, OnboardingViewModelFactory(app))[mx.budget.ui.onboarding.OnboardingViewModel::class.java]
+    }
+
+    private val membersMasterViewModel: mx.budget.ui.masters.MembersMasterViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, MembersMasterViewModelFactory(app.memberRepository, app.householdId))[mx.budget.ui.masters.MembersMasterViewModel::class.java]
+    }
+
+    private val categoriesMasterViewModel: mx.budget.ui.masters.CategoriesMasterViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, CategoriesMasterViewModelFactory(app.categoryRepository, app.householdId))[mx.budget.ui.masters.CategoriesMasterViewModel::class.java]
+    }
+
+    private val incomeSourcesMasterViewModel: mx.budget.ui.masters.IncomeSourcesMasterViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, IncomeSourcesMasterViewModelFactory(
+            app.incomeRepository, app.memberRepository, app.quincenaRepository, app.householdId
+        ))[mx.budget.ui.masters.IncomeSourcesMasterViewModel::class.java]
+    }
+
+    private val statementImportViewModel: mx.budget.ui.statements.StatementImportViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, StatementImportViewModelFactory(app))[mx.budget.ui.statements.StatementImportViewModel::class.java]
+    }
+
     private val captureViewModel: CaptureViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, CaptureViewModelFactory(
@@ -186,7 +230,13 @@ class MainActivity : ComponentActivity() {
             app.retroAttributionEngine,
             app.locationProvider,
             app.householdId,
-            { id -> app.bankCaptureManager.markConfirmedExternally(id) }
+            { id -> app.bankCaptureManager.markConfirmedExternally(id) },
+            // A3: ingresos + recientes reales + autocompletado + quincena por fecha.
+            incomeRepository = app.incomeRepository,
+            expenseDao = app.database.expenseDao(),
+            categoryDao = app.database.categoryDao(),
+            quincenaDao = app.database.quincenaDao(),
+            pendingCaptureDao = app.database.pendingCaptureDao(),
         ))[CaptureViewModel::class.java]
     }
 
@@ -262,6 +312,7 @@ class MainActivity : ComponentActivity() {
             val locationLevel by settings.locationCaptureLevel.collectAsState(
                 initial = SettingsRepository.LOCATION_LEVEL_NONE
             )
+            val nvidiaApiKey by settings.nvidiaApiKey.collectAsState(initial = "")
             val scope = rememberCoroutineScope()
             BudgetAppTheme(dynamicColor = dynamicColor) {
                 // Surface raíz: pinta colorScheme.background bajo TODO el NavHost.
@@ -345,11 +396,112 @@ class MainActivity : ComponentActivity() {
                                     scope.launch { settings.setLocationCaptureLevel(SettingsRepository.LOCATION_LEVEL_PERSISTENT) }
                             }
                         }
-                    }
+                    },
+                    householdViewModel = householdViewModel,
+                    onboardingViewModel = onboardingViewModel,
+                    membersMasterViewModel = membersMasterViewModel,
+                    categoriesMasterViewModel = categoriesMasterViewModel,
+                    incomeSourcesMasterViewModel = incomeSourcesMasterViewModel,
+                    startOnboarding = app.needsOnboarding,
+                    statementImportViewModel = statementImportViewModel,
+                    nvidiaApiKey = nvidiaApiKey,
+                    onNvidiaApiKeyChange = { key -> scope.launch { settings.setNvidiaApiKey(key) } },
                 )
                 }
             }
         }
+    }
+}
+
+/** Factory del importador de estados de cuenta (Fase C, paquete C1). */
+class StatementImportViewModelFactory(
+    private val app: BudgetApplication,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.statements.StatementImportViewModel(
+            manager = app.statementImportManager,
+            walletRepository = app.walletRepository,
+            settings = app.settingsRepository,
+            householdId = app.householdId,
+        ) as T
+    }
+}
+
+/** Factory para HouseholdViewModel (Fase B — cuenta y grupos). */
+class HouseholdViewModelFactory(
+    private val authManager: mx.budget.data.remote.AuthManager,
+    private val membershipRepository: mx.budget.data.remote.MembershipRepository,
+    private val activeHouseholdId: String,
+    private val onSignInWithGoogle: suspend () -> Boolean,
+    private val onSwitchHousehold: (String) -> Unit,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.household.HouseholdViewModel(
+            authManager = authManager,
+            membershipRepository = membershipRepository,
+            activeHouseholdId = activeHouseholdId,
+            onSignInWithGoogle = onSignInWithGoogle,
+            onSwitchHousehold = onSwitchHousehold,
+        ) as T
+    }
+}
+
+/** Factory del wizard de onboarding (paquete B2). Cablea repos + DAO + hook nube. */
+class OnboardingViewModelFactory(
+    private val app: BudgetApplication,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.onboarding.OnboardingViewModel(
+            appContext = app,
+            householdId = app.householdId,
+            householdDao = app.database.householdDao(),
+            memberRepository = app.memberRepository,
+            walletRepository = app.walletRepository,
+            categoryRepository = app.categoryRepository,
+            quincenaRepository = app.quincenaRepository,
+            quincenaDao = app.database.quincenaDao(),
+            onCreateCloudHousehold = { name -> app.registerOnboardingHouseholdInCloud(name) },
+        ) as T
+    }
+}
+
+/** Factory del CRUD de miembros (paquete B2). */
+class MembersMasterViewModelFactory(
+    private val memberRepository: MemberRepository,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.masters.MembersMasterViewModel(memberRepository, householdId) as T
+    }
+}
+
+/** Factory del CRUD de categorías (paquete B2). */
+class CategoriesMasterViewModelFactory(
+    private val categoryRepository: CategoryRepository,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.masters.CategoriesMasterViewModel(categoryRepository, householdId) as T
+    }
+}
+
+/** Factory del CRUD de fuentes de ingreso (paquete B2). */
+class IncomeSourcesMasterViewModelFactory(
+    private val incomeRepository: mx.budget.data.repository.IncomeRepository,
+    private val memberRepository: MemberRepository,
+    private val quincenaRepository: QuincenaRepository,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.masters.IncomeSourcesMasterViewModel(
+            incomeRepository, memberRepository, quincenaRepository, householdId
+        ) as T
     }
 }
 
@@ -584,10 +736,19 @@ class AiAssistantViewModelFactory(
             memberRepository = app.memberRepository,
             householdId = app.householdId,
         )
+        val openAnalysis = mx.budget.ai.rag.OpenAnalysisAnswerer(
+            context = app,
+            llm = app.onDeviceLlm,
+            quincenaRepository = app.quincenaRepository,
+            analyticsRepository = app.analyticsRepository,
+            expenseRepository = app.expenseRepository,
+            installmentRepository = app.installmentRepository,
+        )
         return mx.budget.ai.AiAssistantViewModel(
             llm = app.onDeviceLlm,
             ledgerRagUseCase = rag,
             dispatcher = dispatcher,
+            openAnalysisAnswerer = openAnalysis,
             defaultHouseholdId = app.householdId,
         ) as T
     }
@@ -645,6 +806,12 @@ class CaptureViewModelFactory(
     private val locationProvider: mx.budget.data.location.LocationProvider,
     private val householdId: String,
     private val onPendingConfirmed: (suspend (String) -> Unit)? = null,
+    // A3 (defaults null: QuickCaptureActivity y otros call sites siguen compilando)
+    private val incomeRepository: mx.budget.data.repository.IncomeRepository? = null,
+    private val expenseDao: ExpenseDao? = null,
+    private val categoryDao: mx.budget.data.local.dao.CategoryDao? = null,
+    private val quincenaDao: QuincenaDao? = null,
+    private val pendingCaptureDao: mx.budget.data.local.dao.PendingCaptureDao? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -658,6 +825,11 @@ class CaptureViewModelFactory(
             locationProvider = locationProvider,
             householdId = householdId,
             onPendingConfirmed = onPendingConfirmed,
+            incomeRepository = incomeRepository,
+            expenseDao = expenseDao,
+            categoryDao = categoryDao,
+            quincenaDao = quincenaDao,
+            pendingCaptureDao = pendingCaptureDao,
         ) as T
     }
 }

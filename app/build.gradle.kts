@@ -92,6 +92,17 @@ dependencies {
     // donde AICore aún no provisiona el feature del Prompt API (FEATURE_NOT_FOUND).
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.13.1")
 
+    // ── Fase C (paquete C1): importar estados de cuenta bancarios con LLM cloud ──
+    // Extracción de texto LOCAL del PDF (nada del PDF crudo viaja a la nube: solo
+    // el texto). pdfbox-android es el port de Apache PDFBox para Android.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    // OCR on-device de imágenes de estados de cuenta (JPG/PNG). Mismo stack ML Kit
+    // que ya usa genai-prompt; el modelo latino viene empacado (bundled).
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    // Cliente HTTP para el endpoint OpenAI-compatible de NVIDIA NIM. Firestore ya
+    // trae OkHttp transitivo, pero se declara explícito para fijar la API.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     // Compose Material 3 & Essentials
     implementation("androidx.compose.material3:material3")
     // Material 3 Adaptive — NavigationSuiteScaffold vive aquí (graduado en material3 1.3)
@@ -117,4 +128,10 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+
+    // Fase B (multi-tenant): Google Sign-In vía Credential Manager. Reemplaza al
+    // legacy GoogleSignInClient. `googleid` aporta GetGoogleIdOption/GoogleIdTokenCredential.
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 }

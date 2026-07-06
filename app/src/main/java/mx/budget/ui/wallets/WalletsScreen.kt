@@ -259,6 +259,7 @@ fun WalletsScreen(
         WalletFormSheet(
             initial = formInitial,
             householdId = viewModel.household,
+            members = members,
             onSave = { wallet ->
                 viewModel.saveWallet(wallet)
                 showForm = false
@@ -294,8 +295,8 @@ fun WalletsScreen(
         IncomeSheet(
             wallets = entities,
             members = members,
-            onSave = { walletId, memberId, amount, label, dateIso ->
-                viewModel.recordIncome(walletId, memberId, amount, label, dateIso)
+            onSave = { walletId, memberId, amount, label, dateIso, colorHex ->
+                viewModel.recordIncome(walletId, memberId, amount, label, dateIso, colorHex)
                 showIncome = false
             },
             onDismiss = { showIncome = false },

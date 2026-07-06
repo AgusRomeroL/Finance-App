@@ -58,6 +58,24 @@ interface CategoryDao {
     )
     suspend fun getByKind(householdId: String, kind: String): List<CategoryEntity>
 
+    /**
+     * Búsqueda simple por nombre entre hojas (categorías asignables a gastos),
+     * para el autocompletado anti-duplicados del alta inline en captura (A3).
+     * LIKE es case-insensitive para ASCII; no pliega acentos (limitación
+     * conocida y aceptable para nombres cortos).
+     */
+    @Query(
+        """
+        SELECT * FROM category
+        WHERE household_id = :householdId
+          AND parent_id IS NOT NULL
+          AND display_name LIKE '%' || :query || '%'
+        ORDER BY display_name ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun searchLeavesByName(householdId: String, query: String, limit: Int): List<CategoryEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(category: CategoryEntity)
 

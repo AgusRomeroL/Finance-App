@@ -38,6 +38,8 @@ class SettingsRepository(private val context: Context) {
     private val calendarMirrorIdKey = longPreferencesKey("calendar_mirror_id")
     private val calendarEventMapKey = stringPreferencesKey("calendar_event_map_json")
     private val locationCaptureLevelKey = stringPreferencesKey("location_capture_level")
+    private val activeHouseholdIdKey = stringPreferencesKey("active_household_id")
+    private val nvidiaApiKeyKey = stringPreferencesKey("nvidia_api_key")
 
     /** Flujo del toggle de color dinámico. Default `true` (Material You). */
     val dynamicColor: Flow<Boolean> = context.dataStore.data
@@ -165,6 +167,49 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setLocationCaptureLevel(level: String) {
         context.dataStore.edit { prefs -> prefs[locationCaptureLevelKey] = level }
+    }
+
+    // ── Household activo (Fase B, multi-tenant) ─────────────────────────────────
+
+    /**
+     * Id del hogar activo elegido por el usuario (Fase B). `null` (default) =
+     * usar el fallback histórico (`HouseholdDao.getSingleId()` → `default_household`),
+     * de modo que la instalación de un solo hogar (hoy) se comporta idéntico.
+     * Al cambiarlo, [mx.budget.BudgetApplication.switchActiveHousehold] re-ancla
+     * el pull/push al nuevo hogar.
+     */
+    val activeHouseholdId: Flow<String?> = context.dataStore.data
+        .map { prefs -> prefs[activeHouseholdIdKey] }
+
+    suspend fun getActiveHouseholdId(): String? =
+        context.dataStore.data.first()[activeHouseholdIdKey]
+
+    suspend fun setActiveHouseholdId(id: String?) {
+        context.dataStore.edit { prefs ->
+            if (id == null) prefs.remove(activeHouseholdIdKey) else prefs[activeHouseholdIdKey] = id
+        }
+    }
+
+    // ── API key de NVIDIA NIM (Fase C, paquete C1) ──────────────────────────────
+
+    /**
+     * API key del endpoint OpenAI-compatible de NVIDIA NIM (importar estados de
+     * cuenta). Se guarda SOLO en el DataStore privado de la app (nunca en git ni
+     * en logs). El [mx.budget.data.statements.NvidiaNimClient] la lee justo antes
+     * de la llamada; sin key configurada, la importación dirige al usuario a Perfil.
+     * Default `""` (no configurada).
+     */
+    val nvidiaApiKey: Flow<String> = context.dataStore.data
+        .map { prefs -> prefs[nvidiaApiKeyKey] ?: "" }
+
+    suspend fun getNvidiaApiKey(): String =
+        context.dataStore.data.first()[nvidiaApiKeyKey] ?: ""
+
+    suspend fun setNvidiaApiKey(key: String) {
+        context.dataStore.edit { prefs ->
+            val trimmed = key.trim()
+            if (trimmed.isEmpty()) prefs.remove(nvidiaApiKeyKey) else prefs[nvidiaApiKeyKey] = trimmed
+        }
     }
 
     private fun decodeLongMap(raw: String?): Map<String, Long> {

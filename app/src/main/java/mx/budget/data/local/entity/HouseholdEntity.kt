@@ -33,5 +33,9 @@ data class HouseholdEntity(
     val quincenaAnchor: String = "CALENDAR",
 
     @ColumnInfo(name = "created_at")
-    val createdAt: Long
+    val createdAt: Long,
+
+    /** Última modificación local (epoch millis) para LWW del sync (v13→v14). */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0
 )

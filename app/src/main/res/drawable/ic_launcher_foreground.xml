@@ -1,12 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Foreground del ícono: símbolo de peso/dinero simplificado -->
+<!--
+  Foreground del ícono — "The Architectural Ledger": tres capas apiladas
+  (dos rombos isométricos + chevron) en verdes tonales. Geometría limpia
+  redibujada del logo entregado (viewport 108, dentro de la zona segura).
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Capa superior (atrás), verde claro -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,20 C35.2,20 20,35.2 20,54 C20,72.8 35.2,88 54,88 C72.8,88 88,72.8 88,54 C88,35.2 72.8,20 54,20Z
-                          M58,72 L50,72 L50,68 C46.7,67.3 44,65.5 44,62 C44,58 47.5,56.5 52,55.5 L52,50.2 C50.3,50.6 49,51.4 49,52.5 L44,52.5 C44,48.5 47.5,45.8 52,45.2 L52,40 L56,40 L56,45 C59.5,45.6 62,47.5 62,51 C62,55 58.5,56.5 56,57.3 L56,62.8 C57.8,62.3 59,61.3 59,60 L64,60 C64,64.2 61,67 58,67.8 L58,72Z" />
+        android:fillColor="#5BA981"
+        android:pathData="M46.75,26.38 Q54.00,23.00 61.25,26.38 L76.75,33.62 Q84.00,37.00 76.75,40.38 L61.25,47.62 Q54.00,51.00 46.75,47.62 L31.25,40.38 Q24.00,37.00 31.25,33.62 L46.75,26.38 Z" />
+    <!-- Capa media, verde medio -->
+    <path
+        android:fillColor="#1C7E51"
+        android:pathData="M46.75,40.38 Q54.00,37.00 61.25,40.38 L76.75,47.62 Q84.00,51.00 76.75,54.38 L61.25,61.62 Q54.00,65.00 46.75,61.62 L31.25,54.38 Q24.00,51.00 31.25,47.62 L46.75,40.38 Z" />
+    <!-- Chevron inferior, verde marca oscuro -->
+    <path
+        android:strokeColor="#05502F"
+        android:strokeWidth="11"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M30.00,68.00 L54.00,80.00 L78.00,68.00" />
 </vector>

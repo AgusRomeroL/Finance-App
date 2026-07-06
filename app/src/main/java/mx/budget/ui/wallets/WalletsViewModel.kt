@@ -60,13 +60,23 @@ class WalletsViewModel(
         "DEBIT_ACCOUNT", "CASH", "DIGITAL_WALLET", "EMPLOYER_SAVINGS_FUND",
     )
 
+    /**
+     * El wallet virtual "Pagado por terceros" (`kind="EXTERNAL"`, Fase B/B3) NO es
+     * una cuenta real: se excluye de la lista de saldos, del selector de transferencias
+     * e ingresos y de los KPIs. Existe solo para "colgar" gastos que adelantó un tercero
+     * sin mover ningún saldo real.
+     */
+    private val EXTERNAL_KIND = "EXTERNAL"
+
     val balances: StateFlow<List<WalletBalanceInfo>> =
         walletRepository.observeBalances(householdId)
+            .map { list -> list.filter { it.kind != EXTERNAL_KIND } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Entidades completas (para precargar el formulario de edición). */
     val entities: StateFlow<List<PaymentMethodEntity>> =
         walletRepository.observeActive(householdId)
+            .map { list -> list.filter { it.kind != EXTERNAL_KIND } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** El householdId del hogar, para construir wallets nuevos desde el form. */
@@ -150,6 +160,7 @@ class WalletsViewModel(
         amountMxn: Double,
         label: String,
         expectedDateIso: String,
+        colorHex: String? = null,
     ) {
         viewModelScope.launch {
             val quincena = quincenaRepository.getActive(householdId) ?: return@launch
@@ -165,6 +176,7 @@ class WalletsViewModel(
                     expectedDate = expectedDateIso,
                     paymentMethodId = walletId,
                     status = "POSTED",
+                    colorHex = colorHex,
                     createdAt = System.currentTimeMillis(),
                 )
             )

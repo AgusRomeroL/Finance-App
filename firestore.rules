@@ -1,22 +1,124 @@
 rules_version = '2';
 
-// Reglas de seguridad de Firestore para la Finance-App.
+// Reglas de seguridad de Firestore — Fase B (multi-tenant).
 //
-// La app es de UN SOLO hogar por instalación y usa autenticación ANÓNIMA:
-// los dispositivos del hogar (Norma, Agustín) inician sesión anónima y
-// comparten los mismos datos bajo `households/{householdId}` (householdId fijo
-// = "default_household"). No se puede atar el hogar al uid porque cada
-// instalación anónima tiene un uid distinto, así que la regla exige únicamente
-// que la petición esté autenticada. Suficiente para una app personal; NO usar
-// tal cual para una app multi-tenant pública.
+// A partir de la Fase B la app admite VARIOS hogares y colaboradores:
+//   - users/{uid}                         perfil + activeHouseholdId (solo el dueño del uid)
+//   - users/{uid}/households/{hid}         espejo de mis membresías (solo el dueño del uid)
+//   - households/{hid}                     doc del hogar (name, updatedAt)
+//   - households/{hid}/roles/{uid}         { role: OWNER|COLLABORATOR, ... }
+//   - households/{hid}/invites/{code}      { role, expiresAt, maxUses, uses, createdBy }
+//   - households/{hid}/proposals/{id}      propuestas de colaboradores (propose-then-confirm)
+//   - households/{hid}/{expenses|categories|members|wallets|quincenas|...}  datos del hogar
+//
+// El acceso al hogar se decide por la EXISTENCIA de households/{hid}/roles/{uid}:
+// pertenecer = tener un doc de rol. OWNER lee/escribe todo; COLLABORATOR solo lee
+// y puede crear propuestas.
+//
+// Antes del despliegue el usuario debe:
+//   1) Habilitar Authentication (proveedores Anónimo + Google) en la consola Firebase.
+//   2) Crear un OAuth 2.0 Web Client y ponerlo en AuthManager.WEB_CLIENT_ID + google-services.json.
+//   3) firebase deploy --only firestore:rules
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Datos del hogar (expenses, wallets, wallet_transfer, income_source,
-    // categories, members, quincenas y subcolecciones como attributions):
-    // lectura/escritura solo para usuarios autenticados.
-    match /households/{householdId}/{document=**} {
-      allow read, write: if request.auth != null;
+    // ── Helpers ───────────────────────────────────────────────────────────
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    // ¿El solicitante tiene un doc de rol en este hogar? (= pertenece)
+    function isMember(hid) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/households/$(hid)/roles/$(request.auth.uid));
+    }
+    function roleIn(hid) {
+      return get(/databases/$(database)/documents/households/$(hid)/roles/$(request.auth.uid)).data.role;
+    }
+    function isOwner(hid) {
+      return isMember(hid) && roleIn(hid) == 'OWNER';
+    }
+
+    // ── users/{uid}/** — solo el propio uid ────────────────────────────────
+    match /users/{uid} {
+      allow read, write: if isSelf(uid);
+      match /{document=**} {
+        allow read, write: if isSelf(uid);
+      }
+    }
+
+    // ── households/{hid} ────────────────────────────────────────────────────
+    // La PROPIEDAD del hogar se ancla en el campo `createdBy` del doc del hogar:
+    //   - Al FUNDAR un hogar (createHousehold) el cliente escribe createdBy = su uid.
+    //   - Al RECLAMAR un hogar sin dueño (migración de la semilla, p. ej.
+    //     default_household) el primer autenticado que estampa `createdBy` (cuando
+    //     está vacío) queda como dueño; después ya no se puede cambiar.
+    // Esto cierra el bypass anterior donde CUALQUIER usuario podía auto-asignarse
+    // OWNER en CUALQUIER hogar (tomar control de hogares ajenos).
+    match /households/{hid} {
+      allow read: if isMember(hid);
+      // Crear un hogar nuevo: debe quedar a nombre de quien lo crea.
+      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+      // Actualizar/borrar: el dueño; o reclamar uno SIN dueño estampando createdBy.
+      allow update: if isOwner(hid) || (
+        signedIn() &&
+        !("createdBy" in resource.data) &&
+        request.resource.data.createdBy == request.auth.uid
+      );
+      allow delete: if isOwner(hid);
+
+      // roles/{memberUid}: leer si eres miembro. Crear SOLO tu propio doc de rol,
+      // y solo de forma legítima:
+      //   - OWNER: únicamente si el hogar quedó a tu nombre (createdBy == tu uid).
+      //   - No-OWNER: únicamente con un invite REAL de este hogar cuyo `role`
+      //     coincide con el que te asignas (el cliente guarda `inviteCode`).
+      // El dueño puede administrar cualquier rol.
+      match /roles/{memberUid} {
+        allow read: if isMember(hid);
+        allow create: if isSelf(memberUid) && (
+          (request.resource.data.role == 'OWNER' &&
+            get(/databases/$(database)/documents/households/$(hid)).data.createdBy == request.auth.uid) ||
+          (request.resource.data.role != 'OWNER' &&
+            exists(/databases/$(database)/documents/households/$(hid)/invites/$(request.resource.data.inviteCode)) &&
+            get(/databases/$(database)/documents/households/$(hid)/invites/$(request.resource.data.inviteCode)).data.role == request.resource.data.role)
+        );
+        allow update, delete: if isOwner(hid);
+      }
+
+      // invites/{code}: cualquier autenticado puede LEER un invite por su código
+      // (el código es el secreto). Crear/borrar solo el dueño. El canje solo puede
+      // INCREMENTAR `uses` (no alterar rol/vigencia): update limitado a esa clave.
+      match /invites/{code} {
+        allow get: if signedIn();
+        allow list: if isOwner(hid);
+        allow create, delete: if isOwner(hid);
+        allow update: if signedIn() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uses']);
+      }
+
+      // proposals/{id}: un COLABORADOR (o el dueño) crea propuestas; los miembros
+      // las leen. El dueño puede actualizarlas/borrarlas (al confirmarlas).
+      match /proposals/{id} {
+        allow read: if isMember(hid);
+        allow create: if isMember(hid);
+        allow update, delete: if isOwner(hid);
+      }
+
+      // Datos del hogar (expenses, categories, members, wallets, quincenas,
+      // wallet_transfer, income_source, savings_goal, loan, installment_plan y
+      // subcolecciones como attributions): el dueño lee/escribe todo; el
+      // colaborador SOLO lee (no puede tocar el ledger — para eso están las
+      // propuestas).
+      match /{collection}/{docId}/{sub=**} {
+        allow read: if isMember(hid);
+        allow write: if isOwner(hid);
+      }
+      match /{collection}/{docId} {
+        allow read: if isMember(hid);
+        allow write: if isOwner(hid);
+      }
     }
 
     // Todo lo demás: cerrado.

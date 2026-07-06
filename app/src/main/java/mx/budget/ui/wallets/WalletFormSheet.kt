@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 import java.util.UUID
 
@@ -64,12 +65,26 @@ private fun String.toIntOrNullClean(): Int? =
  * Captura el **saldo inicial** declarado por el usuario (en crédito = deuda actual)
  * y, para tipos de crédito, límite/corte/pago/APR. Sigue el patrón de
  * `CaptureBottomSheet`/`NewPlannedSheet` (ModalBottomSheet acotado a 640dp).
+ *
+ * **Efectivo a hijos — "billete $500" (Fase B, B3).** Un sub-wallet `kind=CASH` con
+ * dueño (owner_member_id) modela el efectivo que un hijo trae encima ("Efectivo
+ * David"). El flujo NO requiere esquema nuevo, se apoya en lo existente:
+ *  1. Al entregar el billete: una **transferencia** (wallet_transfer, RF-41) de una
+ *     cuenta real → el sub-wallet CASH acredita su saldo.
+ *  2. Los gastos del hijo se registran contra ese sub-wallet CASH → bajan su saldo
+ *     (débito/efectivo, vía applyToWallet).
+ *  3. El cambio que devuelve = transferencia de vuelta CASH → la cuenta real.
+ *  4. Si el hijo puso dinero extra de su bolsa, ese excedente se captura como gasto
+ *     "pagó un tercero / ABSORBED" (el hijo como pagador externo).
+ * Aquí solo se habilita crear el sub-wallet CASH con dueño; las transferencias entre
+ * cuentas ya funcionan en la pantalla Wallets.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WalletFormSheet(
     initial: PaymentMethodEntity?,
     householdId: String,
+    members: List<MemberEntity> = emptyList(),
     onSave: (PaymentMethodEntity) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -77,6 +92,7 @@ fun WalletFormSheet(
 
     var name by rememberSaveable { mutableStateOf(initial?.displayName ?: "") }
     var kind by rememberSaveable { mutableStateOf(initial?.kind ?: "DEBIT_ACCOUNT") }
+    var ownerId by rememberSaveable { mutableStateOf(initial?.ownerMemberId) }
     var opening by rememberSaveable {
         mutableStateOf(initial?.openingBalanceMxn?.takeIf { it != 0.0 }?.toLong()?.toString() ?: "")
     }
@@ -134,6 +150,28 @@ fun WalletFormSheet(
                 ) {
                     KIND_OPTIONS.forEach { (k, label) ->
                         KindChip(label = label, selected = k == kind, onClick = { kind = k })
+                    }
+                }
+            }
+
+            // Dueño de la cuenta (opcional). Clave para el efectivo a hijos (B3):
+            // un sub-wallet CASH "Efectivo David" con owner = David. Se ofrece para
+            // cualquier tipo, pero es especialmente útil en efectivo.
+            if (members.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Dueño (opcional)",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        KindChip(label = "Sin dueño", selected = ownerId == null, onClick = { ownerId = null })
+                        members.forEach { m ->
+                            KindChip(label = m.displayName, selected = m.id == ownerId, onClick = { ownerId = m.id })
+                        }
                     }
                 }
             }
@@ -223,7 +261,7 @@ fun WalletFormSheet(
                                 currentBalanceMxn = openingVal,
                                 openingBalanceMxn = openingVal,
                                 interestApr = if (isCredit) apr.toDoubleOrNullClean() else null,
-                                ownerMemberId = initial?.ownerMemberId,
+                                ownerMemberId = ownerId,
                                 isActive = true,
                             )
                         )

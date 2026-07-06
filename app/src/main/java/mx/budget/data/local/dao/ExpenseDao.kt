@@ -179,6 +179,67 @@ interface ExpenseDao {
     suspend fun getById(id: String): ExpenseEntity?
 
     /**
+     * Gastos pendientes de reembolso (Fase B, paquete B3): los que un tercero
+     * adelantó y el hogar aún le debe (`settlement_status = 'PENDING_REIMBURSEMENT'`),
+     * con detalles (categoría/wallet/quincena) para abrir el detalle al tocarlos.
+     * Mismas columnas/JOINs que [observeWithDetails], a nivel household.
+     *
+     * @Query NUEVO de solo lectura — NO altera el esquema (excepción autorizada del
+     * paquete B3 para la sección "Por reembolsar" del dashboard).
+     */
+    @Query(
+        """
+        SELECT
+            e.id                       AS expenseId,
+            e.concept                  AS concept,
+            e.amount_mxn               AS amountMxn,
+            e.occurred_at              AS occurredAt,
+            e.status                   AS status,
+            e.category_id              AS categoryId,
+            c.display_name             AS categoryName,
+            c.code                     AS categoryCode,
+            c.color_hex                AS categoryColorHex,
+            pm.display_name            AS paymentMethodName,
+            pm.kind                    AS paymentMethodKind,
+            q.label                    AS quincenaLabel,
+            e.installment_number       AS installmentNumber,
+            ip.total_installments      AS installmentTotal,
+            e.notes                    AS notes
+        FROM expense e
+        INNER JOIN category c        ON c.id = e.category_id
+        INNER JOIN payment_method pm ON pm.id = e.payment_method_id
+        INNER JOIN quincena q        ON q.id = e.quincena_id
+        LEFT JOIN installment_plan ip ON ip.id = e.installment_plan_id
+        WHERE e.household_id = :householdId
+          AND e.settlement_status = 'PENDING_REIMBURSEMENT'
+        ORDER BY e.occurred_at DESC
+        """
+    )
+    fun observePendingReimbursements(householdId: String): Flow<List<ExpenseWithDetails>>
+
+    /**
+     * Totales por tercero de lo pendiente de reembolso (paquete B3): agrega
+     * `amount_mxn` de los gastos `PENDING_REIMBURSEMENT` por `external_payer_member_id`.
+     * Alimenta los chips agrupados de "Por reembolsar" (cuánto se debe a cada quién).
+     *
+     * @Query NUEVO de solo lectura — NO altera el esquema.
+     */
+    @Query(
+        """
+        SELECT
+            e.external_payer_member_id AS externalPayerMemberId,
+            COALESCE(SUM(e.amount_mxn), 0.0) AS totalMxn,
+            COUNT(*) AS expenseCount
+        FROM expense e
+        WHERE e.household_id = :householdId
+          AND e.settlement_status = 'PENDING_REIMBURSEMENT'
+        GROUP BY e.external_payer_member_id
+        ORDER BY totalMxn DESC
+        """
+    )
+    fun observePendingReimbursementTotals(householdId: String): Flow<List<mx.budget.data.local.result.PendingReimbursementByPayer>>
+
+    /**
      * Gastos `PLANNED` del hogar con el contexto que el [ReminderWorker] (Fase 3)
      * necesita para decidir si recordar: fecha prevista, inicio de la quincena y
      * el `cadence_detail` de la plantilla que los originó (LEFT JOIN: los PLANNED
@@ -218,6 +279,22 @@ interface ExpenseDao {
      */
     @Query("SELECT * FROM expense WHERE household_id = :householdId")
     suspend fun getAll(householdId: String): List<ExpenseEntity>
+
+    /**
+     * Ids de categoría usados más recientemente en gastos POSTED del hogar,
+     * ordenados por último uso (v13, A0). Alimenta las "recientes" reales de
+     * la hoja de captura — antes eran un top-5 estático por `sort_order`.
+     */
+    @Query(
+        """
+        SELECT category_id FROM expense
+        WHERE household_id = :householdId AND status = 'POSTED'
+        GROUP BY category_id
+        ORDER BY MAX(occurred_at) DESC
+        LIMIT :limit
+        """
+    )
+    fun observeRecentCategoryIds(householdId: String, limit: Int): Flow<List<String>>
 
     /** Persiste la clave canónica calculada para un gasto. */
     @Query("UPDATE expense SET concept_canonical = :canonical WHERE id = :id")

@@ -2,6 +2,7 @@ package mx.budget.ai.proactive
 
 import android.util.Log
 import mx.budget.ai.dispatch.JsonRepairer
+import mx.budget.ai.service.HybridLlm
 import mx.budget.ai.service.LlmReadiness
 import mx.budget.ai.service.OnDeviceLlm
 import org.json.JSONArray
@@ -24,16 +25,19 @@ data class CaptureContext(
 }
 
 /**
- * Extractor de captura en lenguaje natural (Apéndice G.3). Orquesta dos motores:
+ * Extractor de captura en lenguaje natural (Apéndice G.3, rediseño A2). Expone
+ * dos fases SEPARADAS que antes vivían en un solo `extract()` bloqueante:
  *
- *  1. **LLM opcional** (Gemini Nano vía AICore o Gemma vía LiteRT-LM, el híbrido
- *     ya existente): traduce la frase a un intent `ADD_EXPENSE` estructurado y
- *     **rico** (beneficiarios, pagadores, notas, categoría, wallet). Solo se
- *     intenta si el motor reporta [LlmReadiness.Available]. En Tensor G4 corre la
- *     ruta LiteRT-LM (Gemma local) cuando el modelo está descargado.
- *  2. **Parser determinista** ([NaturalLanguageCaptureParser]): el contrato
- *     **garantizado** (solo monto/concepto/fecha). Si el LLM no está listo o
- *     devuelve algo inválido, este produce el resultado básico.
+ *  1. **[extractFast]** — parser determinista ([NaturalLanguageCaptureParser]),
+ *     el contrato **garantizado** (solo monto/concepto/fecha). Síncrono, <1 ms,
+ *     sin LLM: es lo único que corre en el camino de creación inmediata de la
+ *     captura (D1). Devuelve `null` si no hay monto.
+ *  2. **[enrich]** — pasada LLM opcional y ASÍNCRONA (la llama
+ *     [mx.budget.data.capture.EnrichCaptureWorker]): traduce la frase a un
+ *     intent `ADD_EXPENSE` **rico** (beneficiarios, pagadores, notas, categoría,
+ *     wallet). SOLO usa AICore/Gemini Nano ([HybridLlm.ensureAiCoreOnly]);
+ *     **NUNCA** carga LiteRT-LM/Gemma aquí — cargar 3.7 GB en el camino de
+ *     captura era la causa del OOM-kill reportado (crash tras dictar).
  *
  * El LLM **nunca** muta el ledger: solo enriquece la extracción. Ambos caminos
  * desembocan en el mismo `pending_capture` (propose-then-confirm).
@@ -44,18 +48,31 @@ class NlCaptureExtractor(
     private val systemPrompt: String,
 ) {
 
-    suspend fun extract(
+    /**
+     * Fase 1 (síncrona, garantizada): solo el parser determinista. `null` si no
+     * se extrae un monto > 0. [nowEpochMs] debe ser el **momento del dictado**
+     * (para que "ayer" se resuelva relativo a cuándo se dijo, no a cuándo se
+     * terminó de procesar).
+     */
+    fun extractFast(
+        rawText: String,
+        nowEpochMs: Long = System.currentTimeMillis(),
+    ): ParsedNlCapture? = parser.parse(rawText, nowEpochMs)
+
+    /**
+     * Fase 2 (asíncrona, opcional): pasada LLM rica, SOLO si AICore está
+     * disponible. Devuelve `null` si no hay motor, el prompt está vacío, el
+     * modelo no está listo o la salida es inválida — el caller conserva
+     * entonces lo que ya extrajo [extractFast]. Nunca lanza.
+     */
+    suspend fun enrich(
         rawText: String,
         context: CaptureContext = CaptureContext(),
         nowEpochMs: Long = System.currentTimeMillis(),
-    ): ParsedNlCapture? {
-        // 1) LLM opcional (mejora la extracción cuando el modelo está disponible).
+    ): ParsedNlCapture? =
         runCatching { extractViaLlm(rawText, context, nowEpochMs) }
-            .onFailure { Log.w(TAG, "Ruta LLM falló → fallback determinista", it) }
-            .getOrNull()?.let { return it }
-        // 2) Determinista — contrato garantizado (solo monto/concepto/fecha).
-        return parser.parse(rawText, nowEpochMs)
-    }
+            .onFailure { Log.w(TAG, "Ruta LLM de enriquecimiento falló", it) }
+            .getOrNull()
 
     private suspend fun extractViaLlm(
         rawText: String,
@@ -64,9 +81,15 @@ class NlCaptureExtractor(
     ): ParsedNlCapture? {
         val engine = llm ?: return null
         if (systemPrompt.isBlank()) return null
-        val readiness = engine.ensureReady()
-        if (readiness !is LlmReadiness.Available) {
-            Log.d(TAG, "LLM no disponible ($readiness) → fallback determinista")
+        // Gate de memoria (A2): en el camino de captura solo se permite AICore.
+        // HybridLlm.ensureReady() intentaría cargar Gemma (LiteRT-LM, 3.7 GB) y
+        // eso mata la app por OOM; ensureAiCoreOnly() pregunta sin cargar nada.
+        val ready = when (engine) {
+            is HybridLlm -> engine.ensureAiCoreOnly()
+            else -> engine.ensureReady() is LlmReadiness.Available
+        }
+        if (!ready) {
+            Log.d(TAG, "AICore no disponible → sin enriquecimiento LLM")
             return null
         }
 

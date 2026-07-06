@@ -12,6 +12,21 @@ enum class ContextDimension {
  * tenga los datos requeridos.
  */
 object QuestionClassifier {
+
+    /**
+     * Pregunta abierta/analítica ("¿qué patrón no sobresale?", "analiza mis
+     * gastos", "¿algo inusual?"): no mapea a un intent del schema, así que se
+     * enruta DIRECTO a la ruta OPEN_ANALYSIS ([OpenAnalysisAnswerer]) sin
+     * gastar una pasada del LLM intentando el intent JSON primero.
+     */
+    private val OPEN_ANALYSIS = Regex(
+        ".*(patron|patrones|insight|analiza|analisis|analitic|inusual|raro|rara|extran|curioso|" +
+            "sorprend|sobresale|oculto|escondid|llama la atencion|destaca|hallazgo|" +
+            "tendencia general|vista general|panorama general|a simple vista|no veo|que observas|que notas).*"
+    )
+
+    fun isOpenAnalysis(q: String): Boolean = q.lowercase().unaccent().matches(OPEN_ANALYSIS)
+
     fun classify(q: String): Set<ContextDimension> {
         val n = q.lowercase().unaccent()
         return buildSet {

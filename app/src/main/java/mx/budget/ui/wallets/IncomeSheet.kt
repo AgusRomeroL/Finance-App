@@ -1,13 +1,18 @@
 package mx.budget.ui.wallets
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -27,12 +32,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.ui.common.ColorPickerDialog
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -51,7 +60,7 @@ private fun String.toAmount(): Double? =
 fun IncomeSheet(
     wallets: List<PaymentMethodEntity>,
     members: List<MemberEntity>,
-    onSave: (walletId: String, memberId: String, amount: Double, label: String, dateIso: String) -> Unit,
+    onSave: (walletId: String, memberId: String, amount: Double, label: String, dateIso: String, colorHex: String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -61,6 +70,8 @@ fun IncomeSheet(
     var memberId by rememberSaveable { mutableStateOf<String?>(null) }
     var amount by rememberSaveable { mutableStateOf("") }
     var label by rememberSaveable { mutableStateOf("") }
+    var colorHex by rememberSaveable { mutableStateOf<String?>(null) }
+    var showColorPicker by remember { mutableStateOf(false) }
 
     val amountVal = amount.toAmount()
     val canSave = walletId != null && memberId != null && (amountVal ?: 0.0) > 0.0
@@ -108,16 +119,51 @@ fun IncomeSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            // Color de identidad del ingreso (paquete A4): punto + inicial en la lista.
+            val dotColor = remember(colorHex) {
+                runCatching { colorHex?.let { Color(android.graphics.Color.parseColor(it)) } }.getOrNull()
+            } ?: MaterialTheme.colorScheme.primary
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(dotColor),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "Color del ingreso",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                TextButton(onClick = { showColorPicker = true }) { Text("Cambiar") }
+            }
+
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancelar") }
                 Button(
-                    onClick = { onSave(walletId!!, memberId!!, amountVal!!, label, today) },
+                    onClick = { onSave(walletId!!, memberId!!, amountVal!!, label, today, colorHex) },
                     enabled = canSave,
                     modifier = Modifier.weight(1f),
                 ) { Text("Registrar") }
             }
         }
+    }
+
+    if (showColorPicker) {
+        ColorPickerDialog(
+            title = "Color del ingreso",
+            selectedHex = colorHex,
+            onSelect = { colorHex = it; showColorPicker = false },
+            onDismiss = { showColorPicker = false },
+        )
     }
 }
 

@@ -19,6 +19,9 @@ serviceAccountKey.json
 *.p12
 *.keystore
 *.jks
+# API keys locales (la app las lee de DataStore; esto es solo respaldo local)
+secrets.local.properties
+*.local.secret
 
 # Heap dumps
 *.hprof
