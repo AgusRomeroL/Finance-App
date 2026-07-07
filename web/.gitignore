@@ -10,6 +10,7 @@ node_modules
 dist
 dist-ssr
 *.local
+*.tsbuildinfo
 
 # Env — solo se commitea .env.example
 .env

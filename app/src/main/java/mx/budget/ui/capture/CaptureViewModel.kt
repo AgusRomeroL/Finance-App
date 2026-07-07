@@ -146,6 +146,12 @@ class CaptureViewModel(
     private val quincenaDao: QuincenaDao? = null,
     /** Fallback para marcar CONFIRMED una pending_capture cuando no hay callback. */
     private val pendingCaptureDao: PendingCaptureDao? = null,
+    /**
+     * Fase 6 (colaboradores): al aceptar una pending `proposal:{docId}` se
+     * escribe status=ACCEPTED + expenseId en la propuesta remota, para que la
+     * web del colaborador refleje el resultado. Opcional (emulador sin red OK).
+     */
+    private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
 ) : ViewModel() {
 
     /** Zona canónica del hogar (spec: America/Mexico_City). */
@@ -650,7 +656,25 @@ class CaptureViewModel(
                 p.beneficiaryBps?.takeIf { it.isNotEmpty() }
                     ?.let { _beneficiaryShares.value = bpsToPercent(it) }
                 p.payerBps?.takeIf { it.isNotEmpty() }
-                    ?.let { _payerShares.value = bpsToPercent(it) }
+                    ?.let { bps ->
+                        _payerShares.value = bpsToPercent(bps)
+                        // Fase 6 (colaboradores): si el pagador sugerido es UN solo
+                        // miembro que NO es adulto pagador (un hijo colaborador, un
+                        // tercero), se preactiva el camino "alguien más pagó" +
+                        // reembolsable — el gasto saldrá con external_payer y
+                        // settlement PENDING_REIMBURSEMENT y caerá en "Por
+                        // reembolsar". El usuario puede cambiarlo antes de registrar.
+                        val soloPayer = bps.keys.singleOrNull()
+                        if (soloPayer != null) {
+                            viewModelScope.launch {
+                                val m = runCatching { memberRepository.getById(soloPayer) }.getOrNull()
+                                if (m != null && m.role != "PAYER_ADULT") {
+                                    _thirdPartyPayerId.value = m.id
+                                    _thirdPartyMode.value = ThirdPartyMode.REIMBURSE
+                                }
+                            }
+                        }
+                    }
                 p.notes?.let { _notes.value = it.take(280) }
                 pendingCaptureId = p.pendingCaptureId
             }
@@ -956,6 +980,18 @@ class CaptureViewModel(
                     runCatching {
                         if (onPendingConfirmed != null) onPendingConfirmed.invoke(id)
                         else pendingCaptureDao?.updateStatus(id, "CONFIRMED")
+                    }
+                    // Fase 6: si la captura era una propuesta de colaborador, avisa
+                    // a Firestore que fue ACEPTADA y con qué gasto (best-effort).
+                    if (id.startsWith("proposal:")) {
+                        runCatching {
+                            membershipRepository?.updateProposalStatus(
+                                householdId = householdId,
+                                proposalDocId = id.removePrefix("proposal:"),
+                                status = "ACCEPTED",
+                                expenseId = expenseId,
+                            )
+                        }
                     }
                     pendingCaptureId = null
                 }

@@ -348,6 +348,18 @@ class RemotePullSync(
                 ?: System.currentTimeMillis()
             val note = doc.getString("note")
 
+            // Fase 6 (colaboradores): el proposer pagó con SU dinero. Se resuelve su
+            // miembro vinculado (roles/{uid}.linkedMemberId) y se sugiere como PAYER
+            // al 100% — el Review lo preactiva como tercero + reembolsable, y al
+            // aceptar el gasto cae en "Por reembolsar" a favor del colaborador.
+            val proposerUid = doc.getString("proposedByUid")
+            val payerJson = proposerUid?.let { uid ->
+                runCatching {
+                    household().collection("roles").document(uid).get().await()
+                        .getString("linkedMemberId")
+                }.getOrNull()
+            }?.let { memberId -> """{"$memberId":10000}""" }
+
             val localId = "proposal:${doc.id}"
             // Idempotencia: si ya existe (y no está PENDING, o ya está), no re-crea
             // trabajo del usuario. Un REPLACE sobre una fila ya confirmada la
@@ -366,6 +378,7 @@ class RemotePullSync(
                     enrichStatus = "READY",
                     createdAt = System.currentTimeMillis(),
                     notes = note,
+                    suggestedPayerJson = payerJson,
                 )
             )
         } catch (e: Exception) {

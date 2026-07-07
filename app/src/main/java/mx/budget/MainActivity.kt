@@ -172,7 +172,8 @@ class MainActivity : ComponentActivity() {
             app.categoryRepository,
             app.walletRepository,
             app.memberRepository,
-            app.householdId
+            app.householdId,
+            app.membershipRepository
         ))[mx.budget.ui.detail.ExpenseDetailViewModel::class.java]
     }
 
@@ -238,6 +239,7 @@ class MainActivity : ComponentActivity() {
             categoryDao = app.database.categoryDao(),
             quincenaDao = app.database.quincenaDao(),
             pendingCaptureDao = app.database.pendingCaptureDao(),
+            membershipRepository = app.membershipRepository,
         ))[CaptureViewModel::class.java]
     }
 
@@ -798,6 +800,7 @@ class ExpenseDetailViewModelFactory(
     private val walletRepository: WalletRepository,
     private val memberRepository: MemberRepository,
     private val householdId: String,
+    private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -808,6 +811,7 @@ class ExpenseDetailViewModelFactory(
             walletRepository = walletRepository,
             memberRepository = memberRepository,
             householdId = householdId,
+            membershipRepository = membershipRepository,
         ) as T
     }
 }
@@ -828,6 +832,7 @@ class CaptureViewModelFactory(
     private val categoryDao: mx.budget.data.local.dao.CategoryDao? = null,
     private val quincenaDao: QuincenaDao? = null,
     private val pendingCaptureDao: mx.budget.data.local.dao.PendingCaptureDao? = null,
+    private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -846,6 +851,7 @@ class CaptureViewModelFactory(
             categoryDao = categoryDao,
             quincenaDao = quincenaDao,
             pendingCaptureDao = pendingCaptureDao,
+            membershipRepository = membershipRepository,
         ) as T
     }
 }

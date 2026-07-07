@@ -316,6 +316,61 @@ class MembershipRepository(
         }.onFailure { Log.w(TAG, "submitProposal falló", it) }
     }
 
+    /**
+     * Fase 6 (circuito de colaboradores): el titular resuelve una propuesta.
+     * Escribe `status` (ACCEPTED | REJECTED), `resolvedAt` y, al aceptar, el
+     * `expenseId` del gasto creado — la web del colaborador lo refleja en
+     * "Mis propuestas" y en su saldo "me deben". Best-effort: un fallo de red
+     * solo se loguea (el gasto local ya quedó registrado igual).
+     */
+    suspend fun updateProposalStatus(
+        householdId: String,
+        proposalDocId: String,
+        status: String,
+        expenseId: String? = null,
+    ) {
+        runCatching {
+            val data = buildMap<String, Any> {
+                put("status", status)
+                put("resolvedAt", System.currentTimeMillis())
+                if (expenseId != null) put("expenseId", expenseId)
+            }
+            households().document(householdId)
+                .collection("proposals").document(proposalDocId)
+                .update(data).await()
+        }.onFailure { Log.w(TAG, "updateProposalStatus($proposalDocId → $status) falló", it) }
+    }
+
+    /**
+     * Marca la propuesta como reembolsada (tras `reimburseFrom` del gasto
+     * vinculado). La web muestra "Reembolsada" y la saca del saldo "me deben".
+     */
+    suspend fun markProposalReimbursed(householdId: String, proposalDocId: String) {
+        runCatching {
+            households().document(householdId)
+                .collection("proposals").document(proposalDocId)
+                .update(mapOf("reimbursedAt" to System.currentTimeMillis())).await()
+        }.onFailure { Log.w(TAG, "markProposalReimbursed($proposalDocId) falló", it) }
+    }
+
+    /**
+     * Variante por gasto: localiza la propuesta cuyo `expenseId` es el gasto
+     * recién reembolsado (lo escribió [updateProposalStatus] al aceptar) y le
+     * estampa `reimbursedAt`. Best-effort; si el gasto no nació de una
+     * propuesta, simplemente no hay doc y no pasa nada.
+     */
+    suspend fun markProposalReimbursedByExpense(householdId: String, expenseId: String) {
+        runCatching {
+            val snap = households().document(householdId)
+                .collection("proposals")
+                .whereEqualTo("expenseId", expenseId)
+                .limit(1)
+                .get().await()
+            snap.documents.firstOrNull()?.reference
+                ?.update(mapOf("reimbursedAt" to System.currentTimeMillis()))?.await()
+        }.onFailure { Log.w(TAG, "markProposalReimbursedByExpense($expenseId) falló", it) }
+    }
+
     companion object {
         private const val TAG = "MembershipRepository"
 

@@ -130,6 +130,13 @@ export interface Attribution {
 
 export type ProposalKind = 'EXPENSE' | 'FUTURE_PAYMENT'
 
+/**
+ * Estado del ciclo de vida de una propuesta. La web solo escribe PENDING;
+ * ACCEPTED/REJECTED (y los campos de resolución) los escribe la app Android
+ * cuando el titular la revisa.
+ */
+export type ProposalStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
+
 // households/{hid}/proposals/{id}
 export interface Proposal {
   kind: ProposalKind
@@ -141,7 +148,13 @@ export interface Proposal {
   proposedByUid: string
   proposedByName: string
   createdAt: number
-  status: 'PENDING'
+  status: ProposalStatus
+  /** Epoch ms en que el titular resolvió (aceptó/rechazó). Lo escribe Android. */
+  resolvedAt?: number
+  /** Id del expense creado al aceptar. Lo escribe Android. */
+  expenseId?: string
+  /** Epoch ms en que el titular reembolsó al proposer. Lo escribe Android. */
+  reimbursedAt?: number
 }
 
 export interface ProposalWithId extends Proposal {

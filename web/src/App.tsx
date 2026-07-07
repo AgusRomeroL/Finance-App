@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage'
 import GroupsPage from './pages/GroupsPage'
 import DashboardPage from './pages/DashboardPage'
 import ProposePage from './pages/ProposePage'
+import MyProposalsPage from './pages/MyProposalsPage'
 
 function AuthedApp() {
   return (
@@ -16,6 +17,7 @@ function AuthedApp() {
           <Route index element={<GroupsPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="proponer" element={<ProposePage />} />
+          <Route path="mis-propuestas" element={<MyProposalsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

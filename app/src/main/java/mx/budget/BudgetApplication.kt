@@ -425,6 +425,12 @@ class BudgetApplication : Application() {
         )
 
         BankCaptureManager.ensureChannel(this)
+        // Fase 6: MembershipRepository se construye ANTES que el BankCaptureManager
+        // para poder reflejar en Firestore el rechazo de propuestas de colaborador.
+        membershipRepository = mx.budget.data.remote.MembershipRepository(
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        )
+
         bankCaptureManager = BankCaptureManager(
             context = this,
             pendingDao = database.pendingCaptureDao(),
@@ -438,6 +444,7 @@ class BudgetApplication : Application() {
             householdId = householdId,
             nlCaptureExtractor = nlCaptureExtractor,
             locationProvider = locationProvider,
+            membershipRepository = membershipRepository,
         )
 
         // Materializador de recurrentes → gastos PLANNED (Apéndice G.2, Fase 1).
@@ -454,7 +461,6 @@ class BudgetApplication : Application() {
         val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
         this.firestore = firestore
         authManager = mx.budget.data.remote.AuthManager(this)
-        membershipRepository = mx.budget.data.remote.MembershipRepository(firestore)
         remoteExpenseRepository = mx.budget.data.remote.ExpenseRepositoryFirestore(firestore, householdId)
         val remoteWalletRepository = mx.budget.data.remote.WalletRepositoryFirestore(firestore)
         val remoteTransferRepository = mx.budget.data.remote.TransferRepositoryFirestore(firestore)

@@ -25,6 +25,7 @@ import type {
   Invite,
   Proposal,
   ProposalKind,
+  ProposalWithId,
   Quincena,
   QuincenaWithId,
   Role,
@@ -244,8 +245,11 @@ export async function createProposal(
   return ref.id
 }
 
-/** Propuestas del usuario en el household (para feedback tras enviar). */
-export async function listMyProposals(hid: string, uid: string): Promise<import('./types').ProposalWithId[]> {
+/**
+ * MIS propuestas en el household (query por proposedByUid; se ordena en
+ * cliente por createdAt desc para no requerir un índice compuesto).
+ */
+export async function listMyProposals(hid: string, uid: string): Promise<ProposalWithId[]> {
   const snap = await getDocs(
     query(collection(db, 'households', hid, 'proposals'), where('proposedByUid', '==', uid)),
   )

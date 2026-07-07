@@ -2,8 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+ * Tokens "Architectural Ledger" — escala tonal derivada del verde sembrado
+ * #016E3E de la app Android. Tripletas RGB (espacios) para que Tailwind pueda
+ * aplicar alpha con `rgb(var(--c-x) / <alpha-value>)`.
+ * Modo oscuro por `prefers-color-scheme` (superficies tonales, no negro puro).
+ * ------------------------------------------------------------------------- */
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
+
+  /* Primario y contenedor */
+  --c-primary: 1 110 62; /* #016E3E */
+  --c-on-primary: 255 255 255;
+  --c-primary-container: 168 240 198; /* #A8F0C6 */
+  --c-on-primary-container: 0 33 17; /* #002111 */
+
+  /* Superficies tonales apiladas (verde-neutro, sin bordes duros) */
+  --c-surface: 245 251 243; /* fondo de página */
+  --c-surface-1: 233 242 232;
+  --c-surface-2: 223 235 223;
+  --c-surface-3: 211 226 212;
+  --c-on-surface: 23 29 25;
+  --c-on-surface-variant: 63 73 65;
+  --c-outline: 111 121 112;
+
+  /* Semánticos financieros */
+  --c-income: 10 138 82; /* verde ingreso */
+  --c-expense: 181 62 92; /* rosa-rojo suave gasto */
+  --c-alert: 141 99 0; /* ámbar alerta */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-primary: 122 219 164; /* verde claro sobre superficies oscuras */
+    --c-on-primary: 0 57 29;
+    --c-primary-container: 0 82 44;
+    --c-on-primary-container: 168 240 198;
+
+    --c-surface: 15 21 17;
+    --c-surface-1: 27 34 29;
+    --c-surface-2: 37 44 38;
+    --c-surface-3: 48 55 49;
+    --c-on-surface: 223 229 222;
+    --c-on-surface-variant: 190 201 190;
+    --c-outline: 137 147 137;
+
+    --c-income: 134 220 168;
+    --c-expense: 255 177 194;
+    --c-alert: 240 195 92;
+  }
 }
 
 html,
@@ -13,5 +60,26 @@ body,
 }
 
 body {
-  @apply bg-gray-50 text-gray-900 antialiased;
+  @apply bg-surface font-sans text-on-surface antialiased;
+}
+
+@layer utilities {
+  /* Cifras tabulares para todo número financiero. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Etiqueta eyebrow: mayúsculas con tracking generoso. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-on-surface-variant;
+  }
+
+  /* Scroll horizontal sin barra visible (chips/nav). */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
