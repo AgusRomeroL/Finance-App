@@ -81,6 +81,7 @@ fun AnalyticsScreen(
 
     val quincena by viewModel.activeQuincena.collectAsState()
     val byCategory by viewModel.spendByCategory.collectAsState()
+    val postedIncome by viewModel.postedIncome.collectAsState()
     val trend by viewModel.trend.collectAsState()
     val topConcepts by viewModel.topConcepts.collectAsState()
     val debt by viewModel.debtConcentration.collectAsState()
@@ -131,6 +132,7 @@ fun AnalyticsScreen(
                 SmartSummaryCard(
                     quincena = quincena,
                     byCategory = byCategory,
+                    postedIncome = postedIncome,
                     money = money,
                     onAsk = if (aiViewModel != null) ({ chatOpen = true }) else null,
                 )
@@ -174,7 +176,8 @@ fun AnalyticsScreen(
                 item {
                     WidgetCard(title = "Flujo de la quincena") {
                         CashflowBars(
-                            quincena = q,
+                            receivedIncome = postedIncome,
+                            projectedIncome = q.projectedIncomeMxn,
                             actualExpenses = maxOf(q.actualExpensesMxn, byCategory.sumOf { it.actual }),
                             money = money,
                         )
@@ -407,6 +410,7 @@ private fun KpiCard(label: String, value: String, modifier: Modifier = Modifier)
 private fun SmartSummaryCard(
     quincena: QuincenaEntity?,
     byCategory: List<SpendByCategory>,
+    postedIncome: Double,
     money: NumberFormat,
     onAsk: (() -> Unit)?,
 ) {
@@ -432,7 +436,7 @@ private fun SmartSummaryCard(
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                buildSmartSummary(quincena, byCategory, money),
+                buildSmartSummary(quincena, byCategory, postedIncome, money),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
@@ -453,6 +457,7 @@ private fun SmartSummaryCard(
 private fun buildSmartSummary(
     quincena: QuincenaEntity?,
     byCategory: List<SpendByCategory>,
+    postedIncome: Double,
     money: NumberFormat,
 ): String {
     if (quincena == null) return "Sin quincena activa."
@@ -461,12 +466,16 @@ private fun buildSmartSummary(
     // El actual de la quincena es un campo desnormalizado que puede ir detrás
     // del agregado real por categoría — usa el mayor de los dos.
     val actualExpenses = maxOf(quincena.actualExpensesMxn, byCategory.sumOf { it.actual })
-    val available = quincena.actualIncomeMxn - actualExpenses
+    // Ingreso mostrado en AMBAS formas: recibido (POSTED en vivo) y proyectado
+    // (lo esperado de la quincena). El "disponible" se ancla al proyectado, que es
+    // el número accionable; el recibido aclara cuánto ha entrado realmente.
+    val projectedIncome = quincena.projectedIncomeMxn
+    val availableProjected = projectedIncome - actualExpenses
     sb.append(
-        "Llevas ${money.format(actualExpenses)} gastados y " +
-            "${money.format(quincena.actualIncomeMxn)} de ingreso — " +
-            if (available >= 0) "disponible ${money.format(available)}."
-            else "déficit de ${money.format(-available)}."
+        "Llevas ${money.format(actualExpenses)} gastados. " +
+            "Ingreso: ${money.format(postedIncome)} recibido de ${money.format(projectedIncome)} proyectado. " +
+            if (availableProjected >= 0) "Con lo proyectado te quedan ${money.format(availableProjected)}."
+            else "Con lo proyectado hay un déficit de ${money.format(-availableProjected)}."
     )
 
     if (quincena.projectedExpensesMxn > 0) {
@@ -603,14 +612,21 @@ private fun SpendDonut(rows: List<SpendByCategory>, money: NumberFormat) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun CashflowBars(quincena: QuincenaEntity, actualExpenses: Double, money: NumberFormat) {
-    val maxRef = maxOf(quincena.actualIncomeMxn, actualExpenses, 1.0)
-    val available = quincena.actualIncomeMxn - actualExpenses
+private fun CashflowBars(
+    receivedIncome: Double,
+    projectedIncome: Double,
+    actualExpenses: Double,
+    money: NumberFormat,
+) {
+    val maxRef = maxOf(projectedIncome, receivedIncome, actualExpenses, 1.0)
+    // "Disponible" se ancla al ingreso PROYECTADO (número accionable de la
+    // quincena); la barra de ingreso muestra lo RECIBIDO (POSTED en vivo).
+    val available = projectedIncome - actualExpenses
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         LabeledBar(
-            label = "Ingreso",
-            amountText = "+${money.format(quincena.actualIncomeMxn)}",
-            fraction = (quincena.actualIncomeMxn / maxRef).toFloat(),
+            label = "Ingreso recibido",
+            amountText = "+${money.format(receivedIncome)}",
+            fraction = (receivedIncome / maxRef).toFloat(),
             color = MaterialTheme.financeColors.income,
         )
         LabeledBar(
@@ -620,8 +636,13 @@ private fun CashflowBars(quincena: QuincenaEntity, actualExpenses: Double, money
             color = MaterialTheme.financeColors.expense,
         )
         Text(
-            if (available >= 0) "Disponible: ${money.format(available)}"
-            else "Déficit: ${money.format(-available)}",
+            "Ingreso proyectado: ${money.format(projectedIncome)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            if (available >= 0) "Disponible (proyectado): ${money.format(available)}"
+            else "Déficit (proyectado): ${money.format(-available)}",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color = if (available >= 0) MaterialTheme.financeColors.income
             else MaterialTheme.financeColors.expense,

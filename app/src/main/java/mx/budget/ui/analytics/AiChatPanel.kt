@@ -410,7 +410,9 @@ private fun formatResult(result: DispatchResult, money: NumberFormat): String = 
         }
 
     is DispatchResult.QuincenaSummary -> with(result.summary) {
-        "$label — ingreso ${money.format(actualIncomeMxn)}, gasto ${money.format(actualExpensesMxn)}; " +
+        // Ingreso en AMBAS formas: recibido (POSTED en vivo) y proyectado.
+        "$label — ingreso ${money.format(actualIncomeMxn)} recibido de " +
+            "${money.format(projectedIncomeMxn)} proyectado, gasto ${money.format(actualExpensesMxn)}; " +
             "diferencia ${money.format(savingsMxn)}."
     }
 
