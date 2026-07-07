@@ -166,7 +166,15 @@ class AiAssistantViewModel(
             }
 
             if (_llmAvailable.value) {
-                ledgerRagUseCase.invoke(question, defaultHouseholdId).fold(
+                // Memoria conversacional corta: las últimas preguntas del usuario
+                // (excluyendo la actual, ya añadida al historial) permiten
+                // follow-ups tipo "¿y el mes pasado?".
+                val previousQuestions = _chatHistory.value
+                    .filter { it.role == ChatMessage.Role.USER }
+                    .map { it.text }
+                    .dropLast(1)
+                    .takeLast(3)
+                ledgerRagUseCase.invoke(question, defaultHouseholdId, previousQuestions).fold(
                     onSuccess = { rawJson ->
                         // La pregunta original habilita el fallback heurístico del
                         // dispatcher cuando la salida del LLM no parsea como intent.

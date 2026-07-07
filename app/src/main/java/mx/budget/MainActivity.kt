@@ -725,6 +725,7 @@ class AiAssistantViewModelFactory(
             analyticsRepository = app.analyticsRepository,
             walletRepository = app.walletRepository,
             installmentRepository = app.installmentRepository,
+            memberRepository = app.memberRepository,
         )
         val resolverProvider: suspend () -> mx.budget.ai.dispatch.AliasResolver = {
             mx.budget.ai.dispatch.AliasResolver(
