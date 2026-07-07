@@ -47,6 +47,11 @@ enum class TutorialKey {
     ANA_WIDGETS,
     ANA_ASK_FAB,
 
+    // ── Perfil ──
+    /** Entrada "Importar estado de cuenta" (conciliación Fase 5). Sin tag aún:
+     *  el paso degrada a globo centrado sobre Perfil (comportamiento previsto). */
+    PROFILE_STATEMENTS,
+
     // ── Libro Mayor ──
     LED_FILTERS,
     LED_ROWS,

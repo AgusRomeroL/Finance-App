@@ -123,7 +123,8 @@ Los tags llevan el comentario `// TUTORIAL: <KEY> — ver TUTORIAL.md` en el có
 | `ANA_SUMMARY` | analytics | `SmartSummaryCard` | `ui/analytics/AnalyticsScreen.kt` |
 | `ANA_KPI_ROW` | analytics | fila de KPIs (Ahorro/Por cobrar/MSI) | `ui/analytics/AnalyticsScreen.kt` |
 | `ANA_WIDGETS` | analytics | primer `WidgetCard` (gráficas) | `ui/analytics/AnalyticsScreen.kt` |
-| `ANA_ASK_FAB` | analytics | FAB "Preguntar" (asistente IA) | `ui/analytics/AnalyticsScreen.kt` |
+| `ANA_ASK_FAB` | analytics | FAB "Preguntar" — lo usan DOS pasos: asistente y "Atajos que aprenden" (pills dinámicos) | `ui/analytics/AnalyticsScreen.kt` |
+| `PROFILE_STATEMENTS` | profile | entrada "Importar estado de cuenta" (conciliación Fase 5). SIN tag: degrada a globo centrado sobre Perfil (previsto) | `ui/profile/ProfileScreen.kt` |
 | `LED_FILTERS` | ledger | fila de FilterChips | `ui/ledger/LedgerScreen.kt` |
 | `LED_ROWS` | ledger | lista / primer `LedgerRow` | `ui/ledger/LedgerScreen.kt` |
 

@@ -493,9 +493,19 @@ private fun ExpandedDashboard(
                                 )
                             }
                         }
-                        if (reimbursementUi.rows.isNotEmpty()) {
-                            Spacer(Modifier.height(18.dp))
-                            ReimbursementSection(ui = reimbursementUi)
+                        // Motion expresivo: la sección aparece/desaparece con resorte
+                        // (entra al aceptar la primera propuesta, sale al saldar todo).
+                        AnimatedVisibility(
+                            visible = reimbursementUi.rows.isNotEmpty(),
+                            enter = fadeIn(spring(stiffness = 380f)) +
+                                expandVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+                            exit = fadeOut(spring(stiffness = 380f)) +
+                                shrinkVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+                        ) {
+                            Column {
+                                Spacer(Modifier.height(18.dp))
+                                ReimbursementSection(ui = reimbursementUi)
+                            }
                         }
                         if (state.viewingActive) {
                             Spacer(Modifier.height(18.dp))
@@ -689,7 +699,10 @@ private fun CompactDashboard(
                         }
                         if (reimbursementUi.rows.isNotEmpty()) {
                             item(key = "reimbursements") {
-                                ReimbursementSection(ui = reimbursementUi)
+                                // Motion expresivo: la sección entra con resorte.
+                                Box(Modifier.animateItem()) {
+                                    ReimbursementSection(ui = reimbursementUi)
+                                }
                             }
                         }
                         // TUTORIAL: DASH_HERO_KPI — ver TUTORIAL.md

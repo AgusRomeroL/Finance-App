@@ -181,6 +181,24 @@ object TutorialSpec {
             body = "El asistente responde en lenguaje natural: \"¿cuánto gasté en comida esta " +
                 "quincena?\" y ejecuta la consulta por ti.",
         ),
+        TutorialStep(
+            key = TutorialKey.ANA_ASK_FAB,
+            route = BudgetDestinations.ANALYTICS,
+            title = "Atajos que aprenden",
+            body = "Dentro del chat, los atajos cambian según tu quincena: si una categoría se " +
+                "pasó del presupuesto o una tarjeta acumula deuda, la pregunta aparece lista " +
+                "para tocarse.",
+        ),
+
+        // ── Perfil ───────────────────────────────────────────────────────────────
+        TutorialStep(
+            key = TutorialKey.PROFILE_STATEMENTS,
+            route = BudgetDestinations.PROFILE,
+            title = "Concilia tu estado de cuenta",
+            body = "Desde Perfil puedes importar el PDF de tu tarjeta: cada movimiento se " +
+                "compara con tus gastos ya registrados para vincularlos sin duplicar; lo " +
+                "nuevo llega a la bandeja para que lo confirmes.",
+        ),
 
         // ── Libro Mayor ──────────────────────────────────────────────────────────
         TutorialStep(

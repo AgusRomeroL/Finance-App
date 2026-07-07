@@ -179,10 +179,13 @@ class OpenAnalysisAnswerer(
         val projectedTotal = quincena.projectedExpensesMxn
             .takeIf { it > 0 } ?: byCategory.sumOf { it.projected }
         val pct = if (projectedTotal > 0) (actualTotal / projectedTotal * 100).toInt() else 0
+        // Etiquetado explícito POSTED vs proyectado: al inicio de una quincena el
+        // gasto ejecutado es ~$0 y sin la aclaración la cifra parece contradecir
+        // el "Reservado" del dashboard (que descuenta lo PLANNED).
         append(
             "Esto es lo que veo en ${quincena.label}: llevan " +
-                "${money.format(actualTotal)} gastados de " +
-                "${money.format(projectedTotal)} proyectados ($pct %)."
+                "${money.format(actualTotal)} ya pagados (no incluye lo planeado " +
+                "por pagar) de ${money.format(projectedTotal)} proyectados ($pct %)."
         )
 
         val deviations = byCategory
