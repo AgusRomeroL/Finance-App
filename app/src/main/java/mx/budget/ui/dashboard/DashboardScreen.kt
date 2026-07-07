@@ -15,9 +15,15 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -36,6 +42,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -72,7 +79,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -546,6 +555,7 @@ private fun BentoPanes(
     tutorialController: mx.budget.ui.tutorial.TutorialController? = null
 ) {
     var fraction by rememberSaveable { mutableStateOf(0.55f) }
+    val settleScope = rememberCoroutineScope()
     BoxWithConstraints(modifier = modifier) {
         val totalPx = constraints.maxWidth.toFloat()
         val dragState = rememberDraggableState { delta ->
@@ -558,7 +568,22 @@ private fun BentoPanes(
                 modifier = Modifier.weight(fraction).fillMaxHeight(),
                 tutorialController = tutorialController
             )
-            PaneDragHandle(dragState)
+            PaneDragHandle(
+                dragState = dragState,
+                onDragStopped = {
+                    // Settle expresivo: si se suelta cerca del ancla 55/45, el divisor
+                    // asienta ahí con resorte (imán suave); lejos del ancla se queda.
+                    if (kotlin.math.abs(fraction - 0.55f) < 0.04f) {
+                        settleScope.launch {
+                            animate(
+                                initialValue = fraction,
+                                targetValue = 0.55f,
+                                animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f)
+                            ) { value, _ -> fraction = value }
+                        }
+                    }
+                }
+            )
             TransactionsPane(
                 transactions = state.transactions,
                 modifier = Modifier.weight(1f - fraction).fillMaxHeight()
@@ -569,12 +594,16 @@ private fun BentoPanes(
 
 /** Divisor (gutter 24dp) con grabber visible; arrastrable en horizontal. */
 @Composable
-private fun PaneDragHandle(dragState: DraggableState) {
+private fun PaneDragHandle(dragState: DraggableState, onDragStopped: () -> Unit = {}) {
     Box(
         modifier = Modifier
             .fillMaxHeight()
             .width(24.dp)
-            .draggable(state = dragState, orientation = Orientation.Horizontal)
+            .draggable(
+                state = dragState,
+                orientation = Orientation.Horizontal,
+                onDragStopped = { onDragStopped() }
+            )
             .semantics { contentDescription = "Ajustar ancho de paneles" },
         contentAlignment = Alignment.Center
     ) {
@@ -715,7 +744,8 @@ private fun CompactDashboard(
                             }
                         }
                         items(state.transactions.take(8), key = { it.expenseId }) { tx ->
-                            TransactionRow(tx)
+                            // Motion expresivo: filas nuevas/reordenadas entran con resorte.
+                            Box(Modifier.animateItem()) { TransactionRow(tx) }
                         }
                     }
                 }
@@ -817,6 +847,19 @@ internal fun NavigationRailCustom(
 
 @Composable
 internal fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
+    // Motion expresivo: la pill activa y el tinte del icono cruzan con resorte,
+    // y la etiqueta entra/sale expandiéndose en vez de aparecer de golpe.
+    val pillColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "railPill"
+    )
+    val iconTint by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "railTint"
+    )
     Column(
         modifier = Modifier
             .clickable(onClick = onClick)
@@ -827,21 +870,23 @@ internal fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
             modifier = Modifier
                 .size(width = 56.dp, height = 32.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-                ),
+                .background(pillColor),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = item.icon,
                 contentDescription = item.label,
-                tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = iconTint,
                 modifier = Modifier.size(22.dp)
             )
         }
-        if (selected) {
-            Spacer(Modifier.height(6.dp))
+        AnimatedVisibility(
+            visible = selected,
+            enter = fadeIn(spring(stiffness = 380f)) +
+                expandVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+            exit = fadeOut(spring(stiffness = 380f)) +
+                shrinkVertically(spring(dampingRatio = 0.8f, stiffness = 380f))
+        ) {
             // Sin uppercase ni letter-spacing: a fontScale 1.3 + bold el texto
             // espaciado partía en dos líneas mid-word ("ANALÍTICA/S"). En caja
             // baja y compacto entra en una línea (ellipsis de seguridad).
@@ -851,7 +896,8 @@ internal fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 6.dp)
             )
         }
     }
@@ -870,6 +916,18 @@ internal fun BottomNavCustom(currentRoute: String, onNavigate: ((String) -> Unit
     ) {
         navItems.forEach { item ->
             val selected = currentRoute == item.route
+            // Motion expresivo: pill y tinte cruzan con resorte al cambiar de pestaña.
+            val pillColor by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                label = "navPill"
+            )
+            val iconTint by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                label = "navTint"
+            )
             Column(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
@@ -881,16 +939,13 @@ internal fun BottomNavCustom(currentRoute: String, onNavigate: ((String) -> Unit
                     modifier = Modifier
                         .size(width = 56.dp, height = 30.dp)
                         .clip(RoundedCornerShape(15.dp))
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-                        ),
+                        .background(pillColor),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         item.icon,
                         contentDescription = item.label,
-                        tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = iconTint,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -1282,17 +1337,28 @@ private fun ReserveToggle(showNet: Boolean, onChange: (Boolean) -> Unit) {
 
 @Composable
 private fun ReserveSegment(label: String, selected: Boolean, onClick: () -> Unit) {
-    val base = Modifier.clip(RoundedCornerShape(50))
-    val withBg = if (selected) base.background(MaterialTheme.colorScheme.primary) else base
+    // Motion expresivo: relleno y color del texto cruzan con resorte al alternar.
+    val bg by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "reserveBg"
+    )
+    val fg by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "reserveFg"
+    )
     Text(
         label,
         style = MaterialTheme.typography.labelLarge.copy(
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
         ),
-        color = if (selected) MaterialTheme.colorScheme.onPrimary
-        else MaterialTheme.colorScheme.onSurfaceVariant,
+        color = fg,
         maxLines = 1, softWrap = false,
-        modifier = withBg
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(bg)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 6.dp)
     )
@@ -1301,6 +1367,12 @@ private fun ReserveSegment(label: String, selected: Boolean, onClick: () -> Unit
 @Composable
 private fun QuincenaRhythm(progress: QuincenaProgress) {
     val pct = (progress.fraction * 100).toInt()
+    // Motion expresivo: la barra crece con resorte al aparecer/cambiar de quincena.
+    val animatedFraction by animateFloatAsState(
+        targetValue = progress.fraction,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "quincenaFraction"
+    )
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1333,7 +1405,7 @@ private fun QuincenaRhythm(progress: QuincenaProgress) {
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progress.fraction)
+                    .fillMaxWidth(animatedFraction)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(5.dp))
                     .background(MaterialTheme.colorScheme.primary)
@@ -1416,17 +1488,23 @@ private fun SuggestionsSection(
             }
         }
         Spacer(Modifier.height(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        // LazyRow (antes Row+horizontalScroll) para que al descartar/añadir una
+        // tarjeta las demás se reacomoden con resorte (animateItem) en vez de saltar.
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            shown.forEach { item ->
-                Box(Modifier.width(cardW)) {
+            items(shown, key = { it.key }) { item ->
+                Box(Modifier.width(cardW).animateItem()) {
                     SmartSuggestionCard(item, onConfirmCapture, onDismissCapture, onRegisterSuggestion, onDismissSuggestion)
                 }
             }
             if (overflow) {
-                SeeMoreTile(remaining = items.size - shown.size, onClick = onSeeMore)
+                item(key = "see-more") {
+                    Box(Modifier.animateItem()) {
+                        SeeMoreTile(remaining = items.size - shown.size, onClick = onSeeMore)
+                    }
+                }
             }
         }
     }
@@ -1906,11 +1984,17 @@ private fun MemberDistributionSection(
                 // "N miembros" y cortar a 5 ocultaba al de menor consumo (p. ej. Santiago)
                 // sin forma de verlo (las pantallas de desglose siguen siendo placeholder).
                 data.forEachIndexed { i, m ->
-                    MemberBarRow(
-                        member = m,
-                        fraction = (m.totalMxn / total).toFloat().coerceIn(0f, 1f),
-                        color = colors[i.coerceIn(0, colors.lastIndex)]
-                    )
+                    // key(memberId): al alternar Beneficiario/Pagador el estado de
+                    // animación sigue a CADA miembro y su barra se transforma con
+                    // resorte hacia su nueva fracción (en vez de heredar la del
+                    // miembro que ocupaba esa posición).
+                    key(m.memberId) {
+                        MemberBarRow(
+                            member = m,
+                            fraction = (m.totalMxn / total).toFloat().coerceIn(0f, 1f),
+                            color = colors[i.coerceIn(0, colors.lastIndex)]
+                        )
+                    }
                 }
             }
             // Antes Spacer(weight(1f)) empujaba el pie al fondo del panel fijo; en Column
@@ -1951,6 +2035,13 @@ private fun MemberDistributionSection(
 @Composable
 private fun MemberBarRow(member: SpendByMember, fraction: Float, color: Color) {
     val share = (fraction * 100).toInt()
+    // Motion expresivo: la barra crece/decrece con resorte (también al alternar
+    // Beneficiario/Pagador, donde cambia el dataset completo).
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction.coerceAtLeast(0.02f),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "memberBar"
+    )
     Row(verticalAlignment = Alignment.CenterVertically) {
         // Avatar + nombre (flexible)
         Box(
@@ -1992,7 +2083,7 @@ private fun MemberBarRow(member: SpendByMember, fraction: Float, color: Color) {
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(fraction.coerceAtLeast(0.02f))
+                    .fillMaxWidth(animatedFraction)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(7.dp))
                     .background(color)
@@ -2028,10 +2119,23 @@ private fun SegmentedToggle(options: List<String>, selectedIndex: Int, onSelect:
     ) {
         options.forEachIndexed { i, label ->
             val selected = i == selectedIndex
+            // Motion expresivo: el relleno del segmento activo cruza con resorte
+            // en vez de saltar de golpe.
+            val segColor by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                label = "segBg"
+            )
+            val segText by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                label = "segText"
+            )
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(18.dp))
-                    .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                    .background(segColor)
                     .clickable { onSelect(i) }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
@@ -2041,8 +2145,7 @@ private fun SegmentedToggle(options: List<String>, selectedIndex: Int, onSelect:
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
                     ),
-                    color = if (selected) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = segText,
                     maxLines = 1,
                     softWrap = false
                 )
@@ -2106,7 +2209,10 @@ private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: M
                 contentPadding = PaddingValues(bottom = 112.dp) // la BottomActionBar flotante (~76dp + insets) no debe tapar la última fila
             ) {
                 itemsIndexed(transactions, key = { _, it -> it.expenseId }) { index, tx ->
-                    TransactionRow(tx, alternate = index % 2 == 1)
+                    // Motion expresivo: filas nuevas/reordenadas entran con resorte.
+                    Box(Modifier.animateItem()) {
+                        TransactionRow(tx, alternate = index % 2 == 1)
+                    }
                 }
             }
         }
@@ -2286,6 +2392,12 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
             ReserveToggle(showNet = showNet, onChange = { showNet = it })
         }
         Spacer(Modifier.height(16.dp))
+        // Motion expresivo: la barra de avance crece con resorte.
+        val animatedProgressFraction by animateFloatAsState(
+            targetValue = progress.fraction,
+            animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+            label = "collapsedQuincenaFraction"
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2295,7 +2407,7 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progress.fraction)
+                    .fillMaxWidth(animatedProgressFraction)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(4.dp))
                     .background(MaterialTheme.colorScheme.primary)

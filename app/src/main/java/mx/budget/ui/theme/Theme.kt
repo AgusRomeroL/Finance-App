@@ -152,6 +152,11 @@ fun BudgetAppTheme(
     }
 
     CompositionLocalProvider(LocalFinanceColors provides financeColors) {
+        // Nota de motion (M3 1.4): los componentes M3 ya animan con física de
+        // resortes por default. El MotionScheme público (expressive()) sigue
+        // experimental en material3 1.5-alpha; cuando gradúe, se pasa aquí.
+        // Mientras, el sello expresivo se aplica con springs en los componentes
+        // custom (specs dampingRatio≈0.8, stiffness≈380).
         MaterialTheme(
             colorScheme = colorScheme,
             typography = BudgetTypography,
