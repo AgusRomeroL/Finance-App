@@ -1,12 +1,21 @@
 package mx.budget.data.statements
 
 import android.net.Uri
+import mx.budget.data.local.dao.ExpenseDao
+import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.local.dao.StatementImportDao
+import mx.budget.data.local.dao.StatementLineDao
+import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.entity.InstallmentPlanEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.local.entity.StatementImportEntity
+import mx.budget.data.local.entity.StatementLineEntity
 import mx.budget.data.repository.InstallmentRepository
 import mx.budget.data.repository.WalletRepository
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 
 /**
@@ -29,8 +38,32 @@ class StatementImportManager(
     private val walletRepository: WalletRepository,
     private val installmentRepository: InstallmentRepository,
     private val statementImportDao: StatementImportDao,
+    private val statementLineDao: StatementLineDao,
+    private val expenseDao: ExpenseDao,
+    private val pendingCaptureDao: PendingCaptureDao,
     private val householdId: String,
+    private val matcher: StatementMatcher = StatementMatcher(),
 ) {
+
+    /** Decisión final por movimiento al aplicar (misma posición que la lista). */
+    data class LineResolution(
+        val movementIndex: Int,
+        /** `MATCHED` | `NEW` | `IGNORED`. */
+        val status: String,
+        val matchedExpenseId: String? = null,
+        val confidence: Double? = null,
+        /** `LOCAL` | `NIM` | `USER`. */
+        val source: String? = null,
+    )
+
+    /** Resumen del apply para el mensaje de éxito. */
+    data class ApplyOutcome(
+        val msiTouched: Int,
+        val linked: Int,
+        val queuedNew: Int,
+        val ignored: Int,
+        val duplicates: Int,
+    )
 
     sealed interface ExtractResult {
         data class Success(val text: String) : ExtractResult
@@ -57,27 +90,133 @@ class StatementImportManager(
         }
 
     /**
+     * Paso 2.5 (Fase 5): **pre-match** de los movimientos contra los gastos POSTED
+     * del wallet en la ventana del periodo (±7 días). Primero el matching local
+     * determinista; los movimientos que quedaron SIN pareja se mandan a NIM como
+     * segunda opinión, y cada propuesta del modelo se acepta SOLO si pasa la
+     * validación dura local ([StatementMatcher.validate]) — el LLM propone, la
+     * regla dispone. Nunca lanza: cualquier fallo degrada al resultado local.
+     */
+    /** Resultado del pre-match + etiquetas legibles de los gastos involucrados. */
+    data class PrematchOutcome(
+        val matches: List<StatementMatcher.MovementMatch>,
+        /** expenseId → "concepto · fecha · $monto" para la UI de conciliación. */
+        val expenseLabels: Map<String, String>,
+    )
+
+    suspend fun prematch(
+        statement: ParsedStatement,
+        walletId: String,
+        useNim: Boolean = true,
+    ): PrematchOutcome {
+        val movements = statement.movimientos
+        if (movements.isEmpty()) return PrematchOutcome(emptyList(), emptyMap())
+
+        val (fromEpoch, toEpoch) = candidateWindow(statement, movements)
+        val candidates = runCatching {
+            expenseDao.getPostedByWalletBetween(walletId, fromEpoch, toEpoch)
+        }.getOrDefault(emptyList())
+        // Gastos ya vinculados en imports anteriores de este wallet: no reofrecer.
+        val alreadyLinked = runCatching {
+            statementLineDao.getMatchedExpenseIds(walletId).toSet()
+        }.getOrDefault(emptySet())
+
+        val labels = candidates.associate { e ->
+            e.id to buildString {
+                append(e.concept.take(40))
+                append(" · ")
+                append(Instant.ofEpochMilli(e.occurredAt).atZone(ZONE).toLocalDate())
+                append(" · $")
+                append(String.format(java.util.Locale.US, "%,.2f", e.amountMxn))
+            }
+        }
+        val local = matcher.match(movements, candidates, alreadyLinked)
+        if (!useNim) return PrematchOutcome(local, labels)
+
+        // Segunda opinión NIM solo para los movimientos sin pareja local.
+        val unmatchedIdx = local.filter { it.expenseId == null }.map { it.movementIndex }
+        if (unmatchedIdx.isEmpty() || candidates.isEmpty()) return PrematchOutcome(local, labels)
+
+        val usedExpenseIds = local.mapNotNull { it.expenseId }.toMutableSet()
+        val freeCandidates = candidates.filter { it.id !in usedExpenseIds && it.id !in alreadyLinked }
+        if (freeCandidates.isEmpty()) return PrematchOutcome(local, labels)
+
+        val nimItems = when (
+            val r = runCatching {
+                nimClient.prematch(
+                    movements = unmatchedIdx.map { movements[it] },
+                    candidates = freeCandidates.map { it.toCandidate() },
+                )
+            }.getOrElse { NvidiaNimClient.PrematchResult.Failure(it.message ?: "error") }
+        ) {
+            is NvidiaNimClient.PrematchResult.Success -> r.items
+            is NvidiaNimClient.PrematchResult.Failure -> return PrematchOutcome(local, labels)
+        }
+
+        val byId = freeCandidates.associateBy { it.id }
+        val result = local.toMutableList()
+        for (item in nimItems) {
+            // El índice del modelo refiere a la sublista enviada — remapear.
+            val movIdx = unmatchedIdx.getOrNull(item.movimiento) ?: continue
+            val expense = item.expenseId?.let { byId[it] } ?: continue
+            if (expense.id in usedExpenseIds) continue
+            // Validación dura local: si el par no cumple monto/fecha, se descarta.
+            if (!matcher.validate(movements[movIdx], expense)) continue
+            usedExpenseIds += expense.id
+            result[movIdx] = StatementMatcher.MovementMatch(
+                movementIndex = movIdx,
+                expenseId = expense.id,
+                confidence = item.confianza.coerceIn(0.0, 1.0).coerceAtLeast(StatementMatcher.SUGGEST_THRESHOLD),
+                auto = false, // lo del LLM siempre queda como sugerencia, nunca auto
+                source = "NIM",
+            )
+        }
+        return PrematchOutcome(result, labels)
+    }
+
+    /** Ventana de candidatos: periodo del estado (o min/max de fechas) ± 7 días. */
+    private fun candidateWindow(
+        statement: ParsedStatement,
+        movements: List<StatementMovement>,
+    ): Pair<Long, Long> {
+        val dates = movements.mapNotNull { it.fecha?.let { d -> runCatching { LocalDate.parse(d) }.getOrNull() } }
+        val start = statement.periodo?.inicio?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            ?: dates.minOrNull() ?: LocalDate.now(ZONE).minusMonths(2)
+        val end = statement.periodo?.fin?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            ?: dates.maxOrNull() ?: LocalDate.now(ZONE)
+        return start.minusDays(7).atStartOfDay(ZONE).toInstant().toEpochMilli() to
+            end.plusDays(7).atTime(23, 59, 59).atZone(ZONE).toInstant().toEpochMilli()
+    }
+
+    private fun ExpenseEntity.toCandidate() = NvidiaNimClient.CandidateExpense(
+        id = id,
+        fecha = Instant.ofEpochMilli(occurredAt).atZone(ZONE).toLocalDate().toString(),
+        monto = amountMxn,
+        concepto = concept,
+    )
+
+    /**
      * Paso 3: **reconciliación** con los datos (posiblemente editados) del preview.
-     * Solo añade claridad futura; no toca los gastos históricos.
+     * Solo añade claridad futura; no toca los gastos históricos — el vínculo
+     * movimiento↔gasto vive en `statement_line`, JAMÁS se edita `expense`.
      *
      * @param statement datos finales tras la edición del usuario.
      * @param rawJson JSON crudo original del LLM (auditoría).
-     * @param walletId wallet (payment_method) al que se aplica; null = solo audita.
-     * @return conteo de planes MSI creados/actualizados (para el mensaje de éxito).
+     * @param walletId wallet al que se aplica. Desde Fase 5 es OBLIGATORIO
+     *  (la UI bloquea el apply sin wallet): sin él no hay conciliación posible.
+     * @param resolutions decisión final por movimiento (Vinculado/Nuevo/Ignorar).
      */
     suspend fun apply(
         statement: ParsedStatement,
         rawJson: String,
-        walletId: String?,
-    ): Int {
+        walletId: String,
+        resolutions: List<LineResolution> = emptyList(),
+    ): ApplyOutcome {
         var msiTouched = 0
 
         // (a) Reconcilia el wallet elegido — solo campos que existen en la entidad.
-        if (walletId != null) {
-            val wallet = walletRepository.getById(walletId)
-            if (wallet != null) {
-                walletRepository.update(reconcileWallet(wallet, statement))
-            }
+        walletRepository.getById(walletId)?.let { wallet ->
+            walletRepository.update(reconcileWallet(wallet, statement))
         }
 
         // (b) Planes MSI: crea/actualiza uno por cada movimiento MSI detectado.
@@ -91,8 +230,9 @@ class StatementImportManager(
 
         // (c) Auditoría: inserta la fila y márcala aplicada.
         val now = System.currentTimeMillis()
+        val importId = UUID.randomUUID().toString()
         val row = StatementImportEntity(
-            id = UUID.randomUUID().toString(),
+            id = importId,
             householdId = householdId,
             walletId = walletId,
             emisor = statement.emisor,
@@ -110,7 +250,68 @@ class StatementImportManager(
             appliedAt = now,
         )
         statementImportDao.insert(row)
-        return msiTouched
+
+        // (d) Fase 5: persiste cada movimiento como `statement_line` con su
+        // decisión. El índice UNIQUE (wallet, fingerprint) hace el re-import
+        // idempotente: una línea ya conciliada antes NO se duplica ni se
+        // vuelve a encolar como Nueva.
+        var linked = 0
+        var queuedNew = 0
+        var ignored = 0
+        var duplicates = 0
+        val byIndex = resolutions.associateBy { it.movementIndex }
+        statement.movimientos.forEachIndexed { i, mov ->
+            val res = byIndex[i] ?: LineResolution(i, status = "PENDING")
+            val fingerprint = matcher.fingerprint(mov)
+            val inserted = statementLineDao.insertIgnore(
+                StatementLineEntity(
+                    id = UUID.randomUUID().toString(),
+                    householdId = householdId,
+                    walletId = walletId,
+                    importId = importId,
+                    lineFingerprint = fingerprint,
+                    postDate = mov.fecha,
+                    description = mov.concepto.orEmpty().ifBlank { "Movimiento" },
+                    descriptionCanonical = matcher.canonicalize(mov.concepto.orEmpty()),
+                    amountMxn = mov.monto ?: 0.0,
+                    matchStatus = res.status,
+                    matchedExpenseId = res.matchedExpenseId,
+                    matchConfidence = res.confidence,
+                    matchSource = res.source,
+                    createdAt = now,
+                    updatedAt = now,
+                )
+            )
+            if (inserted == -1L) {
+                duplicates++
+                return@forEachIndexed
+            }
+            when (res.status) {
+                "MATCHED" -> linked++
+                "IGNORED" -> ignored++
+                "NEW" -> {
+                    // Propose-then-confirm: el movimiento nuevo va a la bandeja
+                    // de captura (Review); NUNCA se inserta un gasto directo.
+                    pendingCaptureDao.insert(
+                        PendingCaptureEntity(
+                            id = "stmt:$fingerprint",
+                            source = "STATEMENT",
+                            amountMxn = mov.monto ?: 0.0,
+                            concept = mov.concepto.orEmpty().ifBlank { "Movimiento del estado" },
+                            occurredAt = mov.fecha
+                                ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                                ?.atStartOfDay(ZONE)?.toInstant()?.toEpochMilli()
+                                ?: now,
+                            suggestedWalletId = walletId,
+                            status = "PENDING",
+                            createdAt = now,
+                        )
+                    )
+                    queuedNew++
+                }
+            }
+        }
+        return ApplyOutcome(msiTouched, linked, queuedNew, ignored, duplicates)
     }
 
     /**
@@ -200,6 +401,9 @@ class StatementImportManager(
         return runCatching { java.time.LocalDate.parse(iso).dayOfMonth }.getOrNull()
     }
 
-    private fun today(): String =
-        java.time.LocalDate.now(java.time.ZoneId.of("America/Mexico_City")).toString()
+    private fun today(): String = LocalDate.now(ZONE).toString()
+
+    private companion object {
+        val ZONE: ZoneId = ZoneId.of("America/Mexico_City")
+    }
 }

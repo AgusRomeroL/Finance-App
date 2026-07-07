@@ -22,6 +22,7 @@ import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.local.dao.RecurrenceTemplateDao
 import mx.budget.data.local.dao.StatementImportDao
+import mx.budget.data.local.dao.StatementLineDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.dao.WalletTransferDao
 import mx.budget.data.local.entity.AttributionReviewEntity
@@ -39,6 +40,7 @@ import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
 import mx.budget.data.local.entity.SavingsGoalEntity
 import mx.budget.data.local.entity.StatementImportEntity
+import mx.budget.data.local.entity.StatementLineEntity
 import mx.budget.data.local.entity.SyncQueueEntity
 import mx.budget.data.local.entity.WalletTransferEntity
 
@@ -70,9 +72,10 @@ import mx.budget.data.local.entity.WalletTransferEntity
         AttributionReviewEntity::class,
         PendingCaptureEntity::class,
         WalletTransferEntity::class,
-        StatementImportEntity::class
+        StatementImportEntity::class,
+        StatementLineEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -116,6 +119,9 @@ abstract class BudgetDatabase : RoomDatabase() {
 
     // Fase C (paquete C1): auditoría de estados de cuenta importados.
     abstract fun statementImportDao(): StatementImportDao
+
+    // Fase 5: líneas conciliadas de estados de cuenta (pre-match sin duplicar).
+    abstract fun statementLineDao(): StatementLineDao
 
     companion object {
         /**
@@ -387,6 +393,25 @@ abstract class BudgetDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `statement_import` (`id` TEXT NOT NULL, `household_id` TEXT NOT NULL, `wallet_id` TEXT, `emisor` TEXT, `last4` TEXT, `periodo_inicio` TEXT, `periodo_fin` TEXT, `fecha_corte` TEXT, `fecha_limite_pago` TEXT, `saldo_total` REAL, `pago_minimo` REAL, `pago_no_intereses` REAL, `tasa_anual` REAL, `payload_json` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `applied_at` INTEGER, PRIMARY KEY(`id`))")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_import_household_id` ON `statement_import` (`household_id`)")
+            }
+        }
+
+        /**
+         * v15 → v16: **Fase 5 — pre-match de estados de cuenta sin duplicar**.
+         * Crea la tabla LOCAL-ONLY `statement_line` (una fila por movimiento del
+         * estado importado, con su resultado de conciliación contra `expense`) +
+         * índice UNIQUE `(wallet_id, line_fingerprint)` que hace idempotente el
+         * re-import del mismo PDF, índice del FK a expense (SET_NULL) e índice
+         * por import. El CREATE TABLE y los índices se copiaron LITERAL del
+         * `createSql` que KSP genera en `app/schemas/16.json`; cualquier
+         * divergencia rompe el identityHash. El asset se queda en v1.
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `statement_line` (`id` TEXT NOT NULL, `household_id` TEXT NOT NULL, `wallet_id` TEXT NOT NULL, `import_id` TEXT NOT NULL, `line_fingerprint` TEXT NOT NULL, `post_date` TEXT, `description` TEXT NOT NULL, `description_canonical` TEXT, `amount_mxn` REAL NOT NULL, `direction` TEXT NOT NULL DEFAULT 'CHARGE', `match_status` TEXT NOT NULL DEFAULT 'PENDING', `matched_expense_id` TEXT, `match_confidence` REAL, `match_source` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`matched_expense_id`) REFERENCES `expense`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_statement_line_wallet_id_line_fingerprint` ON `statement_line` (`wallet_id`, `line_fingerprint`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_line_matched_expense_id` ON `statement_line` (`matched_expense_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_line_import_id` ON `statement_line` (`import_id`)")
             }
         }
     }

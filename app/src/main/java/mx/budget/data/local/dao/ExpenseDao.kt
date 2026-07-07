@@ -319,6 +319,21 @@ interface ExpenseDao {
     )
     suspend fun getTopExpenses(quincenaId: String, limit: Int): List<TopExpense>
 
+    /**
+     * Candidatos para el pre-match de estados de cuenta (Fase 5): gastos POSTED
+     * del wallet dentro de la ventana del periodo del estado. Añadir un método
+     * @Dao no cambia el esquema.
+     */
+    @Query(
+        """
+        SELECT * FROM expense
+        WHERE payment_method_id = :walletId AND status = 'POSTED'
+          AND occurred_at BETWEEN :fromEpoch AND :toEpoch
+        ORDER BY occurred_at
+        """
+    )
+    suspend fun getPostedByWalletBetween(walletId: String, fromEpoch: Long, toEpoch: Long): List<ExpenseEntity>
+
     @Query(
         """
         SELECT * FROM expense

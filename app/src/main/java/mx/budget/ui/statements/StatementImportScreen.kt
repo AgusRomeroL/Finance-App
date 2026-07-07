@@ -125,7 +125,7 @@ fun StatementImportScreen(
                 is ImportPhase.Extracting -> ProgressContent("Extrayendo texto del archivo…", "Todo local: el archivo no sale de tu teléfono.")
                 is ImportPhase.Analyzing -> ProgressContent("Analizando con IA…", "Solo el texto viaja a la nube para estructurarlo.")
                 is ImportPhase.Preview -> PreviewContent(viewModel)
-                is ImportPhase.Applied -> AppliedContent(current.msiCount, onDone = onBack, onAnother = viewModel::reset)
+                is ImportPhase.Applied -> AppliedContent(current.outcome, onDone = onBack, onAnother = viewModel::reset)
                 is ImportPhase.Error -> ErrorContent(current.message, onRetry = viewModel::reset, onOpenProfile = onOpenProfile)
             }
         }
@@ -198,6 +198,8 @@ private fun PreviewContent(viewModel: StatementImportViewModel) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val wallets by viewModel.wallets.collectAsStateWithLifecycle()
     val selectedWalletId by viewModel.selectedWalletId.collectAsStateWithLifecycle()
+    val decisions by viewModel.decisions.collectAsStateWithLifecycle()
+    val matching by viewModel.matching.collectAsStateWithLifecycle()
 
     Column {
         // Wallet objetivo de la reconciliación
@@ -245,12 +247,33 @@ private fun PreviewContent(viewModel: StatementImportViewModel) {
             SectionLabel("MOVIMIENTOS (${draft.movimientos.size})")
             Spacer(Modifier.height(4.dp))
             Text(
-                "Los movimientos marcados como Meses Sin Intereses crean o actualizan " +
-                    "un plan a meses.",
+                "Cada movimiento se concilia contra tus gastos ya registrados: " +
+                    "Vinculado no duplica nada; Nuevo va a la bandeja de captura " +
+                    "para que lo confirmes; Ignorar lo omite. Los MSI crean o " +
+                    "actualizan un plan a meses.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
+            if (matching) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "Conciliando contra tus gastos…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+            } else if (selectedWalletId == null && draft.movimientos.isNotEmpty()) {
+                Text(
+                    "Elige la cuenta arriba para conciliar los movimientos.",
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(12.dp))
+            }
             if (draft.movimientos.isEmpty()) {
                 Text(
                     "No se detectaron movimientos.",
@@ -261,17 +284,27 @@ private fun PreviewContent(viewModel: StatementImportViewModel) {
                 draft.movimientos.forEachIndexed { i, mov ->
                     MovementRow(
                         mov = mov,
+                        decision = decisions[i],
+                        onDecision = { status -> viewModel.setDecision(i, status) },
                         onChange = { t -> viewModel.updateMovement(i) { t(it) } },
                         onRemove = { viewModel.removeMovement(i) },
                     )
                     Spacer(Modifier.height(10.dp))
                 }
+                TextButton(onClick = viewModel::runPrematch, enabled = selectedWalletId != null && !matching) {
+                    Text("Reconciliar de nuevo")
+                }
             }
         }
 
         Spacer(Modifier.height(20.dp))
-        Button(onClick = viewModel::apply, modifier = Modifier.fillMaxWidth()) {
-            Text("Aplicar")
+        // Fase 5: sin cuenta elegida no hay conciliación posible — se bloquea.
+        Button(
+            onClick = viewModel::apply,
+            enabled = selectedWalletId != null && !matching,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (selectedWalletId == null) "Elige una cuenta para aplicar" else "Aplicar")
         }
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = viewModel::reset, modifier = Modifier.fillMaxWidth()) {
@@ -281,9 +314,12 @@ private fun PreviewContent(viewModel: StatementImportViewModel) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MovementRow(
     mov: StatementMovement,
+    decision: StatementImportViewModel.MovementDecision?,
+    onDecision: (String) -> Unit,
     onChange: ((StatementMovement) -> StatementMovement) -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -313,6 +349,41 @@ private fun MovementRow(
                 Icon(Icons.Filled.Delete, "Quitar", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
             }
         }
+        // Fase 5: decisión de conciliación. "Vinculado" solo si el pre-match
+        // encontró pareja; su etiqueta muestra a qué gasto (fuente y confianza).
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (decision?.expenseId != null) {
+                FilterChip(
+                    selected = decision.status == "MATCHED",
+                    onClick = { onDecision("MATCHED") },
+                    label = { Text("Vinculado") },
+                )
+            }
+            FilterChip(
+                selected = decision?.status == "NEW" || decision == null,
+                onClick = { onDecision("NEW") },
+                label = { Text("Nuevo") },
+            )
+            FilterChip(
+                selected = decision?.status == "IGNORED",
+                onClick = { onDecision("IGNORED") },
+                label = { Text("Ignorar") },
+            )
+        }
+        if (decision?.expenseId != null && decision.status == "MATCHED") {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                buildString {
+                    append("→ ")
+                    append(decision.expenseLabel ?: decision.expenseId)
+                    decision.confidence?.let { append("  (${(it * 100).toInt()} %") }
+                    decision.source?.let { append(" · ${if (it == "NIM") "IA" else if (it == "LOCAL") "local" else "manual"}") }
+                    if (decision.confidence != null) append(")")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
         Field("Concepto", mov.concepto.orEmpty(), { onChange { m -> m.copy(concepto = it.ifBlank { null }) } })
         Field("Monto", mov.monto?.toString().orEmpty(), { onChange { m -> m.copy(monto = it.toDoubleOrNull()) } }, numeric = true)
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -336,7 +407,11 @@ private fun MovementRow(
 }
 
 @Composable
-private fun AppliedContent(msiCount: Int, onDone: () -> Unit, onAnother: () -> Unit) {
+private fun AppliedContent(
+    outcome: mx.budget.data.statements.StatementImportManager.ApplyOutcome,
+    onDone: () -> Unit,
+    onAnother: () -> Unit,
+) {
     Card {
         Text(
             "Estado de cuenta aplicado",
@@ -346,9 +421,13 @@ private fun AppliedContent(msiCount: Int, onDone: () -> Unit, onAnother: () -> U
         Spacer(Modifier.height(8.dp))
         Text(
             buildString {
-                append("Se actualizaron los datos de la cuenta")
-                if (msiCount > 0) append(" y se registraron/actualizaron $msiCount plan(es) a meses")
-                append(". Tus gastos no se modificaron.")
+                append("Se actualizaron los datos de la cuenta.")
+                if (outcome.linked > 0) append("\n· ${outcome.linked} movimiento(s) vinculados a gastos existentes (sin duplicar).")
+                if (outcome.queuedNew > 0) append("\n· ${outcome.queuedNew} movimiento(s) nuevos en la bandeja de captura para confirmar.")
+                if (outcome.ignored > 0) append("\n· ${outcome.ignored} ignorado(s).")
+                if (outcome.duplicates > 0) append("\n· ${outcome.duplicates} ya estaban conciliados de un import anterior (omitidos).")
+                if (outcome.msiTouched > 0) append("\n· ${outcome.msiTouched} plan(es) a meses creados/actualizados.")
+                append("\nTus gastos no se modificaron.")
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

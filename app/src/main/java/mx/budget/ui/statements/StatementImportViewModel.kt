@@ -31,7 +31,7 @@ sealed interface ImportPhase {
     /** Preview editable listo. */
     data object Preview : ImportPhase
     /** Reconciliación aplicada. */
-    data class Applied(val msiCount: Int) : ImportPhase
+    data class Applied(val outcome: StatementImportManager.ApplyOutcome) : ImportPhase
     /** Error legible en cualquier paso. */
     data class Error(val message: String) : ImportPhase
 }
@@ -66,9 +66,30 @@ class StatementImportViewModel(
     private val _draft = MutableStateFlow(ParsedStatement())
     val draft: StateFlow<ParsedStatement> = _draft.asStateFlow()
 
-    /** Wallet elegido para la reconciliación (null = solo auditar). */
+    /** Wallet elegido para la reconciliación. Desde Fase 5 es OBLIGATORIO para aplicar. */
     private val _selectedWalletId = MutableStateFlow<String?>(null)
     val selectedWalletId: StateFlow<String?> = _selectedWalletId.asStateFlow()
+
+    /**
+     * Decisión de conciliación por movimiento (Fase 5): `MATCHED` (vinculado a un
+     * gasto existente — no duplica), `NEW` (va a la bandeja de captura) o
+     * `IGNORED`. La siembra el pre-match (local + NIM validado) y la ajusta el
+     * usuario por movimiento.
+     */
+    data class MovementDecision(
+        val status: String,
+        val expenseId: String? = null,
+        val expenseLabel: String? = null,
+        val confidence: Double? = null,
+        val source: String? = null,
+    )
+
+    private val _decisions = MutableStateFlow<Map<Int, MovementDecision>>(emptyMap())
+    val decisions: StateFlow<Map<Int, MovementDecision>> = _decisions.asStateFlow()
+
+    /** `true` mientras corre el pre-match (spinner en la sección de movimientos). */
+    private val _matching = MutableStateFlow(false)
+    val matching: StateFlow<Boolean> = _matching.asStateFlow()
 
     // JSON crudo original del LLM, para auditoría al aplicar.
     private var rawJson: String = "{}"
@@ -102,6 +123,8 @@ class StatementImportViewModel(
                             // Prefill del wallet por last4 si coincide con alguno.
                             _selectedWalletId.value = matchWalletByLast4(res.statement.last4)
                             _phase.value = ImportPhase.Preview
+                            // Pre-match automático si ya hay wallet resuelto.
+                            runPrematch()
                         }
                     }
                 }
@@ -116,6 +139,48 @@ class StatementImportViewModel(
 
     fun selectWallet(id: String?) {
         _selectedWalletId.value = id
+        _decisions.value = emptyMap()
+        if (id != null) runPrematch()
+    }
+
+    /**
+     * Corre el pre-match (local determinista + segunda opinión NIM validada) y
+     * siembra las decisiones por movimiento. Nunca lanza: sin wallet o con
+     * error, las decisiones quedan en NEW por default.
+     */
+    fun runPrematch() {
+        val walletId = _selectedWalletId.value ?: return
+        viewModelScope.launch {
+            _matching.value = true
+            val outcome = runCatching { manager.prematch(_draft.value, walletId) }.getOrNull()
+            _decisions.value = outcome?.matches?.associate { m ->
+                m.movementIndex to if (m.expenseId != null) {
+                    MovementDecision(
+                        status = "MATCHED",
+                        expenseId = m.expenseId,
+                        expenseLabel = outcome.expenseLabels[m.expenseId],
+                        confidence = m.confidence,
+                        source = m.source,
+                    )
+                } else {
+                    MovementDecision(status = "NEW")
+                }
+            } ?: emptyMap()
+            _matching.value = false
+        }
+    }
+
+    /** Cambia manualmente la decisión de un movimiento (el usuario dispone). */
+    fun setDecision(index: Int, status: String) {
+        _decisions.value = _decisions.value.toMutableMap().apply {
+            val prev = this[index]
+            this[index] = when (status) {
+                // Volver a MATCHED solo tiene sentido si el pre-match encontró pareja.
+                "MATCHED" -> if (prev?.expenseId != null) prev.copy(status = "MATCHED", source = "USER")
+                else prev ?: MovementDecision("NEW")
+                else -> (prev ?: MovementDecision(status)).copy(status = status, source = prev?.source ?: "USER")
+            }
+        }
     }
 
     // ── Ediciones del preview (campos de cabecera) ──────────────────────────────
@@ -143,23 +208,46 @@ class StatementImportViewModel(
         it.copy(movimientos = list)
     }
 
-    fun removeMovement(index: Int) = update {
-        val list = it.movimientos.toMutableList()
-        if (index in list.indices) list.removeAt(index)
-        it.copy(movimientos = list)
+    fun removeMovement(index: Int) {
+        update {
+            val list = it.movimientos.toMutableList()
+            if (index in list.indices) list.removeAt(index)
+            it.copy(movimientos = list)
+        }
+        // Reindexa las decisiones (las posteriores al removido corren una posición).
+        _decisions.value = _decisions.value.entries
+            .filter { (i, _) -> i != index }
+            .associate { (i, d) -> (if (i > index) i - 1 else i) to d }
     }
 
     private inline fun update(transform: (ParsedStatement) -> ParsedStatement) {
         _draft.value = transform(_draft.value)
     }
 
-    /** Aplica la reconciliación con el draft editado. */
+    /** Aplica la reconciliación con el draft editado. Exige wallet (Fase 5). */
     fun apply() {
+        val walletId = _selectedWalletId.value
+        if (walletId == null) {
+            _phase.value = ImportPhase.Error(
+                "Elige la cuenta a la que pertenece el estado antes de aplicar."
+            )
+            return
+        }
         viewModelScope.launch {
+            val resolutions = _draft.value.movimientos.indices.map { i ->
+                val d = _decisions.value[i] ?: MovementDecision("NEW")
+                StatementImportManager.LineResolution(
+                    movementIndex = i,
+                    status = d.status,
+                    matchedExpenseId = d.expenseId.takeIf { d.status == "MATCHED" },
+                    confidence = d.confidence,
+                    source = d.source,
+                )
+            }
             runCatching {
-                manager.apply(_draft.value, rawJson, _selectedWalletId.value)
-            }.onSuccess { count ->
-                _phase.value = ImportPhase.Applied(count)
+                manager.apply(_draft.value, rawJson, walletId, resolutions)
+            }.onSuccess { outcome ->
+                _phase.value = ImportPhase.Applied(outcome)
             }.onFailure { e ->
                 _phase.value = ImportPhase.Error("No se pudo aplicar: ${e.message ?: "error"}")
             }
@@ -171,6 +259,8 @@ class StatementImportViewModel(
         _phase.value = ImportPhase.Idle
         _draft.value = ParsedStatement()
         _selectedWalletId.value = null
+        _decisions.value = emptyMap()
+        _matching.value = false
         rawJson = "{}"
     }
 }
