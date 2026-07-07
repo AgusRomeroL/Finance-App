@@ -336,9 +336,11 @@ class BudgetApplication : Application() {
             db = database
         )
 
-        // Fase C (paquete C1): importar estados de cuenta con LLM cloud. Extractor
-        // local (PDFBox/ML Kit) + cliente NVIDIA NIM (la key se lee del DataStore
-        // en cada llamada, nunca hardcodeada) + reconciliación contra wallet/MSI.
+        // Fase C (paquete C1 + reescritura): importar estados de cuenta con LLM
+        // cloud. Extractor local (PDFBox/ML Kit) + cliente NVIDIA NIM (la key se
+        // lee del DataStore en cada llamada, nunca hardcodeada) + reconciliación
+        // contra wallet/MSI + reescritura confirmada de movimientos (gastos
+        // itemizados por los repos públicos y pago agregado → transferencia RF-41).
         statementImportManager = mx.budget.data.statements.StatementImportManager(
             extractor = mx.budget.data.statements.StatementTextExtractor(this),
             nimClient = mx.budget.data.statements.NvidiaNimClient(
@@ -347,6 +349,14 @@ class BudgetApplication : Application() {
             walletRepository = walletRepository,
             installmentRepository = installmentRepository,
             statementImportDao = database.statementImportDao(),
+            expenseRepository = expenseRepository,
+            transferRepository = transferRepository,
+            expenseDao = expenseDao,
+            categoryDao = database.categoryDao(),
+            memberDao = database.memberDao(),
+            quincenaDao = database.quincenaDao(),
+            attributionReviewDao = database.attributionReviewDao(),
+            db = database,
             householdId = householdId,
         )
 

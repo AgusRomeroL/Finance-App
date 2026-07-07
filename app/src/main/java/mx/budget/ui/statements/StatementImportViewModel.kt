@@ -13,13 +13,15 @@ import kotlinx.coroutines.launch
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.repository.WalletRepository
 import mx.budget.data.settings.SettingsRepository
+import mx.budget.data.statements.AggregateCandidate
 import mx.budget.data.statements.ParsedStatement
+import mx.budget.data.statements.PlannedPurchase
 import mx.budget.data.statements.StatementImportManager
 import mx.budget.data.statements.StatementMovement
 import mx.budget.data.statements.StatementPeriod
 
 /**
- * Fase del flujo de importación de estado de cuenta (paquete C1).
+ * Fase del flujo de importación de estado de cuenta (paquete C1 + reescritura).
  */
 sealed interface ImportPhase {
     /** Aún no se eligió archivo (o sin API key configurada). */
@@ -30,17 +32,31 @@ sealed interface ImportPhase {
     data object Analyzing : ImportPhase
     /** Preview editable listo. */
     data object Preview : ImportPhase
-    /** Reconciliación aplicada. */
-    data class Applied(val msiCount: Int) : ImportPhase
+    /** Construyendo el plan de reescritura (detección de agregados + categorías). */
+    data object BuildingRewrite : ImportPhase
+    /** Paso "Reescribir movimientos": confirmación item por item. */
+    data object RewriteReview : ImportPhase
+    /** Reconciliación (y reescritura, si la hubo) aplicada. */
+    data class Applied(
+        val msiCount: Int,
+        val insertedCount: Int = 0,
+        val insertedTotalMxn: Double = 0.0,
+        val convertedCount: Int = 0,
+    ) : ImportPhase
     /** Error legible en cualquier paso. */
     data class Error(val message: String) : ImportPhase
 }
 
+/** Item seleccionable del paso de reescritura (checkbox + payload). */
+data class RewriteItem<T>(val item: T, val selected: Boolean)
+
 /**
- * ViewModel de la pantalla "Importar estado de cuenta" (Fase C, paquete C1).
+ * ViewModel de la pantalla "Importar estado de cuenta" (Fase C, paquete C1 +
+ * extensión "Reescribir movimientos").
  *
  * Orquesta el flujo elegir-archivo → extraer (local) → analizar (cloud) → preview
- * editable → aplicar. Mantiene el estado editable del [ParsedStatement] en un
+ * editable → (si hay wallet elegido) paso de reescritura con confirmación item
+ * por item → aplicar. Mantiene el estado editable del [ParsedStatement] en un
  * [StateFlow] para que la UI lo edite campo a campo antes de aplicar.
  */
 class StatementImportViewModel(
@@ -69,6 +85,24 @@ class StatementImportViewModel(
     /** Wallet elegido para la reconciliación (null = solo auditar). */
     private val _selectedWalletId = MutableStateFlow<String?>(null)
     val selectedWalletId: StateFlow<String?> = _selectedWalletId.asStateFlow()
+
+    // ── Estado del paso "Reescribir movimientos" ────────────────────────────────
+
+    /** Compras del estado, con checkbox (MSI default deseleccionado). */
+    private val _rewritePurchases = MutableStateFlow<List<RewriteItem<PlannedPurchase>>>(emptyList())
+    val rewritePurchases: StateFlow<List<RewriteItem<PlannedPurchase>>> = _rewritePurchases.asStateFlow()
+
+    /** Pagos agregados detectados, con checkbox (default seleccionados). */
+    private val _rewriteAggregates = MutableStateFlow<List<RewriteItem<AggregateCandidate>>>(emptyList())
+    val rewriteAggregates: StateFlow<List<RewriteItem<AggregateCandidate>>> = _rewriteAggregates.asStateFlow()
+
+    /** Nombre del pagador default de las compras (Norma) para el copy del resumen. */
+    private val _rewritePayerName = MutableStateFlow<String?>(null)
+    val rewritePayerName: StateFlow<String?> = _rewritePayerName.asStateFlow()
+
+    /** Cuántos miembros reciben el reparto equitativo (copy del resumen). */
+    private val _rewriteBeneficiaryCount = MutableStateFlow(0)
+    val rewriteBeneficiaryCount: StateFlow<Int> = _rewriteBeneficiaryCount.asStateFlow()
 
     // JSON crudo original del LLM, para auditoría al aplicar.
     private var rawJson: String = "{}"
@@ -153,13 +187,96 @@ class StatementImportViewModel(
         _draft.value = transform(_draft.value)
     }
 
-    /** Aplica la reconciliación con el draft editado. */
-    fun apply() {
+    // ── Continuación desde el preview ───────────────────────────────────────────
+
+    /**
+     * CTA del preview. Sin wallet elegido → aplica solo la reconciliación (ruta
+     * C1 clásica). Con wallet → construye el plan de reescritura y pasa al paso
+     * "Reescribir movimientos" para confirmar item por item.
+     */
+    fun continueFromPreview() {
+        val walletId = _selectedWalletId.value
+        if (walletId == null) {
+            applyReconcileOnly()
+            return
+        }
+        viewModelScope.launch {
+            _phase.value = ImportPhase.BuildingRewrite
+            runCatching {
+                manager.buildRewritePlan(_draft.value, walletId)
+            }.onSuccess { plan ->
+                _rewritePurchases.value = plan.purchases.map {
+                    // MSI default deseleccionado: ya se registra como plan a meses.
+                    RewriteItem(it, selected = !it.esMsi)
+                }
+                _rewriteAggregates.value = plan.aggregates.map { RewriteItem(it, selected = true) }
+                _rewritePayerName.value = plan.payerName
+                _rewriteBeneficiaryCount.value = plan.beneficiaryCount
+                _phase.value = ImportPhase.RewriteReview
+            }.onFailure { e ->
+                _phase.value = ImportPhase.Error(
+                    "No se pudo preparar la reescritura: ${e.message ?: "error"}"
+                )
+            }
+        }
+    }
+
+    /** Aplica SOLO la reconciliación C1 (sin tocar gastos). */
+    private fun applyReconcileOnly() {
         viewModelScope.launch {
             runCatching {
                 manager.apply(_draft.value, rawJson, _selectedWalletId.value)
             }.onSuccess { count ->
-                _phase.value = ImportPhase.Applied(count)
+                _phase.value = ImportPhase.Applied(msiCount = count)
+            }.onFailure { e ->
+                _phase.value = ImportPhase.Error("No se pudo aplicar: ${e.message ?: "error"}")
+            }
+        }
+    }
+
+    // ── Paso "Reescribir movimientos" ───────────────────────────────────────────
+
+    fun togglePurchase(index: Int) {
+        _rewritePurchases.value = _rewritePurchases.value.mapIndexed { i, item ->
+            if (i == index) item.copy(selected = !item.selected) else item
+        }
+    }
+
+    fun toggleAggregate(index: Int) {
+        _rewriteAggregates.value = _rewriteAggregates.value.mapIndexed { i, item ->
+            if (i == index) item.copy(selected = !item.selected) else item
+        }
+    }
+
+    /** Regresa del paso de reescritura al preview (conserva las ediciones). */
+    fun backToPreview() {
+        _phase.value = ImportPhase.Preview
+    }
+
+    /**
+     * Aplica reconciliación + reescritura con lo confirmado. Si el usuario
+     * deseleccionó todo, equivale a la reconciliación C1 clásica.
+     */
+    fun applyRewrite() {
+        val walletId = _selectedWalletId.value ?: return
+        viewModelScope.launch {
+            runCatching {
+                manager.applyWithRewrite(
+                    statement = _draft.value,
+                    rawJson = rawJson,
+                    walletId = walletId,
+                    purchases = _rewritePurchases.value.filter { it.selected }.map { it.item },
+                    aggregateExpenseIds = _rewriteAggregates.value
+                        .filter { it.selected }
+                        .map { it.item.expenseId },
+                )
+            }.onSuccess { result ->
+                _phase.value = ImportPhase.Applied(
+                    msiCount = result.msiTouched,
+                    insertedCount = result.insertedExpenses,
+                    insertedTotalMxn = result.insertedTotalMxn,
+                    convertedCount = result.convertedTransfers,
+                )
             }.onFailure { e ->
                 _phase.value = ImportPhase.Error("No se pudo aplicar: ${e.message ?: "error"}")
             }
@@ -171,6 +288,10 @@ class StatementImportViewModel(
         _phase.value = ImportPhase.Idle
         _draft.value = ParsedStatement()
         _selectedWalletId.value = null
+        _rewritePurchases.value = emptyList()
+        _rewriteAggregates.value = emptyList()
+        _rewritePayerName.value = null
+        _rewriteBeneficiaryCount.value = 0
         rawJson = "{}"
     }
 }

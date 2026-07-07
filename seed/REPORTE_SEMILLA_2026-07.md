@@ -129,3 +129,95 @@ Quincenas **nuevas** que no existían en la semilla vieja:
 ## 6. Nota final
 
 El correo de Norma **`normly@hotmail.com`** queda documentado aquí para su futuro inicio de sesión en la app; **no forma parte de la base de datos** sembrada.
+
+---
+
+## 7. Ronda 2 — correcciones de Agustín (2026-07-07)
+
+Agustín revisó la tabla de clasificación de la Ronda 1 (su versión corregida quedó en `seed/TABLA_RECLASIFICACION_2026-07.md`) y pidió una capa de **canonicalización/homogeneización de conceptos** más una serie de correcciones. Todo lo de esta sección ya está aplicado en el ETL (`scripts/etl/excel_to_room_etl.py`), en las reglas (`scripts/etl/attribution_rules.json`) y en la semilla golden. La tabla final regenerada desde la BD vive en `seed/TABLA_CLASIFICACION_2026-07.md`.
+
+**Conteos finales:** 37 quincenas · **917 gastos** (896 líneas del Excel + 21 hijos de split de teléfonos) · 4,442 atribuciones · 53 ingresos · total global **$2,103,111.13** (idéntico al Excel — los splits preservan el total exacto) · 56 conceptos únicos, sin variantes de mayúsculas duplicadas.
+
+### 7.1 Capa de canonicalización de conceptos
+
+Nueva capa declarativa en el ETL (`CANONICAL_CONCEPT_RULES` + `canonicalize_concept`): renombra el concepto **antes** de insertar y, cuando el canónico difiere del crudo, guarda en `notes` la traza `Concepto original Excel: <crudo>` (además de la hoja de origen, que ya se guardaba; separador `·`). Los mapeos condicionados por nombre de hijo se resuelven **por categoría resuelta o sección**, no solo por texto (el mismo token "DAVID"/"PAU"/"SANTIAGO" cae en categorías distintas según la sección del Excel).
+
+| Crudos del Excel | Concepto canónico | Condición | Nota extra |
+|---|---|---|---|
+| `Berna`, `Bernardo` | **Bernardo** | — | — |
+| `Didi`, `Didi Card`, `Didi tarjeta` | **DiDi** | — | — |
+| `David` (14×), `David Abril/Febrero/Marzo/Mayo`, `David Febrero y 3000 Marzo`, `Inscripcion David` | **Escuela David** | categoría = ESCUELA.DAVID | — |
+| `Santiago`, `Santiago+mes`, `Santi Junio/Mayo`, `Santiago inscripción`, `Inscripcion Santi`, `Libro Santi` | **Escuela Santiago** | categoría = ESCUELA.SANTIAGO | — |
+| `Pau` (mesada 17×), `inscripción Pau` | **Escuela Pau** | categoría = ESCUELA.PAU | — |
+| `Pau` ($800 en OTHERS), `Pau Raul` ($500) | **Pau** | categoría = TRANSFERENCIAS_FAMILIARES.PAU | Pau Raul: "gasto de Pau; Raúl es su novio" |
+| `Hawainano` (typo) | **Hawaiano** | — | — |
+| `Diversion` (sin tilde, 8×) | **Diversión** | — | — |
+| `Cochecito` (17×) y `Gasolina chochecito` (19×) | **Gasolina Cochecito** | sección TRANSPORTATION | — |
+| `Cochecito` ($8,000 en OTHERS) | **Cochecito (servicio)** | sección OTHER | — |
+| `Prestamo Omar 3…10`, `Prestamo 1 Omar`, `Prestamo 2 (Omar)` | **Préstamo Omar** | — | "pago N de la serie" |
+| `Mercado Libre 1 de 12` / `7 de 12` | **Mercado Libre MSI** | — | "pago N de 12" |
+| `Buro de credito 1 de 3` / `2 de 3` | **Buró de Crédito** | — | "pago N de 3" |
+| `David` ($249 en HOUSING) | **Teléfono David** | categoría = OTHER.TELEFONO | — |
+| `Telefono David/Norma/Santi/Benji/Pau` | **Teléfono David/Norma/Santi/Benji/Pau** (con tilde) | — | — |
+
+**Veredicto Cochecito: DISJUNTOS, se unificaron.** Se comprobó hoja por hoja en el Excel: `Cochecito` aparece SOLO en las quincenas 1–15 y `Gasolina chochecito` SOLO en las 16–fin de mes; **nunca coinciden en la misma hoja** — es el mismo cargo de gasolina (~$1,400–1,600/quincena) con nombre inconsistente. Ambos quedan como **"Gasolina Cochecito"** (36×, $54,600, TRANSPORTATION.GASOLINA, beneficia Pau/Agustín/David). El `Cochecito` de $8,000 en OTHERS (jun-2026) queda aparte como **"Cochecito (servicio)"** en TRANSPORTATION.MAINTENANCE.
+
+**No se creó `installment_plan`** para Mercado Libre MSI ni Buró de Crédito (montos inconsistentes entre pagos); queda anotado como mejora futura — el "N de M" se preserva en la nota de cada gasto.
+
+### 7.2 Split de teléfonos por persona
+
+Objetivo de Agustín: "por persona un mismo cargo con mismo concepto cada mes", aunque no sea fiel a la línea compartida del Excel. Nuevo mecanismo `SPLIT_RULES` en el ETL: una línea del Excel emite N gastos hijos con id determinista (`did(expense:<quincena>:<sección>:<crudo>:<member_key>)`), montos repartidos equitativamente en centavos con el residuo al último (el total exacto se preserva), beneficiario 100% el miembro respectivo y nota `Parte de línea compartida del Excel: <crudo> ($total)`.
+
+| Línea del Excel | Hijos emitidos |
+|---|---|
+| `Telefono Pau y David` (15×) | **Teléfono Pau** (Pau 100%) + **Teléfono David** (David 100%), 50/50 |
+| `Telefono Movistar` (2×) | **Teléfono Norma** + **Teléfono Pau** + **Teléfono David** + **Teléfono Santi**, 25% c/u |
+
+Además se corrigió la regla vieja `tel_pau_david`, que hacía que el único `Telefono Pau` suelto ($218) beneficiara a David 50%: ahora hay regla `tel_pau` (exacta) con Pau 100%.
+
+Resultado por persona (todos OTHER.TELEFONO): Teléfono Pau 18× $3,995 · Teléfono David 20× $4,525 (incluye el `David` de $249 en HOUSING) · Teléfono Norma 18× $8,227 · Teléfono Santi 18× $3,731 · Teléfono Benji 8× $6,080. Conteo total: 896 + 15 + 6 = **917 gastos**; el total MXN global no cambia.
+
+### 7.3 Regla de pagador desde oct-2025 (regla de negocio confirmada)
+
+**Benjamín no percibe sueldo desde oct-2025** (la celda E4 del Excel está vacía desde entonces). Regla implementada en `_derive_payer_shares`:
+
+- Gastos con fecha **>= 2025-10-01**: PAYER = **Norma 100%**, con la única excepción de **Spotify → Benjamín 100%** (suscripción personal que él sigue pagando).
+- Gastos anteriores: derivación **fiel** de las columnas Norma/Benjamín del Excel (comportamiento de siempre).
+
+Dato observado: las 8 apariciones de Spotify son todas pre-oct-2025 y el Excel ya las pagaba Benjamín, así que la excepción no dispara en la semilla actual — queda implementada para cuando el ETL se recorra con datos futuros. **Desviación consciente respecto a la tabla de Agustín:** su columna "Pagado por" mostraba Norma 100% en algunos conceptos (Escuela Pau, Benji, mesadas Norma/Santi) cuyas quincenas pre-oct-2025 tienen pagos reales de Benjamín en el Excel; se respetó la regla acordada (fiel antes del corte), por eso la tabla final muestra p. ej. "Escuela Pau — Norma 69%, Benjamín 31%".
+
+### 7.4 Beneficiarios según la tabla corregida
+
+Cambiados a **los 6 miembros en partes iguales** (1666 bps c/u, residuo al último): Banamex Clasica, Buró de Crédito, Coppel, DiDi, Klar, Liverpool, Mercado Libre MSI, Mercado Pago, Walmart, **Hipoteca** (antes solo adultos), **Spotify** (antes solo Benjamín), Kigo, Google Nest, Caja Chica.
+
+Otros cambios: **Bernardo → Benjamín 100%** · **Marco y omar → Norma 100%** · **Changan → Norma 100%** · **Contador → Benjamín 50 / Norma 50**. **Sears se queda Norma 100%** (decisión explícita de Agustín — NO pasa a todos). El resto quedó como estaba.
+
+### 7.5 Categorías nuevas
+
+Creadas en el ETL con ids deterministas `did("category:<CODE>")`:
+
+| Código | Nombre | Parent | Kind | Gastos |
+|---|---|---|---|---:|
+| `LOANS.KLAR` | Klar | LOANS | EXPENSE_INSTALLMENT | 2 ($5,050, wallet Klar) |
+| `SERVICIOS_EXTERNOS.BERNARDO` | Bernardo | SERVICIOS_EXTERNOS | EXPENSE_VARIABLE | 2 ($8,100) |
+| `SERVICIOS_EXTERNOS.CONTADOR` | Contador | SERVICIOS_EXTERNOS | EXPENSE_VARIABLE | 1 ($2,000) |
+| `SAVINGS.CAJA_CHICA` | Caja Chica | SAVINGS | SAVINGS | 1 ($1,000) |
+
+Caja Chica va en SAVINGS (no en OTHER) — confirmado por Agustín: es un ahorro para todos.
+
+### 7.6 Validación y promoción a golden
+
+Validado sobre el asset final (`app/src/main/assets/budget_database.db`, tras `verify_db.py`): 917 gastos · total $2,103,111.13 exacto · bps = 10000 por (gasto, rol) en los 917×2 · todo gasto con ambos roles · `PRAGMA foreign_key_check` limpio · `user_version = 1` · 1 sola quincena ACTIVE (2026-07-FIRST) · 0 POSTED futuros · PAYER Norma 100% en todo gasto >= 2025-10-01 · conceptos canónicos presentes y **cero restos de los crudos renombrados** · categorías nuevas pobladas · `household_id = default_household`. Asset promovido a `seed/budget_database.golden.db` (+ `.sha256` regenerado) y `scripts/check_seed_integrity.sh` en verde.
+
+**Cosmético pendiente (no pedido, no aplicado):** algunos conceptos conservan la capitalización cruda del Excel (`caja chica`, `KIGO`, `Google nest`, `mercado pago`, `Suscripcion nivel 6`). Cada uno tiene UNA sola variante en todo el Excel, así que no hay duplicados — solo estética. Si se quiere, son cinco entradas más en `CANONICAL_CONCEPT_RULES`.
+
+## 8. Notas sueltas del Excel — análisis por patrones y proximidad (2026-07-07)
+
+Escaneé los bloques inferiores (filas 60–140) de las 37 hojas. La mayoría es **plantilla arrastrada**: al duplicar la hoja de la quincena anterior, Norma arrastra notas viejas sin borrarlas (p. ej. "Banamex 5015.59 / Mercado Pago 4837" idéntico en mayo→oct 2025; "Omar 3500 / Mensualidad prestamo 4260.08" idéntico de may-2025 a mar-2026). Lo genuinamente informativo:
+
+1. **Fondo único de $59,000 (Q1 feb-2025, filas 69–75).** Una tabla real de gasto con saldo decreciente: Mueble $19,900 → Pau $10,000 → Liverpool $7,663.50 → Despensa $2,078 → Sears $2,696 → Reparación coche $6,900 → **saldo final $9,762.50**. Por la fecha (primera quincena de febrero) parece **aguinaldo/bono gastado fuera del presupuesto**. NO se importó a la BD: "Mueble" y "Reparación coche" serían gastos reales nuevos (~$26,800), pero Liverpool/Sears/Despensa/Pau podrían duplicar líneas ya presupuestadas. **Decisión de Agustín pendiente**: ¿importar Mueble y Reparación coche como gastos one-off de feb-2025?
+2. **"Mensualidad prestamo $4,260.08 / Omar $3,500 / Total $760.08 (Mercado pago)".** Patrón estable desde may-2025: hay una **mensualidad de préstamo Mercado Pago de $4,260.08 de la que Omar aporta $3,500** y el hogar solo absorbe $760.08 netos. Esto explica la serie "Préstamo Omar" (los $5,500×10 son otro préstamo distinto, ya clasificado). Documental; la app ya registra los pagos brutos.
+3. **Cuentas por cobrar ("Deben").** dic-2025/ene-2026: "Deben $1,900"; oct-2025: "Deben $3,600 · Medicina + rotafolio". Alguien le debe a Norma por compras adelantadas. La app tiene préstamos por cobrar (Cuentas) si se quiere capturar.
+4. **Saldos/pagos de corte de tarjetas por quincena** (BANAMEX $1,057→$1,783→$20,808; BBVA $800→$630.28; Coppel $2,000): tracking manual de estados de cuenta — exactamente lo que reemplaza la nueva función de reescritura por estado de cuenta.
+5. **Viáticos del trabajo de Norma (Q1 oct-2025, cols E–J):** "Airbnb capacitadores (Inbursa)", "viáticos Néstor", "Coahuila", "accidente/reposición" — gastos **reembolsables del trabajo**, no del hogar. Correctamente fuera de la BD.
+6. **Ahorro efectivo**: "Q2 nov: $18,000" (hoja ene-2025) y "Ahorro $1,700 · 30-ene-2026" — apartados en efectivo puntuales, no capturados (el goal "Ahorro Empresa" solo suma los $1,000 de E9).

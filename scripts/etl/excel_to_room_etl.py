@@ -277,6 +277,7 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("LOANS.OMAR",               "Préstamo Omar",    "LOANS",          "EXPENSE_INSTALLMENT", None),
     CategorySeed("LOANS.DIDI",               "Didi Card",        "LOANS",          "EXPENSE_INSTALLMENT", None),
     CategorySeed("LOANS.BURO",               "Buró de crédito",  "LOANS",          "EXPENSE_INSTALLMENT", None),
+    CategorySeed("LOANS.KLAR",               "Klar",             "LOANS",          "EXPENSE_INSTALLMENT", None),
 
     CategorySeed("SEGUROS_MEDICOS.BENJI",    "Seguro Benji",     "SEGUROS_MEDICOS","EXPENSE_FIXED",     None),
     CategorySeed("SEGUROS_MEDICOS.NORMA",    "Seguro Norma",     "SEGUROS_MEDICOS","EXPENSE_FIXED",     None),
@@ -300,9 +301,14 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("SAVINGS.RETIREMENT",       "Retiro",           "SAVINGS",        "SAVINGS",           None),
     CategorySeed("SAVINGS.INVESTMENT",       "Inversión",        "SAVINGS",        "SAVINGS",           None),
     CategorySeed("SAVINGS.EFECTIVO",         "Ahorro efectivo",  "SAVINGS",        "SAVINGS",           None),
+    # Caja Chica es un ahorro para todos (confirmado por Agustín 2026-07-07),
+    # no un gasto "Otros" — vive bajo SAVINGS.
+    CategorySeed("SAVINGS.CAJA_CHICA",       "Caja Chica",       "SAVINGS",        "SAVINGS",           None),
 
     CategorySeed("SERVICIOS_EXTERNOS.ARACELI","Araceli",         "SERVICIOS_EXTERNOS", "EXPENSE_FIXED",  None),
     CategorySeed("SERVICIOS_EXTERNOS.PSICOLOGA","Psicóloga",     "SERVICIOS_EXTERNOS", "EXPENSE_FIXED",  None),
+    CategorySeed("SERVICIOS_EXTERNOS.BERNARDO","Bernardo",       "SERVICIOS_EXTERNOS", "EXPENSE_VARIABLE", None),
+    CategorySeed("SERVICIOS_EXTERNOS.CONTADOR","Contador",       "SERVICIOS_EXTERNOS", "EXPENSE_VARIABLE", None),
 
     CategorySeed("OTHER.TELEFONO",           "Teléfono celular", "OTHER",          "EXPENSE_FIXED",     None),
     CategorySeed("OTHER.SALUD",              "Salud (psicóloga)","OTHER",          "EXPENSE_FIXED",     900.0),
@@ -1033,19 +1039,24 @@ _ATTRIBUTION_RULES: list[AttributionRule] = []
 
 # ── 6.1 Resolvers con soporte de reglas ──────────────────────────────────────
 
-def resolve_category(line: BudgetLine) -> str:
+def resolve_category_code(line: BudgetLine) -> str:
     """
-    Devuelve el ``id`` de la categoria. Prioridad:
+    Devuelve el ``code`` de la categoria resuelta. Prioridad:
       1. Regla explicita de attribution_rules.json
       2. Matching heuristico contra hojas hijas
       3. Fallback: raiz de la seccion
+
+    Se expone el CODE (no el id) porque la capa de canonicalizacion de
+    conceptos condiciona sus mapeos por la categoria RESUELTA (el mismo
+    token "DAVID"/"PAU"/"SANTIAGO" cae en categorias distintas segun la
+    seccion del Excel).
     """
     # 1. Regla explicita
     rule = match_rule(line, _ATTRIBUTION_RULES)
     if rule and rule.override_category:
         code = rule.override_category
         if code in CATEGORIES_BY_CODE:
-            return CATEGORIES_BY_CODE[code].id
+            return code
         # Si la regla referencia una categoria que no existe, log y fallback
         LOG.warning("Regla '%s' referencia categoria inexistente '%s'", rule.rule_id, code)
 
@@ -1057,10 +1068,15 @@ def resolve_category(line: BudgetLine) -> str:
         leaf = cat.code.rsplit(".", 1)[-1]
         leaf_display = _normalize(cat.display_name)
         if leaf in concept_norm or leaf_display in concept_norm:
-            return cat.id
+            return cat.code
 
     # 3. Fallback: raiz de la seccion.
-    return CATEGORIES_BY_CODE[line.section_code].id
+    return line.section_code
+
+
+def resolve_category(line: BudgetLine) -> str:
+    """Devuelve el ``id`` de la categoria resuelta (wrapper de conveniencia)."""
+    return CATEGORIES_BY_CODE[resolve_category_code(line)].id
 
 
 def resolve_payment_method(line: BudgetLine) -> str:
@@ -1152,6 +1168,186 @@ def split_basis_points(count: int) -> list[int]:
     shares = [base] * count
     shares[-1] += 10_000 - (base * count)
     return shares
+
+
+# ── 6.2 Canonicalizacion de conceptos ────────────────────────────────────────
+#
+# El Excel nombra el MISMO cargo de formas distintas entre hojas ("Didi",
+# "Didi Card", "Didi tarjeta"; "Cochecito"/"Gasolina chochecito"; "David
+# Abril"/"Inscripcion David"; "Prestamo Omar 3..10"). Esta capa renombra el
+# concepto a una forma canonica ANTES de insertar, preservando el texto crudo
+# del Excel en `notes` ("Concepto original Excel: <crudo>") para trazabilidad.
+#
+# IMPORTANTE: los mapeos que dependen de nombres de hijos se condicionan por
+# la categoria RESUELTA (o la seccion), no solo por el texto: el token
+# "DAVID" es colegiatura en TRANSFERENCIAS, telefono en HOUSING, etc.
+# Las reglas se evaluan en orden: la primera que matchea gana.
+
+PAYER_RULE_CUTOVER = date(2025, 10, 1)  # ver _derive_payer_shares
+
+
+@dataclass(frozen=True)
+class CanonicalConceptRule:
+    """Renombra un concepto crudo del Excel a su forma canonica."""
+    pattern: str                          # regex FULLMATCH sobre concepto normalizado
+    canonical: str                        # concepto canonico a persistir
+    category_filter: Optional[str] = None # code de la categoria RESUELTA
+    section_filter: Optional[str] = None  # seccion raiz del Excel
+    note: Optional[str] = None            # nota extra; admite {n} de grupos del regex
+
+
+CANONICAL_CONCEPT_RULES: tuple[CanonicalConceptRule, ...] = (
+    # Personas / servicios externos.
+    CanonicalConceptRule(r"BERNA(RDO)?", "Bernardo"),
+
+    # DiDi: la tarjeta de credito DiDi aparece como "Didi", "Didi Card" y
+    # "Didi tarjeta" — es el mismo cargo.
+    CanonicalConceptRule(r"DIDI( CARD| TARJETA)?", "DiDi"),
+
+    # Escuela: colegiaturas/inscripciones/libros con mes o beneficiario
+    # embebido en el concepto. Se condiciona por categoria resuelta para no
+    # tocar los "DAVID"/"PAU"/"SANTIAGO" de otras secciones.
+    CanonicalConceptRule(r".*", "Escuela David",    category_filter="ESCUELA.DAVID"),
+    CanonicalConceptRule(r".*", "Escuela Santiago", category_filter="ESCUELA.SANTIAGO"),
+    CanonicalConceptRule(r".*", "Escuela Pau",      category_filter="ESCUELA.PAU"),
+
+    # Transferencias a Pau que NO son colegiatura (el "Pau" de $800 en OTHER
+    # y "Pau Raul" — Raul es el novio de Pau, el gasto es de ella).
+    CanonicalConceptRule(r"PAU RAUL", "Pau",
+                         note="gasto de Pau; Raúl es su novio"),
+    CanonicalConceptRule(r"PAU", "Pau",
+                         category_filter="TRANSFERENCIAS_FAMILIARES.PAU"),
+
+    # Typos y tildes.
+    CanonicalConceptRule(r"HAWAI?[NI]?ANO", "Hawaiano"),   # HAWAIANO / HAWAINANO
+    CanonicalConceptRule(r"DIVERSION", "Diversión"),
+
+    # Cochecito: "COCHECITO" (quincenas 1-15) y "GASOLINA CHOCHECITO"
+    # (quincenas 16-fin) son el MISMO cargo de gasolina con nombre
+    # inconsistente — verificado DISJUNTOS por quincena en el Excel
+    # (2026-07-07: nunca coinciden en la misma hoja). Se unifican.
+    CanonicalConceptRule(r"(GASOLINA CHOCHECITO|COCHECITO)", "Gasolina Cochecito",
+                         section_filter="TRANSPORTATION"),
+    # El COCHECITO de $8,000 en OTHERS es un servicio/reparacion, no gasolina.
+    CanonicalConceptRule(r"COCHECITO", "Cochecito (servicio)",
+                         section_filter="OTHER"),
+
+    # Prestamo Omar: serie de pagos numerados en el concepto.
+    CanonicalConceptRule(r"PRESTAMO OMAR (?P<n>\d+)", "Préstamo Omar",
+                         note="pago {n} de la serie"),
+    CanonicalConceptRule(r"PRESTAMO (?P<n>\d+) \(?OMAR\)?", "Préstamo Omar",
+                         note="pago {n} de la serie"),
+
+    # MSI / series con "N de M" embebido. NO se crea installment_plan
+    # (montos inconsistentes entre pagos); queda anotado como mejora futura.
+    CanonicalConceptRule(r"MERCADO LIBRE (?P<n>\d+) DE 12", "Mercado Libre MSI",
+                         note="pago {n} de 12"),
+    CanonicalConceptRule(r"BURO DE CREDITO (?P<n>\d+) DE 3", "Buró de Crédito",
+                         note="pago {n} de 3"),
+
+    # Telefonos por persona (tildes + el "David" de $249 suelto en HOUSING,
+    # que la regla housing_david_solo ya manda a OTHER.TELEFONO).
+    CanonicalConceptRule(r"DAVID", "Teléfono David", category_filter="OTHER.TELEFONO"),
+    CanonicalConceptRule(r"TELEFONO DAVID", "Teléfono David"),
+    CanonicalConceptRule(r"TELEFONO NORMA", "Teléfono Norma"),
+    CanonicalConceptRule(r"TELEFONO SANTI", "Teléfono Santi"),
+    CanonicalConceptRule(r"TELEFONO BENJI", "Teléfono Benji"),
+    CanonicalConceptRule(r"TELEFONO PAU", "Teléfono Pau"),
+
+    # Pulido cosmético: capitalización/tildes consistentes para conceptos que
+    # el Excel trae en minúsculas/MAYÚSCULAS crudas (una sola variante cada
+    # uno; no cambia clasificación, solo presentación).
+    CanonicalConceptRule(r"CAJA CHICA", "Caja Chica"),
+    CanonicalConceptRule(r"KIGO", "Kigo"),
+    CanonicalConceptRule(r"GOOGLE NEST", "Google Nest"),
+    CanonicalConceptRule(r"MERCADO PAGO", "Mercado Pago"),
+    CanonicalConceptRule(r"SUSCRIPCION NIVEL 6", "Suscripción Nivel 6"),
+    CanonicalConceptRule(r"MARCO Y OMAR", "Marco y Omar"),
+    CanonicalConceptRule(r"PSICOLOGA", "Psicóloga"),
+    CanonicalConceptRule(r"BANAMEX CLASICA", "Banamex Clásica"),
+    CanonicalConceptRule(r"YOUTUBE", "YouTube"),
+)
+
+
+def canonicalize_concept(
+    concept_raw: str,
+    section_code: str,
+    category_code: str,
+) -> tuple[str, Optional[str]]:
+    """
+    Devuelve ``(concepto_canonico, nota_extra)``. Si ninguna regla matchea,
+    el concepto queda tal cual vino del Excel y la nota es ``None``.
+    """
+    concept_norm = _normalize(concept_raw)
+    for rule in CANONICAL_CONCEPT_RULES:
+        if rule.section_filter is not None and rule.section_filter != section_code:
+            continue
+        if rule.category_filter is not None and rule.category_filter != category_code:
+            continue
+        m = re.fullmatch(rule.pattern, concept_norm)
+        if not m:
+            continue
+        note = None
+        if rule.note:
+            groups = {k: v for k, v in m.groupdict().items() if v}
+            note = rule.note.format(**groups) if groups else rule.note
+        return rule.canonical, note
+    return concept_raw.strip(), None
+
+
+# ── 6.3 Split de lineas compartidas (una linea del Excel → N gastos) ─────────
+#
+# Objetivo (Agustín, 2026-07-07): "por persona un mismo cargo con mismo
+# concepto cada mes". Las lineas de telefono que agrupan a varias personas
+# ("Telefono Pau y David", "Telefono Movistar") se parten en N gastos hijos,
+# uno por persona, con montos repartidos equitativamente (residuo de
+# centavos al ultimo — el total exacto se preserva) y beneficiario 100% el
+# miembro respectivo. Los ids son deterministas (id del padre + member_key).
+
+@dataclass(frozen=True)
+class SplitRule:
+    """Parte una linea del Excel en N gastos hijos, uno por miembro."""
+    pattern: str                              # regex FULLMATCH sobre concepto normalizado
+    section_filter: Optional[str]
+    children: tuple[tuple[str, str], ...]     # (member_key, concepto canonico hijo)
+
+
+SPLIT_RULES: tuple[SplitRule, ...] = (
+    SplitRule(r"TELEFONO PAU Y DAVID", "HOUSING", (
+        ("pau",   "Teléfono Pau"),
+        ("david", "Teléfono David"),
+    )),
+    SplitRule(r"TELEFONO MOVISTAR", "HOUSING", (
+        ("norma",    "Teléfono Norma"),
+        ("pau",      "Teléfono Pau"),
+        ("david",    "Teléfono David"),
+        ("santiago", "Teléfono Santi"),
+    )),
+)
+
+
+def match_split_rule(line: BudgetLine) -> Optional[SplitRule]:
+    concept_norm = _normalize(line.concept)
+    for rule in SPLIT_RULES:
+        if rule.section_filter is not None and rule.section_filter != line.section_code:
+            continue
+        if re.fullmatch(rule.pattern, concept_norm):
+            return rule
+    return None
+
+
+def split_amount_mxn(total: float, count: int) -> list[float]:
+    """
+    Reparte ``total`` en ``count`` montos iguales trabajando en centavos;
+    el residuo va al ultimo para que la suma sea EXACTAMENTE el total.
+    """
+    if count <= 0:
+        raise ValueError("count debe ser > 0")
+    total_cents = round(total * 100)
+    base = total_cents // count
+    cents = [base] * count
+    cents[-1] += total_cents - base * count
+    return [c / 100.0 for c in cents]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1508,13 +1704,6 @@ class EtlPipeline:
         line: BudgetLine,
         occurred_at: int,
     ) -> None:
-        expense_id = did(
-            f"expense:{period.quincena_id}:{line.section_code}:"
-            f"{_normalize(line.concept)}"
-        )
-        category_id = resolve_category(line)
-        wallet_id = resolve_payment_method(line)
-
         # POSTED solo si el gasto ya "ocurrió" respecto a la fecha de
         # generación; lo futuro (quincenas PROVISIONED y la mitad restante de
         # la ACTIVE) nace PLANNED, que es como la app modela pagos pendientes
@@ -1524,6 +1713,34 @@ class EtlPipeline:
             occurred_at / 1000, tz=timezone.utc
         ).date()
         status = "POSTED" if occurred_date <= TODAY else "PLANNED"
+
+        category_code = resolve_category_code(line)
+        category_id = CATEGORIES_BY_CODE[category_code].id
+        wallet_id = resolve_payment_method(line)
+
+        # ¿La linea se parte en N gastos hijos (uno por persona)?
+        split = match_split_rule(line)
+        if split is not None:
+            self._insert_split_children(
+                cur, period, line, occurred_at, occurred_date, status,
+                category_id, wallet_id, split,
+            )
+            return
+
+        expense_id = did(
+            f"expense:{period.quincena_id}:{line.section_code}:"
+            f"{_normalize(line.concept)}"
+        )
+
+        # Canonicalizacion: renombra el concepto y preserva el crudo en notes.
+        concept, extra_note = canonicalize_concept(
+            line.concept, line.section_code, category_code,
+        )
+        notes = f"Importado desde hoja '{line.sheet_name}'"
+        if concept != line.concept.strip():
+            notes += f" · Concepto original Excel: {line.concept.strip()}"
+        if extra_note:
+            notes += f" · {extra_note}"
 
         cur.execute(
             """INSERT INTO expense
@@ -1541,11 +1758,11 @@ class EtlPipeline:
                 occurred_at,
                 period.quincena_id,
                 category_id,
-                line.concept[:64],
+                concept[:64],
                 line.projected,
                 wallet_id,
                 status,
-                f"Importado desde hoja '{line.sheet_name}'",
+                notes,
                 NOW_EPOCH_MS,
             ),
         )
@@ -1565,28 +1782,127 @@ class EtlPipeline:
             )
             self.stats.attributions_written += 1
 
-        # Atribuciones PAYER: se deduce de las columnas Norma/Benjamin.
-        payer_shares = self._derive_payer_shares(line)
-        for member_id, share, amount in payer_shares:
+        # Atribuciones PAYER.
+        self._insert_payer_attributions(
+            cur, expense_id, line, line.projected, occurred_date, concept,
+        )
+
+    def _insert_split_children(
+        self,
+        cur: sqlite3.Cursor,
+        period: SheetPeriod,
+        line: BudgetLine,
+        occurred_at: int,
+        occurred_date: date,
+        status: str,
+        category_id: str,
+        wallet_id: str,
+        split: SplitRule,
+    ) -> None:
+        """
+        Emite N gastos hijos a partir de una linea compartida del Excel.
+        Cada hijo: id determinista (padre + member_key), monto equitativo
+        (residuo de centavos al ultimo — el total exacto se preserva),
+        beneficiario 100% el miembro respectivo, y nota de trazabilidad.
+        """
+        amounts = split_amount_mxn(line.projected, len(split.children))
+        for (member_key, child_concept), amount in zip(split.children, amounts):
+            member_id = MEMBERS_BY_KEY[member_key].id
+            child_id = did(
+                f"expense:{period.quincena_id}:{line.section_code}:"
+                f"{_normalize(line.concept)}:{member_key}"
+            )
+            notes = (
+                f"Importado desde hoja '{line.sheet_name}' · Parte de línea "
+                f"compartida del Excel: {line.concept.strip()} "
+                f"(${line.projected:,.2f})"
+            )
+            cur.execute(
+                """INSERT INTO expense
+                       (id, household_id, occurred_at, quincena_id, category_id,
+                        concept, amount_mxn, payment_method_id,
+                        recurrence_template_id, installment_plan_id,
+                        installment_number, installment_principal_mxn,
+                        installment_interest_mxn, status, notes, created_at,
+                        created_by_member_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL,
+                           ?, ?, ?, NULL)""",
+                (
+                    child_id,
+                    HOUSEHOLD_ID,
+                    occurred_at,
+                    period.quincena_id,
+                    category_id,
+                    child_concept[:64],
+                    amount,
+                    wallet_id,
+                    status,
+                    notes,
+                    NOW_EPOCH_MS,
+                ),
+            )
+            self.stats.expenses_written += 1
+
+            # BENEFICIARY: 100% el miembro del hijo.
+            attr_id = did(f"attr:{child_id}:BEN:{member_id}")
+            cur.execute(
+                """INSERT INTO expense_attribution
+                       (id, expense_id, member_id, role, share_bps, share_amount_mxn)
+                   VALUES (?, ?, ?, 'BENEFICIARY', 10000, ?)""",
+                (attr_id, child_id, member_id, amount),
+            )
+            self.stats.attributions_written += 1
+
+            # PAYER: misma regla que el padre, prorrateada al monto del hijo.
+            self._insert_payer_attributions(
+                cur, child_id, line, amount, occurred_date, child_concept,
+            )
+
+    def _insert_payer_attributions(
+        self,
+        cur: sqlite3.Cursor,
+        expense_id: str,
+        line: BudgetLine,
+        amount: float,
+        expense_date: date,
+        concept: str,
+    ) -> None:
+        payer_shares = self._derive_payer_shares(line, amount, expense_date, concept)
+        for member_id, share, share_amount in payer_shares:
             attr_id = did(f"attr:{expense_id}:PAY:{member_id}")
             cur.execute(
                 """INSERT INTO expense_attribution
                        (id, expense_id, member_id, role, share_bps, share_amount_mxn)
                    VALUES (?, ?, ?, 'PAYER', ?, ?)""",
-                (attr_id, expense_id, member_id, share, amount),
+                (attr_id, expense_id, member_id, share, share_amount),
             )
             self.stats.attributions_written += 1
 
     def _derive_payer_shares(
-        self, line: BudgetLine
+        self,
+        line: BudgetLine,
+        amount: float,
+        expense_date: date,
+        concept: str,
     ) -> list[tuple[str, int, float]]:
         """
-        Calcula el reparto PAYER a partir de las columnas Norma/Benjamin.
-        Retorna lista de ``(member_id, share_bps, share_amount_mxn)``.
-        Si ambas columnas están vacías, Norma asume el 100%.
+        Calcula el reparto PAYER. Retorna lista de
+        ``(member_id, share_bps, share_amount_mxn)``.
+
+        REGLA DE NEGOCIO (confirmada por Agustín 2026-07-07): Benjamín no
+        percibe sueldo desde oct-2025 (la celda E4 del Excel está vacía desde
+        entonces), así que todo gasto con fecha >= 2025-10-01 lo paga Norma
+        al 100%, con la ÚNICA excepción de Spotify, que Benjamín sigue
+        pagando de su bolsillo. Antes de esa fecha el reparto se deriva fiel
+        de las columnas Norma/Benjamín del Excel.
         """
         norma_id = MEMBERS_BY_KEY["norma"].id
         benja_id = MEMBERS_BY_KEY["benjamin"].id
+
+        if expense_date >= PAYER_RULE_CUTOVER:
+            if "SPOTIFY" in _normalize(concept):
+                return [(benja_id, 10_000, amount)]
+            return [(norma_id, 10_000, amount)]
 
         # Los montos del Excel ocasionalmente llegan en negativo cuando el
         # autor anotó un "ajuste" o devolución (p.ej. Benjamin = -200). Para
@@ -1599,7 +1915,7 @@ class EtlPipeline:
 
         if total <= 0:
             # Asume Norma al 100% — es la pagadora principal del hogar.
-            return [(norma_id, 10_000, line.projected)]
+            return [(norma_id, 10_000, amount)]
 
         # Normaliza por el total declarado (no por `projected`): las columnas
         # del Excel a veces suman un poco más o un poco menos que el Projected
@@ -1613,10 +1929,10 @@ class EtlPipeline:
         result: list[tuple[str, int, float]] = []
         if n_bps > 0:
             result.append((norma_id, n_bps,
-                           round(line.projected * n_bps / 10_000, 2)))
+                           round(amount * n_bps / 10_000, 2)))
         if b_bps > 0:
             result.append((benja_id, b_bps,
-                           round(line.projected * b_bps / 10_000, 2)))
+                           round(amount * b_bps / 10_000, 2)))
         return result
 
     # ── paso 4: cierre ──────────────────────────────────────────────────────
