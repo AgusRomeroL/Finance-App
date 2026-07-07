@@ -730,6 +730,7 @@ class AiAssistantViewModelFactory(
             resolverProvider = resolverProvider,
             analyticsRepository = app.analyticsRepository,
             expenseRepository = app.expenseRepository,
+            incomeRepository = app.incomeRepository,
             walletRepository = app.walletRepository,
             installmentRepository = app.installmentRepository,
             quincenaRepository = app.quincenaRepository,

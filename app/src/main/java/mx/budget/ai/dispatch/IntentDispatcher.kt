@@ -12,6 +12,7 @@ import mx.budget.ai.domain.DispatchResult
 import mx.budget.data.local.result.QuincenaSnapshot
 import mx.budget.data.repository.AnalyticsRepository
 import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.InstallmentRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
@@ -32,6 +33,7 @@ class IntentDispatcher(
     private val resolverProvider: suspend () -> AliasResolver,
     private val analyticsRepository: AnalyticsRepository,
     private val expenseRepository: ExpenseRepository,
+    private val incomeRepository: IncomeRepository,
     private val walletRepository: WalletRepository,
     private val installmentRepository: InstallmentRepository,
     private val quincenaRepository: QuincenaRepository,
@@ -192,12 +194,16 @@ class IntentDispatcher(
                 if (history.isEmpty()) {
                     DispatchResult.QuincenaComparison("Aún no hay quincenas cerradas para comparar.", n)
                 } else {
+                    // Gasto de la quincena ACTIVA en vivo desde el ledger (las columnas
+                    // agregadas de quincena no se mantienen; llegarían en 0). El baseline
+                    // usa los snapshots cerrados, que sí traen su total consolidado.
+                    val currentExpenses = expenseRepository.observePostedTotal(quincena.id).first()
                     val avg = history.map { it.actualExpensesMxn }.average()
-                    val delta = quincena.actualExpensesMxn - avg
+                    val delta = currentExpenses - avg
                     val dir = if (delta >= 0) "por ENCIMA" else "por DEBAJO"
                     DispatchResult.QuincenaComparison(
                         "Gasto actual %.2f vs promedio %.2f de las últimas ${history.size} cerradas: %.2f $dir del baseline."
-                            .format(quincena.actualExpensesMxn, avg, kotlin.math.abs(delta)),
+                            .format(currentExpenses, avg, kotlin.math.abs(delta)),
                         n,
                     )
                 }
@@ -236,6 +242,12 @@ class IntentDispatcher(
             }
 
             AssistantResponse.Intent.SUMMARIZE_QUINCENA -> {
+                // Los "ejecutados" se leen EN VIVO del ledger (igual que el dashboard),
+                // no de las columnas agregadas de la quincena — que no se mantienen y
+                // llegaban en 0, haciendo que el resumen reportara "$0 gastado" con el
+                // KPI mostrando el gasto real.
+                val actualExpenses = expenseRepository.observePostedTotal(quincena.id).first()
+                val actualIncome = incomeRepository.observePostedTotal(quincena.id).first()
                 DispatchResult.QuincenaSummary(
                     QuincenaSnapshot(
                         quincenaId = quincena.id,
@@ -244,9 +256,9 @@ class IntentDispatcher(
                         endDate = quincena.endDate,
                         projectedIncomeMxn = quincena.projectedIncomeMxn,
                         projectedExpensesMxn = quincena.projectedExpensesMxn,
-                        actualIncomeMxn = quincena.actualIncomeMxn,
-                        actualExpensesMxn = quincena.actualExpensesMxn,
-                        savingsMxn = quincena.actualIncomeMxn - quincena.actualExpensesMxn,
+                        actualIncomeMxn = actualIncome,
+                        actualExpensesMxn = actualExpenses,
+                        savingsMxn = actualIncome - actualExpenses,
                     )
                 )
             }

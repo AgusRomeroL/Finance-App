@@ -190,9 +190,9 @@ private fun memberColors(count: Int): List<Color> {
 // Modelo de navegación
 // ─────────────────────────────────────────────────────────────────────────────
 
-private data class NavItem(val route: String, val icon: ImageVector, val label: String)
+internal data class NavItem(val route: String, val icon: ImageVector, val label: String)
 
-private val navItems = listOf(
+internal val navItems = listOf(
     NavItem("dashboard", Icons.Filled.Dashboard, "Inicio"),
     NavItem("calendar", Icons.Filled.CalendarMonth, "Calendario"),
     NavItem("wallets", Icons.Filled.AccountBalanceWallet, "Cuentas"),
@@ -412,24 +412,25 @@ private fun ExpandedDashboard(
     onDismissCapture: (String) -> Unit,
     reimbursementUi: ReimbursementUi
 ) {
-    Row(
+    // El rail de 5 pestañas lo aporta ahora el MainShell (barra persistente). El
+    // statusBarsPadding se aplica aquí (el shell ya no lo pone sobre todo el Row, para no
+    // duplicarlo en las otras pantallas que traen el suyo). Aquí queda el contenido del
+    // Inicio + su BottomActionBar.
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
             .statusBarsPadding()
     ) {
-        NavigationRailCustom(currentRoute = currentRoute, onNavigate = onNavigate)
-
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (state) {
-                is DashboardUiState.Loading -> LoadingContent()
-                is DashboardUiState.Error -> ErrorContent(state.message)
-                is DashboardUiState.Success -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(start = 30.dp, top = 22.dp, end = 32.dp, bottom = 24.dp)
-                    ) {
+        when (state) {
+            is DashboardUiState.Loading -> LoadingContent()
+            is DashboardUiState.Error -> ErrorContent(state.message)
+            is DashboardUiState.Success -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = 30.dp, top = 22.dp, end = 32.dp, bottom = 24.dp)
+                ) {
                         DashboardHeader(
                             quincena = state.quincena,
                             expanded = true,
@@ -487,7 +488,6 @@ private fun ExpandedDashboard(
                 }
             }
         }
-    }
 }
 
 /**
@@ -572,19 +572,20 @@ private fun CompactDashboard(
     onDismissCapture: (String) -> Unit,
     reimbursementUi: ReimbursementUi
 ) {
+    // La bottom nav de 5 pestañas la aporta ahora el MainShell (barra persistente).
+    // Aquí solo queda el BottomActionBar (búsqueda + "+") local del Inicio; el shell la
+    // coloca por encima de su propia bottom nav. Sin navigationBarsPadding: el shell ya
+    // reserva la barra de sistema bajo su bottom nav (evita doble padding / hueco).
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         bottomBar = {
-            Column {
-                BottomActionBar(
-                    query = "",
-                    onQueryChange = {},
-                    onPlus = onCapture,
-                    readOnly = true,
-                    onActivate = onOpenSearch
-                )
-                BottomNavCustom(currentRoute = currentRoute, onNavigate = onNavigate)
-            }
+            BottomActionBar(
+                query = "",
+                onQueryChange = {},
+                onPlus = onCapture,
+                readOnly = true,
+                onActivate = onOpenSearch
+            )
         }
     ) { inner ->
         Box(modifier = Modifier.fillMaxSize().padding(inner)) {
@@ -675,7 +676,7 @@ private fun CompactDashboard(
  * `contentDescription`. Glifo de marca arriba, avatar de perfil abajo.
  */
 @Composable
-private fun NavigationRailCustom(
+internal fun NavigationRailCustom(
     currentRoute: String,
     onNavigate: ((String) -> Unit)?
 ) {
@@ -733,7 +734,7 @@ private fun NavigationRailCustom(
 }
 
 @Composable
-private fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
+internal fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .clickable(onClick = onClick)
@@ -770,7 +771,7 @@ private fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun BottomNavCustom(currentRoute: String, onNavigate: ((String) -> Unit)?) {
+internal fun BottomNavCustom(currentRoute: String, onNavigate: ((String) -> Unit)?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
