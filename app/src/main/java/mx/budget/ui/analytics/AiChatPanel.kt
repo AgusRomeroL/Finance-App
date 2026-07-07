@@ -89,7 +89,12 @@ fun AiChatSheet(
     // Cada apertura del sheet reintenta el sondeo si aún no está disponible —
     // cubre el caso de un `Unavailable` previo que ya podría haberse resuelto
     // (p. ej. el modelo se empujó por adb después de arrancar la app).
-    LaunchedEffect(Unit) { viewModel.ensureLlmReadinessChecked() }
+    LaunchedEffect(Unit) {
+        viewModel.ensureLlmReadinessChecked()
+        // Los pills reflejan el estado real del presupuesto: se regeneran en
+        // cada apertura (sobregasto/deuda pueden haber cambiado desde la última).
+        viewModel.refreshSuggestions()
+    }
 
     // Auto-scroll al último mensaje.
     LaunchedEffect(history.size) {
@@ -166,31 +171,52 @@ fun AiChatSheet(
 
             // Atajos — pills completos (mismo lenguaje visual que los filtros
             // del dashboard), en una sola fila horizontal desplazable.
+            // DINÁMICOS (Fase 3): los genera SuggestedQuestionEngine desde el
+            // estado real (sobregasto, deuda, cercanía al límite) con rotación;
+            // si el engine no entrega nada, caen los chips estáticos históricos.
             val thinking = uiState is AiAssistantUiState.Thinking
+            val suggested by viewModel.suggestedQuestions.collectAsState()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                ShortcutPill(
-                    label = "¿Algún patrón inusual?",
-                    enabled = !thinking,
-                    onClick = {
-                        viewModel.sendOpenAnalysis("¿Qué patrón no sobresale a simple vista en mis gastos?")
-                    },
-                )
-                predefinedChips.forEach { (label, intent) ->
+                if (suggested.isNotEmpty()) {
+                    suggested.forEach { q ->
+                        ShortcutPill(
+                            label = q.label,
+                            enabled = !thinking,
+                            onClick = {
+                                val response = q.response
+                                val open = q.openQuestion
+                                when {
+                                    response != null -> viewModel.sendPredefined(q.label, response)
+                                    open != null -> viewModel.sendOpenAnalysis(open)
+                                }
+                            },
+                        )
+                    }
+                } else {
                     ShortcutPill(
-                        label = label,
+                        label = "¿Algún patrón inusual?",
                         enabled = !thinking,
                         onClick = {
-                            viewModel.sendPredefined(
-                                label,
-                                AssistantResponse(intent = intent, args = AssistantResponse.Args(), reason = ""),
-                            )
+                            viewModel.sendOpenAnalysis("¿Qué patrón no sobresale a simple vista en mis gastos?")
                         },
                     )
+                    predefinedChips.forEach { (label, intent) ->
+                        ShortcutPill(
+                            label = label,
+                            enabled = !thinking,
+                            onClick = {
+                                viewModel.sendPredefined(
+                                    label,
+                                    AssistantResponse(intent = intent, args = AssistantResponse.Args(), reason = ""),
+                                )
+                            },
+                        )
+                    }
                 }
             }
 

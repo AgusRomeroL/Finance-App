@@ -40,6 +40,7 @@ class SettingsRepository(private val context: Context) {
     private val locationCaptureLevelKey = stringPreferencesKey("location_capture_level")
     private val activeHouseholdIdKey = stringPreferencesKey("active_household_id")
     private val nvidiaApiKeyKey = stringPreferencesKey("nvidia_api_key")
+    private val suggestedChipHistoryKey = stringPreferencesKey("suggested_chip_history_json")
     private val hasSeenTutorialKey = booleanPreferencesKey("has_seen_tutorial")
 
     /** Flujo del toggle de color dinámico. Default `true` (Material You). */
@@ -230,6 +231,18 @@ class SettingsRepository(private val context: Context) {
     private fun decodeLongMap(raw: String?): Map<String, Long> {
         if (raw.isNullOrBlank()) return emptyMap()
         return runCatching { Json.decodeFromString<Map<String, Long>>(raw) }.getOrDefault(emptyMap())
+    }
+
+    /**
+     * Historial de pills sugeridos del chat de Analíticas: `chipId → epoch millis
+     * de la última vez mostrado`. Alimenta la rotación por frescura del
+     * [mx.budget.ai.suggest.SuggestedQuestionEngine] (pool estable rota <24 h).
+     */
+    suspend fun getSuggestedChipHistory(): Map<String, Long> =
+        decodeState(context.dataStore.data.first()[suggestedChipHistoryKey])
+
+    suspend fun setSuggestedChipHistory(history: Map<String, Long>) {
+        context.dataStore.edit { prefs -> prefs[suggestedChipHistoryKey] = encodeState(history) }
     }
 
     private fun decodeState(raw: String?): Map<String, Long> {

@@ -759,6 +759,12 @@ class AiAssistantViewModelFactory(
             dispatcher = dispatcher,
             openAnalysisAnswerer = openAnalysis,
             defaultHouseholdId = app.householdId,
+            suggestedQuestionEngine = mx.budget.ai.suggest.SuggestedQuestionEngine(
+                analyticsRepository = app.analyticsRepository,
+                quincenaRepository = app.quincenaRepository,
+                settingsRepository = app.settingsRepository,
+                llm = app.onDeviceLlm,
+            ),
         ) as T
     }
 }

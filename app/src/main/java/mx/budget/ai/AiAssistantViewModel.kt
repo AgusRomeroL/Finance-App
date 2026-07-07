@@ -17,6 +17,8 @@ import mx.budget.ai.rag.OpenAnalysisAnswerer
 import mx.budget.ai.rag.QuestionClassifier
 import mx.budget.ai.service.LlmReadiness
 import mx.budget.ai.service.OnDeviceLlm
+import mx.budget.ai.suggest.SuggestedQuestion
+import mx.budget.ai.suggest.SuggestedQuestionEngine
 
 /**
  * ViewModel del asistente reactivo (MVP Fase 4 + ruta OPEN_ANALYSIS). Orquesta
@@ -40,7 +42,8 @@ class AiAssistantViewModel(
     private val ledgerRagUseCase: LedgerRagUseCase,
     private val dispatcher: IntentDispatcher,
     private val openAnalysisAnswerer: OpenAnalysisAnswerer,
-    private val defaultHouseholdId: String
+    private val defaultHouseholdId: String,
+    private val suggestedQuestionEngine: SuggestedQuestionEngine? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AiAssistantUiState>(AiAssistantUiState.Idle)
@@ -59,11 +62,30 @@ class AiAssistantViewModel(
     private val _llmAvailable = MutableStateFlow(false)
     val llmAvailable: StateFlow<Boolean> = _llmAvailable.asStateFlow()
 
+    /**
+     * Pills sugeridos DINÁMICOS (Fase 3): generados desde el estado real del
+     * presupuesto por [SuggestedQuestionEngine]. Lista vacía → la UI cae a los
+     * chips estáticos históricos.
+     */
+    private val _suggestedQuestions = MutableStateFlow<List<SuggestedQuestion>>(emptyList())
+    val suggestedQuestions: StateFlow<List<SuggestedQuestion>> = _suggestedQuestions.asStateFlow()
+
     private var llmPollJob: Job? = null
 
     init {
         ensureLlmReadinessChecked()
         seedWelcome()
+        refreshSuggestions()
+    }
+
+    /** Regenera los pills (al abrir el sheet y tras cada respuesta). */
+    fun refreshSuggestions() {
+        val engine = suggestedQuestionEngine ?: return
+        viewModelScope.launch {
+            runCatching { engine.suggest(defaultHouseholdId) }
+                .onSuccess { _suggestedQuestions.value = it }
+            // onFailure: se conserva la lista previa (o vacía → chips estáticos).
+        }
     }
 
     /**
