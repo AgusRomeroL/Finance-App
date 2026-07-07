@@ -1,5 +1,12 @@
 package mx.budget.ui.navigation
 
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -127,10 +135,57 @@ fun BudgetNavGraph(
         }
     }
 
+    // Rutas de nivel superior: llevan barra persistente (rail/bottom nav) provista por
+    // MainShell y comparten la transición fade-through (M3) entre sí.
+    val topLevelRoutes = remember {
+        setOf(
+            BudgetDestinations.DASHBOARD,
+            BudgetDestinations.CALENDAR,
+            BudgetDestinations.WALLETS,
+            BudgetDestinations.ANALYTICS,
+            BudgetDestinations.PROFILE,
+        )
+    }
+    val isTopLevel = currentRoute in topLevelRoutes
+    val isExpanded = windowWidthDp >= 600
+
+    // Fade-through (M3) para destinos top-level no relacionados: el saliente se desvanece
+    // rápido (90ms) y el entrante aparece con un leve scaleIn (0.92→1) tras 90ms. La barra
+    // del shell NO se anima (está por fuera del NavHost); solo cruza el contenido.
+    val fadeThroughEnter: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.EnterTransition = {
+        fadeIn(animationSpec = tween(210, delayMillis = 90)) +
+            scaleIn(initialScale = 0.92f, animationSpec = tween(210, delayMillis = 90))
+    }
+    val fadeThroughExit: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.ExitTransition = {
+        fadeOut(animationSpec = tween(90))
+    }
+    // Slide horizontal para drill-down (rutas secundarias): entran empujando desde la
+    // derecha — se sienten como un "push" apropiado para navegación jerárquica.
+    val slideEnter: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.EnterTransition = {
+        slideInHorizontally(animationSpec = tween(280)) { it } + fadeIn(tween(280))
+    }
+    val slideExit: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.ExitTransition = {
+        slideOutHorizontally(animationSpec = tween(280)) { it / 4 } + fadeOut(tween(200))
+    }
+
+    // Shell persistente POR FUERA del NavHost: la barra de 5 pestañas vive aquí y no se
+    // recrea al cambiar de pestaña; solo el NavHost (content) hace el cross-fade. En rutas
+    // secundarias showBar=false → el shell queda transparente (contenido a pantalla completa).
+    MainShell(
+        currentRoute = currentRoute,
+        isExpanded = isExpanded,
+        showBar = isTopLevel,
+        onNavigate = onNavigate,
+    ) {
     NavHost(
         navController = navController,
         startDestination = if (startOnboarding && onboardingViewModel != null)
-            BudgetDestinations.ONBOARDING else BudgetDestinations.DASHBOARD
+            BudgetDestinations.ONBOARDING else BudgetDestinations.DASHBOARD,
+        // Default = fade-through (top-level). Las secundarias sobreescriben con slide.
+        enterTransition = fadeThroughEnter,
+        exitTransition = fadeThroughExit,
+        popEnterTransition = fadeThroughEnter,
+        popExitTransition = fadeThroughExit,
     ) {
         composable(route = BudgetDestinations.ONBOARDING) {
             if (onboardingViewModel != null) {
@@ -160,7 +215,11 @@ fun BudgetNavGraph(
             )
         }
 
-        composable(route = BudgetDestinations.SEARCH) {
+        composable(
+            route = BudgetDestinations.SEARCH,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             SearchResultsScreen(
                 searchViewModel = searchViewModel,
                 dashboardViewModel = dashboardViewModel,
@@ -169,7 +228,11 @@ fun BudgetNavGraph(
             )
         }
 
-        composable(route = BudgetDestinations.SUGGESTIONS) {
+        composable(
+            route = BudgetDestinations.SUGGESTIONS,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             AllSuggestionsScreen(
                 dashboardViewModel = dashboardViewModel,
                 captureViewModel = captureViewModel,
@@ -177,7 +240,11 @@ fun BudgetNavGraph(
             )
         }
 
-        composable(route = BudgetDestinations.ATTRIBUTION_REVIEW) {
+        composable(
+            route = BudgetDestinations.ATTRIBUTION_REVIEW,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             AttributionReviewScreen(
                 viewModel = attributionReviewViewModel,
                 onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
@@ -193,14 +260,22 @@ fun BudgetNavGraph(
             )
         }
 
-        composable(route = BudgetDestinations.TEMPLATES) {
+        composable(
+            route = BudgetDestinations.TEMPLATES,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             TemplatesScreen(
                 viewModel = recurrenceViewModel,
                 onBack = { onNavigate(BudgetDestinations.CALENDAR) }
             )
         }
 
-        composable(route = BudgetDestinations.LEDGER) {
+        composable(
+            route = BudgetDestinations.LEDGER,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             if (ledgerViewModel != null) {
                 LedgerScreen(
                     viewModel = ledgerViewModel,
@@ -276,7 +351,11 @@ fun BudgetNavGraph(
             )
         }
 
-        composable(route = BudgetDestinations.STATEMENTS) {
+        composable(
+            route = BudgetDestinations.STATEMENTS,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             if (statementImportViewModel != null) {
                 mx.budget.ui.statements.StatementImportScreen(
                     viewModel = statementImportViewModel,
@@ -288,7 +367,11 @@ fun BudgetNavGraph(
             }
         }
 
-        composable(route = BudgetDestinations.MASTERS_MEMBERS) {
+        composable(
+            route = BudgetDestinations.MASTERS_MEMBERS,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             if (membersMasterViewModel != null) {
                 mx.budget.ui.masters.MembersScreen(
                     viewModel = membersMasterViewModel,
@@ -297,7 +380,11 @@ fun BudgetNavGraph(
             }
         }
 
-        composable(route = BudgetDestinations.MASTERS_CATEGORIES) {
+        composable(
+            route = BudgetDestinations.MASTERS_CATEGORIES,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             if (categoriesMasterViewModel != null) {
                 mx.budget.ui.masters.CategoriesScreen(
                     viewModel = categoriesMasterViewModel,
@@ -306,7 +393,11 @@ fun BudgetNavGraph(
             }
         }
 
-        composable(route = BudgetDestinations.MASTERS_INCOME) {
+        composable(
+            route = BudgetDestinations.MASTERS_INCOME,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             if (incomeSourcesMasterViewModel != null) {
                 mx.budget.ui.masters.IncomeSourcesScreen(
                     viewModel = incomeSourcesMasterViewModel,
@@ -315,7 +406,11 @@ fun BudgetNavGraph(
             }
         }
 
-        composable(route = BudgetDestinations.HOUSEHOLD) {
+        composable(
+            route = BudgetDestinations.HOUSEHOLD,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             if (householdViewModel != null) {
                 mx.budget.ui.household.HouseholdScreen(
                     viewModel = householdViewModel,
@@ -326,6 +421,7 @@ fun BudgetNavGraph(
             }
         }
     }
+    } // MainShell
 }
 
 @Composable

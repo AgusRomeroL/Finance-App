@@ -17,6 +17,7 @@ import mx.budget.data.local.result.WalletBalanceInfo
 import mx.budget.data.local.dao.AnalyticsDao
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.repository.AnalyticsRepository
+import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.InstallmentRepository
 import mx.budget.data.repository.LoanRepository
 import mx.budget.data.repository.QuincenaRepository
@@ -34,6 +35,7 @@ class AnalyticsViewModel(
     private val analyticsRepository: AnalyticsRepository,
     private val analyticsDao: AnalyticsDao,
     quincenaRepository: QuincenaRepository,
+    private val incomeRepository: IncomeRepository,
     savingsRepository: SavingsRepository,
     installmentRepository: InstallmentRepository,
     loanRepository: LoanRepository,
@@ -50,6 +52,16 @@ class AnalyticsViewModel(
             if (q == null) flowOf(emptyList())
             else analyticsRepository.observeSpendByCategory(householdId, q.id)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Ingreso RECIBIDO (POSTED) en vivo de la quincena activa — como el dashboard.
+     * Las columnas agregadas de quincena (`actualIncomeMxn`) no se mantienen y
+     * llegan en 0; se usa esto para el ingreso "recibido" junto al proyectado.
+     */
+    val postedIncome: StateFlow<Double> =
+        activeQuincena.flatMapLatest { q ->
+            if (q == null) flowOf(0.0) else incomeRepository.observePostedTotal(q.id)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0.0)
 
     /** Tendencia: últimas quincenas cerradas (ingreso/gasto real). */
     val trend: StateFlow<List<QuincenaSnapshot>> =

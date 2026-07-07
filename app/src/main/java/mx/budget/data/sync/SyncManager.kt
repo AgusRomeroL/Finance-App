@@ -3,8 +3,11 @@ package mx.budget.data.sync
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -89,6 +92,26 @@ class SyncManager(
         connectivityManager.registerDefaultNetworkCallback(networkCallback)
         // Intento inmediato por si ya hay conexión al arrancar.
         scope.launch { drain() }
+        // Drenado PROACTIVO al encolar: observa el outbox y, cuando aparecen filas
+        // y hay red, empuja sin esperar a un cambio de conectividad (antes el push
+        // se retrasaba si el usuario ya estaba en línea). `debounce` agrupa las
+        // varias altas de una misma transacción (gasto + atribuciones + wallet);
+        // el `drain()` es idempotente y está serializado por el mutex.
+        scope.launch { observeAndDrain() }
+    }
+
+    @OptIn(FlowPreview::class)
+    private suspend fun observeAndDrain() {
+        syncQueueDao.observeCount()
+            .debounce(500)
+            .collect { pending -> if (pending > 0 && isOnline()) drain() }
+    }
+
+    /** ¿Hay una red con Internet validado ahora mismo? */
+    private fun isOnline(): Boolean {
+        val net = connectivityManager.activeNetwork ?: return false
+        val caps = connectivityManager.getNetworkCapabilities(net) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     /**

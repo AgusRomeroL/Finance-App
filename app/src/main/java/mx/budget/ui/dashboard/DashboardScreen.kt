@@ -1,6 +1,7 @@
 package mx.budget.ui.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.DraggableState
 import androidx.compose.foundation.gestures.Orientation
@@ -190,9 +191,9 @@ private fun memberColors(count: Int): List<Color> {
 // Modelo de navegación
 // ─────────────────────────────────────────────────────────────────────────────
 
-private data class NavItem(val route: String, val icon: ImageVector, val label: String)
+internal data class NavItem(val route: String, val icon: ImageVector, val label: String)
 
-private val navItems = listOf(
+internal val navItems = listOf(
     NavItem("dashboard", Icons.Filled.Dashboard, "Inicio"),
     NavItem("calendar", Icons.Filled.CalendarMonth, "Calendario"),
     NavItem("wallets", Icons.Filled.AccountBalanceWallet, "Cuentas"),
@@ -412,24 +413,25 @@ private fun ExpandedDashboard(
     onDismissCapture: (String) -> Unit,
     reimbursementUi: ReimbursementUi
 ) {
-    Row(
+    // El rail de 5 pestañas lo aporta ahora el MainShell (barra persistente). El
+    // statusBarsPadding se aplica aquí (el shell ya no lo pone sobre todo el Row, para no
+    // duplicarlo en las otras pantallas que traen el suyo). Aquí queda el contenido del
+    // Inicio + su BottomActionBar.
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
             .statusBarsPadding()
     ) {
-        NavigationRailCustom(currentRoute = currentRoute, onNavigate = onNavigate)
-
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (state) {
-                is DashboardUiState.Loading -> LoadingContent()
-                is DashboardUiState.Error -> ErrorContent(state.message)
-                is DashboardUiState.Success -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(start = 30.dp, top = 22.dp, end = 32.dp, bottom = 24.dp)
-                    ) {
+        when (state) {
+            is DashboardUiState.Loading -> LoadingContent()
+            is DashboardUiState.Error -> ErrorContent(state.message)
+            is DashboardUiState.Success -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = 30.dp, top = 22.dp, end = 32.dp, bottom = 24.dp)
+                ) {
                         DashboardHeader(
                             quincena = state.quincena,
                             expanded = true,
@@ -487,7 +489,6 @@ private fun ExpandedDashboard(
                 }
             }
         }
-    }
 }
 
 /**
@@ -572,29 +573,20 @@ private fun CompactDashboard(
     onDismissCapture: (String) -> Unit,
     reimbursementUi: ReimbursementUi
 ) {
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.surface,
-        bottomBar = {
-            Column {
-                BottomActionBar(
-                    query = "",
-                    onQueryChange = {},
-                    onPlus = onCapture,
-                    readOnly = true,
-                    onActivate = onOpenSearch
-                )
-                BottomNavCustom(currentRoute = currentRoute, onNavigate = onNavigate)
-            }
-        }
-    ) { inner ->
-        Box(modifier = Modifier.fillMaxSize().padding(inner)) {
+    // La bottom nav de 5 pestañas la aporta el MainShell (barra persistente). El
+    // BottomActionBar (búsqueda + mic + "+") del Inicio NO reserva espacio propio:
+    // FLOTA sobre el contenido (align BottomCenter), superpuesto a la lista que
+    // scrollea detrás, y por encima de la bottom nav del shell.
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
             when (state) {
                 is DashboardUiState.Loading -> LoadingContent()
                 is DashboardUiState.Error -> ErrorContent(state.message)
                 is DashboardUiState.Success -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(20.dp),
+                        // bottom holgado: la última fila scrollea por encima del
+                        // BottomActionBar flotante sin quedar tapada.
+                        contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 96.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
                         item {
@@ -661,7 +653,17 @@ private fun CompactDashboard(
                     }
                 }
             }
-        }
+            // BottomActionBar flotante: se sobrepone al contenido, no reserva espacio.
+            BottomActionBar(
+                query = "",
+                onQueryChange = {},
+                onPlus = onCapture,
+                readOnly = true,
+                onActivate = onOpenSearch,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 12.dp)
+            )
     }
 }
 
@@ -675,7 +677,7 @@ private fun CompactDashboard(
  * `contentDescription`. Glifo de marca arriba, avatar de perfil abajo.
  */
 @Composable
-private fun NavigationRailCustom(
+internal fun NavigationRailCustom(
     currentRoute: String,
     onNavigate: ((String) -> Unit)?
 ) {
@@ -714,26 +716,38 @@ private fun NavigationRailCustom(
 
         Spacer(Modifier.weight(1f))
 
-        // Avatar de perfil (anclado abajo)
+        // Avatar de perfil (anclado abajo). Cuando Perfil es la pestaña activa
+        // recibe el mismo lenguaje de "seleccionado" que los RailItem: fondo
+        // primaryContainer + anillo, para que su estado activo no sea más sutil.
+        val profileSelected = currentRoute == "profile"
         Box(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .background(
+                    if (profileSelected) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+                .then(
+                    if (profileSelected) Modifier.border(
+                        2.dp, MaterialTheme.colorScheme.primary, CircleShape
+                    ) else Modifier
+                )
                 .clickable { onNavigate?.invoke("profile") },
             contentAlignment = Alignment.Center
         ) {
             Text(
                 "AS",
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurface
+                color = if (profileSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                else MaterialTheme.colorScheme.onSurface
             )
         }
     }
 }
 
 @Composable
-private fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
+internal fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .clickable(onClick = onClick)
@@ -759,18 +773,23 @@ private fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
         }
         if (selected) {
             Spacer(Modifier.height(6.dp))
+            // Sin uppercase ni letter-spacing: a fontScale 1.3 + bold el texto
+            // espaciado partía en dos líneas mid-word ("ANALÍTICA/S"). En caja
+            // baja y compacto entra en una línea (ellipsis de seguridad).
             Text(
-                text = item.label.uppercase(),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                text = item.label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                 color = MaterialTheme.colorScheme.onSurface,
-                letterSpacing = 1.2.sp
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }
 }
 
 @Composable
-private fun BottomNavCustom(currentRoute: String, onNavigate: ((String) -> Unit)?) {
+internal fun BottomNavCustom(currentRoute: String, onNavigate: ((String) -> Unit)?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
