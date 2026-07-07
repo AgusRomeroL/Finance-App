@@ -2,6 +2,7 @@ package mx.budget.ui.ledger
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -34,6 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.ui.theme.financeColors
+import mx.budget.ui.tutorial.TutorialKey
+import mx.budget.ui.tutorial.tutorialTarget
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -48,6 +51,7 @@ fun LedgerScreen(
     viewModel: LedgerViewModel,
     onBack: () -> Unit,
     onOpenDetail: (ExpenseWithDetails) -> Unit,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
 ) {
     val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
     val dateFmt = remember { SimpleDateFormat("EEE d MMM", Locale("es", "MX")) }
@@ -58,7 +62,10 @@ fun LedgerScreen(
     val wallets by viewModel.wallets.collectAsState()
     val categoryFilter by viewModel.categoryFilter.collectAsState()
     val walletFilter by viewModel.walletFilter.collectAsState()
-    val rows by viewModel.rows.collectAsState()
+    val rawRows by viewModel.rows.collectAsState()
+    // Tutorial: durante el tour muestra 4 movimientos DEMO (nunca tocan Room). Ver TUTORIAL.md.
+    val rows = if (tutorialController?.demoActive == true)
+        mx.budget.ui.tutorial.TutorialDemoData.ledgerRows else rawRows
 
     Column(Modifier.fillMaxSize()) {
         // Header: back + título + navegación de quincena (patrón del Dashboard).
@@ -99,7 +106,9 @@ fun LedgerScreen(
         }
 
         // Chips de filtro: categorías con gasto + wallets.
+        // TUTORIAL: LED_FILTERS — ver TUTORIAL.md
         LazyRow(
+            modifier = Modifier.tutorialTarget(TutorialKey.LED_FILTERS, tutorialController),
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -149,7 +158,9 @@ fun LedgerScreen(
                 modifier = Modifier.padding(24.dp),
             )
         } else {
+            // TUTORIAL: LED_ROWS — ver TUTORIAL.md
             LazyColumn(
+                modifier = Modifier.tutorialTarget(TutorialKey.LED_ROWS, tutorialController),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {

@@ -225,6 +225,14 @@ class BudgetApplication : Application() {
         private set
 
     /**
+     * Valor inicial de `has_seen_tutorial`, leído una vez al arrancar para decidir sin parpadeo
+     * si el **tutorial guiado** debe auto-arrancar la primera vez (ver `ui/tutorial/` y
+     * `TUTORIAL.md`). Independiente de [needsOnboarding].
+     */
+    var initialHasSeenTutorial: Boolean = false
+        private set
+
+    /**
      * `true` si la instalación está vacía (sin hogar/miembros/gastos) y hay que
      * mostrar el **wizard de onboarding** (paquete B2). Resuelto síncrono en
      * [onCreate] (mismo patrón que [householdId]); lo lee [MainActivity] para
@@ -271,6 +279,7 @@ class BudgetApplication : Application() {
         // de cualquier Activity) para que el tema arranque sin parpadeo.
         settingsRepository = SettingsRepository(this)
         initialDynamicColor = runBlocking { settingsRepository.dynamicColor.first() }
+        initialHasSeenTutorial = runBlocking { settingsRepository.hasSeenTutorial.first() }
 
         // Resolución del household activo (Fase B — multi-tenant):
         // 1) si el usuario eligió un hogar activo (DataStore), se usa ese;

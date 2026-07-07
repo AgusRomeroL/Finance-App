@@ -1,5 +1,7 @@
 package mx.budget.ui.dashboard
 
+import mx.budget.ui.tutorial.TutorialKey
+import mx.budget.ui.tutorial.tutorialTarget
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -226,30 +228,48 @@ fun DashboardScreen(
     onNavigate: ((String) -> Unit)? = null,
     onOpenReview: () -> Unit = {},
     onOpenSearch: () -> Unit = {},
-    onOpenSuggestions: () -> Unit = {}
+    onOpenSuggestions: () -> Unit = {},
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
+    tutorialCaptureOpen: Boolean = false,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val rawUiState by viewModel.uiState.collectAsState()
     val pendingReviewCount by viewModel.pendingReviewCount.collectAsState()
-    val proactiveSuggestions by viewModel.proactiveSuggestions.collectAsState()
-    val bankCaptures by viewModel.pendingBankCaptures.collectAsState()
+    val rawProactiveSuggestions by viewModel.proactiveSuggestions.collectAsState()
+    val rawBankCaptures by viewModel.pendingBankCaptures.collectAsState()
     val groups by viewModel.groups.collectAsState()
     val selectedGroups by viewModel.selectedGroupIds.collectAsState()
     // Fase B/B3: "Por reembolsar" + dashboard single-member.
     val pendingReimbursements by viewModel.pendingReimbursements.collectAsState()
     val reimbursementTotals by viewModel.pendingReimbursementTotals.collectAsState()
-    val members by viewModel.members.collectAsState()
-    val singleMember by viewModel.singleMember.collectAsState()
+    val rawMembers by viewModel.members.collectAsState()
+    val rawSingleMember by viewModel.singleMember.collectAsState()
+
+    // Tutorial: mientras el tour corre, se muestran datos DEMO (nunca tocan Room). Ver TUTORIAL.md.
+    val demo = tutorialController?.demoActive == true
+    val uiState = if (demo) mx.budget.ui.tutorial.TutorialDemoData.dashboardState else rawUiState
+    val proactiveSuggestions = if (demo) mx.budget.ui.tutorial.TutorialDemoData.proactiveSuggestions else rawProactiveSuggestions
+    val bankCaptures = if (demo) mx.budget.ui.tutorial.TutorialDemoData.bankCaptures else rawBankCaptures
+    val members = if (demo) mx.budget.ui.tutorial.TutorialDemoData.members else rawMembers
+    val singleMember = if (demo) false else rawSingleMember
+
     val isExpanded = windowWidthDp >= 600.dp
     // Un único punto de apertura del CaptureBottomSheet con su modo (SP-A1): "+" abre
     // New; las sugerencias/capturas abren Review pre-llenado. null = cerrado.
     var captureMode by remember { mutableStateOf<CaptureSheetMode?>(null) }
     var showFilterSheet by remember { mutableStateOf(false) }
 
+    // Tutorial guiado: abre/cierra la hoja de captura cuando el tour lo pide (ver TUTORIAL.md).
+    androidx.compose.runtime.LaunchedEffect(tutorialCaptureOpen) {
+        captureMode = if (tutorialCaptureOpen) CaptureSheetMode.New else null
+    }
+
     captureMode?.let { mode ->
         CaptureBottomSheet(
             viewModel = captureViewModel,
             onDismiss = { captureMode = null },
-            mode = mode
+            mode = mode,
+            tutorialController = tutorialController,
+            tutorialCurrentRoute = currentRoute,
         )
     }
 
@@ -340,7 +360,8 @@ fun DashboardScreen(
                 bankCaptures = bankCaptures,
                 onConfirmCapture = onConfirmCapture,
                 onDismissCapture = viewModel::dismissBankCapture,
-                reimbursementUi = reimbursementUi
+                reimbursementUi = reimbursementUi,
+                tutorialController = tutorialController
             )
         } else {
             CompactDashboard(
@@ -360,7 +381,8 @@ fun DashboardScreen(
                 bankCaptures = bankCaptures,
                 onConfirmCapture = onConfirmCapture,
                 onDismissCapture = viewModel::dismissBankCapture,
-                reimbursementUi = reimbursementUi
+                reimbursementUi = reimbursementUi,
+                tutorialController = tutorialController
             )
         }
     }
@@ -411,7 +433,8 @@ private fun ExpandedDashboard(
     bankCaptures: List<PendingCaptureEntity>,
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit,
-    reimbursementUi: ReimbursementUi
+    reimbursementUi: ReimbursementUi,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null
 ) {
     // El rail de 5 pestañas lo aporta ahora el MainShell (barra persistente). El
     // statusBarsPadding se aplica aquí (el shell ya no lo pone sobre todo el Row, para no
@@ -444,16 +467,19 @@ private fun ExpandedDashboard(
                         )
                         if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestions.isNotEmpty())) {
                             Spacer(Modifier.height(18.dp))
-                            SuggestionsSection(
-                                bankCaptures = bankCaptures,
-                                proactiveSuggestions = proactiveSuggestions,
-                                isExpanded = true,
-                                onSeeMore = onOpenSuggestions,
-                                onConfirmCapture = onConfirmCapture,
-                                onDismissCapture = onDismissCapture,
-                                onRegisterSuggestion = onRegisterSuggestion,
-                                onDismissSuggestion = onDismissSuggestion
-                            )
+                            // TUTORIAL: DASH_SUGGESTIONS — ver TUTORIAL.md
+                            Box(Modifier.tutorialTarget(TutorialKey.DASH_SUGGESTIONS, tutorialController)) {
+                                SuggestionsSection(
+                                    bankCaptures = bankCaptures,
+                                    proactiveSuggestions = proactiveSuggestions,
+                                    isExpanded = true,
+                                    onSeeMore = onOpenSuggestions,
+                                    onConfirmCapture = onConfirmCapture,
+                                    onDismissCapture = onDismissCapture,
+                                    onRegisterSuggestion = onRegisterSuggestion,
+                                    onDismissSuggestion = onDismissSuggestion
+                                )
+                            }
                         }
                         if (reimbursementUi.rows.isNotEmpty()) {
                             Spacer(Modifier.height(18.dp))
@@ -472,10 +498,12 @@ private fun ExpandedDashboard(
                         BentoPanes(
                             state = state,
                             singleMember = reimbursementUi.singleMember,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            tutorialController = tutorialController
                         )
                     }
                     // Barra inferior: búsqueda + mic + "+" (reemplaza el FAB).
+                    // TUTORIAL: DASH_ACTION_BAR — ver TUTORIAL.md
                     BottomActionBar(
                         query = "",
                         onQueryChange = {},
@@ -485,6 +513,7 @@ private fun ExpandedDashboard(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .navigationBarsPadding()
+                            .tutorialTarget(TutorialKey.DASH_ACTION_BAR, tutorialController)
                     )
                 }
             }
@@ -505,7 +534,8 @@ private fun ExpandedDashboard(
 private fun BentoPanes(
     state: DashboardUiState.Success,
     singleMember: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null
 ) {
     var fraction by rememberSaveable { mutableStateOf(0.55f) }
     BoxWithConstraints(modifier = modifier) {
@@ -517,7 +547,8 @@ private fun BentoPanes(
             MainHealthPane(
                 state = state,
                 singleMember = singleMember,
-                modifier = Modifier.weight(fraction).fillMaxHeight()
+                modifier = Modifier.weight(fraction).fillMaxHeight(),
+                tutorialController = tutorialController
             )
             PaneDragHandle(dragState)
             TransactionsPane(
@@ -571,7 +602,8 @@ private fun CompactDashboard(
     bankCaptures: List<PendingCaptureEntity>,
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit,
-    reimbursementUi: ReimbursementUi
+    reimbursementUi: ReimbursementUi,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null
 ) {
     // La bottom nav de 5 pestañas la aporta el MainShell (barra persistente). El
     // BottomActionBar (búsqueda + mic + "+") del Inicio NO reserva espacio propio:
@@ -603,16 +635,19 @@ private fun CompactDashboard(
                         }
                         if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestions.isNotEmpty())) {
                             item {
-                                SuggestionsSection(
-                                    bankCaptures = bankCaptures,
-                                    proactiveSuggestions = proactiveSuggestions,
-                                    isExpanded = false,
-                                    onSeeMore = onOpenSuggestions,
-                                    onConfirmCapture = onConfirmCapture,
-                                    onDismissCapture = onDismissCapture,
-                                    onRegisterSuggestion = onRegisterSuggestion,
-                                    onDismissSuggestion = onDismissSuggestion
-                                )
+                                // TUTORIAL: DASH_SUGGESTIONS — ver TUTORIAL.md
+                                Box(Modifier.tutorialTarget(TutorialKey.DASH_SUGGESTIONS, tutorialController)) {
+                                    SuggestionsSection(
+                                        bankCaptures = bankCaptures,
+                                        proactiveSuggestions = proactiveSuggestions,
+                                        isExpanded = false,
+                                        onSeeMore = onOpenSuggestions,
+                                        onConfirmCapture = onConfirmCapture,
+                                        onDismissCapture = onDismissCapture,
+                                        onRegisterSuggestion = onRegisterSuggestion,
+                                        onDismissSuggestion = onDismissSuggestion
+                                    )
+                                }
                             }
                         }
                         if (reimbursementUi.rows.isNotEmpty()) {
@@ -620,7 +655,31 @@ private fun CompactDashboard(
                                 ReimbursementSection(ui = reimbursementUi)
                             }
                         }
-                        item { CollapsedHealthCard(state = state) }
+                        // TUTORIAL: DASH_HERO_KPI — ver TUTORIAL.md
+                        item {
+                            Box(Modifier.tutorialTarget(TutorialKey.DASH_HERO_KPI, tutorialController)) {
+                                CollapsedHealthCard(state = state)
+                            }
+                        }
+                        // Paridad con el Fold: barras Beneficiario/Pagador también en compacto
+                        // (antes solo existían en el layout expandido). TUTORIAL: DASH_MEMBER_BARS.
+                        if (!reimbursementUi.singleMember) {
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(28.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                                        .padding(22.dp)
+                                        .tutorialTarget(TutorialKey.DASH_MEMBER_BARS, tutorialController)
+                                ) {
+                                    MemberDistributionSection(
+                                        beneficiary = state.beneficiaryDistribution,
+                                        payer = state.payerDistribution
+                                    )
+                                }
+                            }
+                        }
                         if (state.viewingActive) {
                             item {
                                 FilterPillsRow(
@@ -654,6 +713,7 @@ private fun CompactDashboard(
                 }
             }
             // BottomActionBar flotante: se sobrepone al contenido, no reserva espacio.
+            // TUTORIAL: DASH_ACTION_BAR — ver TUTORIAL.md
             BottomActionBar(
                 query = "",
                 onQueryChange = {},
@@ -663,6 +723,7 @@ private fun CompactDashboard(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 12.dp)
+                    .tutorialTarget(TutorialKey.DASH_ACTION_BAR, tutorialController)
             )
     }
 }
@@ -1016,7 +1077,8 @@ private fun Eyebrow(
 private fun MainHealthPane(
     state: DashboardUiState.Success,
     singleMember: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null
 ) {
     // Scroll vertical: en pantalla casi cuadrada del Fold + fontScale 1.3 + bold, el
     // KPI héroe + las barras por miembro exceden el alto del panel. Sin scroll el pie
@@ -1028,17 +1090,23 @@ private fun MainHealthPane(
             .verticalScroll(rememberScrollState())
             .padding(36.dp)
     ) {
-        HeroKpi(state = state)
+        // TUTORIAL: DASH_HERO_KPI — ver TUTORIAL.md
+        Box(Modifier.tutorialTarget(TutorialKey.DASH_HERO_KPI, tutorialController)) {
+            HeroKpi(state = state)
+        }
         // Fase B/B3: en un hogar de una sola persona el desglose por miembro (toggle
         // Beneficiario/Pagador + barras) no aporta; se oculta.
         if (!singleMember) {
             Spacer(Modifier.height(24.dp))
             // Sin weight(1f): dentro de una Column scrollable el contenido fluye a su alto
             // natural (weight exigiría alto acotado y colapsaría la sección).
-            MemberDistributionSection(
-                beneficiary = state.beneficiaryDistribution,
-                payer = state.payerDistribution
-            )
+            // TUTORIAL: DASH_MEMBER_BARS — ver TUTORIAL.md
+            Box(Modifier.tutorialTarget(TutorialKey.DASH_MEMBER_BARS, tutorialController)) {
+                MemberDistributionSection(
+                    beneficiary = state.beneficiaryDistribution,
+                    payer = state.payerDistribution
+                )
+            }
         }
     }
 }

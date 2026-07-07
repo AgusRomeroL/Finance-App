@@ -52,6 +52,8 @@ import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.QuincenaSnapshot
 import mx.budget.data.local.result.SpendByCategory
 import mx.budget.ui.theme.financeColors
+import mx.budget.ui.tutorial.TutorialKey
+import mx.budget.ui.tutorial.tutorialTarget
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.min
@@ -75,20 +77,33 @@ fun AnalyticsScreen(
     onBack: () -> Unit,
     onOpenLedger: (() -> Unit)? = null,
     aiViewModel: mx.budget.ai.AiAssistantViewModel? = null,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
 ) {
     val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
     var chatOpen by remember { mutableStateOf(false) }
 
-    val quincena by viewModel.activeQuincena.collectAsState()
-    val byCategory by viewModel.spendByCategory.collectAsState()
-    val postedIncome by viewModel.postedIncome.collectAsState()
+    val rawQuincena by viewModel.activeQuincena.collectAsState()
+    val rawByCategory by viewModel.spendByCategory.collectAsState()
+    val rawPostedIncome by viewModel.postedIncome.collectAsState()
     val trend by viewModel.trend.collectAsState()
-    val topConcepts by viewModel.topConcepts.collectAsState()
+    val rawTopConcepts by viewModel.topConcepts.collectAsState()
     val debt by viewModel.debtConcentration.collectAsState()
     val interest by viewModel.interestByWallet.collectAsState()
-    val totalSavings by viewModel.totalSavings.collectAsState()
-    val totalCommitment by viewModel.totalCommitment.collectAsState()
-    val totalReceivable by viewModel.totalReceivable.collectAsState()
+    val rawTotalSavings by viewModel.totalSavings.collectAsState()
+    val rawTotalCommitment by viewModel.totalCommitment.collectAsState()
+    val rawTotalReceivable by viewModel.totalReceivable.collectAsState()
+
+    // Tutorial: durante el tour muestra analíticas DEMO (nunca tocan Room). Los flujos secundarios
+    // (trend/deuda/interés) se dejan reales y degradan a hints si están vacíos. Ver TUTORIAL.md.
+    val demo = tutorialController?.demoActive == true
+    val D = mx.budget.ui.tutorial.TutorialDemoData
+    val quincena = if (demo) D.quincena else rawQuincena
+    val byCategory = if (demo) D.spendByCategory else rawByCategory
+    val postedIncome = if (demo) D.postedIncome else rawPostedIncome
+    val topConcepts = if (demo) D.topConcepts else rawTopConcepts
+    val totalSavings = if (demo) D.totalSavings else rawTotalSavings
+    val totalCommitment = if (demo) D.totalCommitment else rawTotalCommitment
+    val totalReceivable = if (demo) D.totalReceivable else rawTotalReceivable
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -129,18 +144,25 @@ fun AnalyticsScreen(
 
             // ── Widget: resumen inteligente ───────────────────────────────────
             item {
-                SmartSummaryCard(
-                    quincena = quincena,
-                    byCategory = byCategory,
-                    postedIncome = postedIncome,
-                    money = money,
-                    onAsk = if (aiViewModel != null) ({ chatOpen = true }) else null,
-                )
+                // TUTORIAL: ANA_SUMMARY — ver TUTORIAL.md
+                Box(Modifier.tutorialTarget(TutorialKey.ANA_SUMMARY, tutorialController)) {
+                    SmartSummaryCard(
+                        quincena = quincena,
+                        byCategory = byCategory,
+                        postedIncome = postedIncome,
+                        money = money,
+                        onAsk = if (aiViewModel != null) ({ chatOpen = true }) else null,
+                    )
+                }
             }
 
             // ── Widget: KPIs de hoja de balance ───────────────────────────────
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // TUTORIAL: ANA_KPI_ROW — ver TUTORIAL.md
+                Row(
+                    modifier = Modifier.tutorialTarget(TutorialKey.ANA_KPI_ROW, tutorialController),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     KpiCard("Ahorro", money.format(totalSavings), Modifier.weight(1f))
                     KpiCard("Por cobrar", money.format(totalReceivable), Modifier.weight(1f))
                     KpiCard("MSI pendiente", money.format(totalCommitment), Modifier.weight(1f))
@@ -152,12 +174,15 @@ fun AnalyticsScreen(
                 val totalProjected = byCategory.sumOf { it.projected }
                 val totalActual = byCategory.sumOf { it.actual }
                 if (totalProjected > 0) {
-                    WidgetCard(title = "Salud del presupuesto") {
-                        BudgetGauge(
-                            totalActual = totalActual,
-                            totalProjected = totalProjected,
-                            money = money,
-                        )
+                    // TUTORIAL: ANA_WIDGETS — ver TUTORIAL.md
+                    Box(Modifier.tutorialTarget(TutorialKey.ANA_WIDGETS, tutorialController)) {
+                        WidgetCard(title = "Salud del presupuesto") {
+                            BudgetGauge(
+                                totalActual = totalActual,
+                                totalProjected = totalProjected,
+                                money = money,
+                            )
+                        }
                     }
                 }
             }
@@ -318,6 +343,7 @@ fun AnalyticsScreen(
 
         // FAB del asistente — chat determinista + LLM si hay.
         if (aiViewModel != null) {
+            // TUTORIAL: ANA_ASK_FAB — ver TUTORIAL.md
             androidx.compose.material3.ExtendedFloatingActionButton(
                 onClick = { chatOpen = true },
                 icon = { Icon(Icons.Filled.AutoAwesome, contentDescription = null) },
@@ -326,7 +352,8 @@ fun AnalyticsScreen(
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(24.dp),
+                    .padding(24.dp)
+                    .tutorialTarget(TutorialKey.ANA_ASK_FAB, tutorialController),
             )
         }
     }

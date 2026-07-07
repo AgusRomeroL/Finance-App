@@ -76,6 +76,8 @@ import mx.budget.ui.dashboard.iconForCategory
 import mx.budget.ui.theme.FinancialTone
 import mx.budget.ui.theme.amountSemantic
 import mx.budget.ui.theme.financeColors
+import mx.budget.ui.tutorial.TutorialKey
+import mx.budget.ui.tutorial.tutorialTarget
 import java.text.NumberFormat
 import java.util.Date
 import java.util.Locale
@@ -140,6 +142,7 @@ fun WalletsScreen(
     viewModel: WalletsViewModel,
     windowWidthDp: Dp,
     onBack: () -> Unit,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
 ) {
     val balances by viewModel.balances.collectAsState()
     val revolvingDebt by viewModel.revolvingDebt.collectAsState()
@@ -195,12 +198,14 @@ fun WalletsScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         floatingActionButton = {
+            // TUTORIAL: WAL_FAB — ver TUTORIAL.md
             ExtendedFloatingActionButton(
                 onClick = { formInitial = null; showForm = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                 text = { Text("Nueva cuenta") },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.tutorialTarget(TutorialKey.WAL_FAB, tutorialController),
             )
         },
     ) { inner ->
@@ -214,6 +219,7 @@ fun WalletsScreen(
                 onBack = onBack,
                 onIncome = { showIncome = true },
                 onTransfer = { showTransfer = true },
+                tutorialController = tutorialController,
             )
 
             if (expanded) {
@@ -228,6 +234,7 @@ fun WalletsScreen(
                         transfers = transfers,
                         onTransferLongPress = { transferToDelete = it },
                         extraSections = balanceSections,
+                        tutorialController = tutorialController,
                         modifier = Modifier.weight(0.62f).fillMaxHeight(),
                     )
                     DetailPane(
@@ -249,6 +256,7 @@ fun WalletsScreen(
                     transfers = transfers,
                     onTransferLongPress = { transferToDelete = it },
                     extraSections = balanceSections,
+                    tutorialController = tutorialController,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -408,7 +416,12 @@ fun WalletsScreen(
 }
 
 @Composable
-private fun Header(onBack: () -> Unit, onIncome: () -> Unit, onTransfer: () -> Unit) {
+private fun Header(
+    onBack: () -> Unit,
+    onIncome: () -> Unit,
+    onTransfer: () -> Unit,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -443,32 +456,38 @@ private fun Header(onBack: () -> Unit, onIncome: () -> Unit, onTransfer: () -> U
                 maxLines = 1,
             )
         }
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .clickable(onClick = onIncome),
-            contentAlignment = Alignment.Center,
+        // TUTORIAL: WAL_HEADER — ver TUTORIAL.md
+        Row(
+            modifier = Modifier.tutorialTarget(TutorialKey.WAL_HEADER, tutorialController),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                Icons.Filled.TrendingUp, "Registrar ingreso",
-                tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp),
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .clickable(onClick = onTransfer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Filled.SwapHoriz, "Transferir o pagar tarjeta",
-                tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp),
-            )
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .clickable(onClick = onIncome),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.TrendingUp, "Registrar ingreso",
+                    tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .clickable(onClick = onTransfer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.SwapHoriz, "Transferir o pagar tarjeta",
+                    tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp),
+                )
+            }
         }
     }
 }
@@ -484,6 +503,7 @@ private fun WalletList(
     transfers: List<TransferWithNames>,
     onTransferLongPress: (TransferWithNames) -> Unit,
     extraSections: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
     modifier: Modifier = Modifier,
 ) {
     // Agrupa por sección preservando el orden definido; el resto cae en "Otras".
@@ -497,8 +517,9 @@ private fun WalletList(
         if (rest.isEmpty()) matched else matched + ("Otras cuentas" to rest)
     }
 
+    // TUTORIAL: WAL_LIST — ver TUTORIAL.md
     LazyColumn(
-        modifier = modifier,
+        modifier = modifier.tutorialTarget(TutorialKey.WAL_LIST, tutorialController),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

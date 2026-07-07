@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.ui.dashboard.iconForCategory
+import mx.budget.ui.tutorial.TutorialKey
+import mx.budget.ui.tutorial.tutorialTarget
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -99,8 +101,12 @@ fun CalendarScreen(
     newPlannedViewModel: NewPlannedViewModel,
     onBack: () -> Unit,
     onOpenTemplates: () -> Unit = {},
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
 ) {
-    val planned by viewModel.planned.collectAsState()
+    val rawPlanned by viewModel.planned.collectAsState()
+    // Tutorial: durante el tour muestra pagos planeados DEMO (nunca tocan Room). Ver TUTORIAL.md.
+    val planned = if (tutorialController?.demoActive == true)
+        mx.budget.ui.tutorial.TutorialDemoData.plannedExpenses else rawPlanned
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<ExpenseWithDetails?>(null) }
@@ -136,12 +142,14 @@ fun CalendarScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
+            // TUTORIAL: CAL_FAB — ver TUTORIAL.md
             FloatingActionButton(
                 onClick = {
                     newPlannedViewModel.start(selected ?: today)
                     showAdd = true
                 },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.tutorialTarget(TutorialKey.CAL_FAB, tutorialController),
             ) {
                 Icon(Icons.Filled.Add, "Nuevo pago planeado", tint = MaterialTheme.colorScheme.onPrimaryContainer)
             }
@@ -166,7 +174,8 @@ fun CalendarScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item(key = "month") {
-                    Column {
+                    // TUTORIAL: CAL_MONTH_GRID — ver TUTORIAL.md
+                    Column(modifier = Modifier.tutorialTarget(TutorialKey.CAL_MONTH_GRID, tutorialController)) {
                         MonthCalendar(
                             month = month,
                             today = today,
@@ -184,7 +193,8 @@ fun CalendarScreen(
                 if (visible.isEmpty()) {
                     item(key = "empty") { EmptyRow(filtered = selected != null) }
                 } else {
-                    items(visible, key = { it.expenseId }) { item ->
+                    itemsIndexed(visible, key = { _, it -> it.expenseId }) { index, item ->
+                        // TUTORIAL: CAL_PLANNED — ver TUTORIAL.md (primera tarjeta como ancla)
                         PlannedCard(
                             item = item,
                             onConfirm = { viewModel.confirm(item.expenseId) },
@@ -193,11 +203,16 @@ fun CalendarScreen(
                                 viewModel.postpone(item.expenseId)
                                 scope.launch { snackbar.showSnackbar("Recordatorio pospuesto") }
                             },
-                            modifier = Modifier.animateItem(
-                                fadeInSpec = spring(stiffness = 380f),
-                                fadeOutSpec = spring(stiffness = 380f),
-                                placementSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
-                            ),
+                            modifier = Modifier
+                                .then(
+                                    if (index == 0) Modifier.tutorialTarget(TutorialKey.CAL_PLANNED, tutorialController)
+                                    else Modifier
+                                )
+                                .animateItem(
+                                    fadeInSpec = spring(stiffness = 380f),
+                                    fadeOutSpec = spring(stiffness = 380f),
+                                    placementSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                                ),
                         )
                     }
                 }

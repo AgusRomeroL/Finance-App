@@ -314,6 +314,9 @@ class MainActivity : ComponentActivity() {
                 initial = SettingsRepository.LOCATION_LEVEL_NONE
             )
             val nvidiaApiKey by settings.nvidiaApiKey.collectAsState(initial = "")
+            // Tutorial guiado (coach-marks): auto-arranca la primera vez. Valor inicial leído
+            // síncrono al arrancar → sin parpadeo. Ver ui/tutorial/ y TUTORIAL.md.
+            val hasSeenTutorial by settings.hasSeenTutorial.collectAsState(initial = app.initialHasSeenTutorial)
             val scope = rememberCoroutineScope()
             BudgetAppTheme(dynamicColor = dynamicColor) {
                 // Surface raíz: pinta colorScheme.background bajo TODO el NavHost.
@@ -407,6 +410,8 @@ class MainActivity : ComponentActivity() {
                     statementImportViewModel = statementImportViewModel,
                     nvidiaApiKey = nvidiaApiKey,
                     onNvidiaApiKeyChange = { key -> scope.launch { settings.setNvidiaApiKey(key) } },
+                    startTutorial = !hasSeenTutorial,
+                    onTutorialSeen = { scope.launch { settings.setHasSeenTutorial(true) } },
                 )
                 }
             }

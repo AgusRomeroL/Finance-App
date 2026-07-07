@@ -12,6 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import mx.budget.ui.dashboard.BottomNavCustom
 import mx.budget.ui.dashboard.NavigationRailCustom
+import mx.budget.ui.tutorial.TutorialController
+import mx.budget.ui.tutorial.TutorialKey
+import mx.budget.ui.tutorial.tutorialTarget
 
 /**
  * Shell persistente de los 5 destinos de nivel superior (Inicio, Calendario, Cuentas,
@@ -44,6 +47,7 @@ fun MainShell(
     isExpanded: Boolean,
     showBar: Boolean,
     onNavigate: (String) -> Unit,
+    tutorialController: TutorialController? = null,
     content: @Composable () -> Unit
 ) {
     // Ruta secundaria: sin barra. El contenido llena la pantalla y maneja su propio
@@ -64,7 +68,8 @@ fun MainShell(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface)
         ) {
-            Box(modifier = Modifier.statusBarsPadding()) {
+            // TUTORIAL: DASH_NAV — ver TUTORIAL.md
+            Box(modifier = Modifier.statusBarsPadding().tutorialTarget(TutorialKey.DASH_NAV, tutorialController)) {
                 NavigationRailCustom(currentRoute = currentRoute, onNavigate = onNavigate)
             }
             Box(modifier = Modifier.weight(1f).fillMaxSize()) {
@@ -77,7 +82,10 @@ fun MainShell(
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
             bottomBar = {
-                BottomNavCustom(currentRoute = currentRoute, onNavigate = onNavigate)
+                // TUTORIAL: DASH_NAV — ver TUTORIAL.md
+                Box(Modifier.tutorialTarget(TutorialKey.DASH_NAV, tutorialController)) {
+                    BottomNavCustom(currentRoute = currentRoute, onNavigate = onNavigate)
+                }
             }
         ) { inner ->
             Box(

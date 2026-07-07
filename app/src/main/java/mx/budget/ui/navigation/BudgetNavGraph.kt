@@ -16,11 +16,17 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import mx.budget.ui.tutorial.TutorialController
+import mx.budget.ui.tutorial.TutorialOverlay
+import mx.budget.ui.tutorial.TutorialSpec
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -117,6 +123,8 @@ fun BudgetNavGraph(
     statementImportViewModel: mx.budget.ui.statements.StatementImportViewModel? = null,
     nvidiaApiKey: String = "",
     onNvidiaApiKeyChange: (String) -> Unit = {},
+    startTutorial: Boolean = false,
+    onTutorialSeen: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -149,6 +157,22 @@ fun BudgetNavGraph(
     val isTopLevel = currentRoute in topLevelRoutes
     val isExpanded = windowWidthDp >= 600
 
+    // ── Tutorial guiado (coach-marks / spotlight) — ver ui/tutorial/ y TUTORIAL.md ──
+    // El controller se recuerda una sola vez; el overlay (abajo) ejecuta la navegación
+    // y apertura de la hoja de captura con callbacks frescos.
+    val tutorialController = remember { TutorialController(TutorialSpec.steps, onMarkSeen = onTutorialSeen) }
+    // Señal para abrir el CaptureBottomSheet (estado local del Dashboard) durante el tour.
+    var tutorialCaptureOpen by remember { mutableStateOf(false) }
+    // Auto-arranque la primera vez: solo cuando ya estamos en el Dashboard (una instalación
+    // fresca ve el tour tras salir del onboarding de datos). Latch para no re-arrancar.
+    var tutorialStarted by remember { mutableStateOf(false) }
+    LaunchedEffect(startTutorial, currentRoute) {
+        if (startTutorial && !tutorialStarted && currentRoute == BudgetDestinations.DASHBOARD) {
+            tutorialStarted = true
+            tutorialController.start(firstRun = true)
+        }
+    }
+
     // Fade-through (M3) para destinos top-level no relacionados: el saliente se desvanece
     // rápido (90ms) y el entrante aparece con un leve scaleIn (0.92→1) tras 90ms. La barra
     // del shell NO se anima (está por fuera del NavHost); solo cruza el contenido.
@@ -171,11 +195,13 @@ fun BudgetNavGraph(
     // Shell persistente POR FUERA del NavHost: la barra de 5 pestañas vive aquí y no se
     // recrea al cambiar de pestaña; solo el NavHost (content) hace el cross-fade. En rutas
     // secundarias showBar=false → el shell queda transparente (contenido a pantalla completa).
+    Box(Modifier.fillMaxSize()) {
     MainShell(
         currentRoute = currentRoute,
         isExpanded = isExpanded,
         showBar = isTopLevel,
         onNavigate = onNavigate,
+        tutorialController = tutorialController,
     ) {
     NavHost(
         navController = navController,
@@ -211,7 +237,9 @@ fun BudgetNavGraph(
                 onNavigate = onNavigate,
                 onOpenReview = { onNavigate(BudgetDestinations.ATTRIBUTION_REVIEW) },
                 onOpenSearch = { onNavigate(BudgetDestinations.SEARCH) },
-                onOpenSuggestions = { onNavigate(BudgetDestinations.SUGGESTIONS) }
+                onOpenSuggestions = { onNavigate(BudgetDestinations.SUGGESTIONS) },
+                tutorialController = tutorialController,
+                tutorialCaptureOpen = tutorialCaptureOpen,
             )
         }
 
@@ -256,7 +284,8 @@ fun BudgetNavGraph(
                 viewModel = calendarViewModel,
                 newPlannedViewModel = newPlannedViewModel,
                 onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
-                onOpenTemplates = { onNavigate(BudgetDestinations.TEMPLATES) }
+                onOpenTemplates = { onNavigate(BudgetDestinations.TEMPLATES) },
+                tutorialController = tutorialController
             )
         }
 
@@ -281,6 +310,7 @@ fun BudgetNavGraph(
                     viewModel = ledgerViewModel,
                     onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
                     onOpenDetail = { row -> expenseDetailViewModel?.open(row) },
+                    tutorialController = tutorialController,
                 )
                 // Detalle Fase 1 (ver/editar/borrar) reutilizado desde el ledger.
                 expenseDetailViewModel?.let { ExpenseDetailSheet(it) }
@@ -293,7 +323,8 @@ fun BudgetNavGraph(
             WalletsScreen(
                 viewModel = walletsViewModel,
                 windowWidthDp = windowWidthDp.dp,
-                onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
+                onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
+                tutorialController = tutorialController
             )
         }
 
@@ -306,6 +337,7 @@ fun BudgetNavGraph(
                         { onNavigate(BudgetDestinations.LEDGER) }
                     } else null,
                     aiViewModel = aiAssistantViewModel,
+                    tutorialController = tutorialController,
                 )
             } else {
                 PlaceholderScreen("Analíticas e IA", onNavigate)
@@ -348,6 +380,7 @@ fun BudgetNavGraph(
                 onImportStatement = if (statementImportViewModel != null) {
                     { onNavigate(BudgetDestinations.STATEMENTS) }
                 } else null,
+                onShowTutorial = { tutorialController.start(firstRun = false) },
             )
         }
 
@@ -422,6 +455,63 @@ fun BudgetNavGraph(
         }
     }
     } // MainShell
+
+    // Overlay principal del tutorial: cubre todas las pantallas normales y orquesta la
+    // navegación + apertura de la hoja de captura. La hoja hospeda su propio overlay
+    // (problema de ventanas del ModalBottomSheet, ver TUTORIAL.md).
+    TutorialOverlay(
+        controller = tutorialController,
+        currentRoute = currentRoute,
+        onNavigate = onNavigate,
+        groupFilter = { !it.requiresCaptureSheet },
+        orchestrate = true,
+        onRequestOpenCapture = { tutorialCaptureOpen = true },
+        onRequestCloseCapture = { tutorialCaptureOpen = false },
+    )
+
+    // Aviso previo al relanzar desde Perfil: los datos del tour son de demostración.
+    if (tutorialController.pendingWarning) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { tutorialController.dismissWarning() },
+            title = { Text("Datos de demostración") },
+            text = {
+                Text(
+                    "Durante el tutorial verás datos de ejemplo, no los de tu presupuesto real. " +
+                        "Al terminar, tu información vuelve intacta."
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { tutorialController.confirmWarning() }) {
+                    Text("Entendido")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { tutorialController.dismissWarning() }) {
+                    Text("Cancelar")
+                }
+            },
+        )
+    }
+
+    // Invitación final de la primera vez: empezar la Wallet real.
+    if (tutorialController.pendingInvitation) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { tutorialController.dismissInvitation() },
+            title = { Text("¡Listo para empezar!") },
+            text = {
+                Text(
+                    "Eso es todo. Ahora registra tus propios movimientos y haz tuyo el presupuesto. " +
+                        "Puedes volver a ver el tutorial cuando quieras desde Perfil."
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { tutorialController.dismissInvitation() }) {
+                    Text("Comenzar")
+                }
+            },
+        )
+    }
+    } // Box
 }
 
 @Composable

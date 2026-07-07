@@ -1,5 +1,7 @@
 package mx.budget.ui.capture
 
+import mx.budget.ui.tutorial.TutorialKey
+import mx.budget.ui.tutorial.tutorialTarget
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -124,6 +126,10 @@ fun CaptureBottomSheet(
     viewModel: CaptureViewModel? = null,
     onDismiss: () -> Unit,
     mode: CaptureSheetMode = CaptureSheetMode.New,
+    // Tutorial guiado: la hoja hospeda su propio overlay (problema de ventanas del
+    // ModalBottomSheet). null = sin tour activo. Ver TUTORIAL.md.
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
+    tutorialCurrentRoute: String = "dashboard",
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -135,7 +141,7 @@ fun CaptureBottomSheet(
     val selectedWalletId by (viewModel?.selectedWalletId ?: dummyStateFlow<String?>(null)).collectAsState()
     val categories by (viewModel?.categories ?: dummyStateFlow(emptyList<CategoryEntity>())).collectAsState()
     val selectedCategoryId by (viewModel?.selectedCategoryId ?: dummyStateFlow<String?>(null)).collectAsState()
-    val members by (viewModel?.members ?: dummyStateFlow(emptyList<MemberEntity>())).collectAsState()
+    val rawMembers by (viewModel?.members ?: dummyStateFlow(emptyList<MemberEntity>())).collectAsState()
     val beneficiaryShares by (viewModel?.beneficiaryShares ?: dummyStateFlow(emptyMap<String, Int>())).collectAsState()
     val payerShares by (viewModel?.payerShares ?: dummyStateFlow(emptyMap<String, Int>())).collectAsState()
     val attributionSuggestion by (viewModel?.attributionSuggestion
@@ -148,11 +154,17 @@ fun CaptureBottomSheet(
     val captureKind by (viewModel?.captureKind ?: dummyStateFlow(CaptureKind.EXPENSE)).collectAsState()
     val selectedDate by (viewModel?.selectedDate ?: dummyStateFlow<LocalDate?>(null)).collectAsState()
     val incomeMemberId by (viewModel?.incomeMemberId ?: dummyStateFlow<String?>(null)).collectAsState()
-    val recentCategories by (viewModel?.recentCategories ?: dummyStateFlow(emptyList<CategoryEntity>())).collectAsState()
+    val rawRecentCategories by (viewModel?.recentCategories ?: dummyStateFlow(emptyList<CategoryEntity>())).collectAsState()
     val categorySearchResults by (viewModel?.categorySearchResults ?: dummyStateFlow(emptyList<CategoryEntity>())).collectAsState()
     val unresolvedFields by (viewModel?.unresolvedFields ?: dummyStateFlow(emptySet<CaptureField>())).collectAsState()
     // Fase B/B3: "¿Quién pagó?" con tercero.
     val allMembers by (viewModel?.allMembers ?: dummyStateFlow(emptyList<MemberEntity>())).collectAsState()
+
+    // Tutorial: durante el tour se muestran miembros/categorías DEMO para que la atribución y la
+    // tarjeta de categoría tengan contenido (nunca tocan Room). Ver TUTORIAL.md.
+    val demo = tutorialController?.demoActive == true
+    val members = if (demo) mx.budget.ui.tutorial.TutorialDemoData.members else rawMembers
+    val recentCategories = if (demo) mx.budget.ui.tutorial.TutorialDemoData.recentCategories else rawRecentCategories
     val thirdPartyPayerId by (viewModel?.thirdPartyPayerId ?: dummyStateFlow<String?>(null)).collectAsState()
     val thirdPartyMode by (viewModel?.thirdPartyMode
         ?: dummyStateFlow(CaptureViewModel.ThirdPartyMode.REIMBURSE)).collectAsState()
@@ -194,6 +206,7 @@ fun CaptureBottomSheet(
             )
         }
     ) {
+      Box {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             containerColor = Color.Transparent
@@ -203,12 +216,15 @@ fun CaptureBottomSheet(
                     .padding(inner)
                     .imePadding()
             ) {
-                CaptureHeader(
-                    kind = captureKind,
-                    isReview = mode is CaptureSheetMode.Review,
-                    onKindChange = { viewModel?.onKindChange(it) },
-                    onClose = { viewModel?.onDismiss(); onDismiss() }
-                )
+                // TUTORIAL: CAP_KIND_TOGGLE — ver TUTORIAL.md
+                Box(Modifier.tutorialTarget(TutorialKey.CAP_KIND_TOGGLE, tutorialController)) {
+                    CaptureHeader(
+                        kind = captureKind,
+                        isReview = mode is CaptureSheetMode.Review,
+                        onKindChange = { viewModel?.onKindChange(it) },
+                        onClose = { viewModel?.onDismiss(); onDismiss() }
+                    )
+                }
 
                 // Contenido scrollable — weight(1f) (fill) acota el alto del scroll
                 // exactamente al espacio entre header y footer, alineando pintura y
@@ -220,17 +236,20 @@ fun CaptureBottomSheet(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 24.dp)
                 ) {
-                    AmountCard(
-                        displayAmount = displayAmount,
-                        concept = concept,
-                        kind = captureKind,
-                        onConceptChange = { viewModel?.onConceptChange(it) },
-                        onKey = { viewModel?.onNumpadKey(it) },
-                        onRegister = { viewModel?.onRegister() },
-                        canRegister = canRegister,
-                        amountPending = CaptureField.AMOUNT in unresolvedFields,
-                        conceptPending = CaptureField.CONCEPT in unresolvedFields
-                    )
+                    // TUTORIAL: CAP_AMOUNT_KEYPAD — ver TUTORIAL.md
+                    Box(Modifier.tutorialTarget(TutorialKey.CAP_AMOUNT_KEYPAD, tutorialController)) {
+                        AmountCard(
+                            displayAmount = displayAmount,
+                            concept = concept,
+                            kind = captureKind,
+                            onConceptChange = { viewModel?.onConceptChange(it) },
+                            onKey = { viewModel?.onNumpadKey(it) },
+                            onRegister = { viewModel?.onRegister() },
+                            canRegister = canRegister,
+                            amountPending = CaptureField.AMOUNT in unresolvedFields,
+                            conceptPending = CaptureField.CONCEPT in unresolvedFields
+                        )
+                    }
                     Spacer(Modifier.height(14.dp))
 
                     // Conmutación Gasto/Ingreso con resortes M3 (A3 §2).
@@ -260,18 +279,21 @@ fun CaptureBottomSheet(
                                         }
                                     }
                                 }
-                                CategoryCard(
-                                    categories = categories,
-                                    recents = recentCategories,
-                                    searchResults = categorySearchResults,
-                                    selectedCategoryId = selectedCategoryId,
-                                    pending = CaptureField.CATEGORY in unresolvedFields,
-                                    onSelect = { viewModel?.onCategorySelected(it) },
-                                    onQueryChange = { viewModel?.onCategoryQueryChange(it) },
-                                    onCreateCategory = { name, parentId ->
-                                        viewModel?.onCreateCategory(name, parentId)
-                                    }
-                                )
+                                // TUTORIAL: CAP_CATEGORY — ver TUTORIAL.md
+                                Box(Modifier.tutorialTarget(TutorialKey.CAP_CATEGORY, tutorialController)) {
+                                    CategoryCard(
+                                        categories = categories,
+                                        recents = recentCategories,
+                                        searchResults = categorySearchResults,
+                                        selectedCategoryId = selectedCategoryId,
+                                        pending = CaptureField.CATEGORY in unresolvedFields,
+                                        onSelect = { viewModel?.onCategorySelected(it) },
+                                        onQueryChange = { viewModel?.onCategoryQueryChange(it) },
+                                        onCreateCategory = { name, parentId ->
+                                            viewModel?.onCreateCategory(name, parentId)
+                                        }
+                                    )
+                                }
                                 Spacer(Modifier.height(14.dp))
                                 WalletsCard(
                                     title = "Fuente de pago",
@@ -284,15 +306,18 @@ fun CaptureBottomSheet(
                                 // Atribución visible = solo "Beneficia a". El pagador (casi
                                 // siempre el adulto dueño de la cuenta) se autodefine y vive
                                 // bajo "Más" para overridear/repartir.
-                                BeneficiaryCard(
-                                    members = members,
-                                    beneficiaryShares = beneficiaryShares,
-                                    pending = CaptureField.BENEFICIARY in unresolvedFields,
-                                    onToggle = { viewModel?.onBeneficiaryToggled(it) },
-                                    onDelta = { id, d -> viewModel?.onBeneficiaryShareDelta(id, d) },
-                                    onSelectAll = { viewModel?.onSelectAllMembers() },
-                                    onClearAll = { viewModel?.onClearMembers() }
-                                )
+                                // TUTORIAL: CAP_ATTRIBUTION — ver TUTORIAL.md
+                                Box(Modifier.tutorialTarget(TutorialKey.CAP_ATTRIBUTION, tutorialController)) {
+                                    BeneficiaryCard(
+                                        members = members,
+                                        beneficiaryShares = beneficiaryShares,
+                                        pending = CaptureField.BENEFICIARY in unresolvedFields,
+                                        onToggle = { viewModel?.onBeneficiaryToggled(it) },
+                                        onDelta = { id, d -> viewModel?.onBeneficiaryShareDelta(id, d) },
+                                        onSelectAll = { viewModel?.onSelectAllMembers() },
+                                        onClearAll = { viewModel?.onClearMembers() }
+                                    )
+                                }
                                 Spacer(Modifier.height(14.dp))
                                 MoreSection(
                                     members = members,
@@ -358,6 +383,19 @@ fun CaptureBottomSheet(
                 )
             }
         }
+        // Overlay del tutorial DENTRO de la hoja: dibuja el spotlight sobre los targets
+        // de captura en el espacio de coordenadas de la propia ventana del sheet.
+        if (tutorialController != null) {
+            mx.budget.ui.tutorial.TutorialOverlay(
+                controller = tutorialController,
+                currentRoute = tutorialCurrentRoute,
+                onNavigate = {},
+                groupFilter = { it.requiresCaptureSheet },
+                orchestrate = false,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+      }
     }
 
     // DatePicker M3 (A3 §5): fecha del movimiento; la quincena se resuelve

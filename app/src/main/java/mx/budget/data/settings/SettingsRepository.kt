@@ -40,6 +40,7 @@ class SettingsRepository(private val context: Context) {
     private val locationCaptureLevelKey = stringPreferencesKey("location_capture_level")
     private val activeHouseholdIdKey = stringPreferencesKey("active_household_id")
     private val nvidiaApiKeyKey = stringPreferencesKey("nvidia_api_key")
+    private val hasSeenTutorialKey = booleanPreferencesKey("has_seen_tutorial")
 
     /** Flujo del toggle de color dinámico. Default `true` (Material You). */
     val dynamicColor: Flow<Boolean> = context.dataStore.data
@@ -71,6 +72,20 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setBankCaptureEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs -> prefs[bankCaptureEnabledKey] = enabled }
+    }
+
+    /**
+     * `true` cuando el usuario ya vio (o saltó) el **tutorial guiado** de uso de la app
+     * (coach-marks / spotlight — ver `ui/tutorial/` y `TUTORIAL.md`). Independiente del
+     * onboarding de alta de datos (`needsOnboarding`): el tour arranca la primera vez
+     * incluso en instalaciones sembradas y se marca al terminar o saltar. Se puede
+     * relanzar desde Perfil sin resetear este flag.
+     */
+    val hasSeenTutorial: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[hasSeenTutorialKey] ?: false }
+
+    suspend fun setHasSeenTutorial(seen: Boolean) {
+        context.dataStore.edit { prefs -> prefs[hasSeenTutorialKey] = seen }
     }
 
     // ── Recordatorios de gastos PLANNED (Apéndice G.2, Fase 3) ──────────────────
