@@ -69,6 +69,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -77,6 +78,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -88,6 +90,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -495,10 +498,15 @@ private fun ExpandedDashboard(
                             )
                         }
                         Spacer(Modifier.height(22.dp))
+                        // weight(1f) y NO fillMaxSize: dentro de esta Column sin scroll,
+                        // fillMaxSize pedía TODA la altura y el Bento se recortaba bajo
+                        // el borde inferior en la pantalla casi cuadrada del Fold.
                         BentoPanes(
                             state = state,
                             singleMember = reimbursementUi.singleMember,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
                             tutorialController = tutorialController
                         )
                     }
@@ -1088,7 +1096,9 @@ private fun MainHealthPane(
             .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .verticalScroll(rememberScrollState())
-            .padding(36.dp)
+            // bottom holgado: la BottomActionBar flotante (~76dp + insets) se superpone
+            // al pie del panel; sin esta reserva el final del scroll queda tapado.
+            .padding(start = 36.dp, top = 36.dp, end = 36.dp, bottom = 120.dp)
     ) {
         // TUTORIAL: DASH_HERO_KPI — ver TUTORIAL.md
         Box(Modifier.tutorialTarget(TutorialKey.DASH_HERO_KPI, tutorialController)) {
@@ -1109,6 +1119,39 @@ private fun MainHealthPane(
             }
         }
     }
+}
+
+/**
+ * Cifra de monto con auto-escala: si el texto no cabe a lo ancho (fontScale 1.3 +
+ * panel angosto del Fold), baja el tamaño en pasos de 4sp hasta [minFontSp]. El
+ * contenido no se dibuja hasta converger para que no parpadee el reintento de medida.
+ * Nunca marquee ni elipsis: una cifra financiera cortada es un dato falso.
+ */
+@Composable
+private fun AutoSizeAmountText(
+    text: String,
+    baseStyle: TextStyle,
+    maxFontSp: Float,
+    minFontSp: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    var fontSize by remember(text.length) { mutableFloatStateOf(maxFontSp) }
+    var ready by remember(text.length) { mutableStateOf(false) }
+    Text(
+        text,
+        style = baseStyle.copy(fontSize = fontSize.sp),
+        color = color,
+        maxLines = 1, softWrap = false,
+        modifier = modifier.drawWithContent { if (ready) drawContent() },
+        onTextLayout = { result ->
+            if (result.didOverflowWidth && fontSize > minFontSp) {
+                fontSize = (fontSize - 4f).coerceAtLeast(minFontSp)
+            } else {
+                ready = true
+            }
+        }
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -1150,15 +1193,16 @@ private fun HeroKpi(state: DashboardUiState.Success) {
                 modifier = Modifier.padding(top = 6.dp)
             )
             Spacer(Modifier.width(6.dp))
-            Text(
-                animatedShown.toDouble().toGrouped(),
-                style = MaterialTheme.typography.displayLarge.copy(
+            AutoSizeAmountText(
+                text = animatedShown.toDouble().toGrouped(),
+                baseStyle = MaterialTheme.typography.displayLarge.copy(
                     fontWeight = FontWeight.Light,
-                    fontSize = 66.sp,
                     letterSpacing = (-1).sp
                 ),
+                maxFontSp = 66f,
+                minFontSp = 44f,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1, softWrap = false
+                modifier = Modifier.weight(1f, fill = false)
             )
             Spacer(Modifier.width(10.dp))
             Text(
@@ -2059,7 +2103,7 @@ private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: M
             LazyColumn(
                 state = rememberLazyListState(),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
-                contentPadding = PaddingValues(bottom = 88.dp) // espacio para que el FAB no tape la última fila
+                contentPadding = PaddingValues(bottom = 112.dp) // la BottomActionBar flotante (~76dp + insets) no debe tapar la última fila
             ) {
                 itemsIndexed(transactions, key = { _, it -> it.expenseId }) { index, tx ->
                     TransactionRow(tx, alternate = index % 2 == 1)
@@ -2195,12 +2239,15 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
                 modifier = Modifier.padding(top = 4.dp)
             )
             Spacer(Modifier.width(4.dp))
-            Text(
-                animatedShown.toDouble().toGrouped(),
-                style = MaterialTheme.typography.displayMedium.copy(
-                    fontWeight = FontWeight.Light, fontSize = 52.sp
+            AutoSizeAmountText(
+                text = animatedShown.toDouble().toGrouped(),
+                baseStyle = MaterialTheme.typography.displayMedium.copy(
+                    fontWeight = FontWeight.Light
                 ),
-                color = MaterialTheme.colorScheme.onSurface, maxLines = 1
+                maxFontSp = 52f,
+                minFontSp = 36f,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f, fill = false)
             )
             Spacer(Modifier.width(8.dp))
             Text(
