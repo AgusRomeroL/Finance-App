@@ -36,3 +36,5 @@ etl_output.log
 ui_reference/screenshots/
 ui_reference/claude_design/*.raw.json
 .kotlin/
+Copy of presupuesto 2.5 (1).xlsx
+scripts/etl/__pycache__/

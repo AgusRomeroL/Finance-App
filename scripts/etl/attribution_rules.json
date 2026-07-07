@@ -656,6 +656,148 @@
       "override_category": "TRANSFERENCIAS_FAMILIARES.PAU",
       "override_beneficiaries": ["pau"],
       "override_payment_method": "efectivo"
+    },
+
+    {
+      "_comment": "=== Reglas 2026-07 — reseed con Excel presupuesto 2.5 (37 hojas, ene-2025 → ago-2026) ===",
+      "id": "klar_pago_tarjeta",
+      "_comment2": "Klar en ENTERTAINMENT es el pago de la tarjeta Klar, no entretenimiento. No existe LOANS.KLAR (pendiente); se usa la raíz LOANS. Wallet klar (existe en PAYMENT_METHODS), a diferencia de las otras tarjetas que se pagan desde efectivo — decisión pedida explícitamente.",
+      "concept_pattern": "KLAR",
+      "match_type": "exact_normalized",
+      "section_filter": null,
+      "override_category": "LOANS",
+      "override_beneficiaries": ["norma"],
+      "override_payment_method": "klar"
+    },
+    {
+      "id": "tel_david",
+      "_comment": "Teléfono David en HOUSING → OTHER.TELEFONO, consistente con tel_norma/tel_santi/tel_benji",
+      "concept_pattern": "TELEFONO DAVID",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER.TELEFONO",
+      "override_beneficiaries": ["david"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "inscripcion_david",
+      "_comment": "Inscripción escolar de David (17,000 en TAXES) → colegiatura, no mesada",
+      "concept_pattern": "INSCRIPCION DAVID",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ESCUELA.DAVID",
+      "override_beneficiaries": ["david"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "inscripcion_pau",
+      "_comment": "Inscripción escolar de Pau (7,780 en TAXES) → colegiatura; la tilde de 'inscripción' se pierde al normalizar",
+      "concept_pattern": "INSCRIPCION PAU",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ESCUELA.PAU",
+      "override_beneficiaries": ["pau"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "libro_santi",
+      "_comment": "Libro escolar de Santiago → gasto de escuela, mismo destino que sus colegiaturas",
+      "concept_pattern": "LIBRO SANTI",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ESCUELA.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "santi_junio",
+      "_comment": "'Santi Junio' = colegiatura de Santiago con mes embebido (convención igual que SANTIAGO FEBRERO/MARZO/…)",
+      "concept_pattern": "SANTI JUNIO",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ESCUELA.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "santi_mayo",
+      "_comment": "'Santi Mayo' = colegiatura de Santiago con mes embebido",
+      "concept_pattern": "SANTI MAYO",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "ESCUELA.SANTIAGO",
+      "override_beneficiaries": ["santiago"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "pau_raul",
+      "_comment": "BAJA CONFIANZA: 'Pau Raul' (500 en OTHERS jul-2026) se trata como transferencia a Pau; se desconoce quién es Raúl",
+      "concept_pattern": "PAU RAUL",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "TRANSFERENCIAS_FAMILIARES.PAU",
+      "override_beneficiaries": ["pau"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "contador",
+      "_comment": "Contador (2,000 en OTHERS jul-2026) = honorarios del contador → servicio externo. Pendiente: categoría hija SERVICIOS_EXTERNOS.CONTADOR",
+      "concept_pattern": "CONTADOR",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "SERVICIOS_EXTERNOS",
+      "override_beneficiaries": ["norma", "benjamin"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "caja_chica",
+      "_comment": "Caja chica (1,000 en OTHERS jun-2026) = gasto operativo del hogar; se queda en OTHER raíz de forma deliberada",
+      "concept_pattern": "CAJA CHICA",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER",
+      "override_beneficiaries": ["norma", "benjamin"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "berna_bernardo",
+      "_comment": "BAJA CONFIANZA: 'Berna' (3,100 jun-2026) y 'Bernardo' (5,000 jul-2026) = pagos a una persona, presumiblemente servicio → SERVICIOS_EXTERNOS raíz. El patrón BERNA cubre ambos por contains. Pendiente: categoría hija si Agustín confirma quién es",
+      "concept_pattern": "BERNA",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "SERVICIOS_EXTERNOS",
+      "override_beneficiaries": ["norma", "benjamin"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "marco_y_omar",
+      "_comment": "BAJA CONFIANZA: 'Marco y omar' (2,120 en OTHERS jun-2026) = pago a personas; podría ser abono al préstamo de Omar pero el monto no coincide con la mensualidad de 5,500 → se deja en OTHER raíz para revisión",
+      "concept_pattern": "MARCO Y OMAR",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "OTHER",
+      "override_beneficiaries": ["norma", "benjamin"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "cochecito_other",
+      "_comment": "BAJA CONFIANZA: 'Cochecito' suelto en OTHERS (8,000 jun-2026) — monto muy alto para gasolina, se asume mantenimiento del coche de los hijos",
+      "concept_pattern": "COCHECITO",
+      "match_type": "contains",
+      "section_filter": "OTHER",
+      "override_category": "TRANSPORTATION.MAINTENANCE",
+      "override_beneficiaries": ["agustin", "david", "pau"],
+      "override_payment_method": "efectivo"
+    },
+    {
+      "id": "changan_gifts",
+      "_comment": "BAJA CONFIANZA: 'Changan' (5,000 en GIFTS jul-2026) es una marca de coche; el contexto de la hoja no aclara — se asume gasto del vehículo (¿enganche/servicio?) → TRANSPORTATION raíz. Revisar con Norma",
+      "concept_pattern": "CHANGAN",
+      "match_type": "contains",
+      "section_filter": null,
+      "override_category": "TRANSPORTATION",
+      "override_beneficiaries": ["norma", "benjamin"],
+      "override_payment_method": "efectivo"
     }
   ]
 }

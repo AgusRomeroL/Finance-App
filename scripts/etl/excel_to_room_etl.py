@@ -5,7 +5,7 @@
  excel_to_room_etl.py  —  Puente de datos: Excel quincenal → Room SQLite
 ================================================================================
 
-Lee ``Copy of presupuesto 2.5.xlsx`` (33 hojas quincenales manuales con layout
+Lee el Excel de presupuesto quincenal (hojas manuales con layout
 variable, typos, y formatos de fecha inconsistentes) y emite un archivo
 ``budget_database.db`` cuyo esquema es bit-compatible con el generado por Room
 para ``mx.budget.data.local.BudgetDatabase`` (version = 1).
@@ -78,6 +78,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Iterable, Optional
+from zoneinfo import ZoneInfo
 
 import pandas as pd  # noqa: F401  — se usa para analítica de los conteos finales.
 from openpyxl import load_workbook
@@ -110,6 +111,13 @@ ROOM_IDENTITY_HASH = "9b889298fe2edb27e8865dc8239ef354"
 # Epoch millis fijo para las filas "nacidas" por el ETL. Se elige el instante
 # en el que se generó la base de datos, en UTC.
 NOW_EPOCH_MS = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+
+# "Hoy" en la zona horaria del hogar. Gobierna los status derivados de la
+# fecha de generación: quincenas CLOSED/ACTIVE/PROVISIONED, gastos
+# POSTED/PLANNED e ingresos POSTED/PLANNED. Se usa la zona del hogar (no UTC)
+# porque el corte quincenal es un concepto local: a las 19:00 de CDMX ya es
+# "mañana" en UTC y sin esto la quincena activa podría cerrarse antes de tiempo.
+TODAY = datetime.now(ZoneInfo(HOUSEHOLD_TZ)).date()
 
 
 # ── 1.1 Miembros del hogar ────────────────────────────────────────────────────
@@ -786,6 +794,16 @@ def parse_sheet_name(name: str, fallback_year: int) -> Optional[SheetPeriod]:
         end = last_day
 
     half = "FIRST" if start <= 15 else "SECOND"
+
+    # Las quincenas SECOND cubren hasta el último día REAL del mes aunque el
+    # nombre de la hoja diga "al 30" en un mes de 31 (mar/may/jul/ago/dic):
+    # el autor del Excel usa "16 al 30" como plantilla fija. Sin esta
+    # extensión, el día 31 quedaría fuera de toda quincena y los gastos
+    # distribuidos por `occurred_at` nunca caerían en él.
+    if half == "SECOND" and end < last_day:
+        LOG.debug("Extendiendo día fin %d → %d (fin de mes real) en hoja %r",
+                  end, last_day, name)
+        end = last_day
     return SheetPeriod(
         year=year,
         month=month,
@@ -1164,6 +1182,9 @@ class EtlPipeline:
         self.db_path = db_path
         self.rules_path = rules_path
         self.stats = EtlStats()
+        # Suma de la celda E9 ("Ahorro empresa") de las hojas ya iniciadas;
+        # se vuelca a savings_goal.current_mxn en _finalize.
+        self._ahorro_empresa_mxn = 0.0
 
     # ── punto de entrada ─────────────────────────────────────────────────────
 
@@ -1325,22 +1346,74 @@ class EtlPipeline:
         cur = conn.cursor()
 
         # 3.1 · Extraer montos fijos de ingresos (celdas E4 y E5).
-        benja_income = _as_float(ws["E4"].value) or MEMBERS_BY_KEY["benjamin"].default_income or 0.0
-        norma_income = _as_float(ws["E5"].value) or MEMBERS_BY_KEY["norma"].default_income or 0.0
-        projected_income = (benja_income or 0.0) + (norma_income or 0.0)
+        # Fieles al Excel: si la celda está vacía NO se inventa un fallback al
+        # default del miembro — un E4 vacío significa que ese ingreso ya no
+        # existe (Benjamín deja de percibir sueldo desde oct-2025) y un E5
+        # cambiante refleja los aumentos reales de Norma (60k → 75k → 85k).
+        # `_insert_income` ya descarta montos <= 0, así que la quincena queda
+        # sin income_source para ese miembro, que es exactamente lo correcto.
+        benja_income = _as_float(ws["E4"].value) or 0.0
+        norma_income = _as_float(ws["E5"].value) or 0.0
+        projected_income = benja_income + norma_income
 
         # 3.2 · Extraer las líneas de presupuesto (gastos).
         lines = extract_budget_lines(ws)
 
         projected_expenses = sum(l.projected for l in lines)
 
-        # 3.3 · Insertar Quincena.
+        # 3.2b · Precomputar la fecha de cada gasto ANTES de insertar la
+        # quincena: la quincena ACTIVE necesita saber cuántos de sus gastos
+        # quedarán POSTED (occurred <= hoy) para escribir actual_expenses.
+        # occurred_at se distribuye uniformemente dentro del período para que
+        # las consultas temporales de la app tengan sentido.
+        span_days = max((period.end_date - period.start_date).days, 1)
+        dated_lines: list[tuple[BudgetLine, date, int]] = []
+        for idx, line in enumerate(lines):
+            day_offset = (idx * span_days) // max(len(lines), 1)
+            expense_date = date.fromordinal(period.start_date.toordinal() + day_offset)
+            occurred_at = int(datetime.combine(
+                expense_date,
+                time(hour=12),
+                tzinfo=timezone.utc,
+            ).timestamp() * 1000)
+            dated_lines.append((line, expense_date, occurred_at))
+
+        # 3.3 · Insertar Quincena, con status derivado de la fecha de
+        # generación (TODAY) en vez del 'CLOSED' histórico:
+        #   * terminó antes de hoy      → CLOSED, actual = projected (histórico)
+        #   * hoy cae dentro            → ACTIVE, actuales = solo lo ya POSTED
+        #   * empieza después de hoy    → PROVISIONED, actuales en cero
+        if period.end_date < TODAY:
+            status = "CLOSED"
+            closed_at: Optional[int] = NOW_EPOCH_MS
+            actual_income = projected_income
+            actual_expenses = projected_expenses
+        elif period.start_date > TODAY:
+            status = "PROVISIONED"
+            closed_at = None
+            actual_income = 0.0
+            actual_expenses = 0.0
+        else:
+            status = "ACTIVE"
+            closed_at = None
+            # Solo cuenta la mitad ya transcurrida: los gastos cuya fecha
+            # distribuida quedará POSTED y los ingresos ya cobrados (la fecha
+            # esperada es el inicio del período, que para la ACTIVE ya pasó).
+            actual_expenses = sum(
+                l.projected for l, expense_date, _ in dated_lines
+                if expense_date <= TODAY
+            )
+            actual_income = sum(
+                amount for amount in (benja_income, norma_income)
+                if amount > 0 and period.start_date <= TODAY
+            )
+
         cur.execute(
             """INSERT INTO quincena
                    (id, household_id, year, month, half, start_date, end_date,
                     label, projected_income_mxn, projected_expenses_mxn,
                     actual_income_mxn, actual_expenses_mxn, status, closed_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CLOSED', ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 period.quincena_id,
                 HOUSEHOLD_ID,
@@ -1352,9 +1425,10 @@ class EtlPipeline:
                 period.label,
                 projected_income,
                 projected_expenses,
-                projected_income,        # histórico: actual = projected
-                projected_expenses,
-                NOW_EPOCH_MS,
+                actual_income,
+                actual_expenses,
+                status,
+                closed_at,
             ),
         )
         self.stats.quincenas_written += 1
@@ -1375,20 +1449,15 @@ class EtlPipeline:
             payment_method_key="bbva",
         )
 
-        # 3.5 · Insertar gastos + atribuciones.
-        # occurred_at se distribuye uniformemente dentro del período para que
-        # las consultas temporales de la app tengan sentido.
-        span_days = max((period.end_date - period.start_date).days, 1)
-        for idx, line in enumerate(lines):
-            day_offset = (idx * span_days) // max(len(lines), 1)
-            expense_day = period.start_date.toordinal() + day_offset
-            occurred_at = int(datetime.combine(
-                date.fromordinal(expense_day),
-                time(hour=12),
-                tzinfo=timezone.utc,
-            ).timestamp() * 1000)
-
+        # 3.5 · Insertar gastos + atribuciones (fechas precomputadas en 3.2b).
+        for line, _, occurred_at in dated_lines:
             self._insert_expense(cur, period, line, occurred_at)
+
+        # 3.6 · Acumular el ahorro empresa ya apartado (celda E9): alimenta
+        # el current_mxn de la meta "Ahorro Empresa anual" en _finalize.
+        # Solo cuentan períodos ya iniciados — lo futuro aún no está apartado.
+        if period.start_date <= TODAY:
+            self._ahorro_empresa_mxn += _as_float(ws["E9"].value) or 0.0
 
         conn.commit()
 
@@ -1406,12 +1475,15 @@ class EtlPipeline:
         if amount <= 0:
             return
         income_id = did(f"income:{period.quincena_id}:{member_key}")
+        # POSTED solo si el ingreso ya debió cobrarse (expected_date = inicio
+        # del período <= hoy); los de quincenas futuras nacen PLANNED.
+        status = "POSTED" if period.start_date <= TODAY else "PLANNED"
         cur.execute(
             """INSERT INTO income_source
                    (id, household_id, quincena_id, member_id, label,
                     amount_mxn, cadence, expected_date, payment_method_id,
                     status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, 'QUINCENAL', ?, ?, 'POSTED', ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, 'QUINCENAL', ?, ?, ?, ?)""",
             (
                 income_id,
                 HOUSEHOLD_ID,
@@ -1421,6 +1493,7 @@ class EtlPipeline:
                 amount,
                 period.start_date.isoformat(),
                 PAYMENT_METHODS_BY_KEY[payment_method_key].id,
+                status,
                 NOW_EPOCH_MS,
             ),
         )
@@ -1442,6 +1515,16 @@ class EtlPipeline:
         category_id = resolve_category(line)
         wallet_id = resolve_payment_method(line)
 
+        # POSTED solo si el gasto ya "ocurrió" respecto a la fecha de
+        # generación; lo futuro (quincenas PROVISIONED y la mitad restante de
+        # la ACTIVE) nace PLANNED, que es como la app modela pagos pendientes
+        # confirmables. La fecha se lee del propio occurred_at en UTC porque
+        # así se generó (mediodía UTC del día distribuido).
+        occurred_date = datetime.fromtimestamp(
+            occurred_at / 1000, tz=timezone.utc
+        ).date()
+        status = "POSTED" if occurred_date <= TODAY else "PLANNED"
+
         cur.execute(
             """INSERT INTO expense
                    (id, household_id, occurred_at, quincena_id, category_id,
@@ -1451,7 +1534,7 @@ class EtlPipeline:
                     installment_interest_mxn, status, notes, created_at,
                     created_by_member_id)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL,
-                       'POSTED', ?, ?, NULL)""",
+                       ?, ?, ?, NULL)""",
             (
                 expense_id,
                 HOUSEHOLD_ID,
@@ -1461,6 +1544,7 @@ class EtlPipeline:
                 line.concept[:64],
                 line.projected,
                 wallet_id,
+                status,
                 f"Importado desde hoja '{line.sheet_name}'",
                 NOW_EPOCH_MS,
             ),
@@ -1538,9 +1622,27 @@ class EtlPipeline:
     # ── paso 4: cierre ──────────────────────────────────────────────────────
 
     def _finalize(self, conn: sqlite3.Connection) -> None:
+        # Meta "Ahorro Empresa anual": current_mxn = suma de lo YA apartado
+        # (celda E9 de cada hoja con período iniciado), acumulado en 3.6.
+        # El target sigue siendo el seed de 60k; solo se actualiza el avance.
+        conn.execute(
+            "UPDATE savings_goal SET current_mxn = ? WHERE id = ?",
+            (self._ahorro_empresa_mxn, did("savings_goal:ahorro_empresa")),
+        )
+        conn.commit()
+        LOG.info("Ahorro Empresa acumulado a la fecha: $%.2f",
+                 self._ahorro_empresa_mxn)
+
         # Reactiva FK para futuras sesiones (Room lo hace al abrir).
         conn.execute("PRAGMA foreign_keys = ON")
-        # VACUUM compacta el archivo final.
+        # user_version = 1 es OBLIGATORIO: el asset declara schema v1. Si
+        # queda en 0, el SQLiteOpenHelper de Android llama onCreate (no
+        # onUpgrade) en instalación fresca y createAllTables de Room intenta
+        # crear índices del schema actual sobre tablas del asset que no tienen
+        # esas columnas → crash al primer arranque (footgun documentado en
+        # CLAUDE.md). Debe fijarse ANTES del commit/cierre final.
+        conn.execute("PRAGMA user_version = 1")
+        # VACUUM compacta el archivo final (preserva user_version).
         conn.execute("VACUUM")
         conn.commit()
 
@@ -1584,7 +1686,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     print("=" * 70)
     print(f"  Base generada: {args.output}")
     print("-" * 70)
-    print(f"  Hojas procesadas:      {stats.sheets_parsed} / 33")
+    print(f"  Hojas procesadas:      {stats.sheets_parsed}")
     print(f"  Quincenas creadas:     {stats.quincenas_written}")
     print(f"  Ingresos creados:      {stats.incomes_written}")
     print(f"  Gastos creados:        {stats.expenses_written}")
