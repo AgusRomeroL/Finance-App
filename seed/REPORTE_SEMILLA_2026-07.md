@@ -221,3 +221,14 @@ Escaneé los bloques inferiores (filas 60–140) de las 37 hojas. La mayoría es
 4. **Saldos/pagos de corte de tarjetas por quincena** (BANAMEX $1,057→$1,783→$20,808; BBVA $800→$630.28; Coppel $2,000): tracking manual de estados de cuenta — exactamente lo que reemplaza la nueva función de reescritura por estado de cuenta.
 5. **Viáticos del trabajo de Norma (Q1 oct-2025, cols E–J):** "Airbnb capacitadores (Inbursa)", "viáticos Néstor", "Coahuila", "accidente/reposición" — gastos **reembolsables del trabajo**, no del hogar. Correctamente fuera de la BD.
 6. **Ahorro efectivo**: "Q2 nov: $18,000" (hoja ene-2025) y "Ahorro $1,700 · 30-ene-2026" — apartados en efectivo puntuales, no capturados (el goal "Ahorro Empresa" solo suma los $1,000 de E9).
+
+## 9. Ronda 3 — captura de las notas confirmadas (2026-07-07)
+
+Agustín confirmó que el fondo de $59,000 de feb-2025 fue un **aguinaldo** y autorizó registrar lo propuesto en §8:
+
+1. **Ingreso "Aguinaldo"** de $59,000 (Norma, Q1 feb-2025, wallet Efectivo, cadencia UNICO, POSTED).
+2. **Gastos one-off del fondo** que no duplican presupuesto: **Mueble $19,900** (HOUSING.MUEBLES — categoría nueva; beneficia a los 6) y **Reparación coche $6,900** (TRANSPORTATION.MAINTENANCE; beneficiaria Norma — corregible si el coche era de otro). Pagados por Norma (su aguinaldo). Los renglones restantes del fondo (Liverpool $7,663.50, Sears $2,696, Despensa $2,078, Pau $10,000) NO se importaron: ya existen como líneas presupuestadas de esa quincena.
+3. Los **actuales de Q1 feb-2025** dejan de ser == projected: ingreso real $164,000 (105k sueldos + 59k aguinaldo), gasto real $85,349 (58,549 presupuestado + 26,800 del fondo).
+4. **Cuenta por cobrar "Deben"**: préstamo por cobrar de $3,600 (oct-2025, "Medicina + rotafolio") con saldo $1,900 (nota de dic-2025/ene-2026), deudor **"Por identificar"** (miembro externo nuevo `deudor_pendiente` — renombrar en la app cuando Norma diga quién es).
+
+Totales finales: **919 gastos** ($2,129,911.13 = 2,103,111.13 del presupuesto + 26,800 del fondo), 54 ingresos, 2 préstamos por cobrar (Jaudiel $105,000 + Deben $1,900), 10 miembros, golden re-promovido y verificado en emulador (instalación fresca, migra 1→15, sin crash).

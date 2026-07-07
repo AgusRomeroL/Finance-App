@@ -38,6 +38,7 @@
 | Mary | OTHER.MARY | Norma 100% | Norma 100% | Efectivo | 3 | 7,213 |
 | Mercado Libre MSI | LOANS.MERCADO_LIBRE | Santiago 17%, Agustín 17%, Benjamín 17%, David 17%, Norma 17%, Pau 17% | Norma 100% | Efectivo | 8 | 13,472 |
 | Mercado Pago | LOANS.MERCADO_PAGO | Santiago 17%, Agustín 17%, Benjamín 17%, David 17%, Norma 17%, Pau 17% | Norma 100%, Benjamín 0% | Efectivo | 13 | 41,140 |
+| Mueble | HOUSING.MUEBLES | Santiago 17%, Agustín 17%, Benjamín 17%, David 17%, Norma 17%, Pau 17% | Norma 100% | Efectivo | 1 | 19,900 |
 | Netflix | ENTERTAINMENT.NETFLIX | Santiago 17%, Agustín 17%, Benjamín 17%, David 17%, Norma 17%, Pau 17% | Norma 100% | Efectivo | 18 | 5,922 |
 | Norma | TRANSFERENCIAS_FAMILIARES.NORMA | Norma 100% | Norma 97%, Benjamín 3% | Efectivo | 37 | 88,471 |
 | Pau | TRANSFERENCIAS_FAMILIARES.PAU | Pau 100% | Norma 100% | Efectivo | 2 | 1,300 |
@@ -45,6 +46,7 @@
 | Prime | ENTERTAINMENT.PRIME | Santiago 17%, Agustín 17%, Benjamín 17%, David 17%, Norma 17%, Pau 17% | Norma 100% | Efectivo | 18 | 1,782 |
 | Préstamo Omar | LOANS.OMAR | Norma 100% | Norma 100% | Efectivo | 10 | 55,000 |
 | Psicóloga | OTHER.SALUD | Norma 100% | Norma 100% | Efectivo | 20 | 18,000 |
+| Reparación coche | TRANSPORTATION.MAINTENANCE | Norma 100% | Norma 100% | Efectivo | 1 | 6,900 |
 | Santi | TRANSFERENCIAS_FAMILIARES.SANTIAGO | Santiago 100% | Norma 95%, Benjamín 5% | Efectivo | 34 | 15,929 |
 | Sears | LOANS.SEARS | Norma 100% | Norma 99%, Benjamín 1% | Efectivo | 18 | 24,855 |
 | Spotify | ENTERTAINMENT.SPOTIFY | Santiago 17%, Agustín 17%, Benjamín 17%, David 17%, Norma 17%, Pau 17% | Benjamín 100% | Efectivo | 8 | 1,432 |
@@ -60,5 +62,12 @@
 INGRESOS
 | Fuente | Miembro | Quincenas | Monto(s) | Wallet destino |
 |---|---|---:|---|---|
+| Aguinaldo | Norma | 1 | 59000 | Efectivo |
 | Sueldo Benjamín | Benjamín | 16 | 45000 | Ahorro Empresa |
 | Sueldo Norma | Norma | 37 | 60000,75000,85000 | BBVA |
+
+PRÉSTAMOS POR COBRAR
+| Deudor | Principal | Saldo | Nota |
+|---|---:|---:|---|
+| Jaudiel | 105,000 | 105,000 | Préstamo histórico registrado en Excel (R116) |
+| Por identificar | 3,600 | 1,900 | Cuenta por cobrar de las notas del Excel: 'Deben $3,600 — Medicina + rotafolio'  |

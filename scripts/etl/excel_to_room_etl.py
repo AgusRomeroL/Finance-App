@@ -154,6 +154,10 @@ MEMBERS: tuple[MemberSeed, ...] = (
                ("jaudiel",)),
     MemberSeed("araceli",  "Araceli",   "EXTERNAL_SERVICE",
                ("araceli",)),
+    # Deudor de la cuenta por cobrar "Deben $3,600 — Medicina + rotafolio"
+    # (notas del Excel oct-dic 2025). Norma sabe quién es; renombrar en la app.
+    MemberSeed("deudor_pendiente", "Por identificar", "EXTERNAL_DEBTOR",
+               ("deudor",)),
 )
 
 MEMBERS_BY_KEY: dict[str, MemberSeed] = {m.key: m for m in MEMBERS}
@@ -243,6 +247,7 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("HOUSING.AGUA",             "Agua",             "HOUSING",        "EXPENSE_VARIABLE",  None),
     CategorySeed("HOUSING.TELEFONO",         "Teléfono",         "HOUSING",        "EXPENSE_FIXED",     None),
     CategorySeed("HOUSING.FRACCIONAMIENTO",  "Fraccionamiento",  "HOUSING",        "EXPENSE_FIXED",     None),
+    CategorySeed("HOUSING.MUEBLES",          "Muebles",          "HOUSING",        "EXPENSE_VARIABLE",  None),
 
     CategorySeed("TRANSPORTATION.GASOLINA",  "Gasolina",         "TRANSPORTATION", "EXPENSE_VARIABLE", 2600.0),
     CategorySeed("TRANSPORTATION.INSURANCE", "Seguro vehículo",  "TRANSPORTATION", "EXPENSE_FIXED",     None),
@@ -1412,6 +1417,7 @@ class EtlPipeline:
             self._create_schema(conn)
             self._insert_seed(conn)
             self._ingest_sheets(conn, wb)
+            self._insert_oneoff_seeds(conn)
             self._finalize(conn)
 
         LOG.info("ETL completado: %s", self.stats)
@@ -1936,6 +1942,120 @@ class EtlPipeline:
         return result
 
     # ── paso 4: cierre ──────────────────────────────────────────────────────
+
+    # ── paso 3.7: seeds one-off fuera de las secciones presupuestales ───────
+
+    def _insert_oneoff_seeds(self, conn: sqlite3.Connection) -> None:
+        """
+        Registros confirmados por Agustín (2026-07-07) que viven en las NOTAS
+        del Excel, no en las secciones presupuestales:
+
+        1. Fondo de $59,000 de Q1 feb-2025 (filas 69-75): aguinaldo de Norma
+           gastado fuera del presupuesto. Se registra el ingreso y los dos
+           gastos que NO duplican líneas presupuestadas (Mueble $19,900 y
+           Reparación coche $6,900); los demás renglones del fondo
+           (Liverpool/Sears/Despensa/Pau) ya existen como líneas del
+           presupuesto. Los actuales de la quincena se ajustan (dejan de ser
+           == projected: hubo gasto extra real cubierto por el aguinaldo).
+        2. Cuenta por cobrar "Deben $3,600 — Medicina + rotafolio" (oct-2025),
+           reducida a $1,900 en dic-2025/ene-2026 → loan por cobrar con
+           deudor "Por identificar" (Norma lo renombra en la app).
+        """
+        cur = conn.cursor()
+        q_feb = did("quincena:2025-02-FIRST")
+        norma = MEMBERS_BY_KEY["norma"]
+        efectivo_id = PAYMENT_METHODS_BY_KEY["efectivo"].id
+
+        # 1a. Ingreso del aguinaldo (en efectivo: el fondo se siguió en las
+        # notas "Ahorro Efectivo", no en un banco).
+        cur.execute(
+            """INSERT INTO income_source
+                   (id, household_id, quincena_id, member_id, label,
+                    amount_mxn, cadence, expected_date, payment_method_id,
+                    status, created_at)
+               VALUES (?, ?, ?, ?, 'Aguinaldo', 59000.0, 'UNICO',
+                       '2025-02-01', ?, 'POSTED', ?)""",
+            (did(f"income:{q_feb}:aguinaldo"), HOUSEHOLD_ID, q_feb,
+             norma.id, efectivo_id, NOW_EPOCH_MS),
+        )
+        self.stats.incomes_written += 1
+
+        # 1b. Gastos one-off pagados del aguinaldo.
+        occurred = int(datetime(2025, 2, 8, 12, tzinfo=timezone.utc)
+                       .timestamp() * 1000)
+        fondo_nota = ("Pagado del aguinaldo de $59,000 (fondo de feb-2025, "
+                      "notas del Excel filas 69-75)")
+        oneoffs = (
+            ("mueble", "Mueble", 19_900.0, "HOUSING.MUEBLES",
+             ["benjamin", "norma", "pau", "david", "agustin", "santiago"]),
+            ("reparacion_coche", "Reparación coche", 6_900.0,
+             "TRANSPORTATION.MAINTENANCE", ["norma"]),
+        )
+        for key, concepto, monto, cat_code, bene_keys in oneoffs:
+            expense_id = did(f"expense:oneoff:2025-02:{key}")
+            cur.execute(
+                """INSERT INTO expense
+                       (id, household_id, occurred_at, quincena_id, category_id,
+                        concept, amount_mxn, payment_method_id,
+                        recurrence_template_id, installment_plan_id,
+                        installment_number, installment_principal_mxn,
+                        installment_interest_mxn, status, notes, created_at,
+                        created_by_member_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL,
+                           NULL, 'POSTED', ?, ?, NULL)""",
+                (expense_id, HOUSEHOLD_ID, occurred, q_feb,
+                 CATEGORIES_BY_CODE[cat_code].id, concepto, monto,
+                 efectivo_id, fondo_nota, NOW_EPOCH_MS),
+            )
+            self.stats.expenses_written += 1
+            bene_ids = [MEMBERS_BY_KEY[k].id for k in bene_keys]
+            for member_id, share in zip(bene_ids,
+                                        split_basis_points(len(bene_ids))):
+                cur.execute(
+                    """INSERT INTO expense_attribution
+                           (id, expense_id, member_id, role, share_bps,
+                            share_amount_mxn)
+                       VALUES (?, ?, ?, 'BENEFICIARY', ?, ?)""",
+                    (did(f"attr:{expense_id}:BEN:{member_id}"), expense_id,
+                     member_id, share, round(monto * share / 10_000, 2)),
+                )
+                self.stats.attributions_written += 1
+            # Pagado por Norma (de su aguinaldo).
+            cur.execute(
+                """INSERT INTO expense_attribution
+                       (id, expense_id, member_id, role, share_bps,
+                        share_amount_mxn)
+                   VALUES (?, ?, ?, 'PAYER', 10000, ?)""",
+                (did(f"attr:{expense_id}:PAY:{norma.id}"), expense_id,
+                 norma.id, monto),
+            )
+            self.stats.attributions_written += 1
+
+        # 1c. Ajustar actuales de la quincena (CLOSED venía con
+        # actual == projected; el fondo fue movimiento real extra).
+        cur.execute(
+            """UPDATE quincena
+               SET actual_income_mxn = actual_income_mxn + 59000.0,
+                   actual_expenses_mxn = actual_expenses_mxn + 26800.0
+               WHERE id = ?""",
+            (q_feb,),
+        )
+
+        # 2. Cuenta por cobrar "Deben".
+        cur.execute(
+            """INSERT INTO loan
+                   (id, household_id, debtor_member_id, principal_mxn,
+                    remaining_balance_mxn, agreed_interest_mxn, issued_at,
+                    due_at, payment_schedule_id, notes)
+               VALUES (?, ?, ?, 3600.0, 1900.0, 0.0, '2025-10-01', NULL,
+                       NULL, ?)""",
+            (did("loan:deben_medicina_rotafolio"), HOUSEHOLD_ID,
+             MEMBERS_BY_KEY["deudor_pendiente"].id,
+             "Cuenta por cobrar de las notas del Excel: 'Deben $3,600 — "
+             "Medicina + rotafolio' (oct-2025); para dic-2025/ene-2026 la "
+             "nota baja a $1,900. Deudor por identificar/renombrar en la app."),
+        )
+        conn.commit()
 
     def _finalize(self, conn: sqlite3.Connection) -> None:
         # Meta "Ahorro Empresa anual": current_mxn = suma de lo YA apartado
