@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace = "mx.budget.wear"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         // Mismo applicationId que el teléfono: requisito de la app companion Wear
         // (emparejamiento por package). El namespace (mx.budget.wear) sí difiere.
         applicationId = "mx.budget"
         minSdk = 30 // Wear OS 3+
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
     }
@@ -26,11 +26,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         // Horologist marca su layout API (AppScaffold/ScreenScaffold/responsive column)
         // como experimental; optamos in a nivel de módulo en vez de anotar cada uso.
-        freeCompilerArgs += "-opt-in=com.google.android.horologist.annotations.ExperimentalHorologistApi"
+        freeCompilerArgs.add("-opt-in=com.google.android.horologist.annotations.ExperimentalHorologistApi")
     }
 }
 
@@ -38,7 +41,7 @@ dependencies {
     // Constantes compartidas del Data Layer telefono-reloj (MVP Fase 5).
     implementation(project(":wearcore"))
 
-    val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
+    val composeBom = platform("androidx.compose:compose-bom:2025.12.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
