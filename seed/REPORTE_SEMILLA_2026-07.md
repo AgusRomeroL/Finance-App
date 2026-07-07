@@ -232,3 +232,11 @@ Agustín confirmó que el fondo de $59,000 de feb-2025 fue un **aguinaldo** y au
 4. **Cuenta por cobrar "Deben"**: préstamo por cobrar de $3,600 (oct-2025, "Medicina + rotafolio") con saldo $1,900 (nota de dic-2025/ene-2026), deudor **"Por identificar"** (miembro externo nuevo `deudor_pendiente` — renombrar en la app cuando Norma diga quién es).
 
 Totales finales: **919 gastos** ($2,129,911.13 = 2,103,111.13 del presupuesto + 26,800 del fondo), 54 ingresos, 2 préstamos por cobrar (Jaudiel $105,000 + Deben $1,900), 10 miembros, golden re-promovido y verificado en emulador (instalación fresca, migra 1→15, sin crash).
+
+## 10. Ronda 4 — ajustes finales (2026-07-07)
+
+1. **"Reparación coche"** (one-off del aguinaldo): beneficiarios corregidos a **Agustín/David/Normita** (33% c/u).
+2. **Pau se llama "Normita" en toda la app**: display del miembro, conceptos ("Escuela Normita", "Teléfono Normita", "Normita", "Normita, David y Agus") y categorías ("Mesada Normita", "Colegiatura Normita"). El key interno del miembro y los alias conservan "pau" porque así viene en el Excel; se añadió el alias "normita".
+3. **Correo apartado en Firebase Auth**: `normly@gmail.com` (CORRECCIÓN: gmail, no hotmail) creado vía Admin SDK — uid `fQP5T1frbuZyShweNq7m3bTnVqg2`, display name "Norma". Sigue pendiente habilitar el proveedor anónimo (y Google) en la consola para el sign-in del cliente.
+
+Totales sin cambio: 919 gastos / $2,129,911.13 / 54 ingresos / 2 préstamos / 10 miembros. Golden re-promovido, verificado en emulador (instalación fresca, migra 1→15, sin crash).

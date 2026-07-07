@@ -140,8 +140,10 @@ MEMBERS: tuple[MemberSeed, ...] = (
                ("benji", "benjamin", "benjamín"), 45_000.0),
     MemberSeed("norma",    "Norma",     "PAYER_ADULT",
                ("norma",), 60_000.0),
-    MemberSeed("pau",      "Pau",       "BENEFICIARY_DEPENDENT",
-               ("pau", "paulina", "pau,", "pau ")),
+    # Pau se llama "Normita" en la app (pedido de Agustín 2026-07-07); el key
+    # y los alias conservan "pau" porque así aparece en el Excel.
+    MemberSeed("pau",      "Normita",   "BENEFICIARY_DEPENDENT",
+               ("pau", "paulina", "pau,", "pau ", "normita")),
     MemberSeed("david",    "David",     "BENEFICIARY_DEPENDENT",
                ("david", "dav", "dave")),
     MemberSeed("agustin",  "Agustín",   "BENEFICIARY_DEPENDENT",
@@ -290,7 +292,7 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("SEGUROS_MEDICOS.SANTI",    "Seguro Santi",     "SEGUROS_MEDICOS","EXPENSE_FIXED",     None),
 
     CategorySeed("TRANSFERENCIAS_FAMILIARES.DAVID",    "Mesada David",    "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
-    CategorySeed("TRANSFERENCIAS_FAMILIARES.PAU",      "Mesada Pau",      "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
+    CategorySeed("TRANSFERENCIAS_FAMILIARES.PAU",      "Mesada Normita",  "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
     CategorySeed("TRANSFERENCIAS_FAMILIARES.SANTIAGO", "Mesada Santiago", "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
     CategorySeed("TRANSFERENCIAS_FAMILIARES.NORMA",    "Mesada Norma",    "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
     CategorySeed("TRANSFERENCIAS_FAMILIARES.AGUSTIN",  "Mesada Agustín",  "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
@@ -298,7 +300,7 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("TRANSFERENCIAS_FAMILIARES.INSCRIPCIONES", "Inscripciones", "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
 
     CategorySeed("ESCUELA.DAVID",            "Colegiatura David",    "ESCUELA",    "EXPENSE_FIXED",     None),
-    CategorySeed("ESCUELA.PAU",              "Colegiatura Pau",      "ESCUELA",    "EXPENSE_FIXED",     None),
+    CategorySeed("ESCUELA.PAU",              "Colegiatura Normita",  "ESCUELA",    "EXPENSE_FIXED",     None),
     CategorySeed("ESCUELA.SANTIAGO",          "Colegiatura Santiago", "ESCUELA",    "EXPENSE_FIXED",     None),
 
     CategorySeed("SAVINGS.EMPRESA",          "Ahorro Empresa",   "SAVINGS",        "SAVINGS",           None),
@@ -1214,14 +1216,17 @@ CANONICAL_CONCEPT_RULES: tuple[CanonicalConceptRule, ...] = (
     # tocar los "DAVID"/"PAU"/"SANTIAGO" de otras secciones.
     CanonicalConceptRule(r".*", "Escuela David",    category_filter="ESCUELA.DAVID"),
     CanonicalConceptRule(r".*", "Escuela Santiago", category_filter="ESCUELA.SANTIAGO"),
-    CanonicalConceptRule(r".*", "Escuela Pau",      category_filter="ESCUELA.PAU"),
+    CanonicalConceptRule(r".*", "Escuela Normita",  category_filter="ESCUELA.PAU"),
 
-    # Transferencias a Pau que NO son colegiatura (el "Pau" de $800 en OTHER
-    # y "Pau Raul" — Raul es el novio de Pau, el gasto es de ella).
-    CanonicalConceptRule(r"PAU RAUL", "Pau",
-                         note="gasto de Pau; Raúl es su novio"),
-    CanonicalConceptRule(r"PAU", "Pau",
+    # Transferencias a Normita (Pau) que NO son colegiatura (el "Pau" de $800
+    # en OTHER y "Pau Raul" — Raul es el novio de Normita, el gasto es de ella).
+    CanonicalConceptRule(r"PAU RAUL", "Normita",
+                         note="gasto de Normita (Pau); Raúl es su novio"),
+    CanonicalConceptRule(r"PAU", "Normita",
                          category_filter="TRANSFERENCIAS_FAMILIARES.PAU"),
+
+    # Seguro de los tres hijos mayores (sección PERSONAL del Excel).
+    CanonicalConceptRule(r"PAU,? DAVID,? AGUS", "Normita, David y Agus"),
 
     # Typos y tildes.
     CanonicalConceptRule(r"HAWAI?[NI]?ANO", "Hawaiano"),   # HAWAIANO / HAWAINANO
@@ -1257,7 +1262,7 @@ CANONICAL_CONCEPT_RULES: tuple[CanonicalConceptRule, ...] = (
     CanonicalConceptRule(r"TELEFONO NORMA", "Teléfono Norma"),
     CanonicalConceptRule(r"TELEFONO SANTI", "Teléfono Santi"),
     CanonicalConceptRule(r"TELEFONO BENJI", "Teléfono Benji"),
-    CanonicalConceptRule(r"TELEFONO PAU", "Teléfono Pau"),
+    CanonicalConceptRule(r"TELEFONO PAU", "Teléfono Normita"),
 
     # Pulido cosmético: capitalización/tildes consistentes para conceptos que
     # el Excel trae en minúsculas/MAYÚSCULAS crudas (una sola variante cada
@@ -1319,12 +1324,12 @@ class SplitRule:
 
 SPLIT_RULES: tuple[SplitRule, ...] = (
     SplitRule(r"TELEFONO PAU Y DAVID", "HOUSING", (
-        ("pau",   "Teléfono Pau"),
+        ("pau",   "Teléfono Normita"),
         ("david", "Teléfono David"),
     )),
     SplitRule(r"TELEFONO MOVISTAR", "HOUSING", (
         ("norma",    "Teléfono Norma"),
-        ("pau",      "Teléfono Pau"),
+        ("pau",      "Teléfono Normita"),
         ("david",    "Teléfono David"),
         ("santiago", "Teléfono Santi"),
     )),
@@ -1989,7 +1994,7 @@ class EtlPipeline:
             ("mueble", "Mueble", 19_900.0, "HOUSING.MUEBLES",
              ["benjamin", "norma", "pau", "david", "agustin", "santiago"]),
             ("reparacion_coche", "Reparación coche", 6_900.0,
-             "TRANSPORTATION.MAINTENANCE", ["norma"]),
+             "TRANSPORTATION.MAINTENANCE", ["agustin", "david", "pau"]),
         )
         for key, concepto, monto, cat_code, bene_keys in oneoffs:
             expense_id = did(f"expense:oneoff:2025-02:{key}")
