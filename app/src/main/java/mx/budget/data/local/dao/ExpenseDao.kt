@@ -212,6 +212,7 @@ interface ExpenseDao {
         LEFT JOIN installment_plan ip ON ip.id = e.installment_plan_id
         WHERE e.household_id = :householdId
           AND e.settlement_status = 'PENDING_REIMBURSEMENT'
+          AND e.status = 'POSTED'
         ORDER BY e.occurred_at DESC
         """
     )
@@ -233,11 +234,53 @@ interface ExpenseDao {
         FROM expense e
         WHERE e.household_id = :householdId
           AND e.settlement_status = 'PENDING_REIMBURSEMENT'
+          AND e.status = 'POSTED'
         GROUP BY e.external_payer_member_id
         ORDER BY totalMxn DESC
         """
     )
     fun observePendingReimbursementTotals(householdId: String): Flow<List<mx.budget.data.local.result.PendingReimbursementByPayer>>
+
+    /**
+     * Gastos pendientes de reembolso con el tercero que los adelantó
+     * (`external_payer_member_id`), para la pantalla "Cuentas entre miembros"
+     * (deudas explícitas por pagar). A diferencia de [observePendingReimbursements],
+     * expone el pagador para agrupar por miembro y desglosar la deuda por concepto.
+     *
+     * @Query NUEVO de solo lectura — NO altera el esquema.
+     */
+    @Query(
+        """
+        SELECT
+            e.id                       AS expenseId,
+            e.concept                  AS concept,
+            e.amount_mxn               AS amountMxn,
+            e.occurred_at              AS occurredAt,
+            e.external_payer_member_id AS externalPayerMemberId
+        FROM expense e
+        WHERE e.household_id = :householdId
+          AND e.settlement_status = 'PENDING_REIMBURSEMENT'
+          AND e.status = 'POSTED'
+        ORDER BY e.occurred_at DESC
+        """
+    )
+    fun observePendingReimbursementExpenses(
+        householdId: String
+    ): Flow<List<mx.budget.data.local.result.PendingReimbursementExpense>>
+
+    /**
+     * Marca un gasto adelantado por un tercero como **reembolsado**
+     * (`settlement_status = 'REIMBURSED'`): el hogar ya le repuso el dinero al que
+     * lo adelantó. NO mueve saldos de wallet (la reposición ocurre en efectivo/fuera
+     * del ledger) — a diferencia de [mx.budget.data.repository.ExpenseRepository.reimburseFrom],
+     * que reasigna el gasto a un wallet real. Gate `PENDING_REIMBURSEMENT` para no
+     * pisar otros estados. Sube `updated_at` para el LWW del sync.
+     */
+    @Query(
+        "UPDATE expense SET settlement_status = 'REIMBURSED', updated_at = :ts " +
+            "WHERE id = :id AND settlement_status = 'PENDING_REIMBURSEMENT'"
+    )
+    suspend fun markReimbursed(id: String, ts: Long)
 
     /**
      * Gastos `PLANNED` del hogar con el contexto que el [ReminderWorker] (Fase 3)
@@ -280,6 +323,13 @@ interface ExpenseDao {
     @Query("SELECT * FROM expense WHERE household_id = :householdId")
     suspend fun getAll(householdId: String): List<ExpenseEntity>
 
+    /** Gasto (cualquier status) de una cuota MSI concreta — dedupe del materializador. */
+    @Query(
+        "SELECT * FROM expense WHERE household_id = :householdId AND installment_plan_id = :planId " +
+            "AND installment_number = :number LIMIT 1"
+    )
+    suspend fun getByPlanAndNumber(householdId: String, planId: String, number: Int): ExpenseEntity?
+
     /**
      * Ids de categoría usados más recientemente en gastos POSTED del hogar,
      * ordenados por último uso (v13, A0). Alimenta las "recientes" reales de
@@ -299,6 +349,18 @@ interface ExpenseDao {
     /** Persiste la clave canónica calculada para un gasto. */
     @Query("UPDATE expense SET concept_canonical = :canonical WHERE id = :id")
     suspend fun updateConceptCanonical(id: String, canonical: String?)
+
+    /**
+     * Marca un gasto como liquidado por netting ("Cuentas entre miembros"):
+     * `settlement_status = 'NETTED'`. El gate `= 'NONE'` garantiza que NO pise el
+     * flujo "alguien más pagó" (PENDING_REIMBURSEMENT/REIMBURSED/ABSORBED): solo
+     * transiciona gastos normales aún no liquidados. Sube `updated_at` para el LWW.
+     */
+    @Query(
+        "UPDATE expense SET settlement_status = 'NETTED', updated_at = :ts " +
+            "WHERE id = :id AND settlement_status = 'NONE'"
+    )
+    suspend fun markNetted(id: String, ts: Long)
 
     @Query(
         """

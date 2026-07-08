@@ -37,4 +37,20 @@ data class StatementMovement(
     val esMsi: Boolean = false,
     @SerialName("msiPlazo") val msiPlazo: Int? = null,
     @SerialName("msiNumero") val msiNumero: Int? = null,
+    /**
+     * Naturaleza del movimiento: `COMPRA`/`CARGO`/`INTERES`/`COMISION` (dinero que
+     * gasta/debe Norma) o `PAGO`/`ABONO` (dinero a favor). Permite filtrar los pagos
+     * para que no se reinserten como compras al reescribir. Null en respuestas viejas.
+     */
+    val tipo: String? = null,
+    /**
+     * Categoría sugerida por el LLM para esta compra (código del catálogo del hogar,
+     * ej. `FOOD.DESPENSA`). El paso de revisión la precarga; null si no se pudo inferir.
+     */
+    val categoriaSugerida: String? = null,
+    /**
+     * Nombres de pila de los miembros que se benefician de esta compra (subconjunto de
+     * la lista del hogar). Vacío/null ⇒ reparto equitativo por defecto.
+     */
+    val beneficiariosSugeridos: List<String>? = null,
 )

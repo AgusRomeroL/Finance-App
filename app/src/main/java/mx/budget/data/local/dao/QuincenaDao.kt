@@ -101,6 +101,24 @@ interface QuincenaDao {
     @Query("UPDATE quincena SET status = :status WHERE id = :quincenaId")
     suspend fun updateStatus(quincenaId: String, status: String)
 
+    /**
+     * Recalcula el snapshot `actual_expenses_mxn` de una quincena desde los gastos
+     * POSTED (el snapshot es persistido y nadie lo recalcula en runtime; el seed
+     * histórico lo actualiza tras insertar/borrar gastos). Tarea 4 estados v2.
+     */
+    @Query(
+        """
+        UPDATE quincena
+        SET actual_expenses_mxn = (
+                SELECT COALESCE(SUM(amount_mxn), 0) FROM expense
+                WHERE quincena_id = :quincenaId AND status = 'POSTED'
+            ),
+            updated_at = :now
+        WHERE id = :quincenaId
+        """
+    )
+    suspend fun recalcActualExpenses(quincenaId: String, now: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(quincena: QuincenaEntity)
 

@@ -42,6 +42,20 @@ data class PendingReimbursementByPayer(
 )
 
 /**
+ * Gasto pendiente de reembolso con el tercero que lo adelantó, para la pantalla
+ * "Cuentas entre miembros" (deudas explícitas por pagar). A diferencia de
+ * [ExpenseWithDetails], expone `externalPayerMemberId` para poder agrupar por
+ * miembro y desglosar la deuda del hogar por concepto/fecha. Solo lectura.
+ */
+data class PendingReimbursementExpense(
+    val expenseId: String,
+    val concept: String,
+    val amountMxn: Double,
+    val occurredAt: Long,
+    val externalPayerMemberId: String?,
+)
+
+/**
  * Gasto por categoría: proyectado vs ejecutado con restante.
  * Alimenta el dashboard quincenal y el contexto RAG del asistente IA.
  */
@@ -190,4 +204,19 @@ data class AttributionRow(
     val expenseId: String,
     val memberId: String,
     val shareBps: Int
+)
+
+/**
+ * Fila de atribución enriquecida con el monto del gasto, para el cómputo de
+ * "Cuentas entre miembros" (netting). Trae ambos roles (PAYER/BENEFICIARY);
+ * la pantalla agrega por gasto para derivar la matriz de deudas B→P.
+ *
+ * Alimenta [mx.budget.ui.settle.MemberBalancesViewModel]. Solo lectura.
+ */
+data class NettingAttributionRow(
+    val expenseId: String,
+    val amountMxn: Double,
+    val role: String,
+    val memberId: String,
+    val shareAmountMxn: Double
 )

@@ -1,9 +1,12 @@
 package mx.budget
 
 import android.Manifest
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -130,8 +133,19 @@ class MainActivity : ComponentActivity() {
             app.householdId,
             app.savingsRepository,
             app.loanRepository,
-            app.installmentRepository
+            app.installmentRepository,
+            app.database.statementImportDao()
         ))[WalletsViewModel::class.java]
+    }
+
+    private val memberBalancesViewModel: mx.budget.ui.settle.MemberBalancesViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, MemberBalancesViewModelFactory(
+            app.expenseRepository,
+            app.loanRepository,
+            app.memberRepository,
+            app.householdId,
+        ))[mx.budget.ui.settle.MemberBalancesViewModel::class.java]
     }
 
     private val analyticsViewModel: mx.budget.ui.analytics.AnalyticsViewModel by lazy {
@@ -139,6 +153,7 @@ class MainActivity : ComponentActivity() {
         ViewModelProvider(this, AnalyticsViewModelFactory(
             app.analyticsRepository,
             app.database.analyticsDao(),
+            app.expenseRepository,
             app.quincenaRepository,
             app.incomeRepository,
             app.savingsRepository,
@@ -221,6 +236,11 @@ class MainActivity : ComponentActivity() {
         ViewModelProvider(this, StatementImportViewModelFactory(app))[mx.budget.ui.statements.StatementImportViewModel::class.java]
     }
 
+    private val statementsChecklistViewModel: mx.budget.ui.statements.StatementsChecklistViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, StatementsChecklistViewModelFactory(app))[mx.budget.ui.statements.StatementsChecklistViewModel::class.java]
+    }
+
     private val captureViewModel: CaptureViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, CaptureViewModelFactory(
@@ -294,6 +314,14 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Edge-to-edge: barras del sistema transparentes para que la superficie de
+        // la app se vea a través de ellas (blend). La APARIENCIA de los íconos
+        // (claro/oscuro) la fija BudgetAppTheme según el tema Compose. Ambas barras
+        // transparentes; en nav de 3 botones el scrim automático cuida el contraste.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
+        )
         super.onCreate(savedInstanceState)
         val windowWidthDp = resources.displayMetrics.let {
             (it.widthPixels / it.density).toInt()
@@ -339,6 +367,7 @@ class MainActivity : ComponentActivity() {
                     newPlannedViewModel = newPlannedViewModel,
                     recurrenceViewModel = recurrenceViewModel,
                     walletsViewModel = walletsViewModel,
+                    memberBalancesViewModel = memberBalancesViewModel,
                     analyticsViewModel = analyticsViewModel,
                     ledgerViewModel = ledgerViewModel,
                     aiAssistantViewModel = aiAssistantViewModel,
@@ -410,6 +439,7 @@ class MainActivity : ComponentActivity() {
                     incomeSourcesMasterViewModel = incomeSourcesMasterViewModel,
                     startOnboarding = app.needsOnboarding,
                     statementImportViewModel = statementImportViewModel,
+                    statementsChecklistViewModel = statementsChecklistViewModel,
                     nvidiaApiKey = nvidiaApiKey,
                     onNvidiaApiKeyChange = { key -> scope.launch { settings.setNvidiaApiKey(key) } },
                     startTutorial = !hasSeenTutorial,
@@ -418,6 +448,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+}
+
+/** Factory del checklist "Estados del mes" (Tarea 4 — alimentación mensual). */
+class StatementsChecklistViewModelFactory(
+    private val app: BudgetApplication,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.statements.StatementsChecklistViewModel(
+            walletRepository = app.walletRepository,
+            statementImportDao = app.database.statementImportDao(),
+            householdId = app.householdId,
+        ) as T
     }
 }
 
@@ -665,6 +709,7 @@ class WalletsViewModelFactory(
     private val savingsRepository: mx.budget.data.repository.SavingsRepository? = null,
     private val loanRepository: mx.budget.data.repository.LoanRepository? = null,
     private val installmentRepository: mx.budget.data.repository.InstallmentRepository? = null,
+    private val statementImportDao: mx.budget.data.local.dao.StatementImportDao? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -679,6 +724,25 @@ class WalletsViewModelFactory(
             savingsRepository = savingsRepository,
             loanRepository = loanRepository,
             installmentRepository = installmentRepository,
+            statementImportDao = statementImportDao,
+        ) as T
+    }
+}
+
+/** Factory para MemberBalancesViewModel ("Cuentas entre miembros" — deudas explícitas). */
+class MemberBalancesViewModelFactory(
+    private val expenseRepository: ExpenseRepository,
+    private val loanRepository: mx.budget.data.repository.LoanRepository,
+    private val memberRepository: MemberRepository,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.settle.MemberBalancesViewModel(
+            expenseRepository = expenseRepository,
+            loanRepository = loanRepository,
+            memberRepository = memberRepository,
+            householdId = householdId,
         ) as T
     }
 }
@@ -687,6 +751,7 @@ class WalletsViewModelFactory(
 class AnalyticsViewModelFactory(
     private val analyticsRepository: mx.budget.data.repository.AnalyticsRepository,
     private val analyticsDao: mx.budget.data.local.dao.AnalyticsDao,
+    private val expenseRepository: mx.budget.data.repository.ExpenseRepository,
     private val quincenaRepository: QuincenaRepository,
     private val incomeRepository: mx.budget.data.repository.IncomeRepository,
     private val savingsRepository: mx.budget.data.repository.SavingsRepository,
@@ -699,6 +764,7 @@ class AnalyticsViewModelFactory(
         return mx.budget.ui.analytics.AnalyticsViewModel(
             analyticsRepository = analyticsRepository,
             analyticsDao = analyticsDao,
+            expenseRepository = expenseRepository,
             quincenaRepository = quincenaRepository,
             incomeRepository = incomeRepository,
             savingsRepository = savingsRepository,

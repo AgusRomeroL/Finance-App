@@ -6,6 +6,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.tasks.await
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
@@ -113,6 +114,15 @@ class ExpenseRepositoryFirestore(
         awaitClose { listener.remove() }
     }
 
+    // Analíticas lee SIEMPRE de Room (fuente de verdad); este lado nube es solo
+    // para sync. Stub consistente con observeSpendByMember de arriba.
+    override fun observeSpendByMemberRange(
+        householdId: String,
+        role: String,
+        startMs: Long,
+        endMs: Long
+    ): Flow<List<SpendByMember>> = emptyFlow()
+
     // El dashboard lee SIEMPRE de Room (fuente de verdad); este lado nube es solo
     // para sync. Stub consistente con observeSpendByMember de arriba.
     override fun observePaidByMember(quincenaId: String): Flow<List<SpendByMember>> = callbackFlow {
@@ -150,6 +160,26 @@ class ExpenseRepositoryFirestore(
             }
         awaitClose { listener.remove() }
     }
+
+    // Deudas explícitas (cuentas entre miembros): la pantalla lee SIEMPRE de Room
+    // (fuente de verdad); el estado REIMBURSED viaja a la nube en el push del gasto.
+    // Stubs consistentes con el resto del lado nube (solo push).
+    override fun observePendingReimbursementExpenses(
+        householdId: String
+    ): Flow<List<mx.budget.data.local.result.PendingReimbursementExpense>> =
+        kotlinx.coroutines.flow.flowOf(emptyList())
+
+    override suspend fun markReimbursed(expenseId: String) {}
+
+    // Netting (cuentas entre miembros): el cómputo lee SIEMPRE de Room (fuente de
+    // verdad) y el estado 'NETTED' viaja a la nube en el push del gasto editado.
+    // Stubs consistentes con el resto del lado nube (solo push).
+    override fun observeNettingRows(
+        householdId: String
+    ): Flow<List<mx.budget.data.local.result.NettingAttributionRow>> =
+        kotlinx.coroutines.flow.flowOf(emptyList())
+
+    override suspend fun markNetted(expenseIds: List<String>) {}
 
     // El repo PÚBLICO cableado es la impl Room (fuente de verdad); este método
     // nunca se invoca por la ruta nube. Devuelve la entidad determinista sin

@@ -195,6 +195,10 @@ fun DocumentSnapshot.toLoanEntity(): LoanEntity? {
         dueAt = str("dueAt", "due_at"),
         paymentScheduleId = str("paymentScheduleId", "payment_schedule_id"),
         notes = str("notes", "notes"),
+        paymentCount = int("paymentCount", "payment_count"),
+        paymentFrequency = str("paymentFrequency", "payment_frequency"),
+        paymentAmountMxn = dbl("paymentAmountMxn", "payment_amount_mxn"),
+        scheduleStartDate = str("scheduleStartDate", "schedule_start_date"),
         updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }
@@ -206,6 +210,7 @@ fun DocumentSnapshot.toInstallmentPlanEntity(): InstallmentPlanEntity? {
         displayName = str("displayName", "display_name") ?: return null,
         creditorMemberId = str("creditorMemberId", "creditor_member_id"),
         paymentMethodId = str("paymentMethodId", "payment_method_id"),
+        fundingPaymentMethodId = str("fundingPaymentMethodId", "funding_payment_method_id"),
         principalMxn = dbl("principalMxn", "principal_mxn") ?: return null,
         totalInstallments = int("totalInstallments", "total_installments") ?: return null,
         installmentAmountMxn = dbl("installmentAmountMxn", "installment_amount_mxn") ?: return null,

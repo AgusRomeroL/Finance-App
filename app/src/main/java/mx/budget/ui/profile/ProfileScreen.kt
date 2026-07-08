@@ -471,7 +471,7 @@ fun ProfileScreen(
                 SettingRow(
                     icon = Icons.Filled.UploadFile,
                     title = "Importar estado de cuenta",
-                    subtitle = "Sube un PDF o imagen y reconcilia corte, límite y planes a meses",
+                    subtitle = "Sube un PDF o imagen: reconcilia corte, límite y MSI, y reescribe los movimientos de la tarjeta",
                     trailingBadge = null,
                     onClick = onImportStatement
                 )

@@ -1,5 +1,7 @@
 package mx.budget.wear.presentation
 
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -73,6 +76,25 @@ fun WearHub() {
     }
 }
 
+/**
+ * Versión reactiva del cache: se incrementa cada vez que el push del teléfono
+ * reescribe [WearCache] (SharedPreferences, vía `MobileSyncListenerService`).
+ * Úsalo como clave de `remember` para releer los valores y reflejar la cifra EN
+ * VIVO — sin esto las pantallas leían el cache una sola vez al componer y se
+ * quedaban en el $0 del arranque aunque el snapshot llegara segundos después.
+ * El listener se desregistra al salir de composición (`awaitDispose`).
+ */
+@Composable
+private fun cacheVersion(context: Context): Int {
+    val version by produceState(initialValue = 0, context) {
+        val prefs = context.getSharedPreferences(WearCache.PREFS, Context.MODE_PRIVATE)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> value++ }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    return version
+}
+
 @Composable
 private fun EstadoScreen(
     onCapture: () -> Unit,
@@ -80,9 +102,10 @@ private fun EstadoScreen(
     onPendientes: () -> Unit,
 ) {
     val context = LocalContext.current
-    val balance = remember { WearCache.balance(context) }
-    val label = remember { WearCache.label(context) }
-    val members = remember { WearCache.memberSpend(context) }
+    val version = cacheVersion(context)
+    val balance = remember(version) { WearCache.balance(context) }
+    val label = remember(version) { WearCache.label(context) }
+    val members = remember(version) { WearCache.memberSpend(context) }
     val maxTotal = remember(members) { members.maxOfOrNull { it.total }?.takeIf { it > 0 } ?: 1.0 }
 
     ScalingLazyColumn(
@@ -179,7 +202,8 @@ private fun MemberBar(m: WearCache.MemberSpend, maxTotal: Double) {
 @Composable
 private fun MovimientosScreen() {
     val context = LocalContext.current
-    val movements = remember { WearCache.movements(context) }
+    val version = cacheVersion(context)
+    val movements = remember(version) { WearCache.movements(context) }
 
     ScalingLazyColumn(state = rememberScalingLazyListState(), modifier = Modifier.fillMaxWidth()) {
         item { Text("Movimientos", style = MaterialTheme.typography.title3, textAlign = TextAlign.Center) }
@@ -211,7 +235,13 @@ private fun PendientesScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sender = remember { ExpenseSender(context) }
-    val pending = remember { mutableStateListOf<WearCache.Pending>().apply { addAll(WearCache.pending(context)) } }
+    val version = cacheVersion(context)
+    // Se recrea con cada push del teléfono (nueva `version`), reconciliando la
+    // bandeja con lo que ya no está pendiente; dentro de una versión, el
+    // `remove(p)` optimista tras confirmar/descartar sigue siendo instantáneo.
+    val pending = remember(version) {
+        mutableStateListOf<WearCache.Pending>().apply { addAll(WearCache.pending(context)) }
+    }
 
     ScalingLazyColumn(state = rememberScalingLazyListState(), modifier = Modifier.fillMaxWidth()) {
         item { Text("Pendientes", style = MaterialTheme.typography.title3, textAlign = TextAlign.Center) }

@@ -46,7 +46,11 @@ class NvidiaNimClient(
      * Analiza el [statementText] con el modelo. Corre en IO. Devuelve el
      * [ParsedStatement] + el JSON crudo (para auditoría), o un [Result.Failure].
      */
-    suspend fun analyze(statementText: String): Result = withContext(Dispatchers.IO) {
+    suspend fun analyze(
+        statementText: String,
+        context: StatementLlmContext? = null,
+        kind: DocumentKind = DocumentKind.BANK_STATEMENT,
+    ): Result = withContext(Dispatchers.IO) {
         val apiKey = apiKeyProvider()
         if (apiKey.isBlank()) {
             return@withContext Result.Failure(
@@ -54,7 +58,7 @@ class NvidiaNimClient(
             )
         }
 
-        val bodyJson = buildRequestBody(statementText)
+        val bodyJson = buildRequestBody(statementText, context, kind)
         val request = Request.Builder()
             .url(ENDPOINT)
             .addHeader("Authorization", "Bearer $apiKey")
@@ -190,16 +194,22 @@ class NvidiaNimClient(
     }.getOrElse { PrematchResult.Failure("Respuesta de pre-match no interpretable.") }
 
     /** Arma el cuerpo del chat/completions (OpenAI-compatible) con org.json. */
-    private fun buildRequestBody(statementText: String): String {
+    private fun buildRequestBody(
+        statementText: String,
+        context: StatementLlmContext?,
+        kind: DocumentKind,
+    ): String {
         val messages = JSONArray().apply {
-            put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT))
-            put(JSONObject().put("role", "user").put("content", userPrompt(statementText)))
+            put(JSONObject().put("role", "system").put("content", systemPromptFor(kind)))
+            put(JSONObject().put("role", "user").put("content", userPrompt(statementText, context, kind)))
         }
         return JSONObject().apply {
             put("model", MODEL)
             put("messages", messages)
             put("temperature", 0.1)
-            put("max_tokens", 4096)
+            // 8192 (antes 4096): los estados de cuenta largos (cuentas de débito con
+            // 15-20 movimientos) truncaban la salida y perdían movimientos.
+            put("max_tokens", 8192)
         }.toString()
     }
 
@@ -231,55 +241,202 @@ class NvidiaNimClient(
         else -> "Error del servidor (HTTP $code)."
     }
 
-    private fun userPrompt(statementText: String): String =
-        "Analiza el siguiente estado de cuenta y devuelve SOLO el JSON del esquema.\n\n" +
-            "===== ESTADO DE CUENTA =====\n$statementText\n===== FIN ====="
+    private fun userPrompt(
+        statementText: String,
+        context: StatementLlmContext?,
+        kind: DocumentKind,
+    ): String {
+        val household = context?.let {
+            val miembros = it.miembros.joinToString(", ")
+            val categorias = it.categorias.joinToString("; ")
+            "\nContexto del hogar (para categoriaSugerida y beneficiariosSugeridos):\n" +
+                "MIEMBROS (usa estos nombres exactos): $miembros\n" +
+                "CATEGORÍAS (código — nombre; usa el CÓDIGO exacto): $categorias\n"
+        }.orEmpty()
+        val (accion, marca) = when (kind) {
+            DocumentKind.BANK_STATEMENT -> "el siguiente estado de cuenta" to "ESTADO DE CUENTA"
+            DocumentKind.PURCHASE_HISTORY -> "el siguiente historial de compras" to "HISTORIAL DE COMPRAS"
+            DocumentKind.WALLET_MOVEMENTS -> "los siguientes movimientos de dinero" to "MOVIMIENTOS DE DINERO"
+            DocumentKind.INVOICE_CFDI -> "las siguientes facturas (CFDI)" to "FACTURAS CFDI"
+        }
+        return "Analiza $accion y devuelve SOLO el JSON del esquema.\n" +
+            household +
+            "\n===== $marca =====\n$statementText\n===== FIN ====="
+    }
 
     companion object {
         const val ENDPOINT = "https://integrate.api.nvidia.com/v1/chat/completions"
         const val MODEL = "google/diffusiongemma-26b-a4b-it"
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
-        /**
-         * System prompt: exige SOLO JSON con el esquema estricto de C1. El modelo
-         * es de texto, así que se le pasa el texto ya extraído del PDF/imagen.
-         */
-        val SYSTEM_PROMPT = """
-            Eres un extractor de datos de estados de cuenta bancarios mexicanos (MXN).
-            Recibes el TEXTO PLANO de un estado de cuenta. Devuelve EXCLUSIVAMENTE un
-            objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones.
+        /** Selecciona el system prompt según el tipo de documento. */
+        fun systemPromptFor(kind: DocumentKind): String = when (kind) {
+            DocumentKind.BANK_STATEMENT -> STATEMENT_PROMPT
+            DocumentKind.PURCHASE_HISTORY -> PURCHASE_PROMPT
+            DocumentKind.WALLET_MOVEMENTS -> WALLET_PROMPT
+            DocumentKind.INVOICE_CFDI -> CFDI_PROMPT
+        }
 
-            Esquema EXACTO (usa null si un dato no aparece; no inventes):
+        /** Alias histórico (= prompt de estado de cuenta). Ver [systemPromptFor]. */
+        val SYSTEM_PROMPT: String get() = STATEMENT_PROMPT
+
+        /** Esquema JSON común a todos los tipos (se reutiliza [ParsedStatement]). */
+        private const val SCHEMA = """
+            Esquema EXACTO (usa null si un dato no aparece; NO inventes):
             {
-              "emisor": string|null,            // banco emisor, ej. "Citibanamex"
-              "last4": string|null,             // últimos 4 dígitos de la tarjeta
+              "emisor": string|null,            // emisor/tienda, ej. "Citibanamex", "Amazon"
+              "last4": string|null,             // últimos 4 dígitos de la tarjeta/cuenta
               "periodo": { "inicio": "YYYY-MM-DD"|null, "fin": "YYYY-MM-DD"|null },
               "fechaCorte": "YYYY-MM-DD"|null,
               "fechaLimitePago": "YYYY-MM-DD"|null,
-              "saldoTotal": number|null,        // saldo al corte, MXN
+              "saldoTotal": number|null,
               "pagoMinimo": number|null,
-              "pagoNoIntereses": number|null,   // pago para no generar intereses
-              "tasaAnual": number|null,         // % anual (CAT o tasa de interés)
+              "pagoNoIntereses": number|null,
+              "tasaAnual": number|null,
               "movimientos": [
                 {
                   "fecha": "YYYY-MM-DD"|null,
                   "concepto": string,
-                  "monto": number,              // cargo en MXN, positivo
-                  "esMsi": boolean,             // true si es Meses Sin Intereses / a cuotas
+                  "monto": number,              // SIEMPRE positivo, con centavos
+                  "tipo": "COMPRA"|"CARGO"|"INTERES"|"IVA"|"COMISION"|"PAGO"|"ABONO"|"OTRO",
+                  "esMsi": boolean,
                   "msiPlazo": number|null,      // total de mensualidades del plan
-                  "msiNumero": number|null      // número de mensualidad actual (ej. 3 de 12)
+                  "msiNumero": number|null,     // mensualidad actual (ej. 3 de 12)
+                  "categoriaSugerida": string|null,
+                  "beneficiariosSugeridos": [string]|null
                 }
               ]
             }
+        """
 
-            Reglas:
-            - Todas las fechas en formato ISO YYYY-MM-DD. Infiere el año del periodo.
-            - Montos como número decimal sin símbolo ni comas de miles (1234.56).
-            - Detecta MSI/mensualidades: "3/12", "3 de 12", "MSI", "Meses sin intereses",
-              "a X meses". Rellena esMsi=true, msiPlazo y msiNumero cuando puedas.
-            - No incluyas pagos/abonos ni intereses como movimientos de cargo.
-            - Si el texto no es un estado de cuenta, devuelve el objeto con todos los
-              campos en null y "movimientos": [].
+        /** Reglas de atribución del hogar, comunes a todos los tipos. */
+        private const val HOUSEHOLD_RULES = """
+            - CATEGORÍA y BENEFICIARIOS: solo si abajo se te da la lista del hogar.
+              Sugiere "categoriaSugerida" (CÓDIGO EXACTO de la lista) y
+              "beneficiariosSugeridos" (nombres EXACTOS) según el PRODUCTO/comercio.
+              Si dudas, usa null y []. No lo apliques a INTERES/IVA/COMISION/PAGO/ABONO.
+            - SOFTWARE/DEV (GitHub, Microsoft, Adobe, Coursera, dominios/hosting) lo
+              paga y usa NORMA: beneficiariosSugeridos ["Norma"], NUNCA un hijo.
+            - Ropa/exámenes universitarios (CENEVAL) → el hijo estudiante; líneas de
+              teléfono del plan familiar → sus dueños; suscripciones compartidas
+              (Netflix, HBO, Prime) → todos.
+        """
+
+        /** Estado de cuenta bancario / tarjeta de crédito (flujo C1, mejorado). */
+        val STATEMENT_PROMPT = """
+            Eres un extractor de datos de estados de cuenta bancarios mexicanos (MXN).
+            Recibes el TEXTO PLANO de un estado de cuenta (puede venir de OCR, con
+            ruido). Devuelve EXCLUSIVAMENTE un objeto JSON válido, sin texto adicional,
+            sin markdown, sin explicaciones.
+
+            $SCHEMA
+
+            REGLAS CRÍTICAS:
+            1. MONTOS: cópialos TAL CUAL, con sus centavos. Quita solo "${'$'}" y las
+               comas de millares. "159.73" es 159.73, NUNCA 1597.3. "1,234.56" es
+               1234.56. Jamás muevas el punto decimal ni multipliques.
+            2. EXTRAE TODOS los movimientos del detalle, de principio a fin, sin omitir
+               ni resumir. Si el estado tiene 20 movimientos, devuelve los 20.
+            3. TIPO de cada movimiento:
+               - COMPRA/CARGO = consumo o cargo. INTERES = intereses ordinarios.
+                 IVA = el I.V.A. de intereses/comisiones (NO lo mezcles con COMPRA).
+                 COMISION = comisiones/cuotas de manejo.
+               - PAGO/ABONO = dinero a favor (pagos a la tarjeta, abonos, devoluciones,
+                 depósitos, nómina, cashback). OTRO = traspasos/movimientos que no encajan.
+               Señales de abono: "Su Pago", "Gracias", "Abono", "Devolución",
+               "Depósito", "Crédito por Aclaración"; signo "-" antepuesto o guion
+               pospuesto ("244.00-"); columna de abonos.
+            4. SIGNO: en "monto" pon SIEMPRE el valor absoluto (positivo). La dirección
+               la da "tipo", no el signo.
+            5. FECHAS: ISO YYYY-MM-DD, infiriendo el año del periodo. Si una fecha está
+               corrupta o ilegible (ruido de OCR tipo "Nnf-60"), usa null; nunca copies
+               texto que no sea una fecha.
+            6. MSI: detecta "3/12", "3 de 12", "N DE M", "MSI", "Meses sin intereses",
+               "N MENS", "PP#####", "en N Cuotas (n/N)". esMsi=true y rellena msiPlazo
+               (total) y msiNumero (actual) cuando el texto los dé. Si dice "Amazon A
+               Meses" SIN número/plazo, esMsi=true con msiPlazo=null y msiNumero=null.
+            7. DIFERIMIENTOS (DiDi "Diferimientos especiales"): es un traspaso de deuda
+               existente, NO una compra nueva. Sepáralo en Capital (tipo CARGO,
+               categoriaSugerida "LOANS.DIDI"), Interés (tipo INTERES) e IVA (tipo IVA).
+            8. CUENTAS DE DÉBITO / WALLETS (BBVA, Banamex MiCuenta, BanCoppel, Mercado
+               Pago): retiros/compras/SPEI enviados = CARGO/COMPRA; depósitos/nómina =
+               ABONO. No hay MSI ni pago mínimo (usa null en esos).
+            $HOUSEHOLD_RULES
+            9. Si el texto no es un estado de cuenta, devuelve todos los campos null y
+               "movimientos": [].
+        """.trimIndent()
+
+        /** Historial de compras (Amazon "Mis pedidos", Mercado Libre "Tus compras"). */
+        val PURCHASE_PROMPT = """
+            Eres un extractor de HISTORIALES DE COMPRA (Amazon, Mercado Libre) de un
+            hogar mexicano (MXN). Recibes filas ya parseadas de un CSV/JSON de pedidos.
+            Devuelve EXCLUSIVAMENTE un objeto JSON válido con el mismo esquema, donde
+            cada "movimiento" es UNA COMPRA (un producto). Sin markdown ni explicaciones.
+
+            $SCHEMA
+
+            REGLAS:
+            1. Una fila = un movimiento. "concepto" = NOMBRE DEL PRODUCTO (limpio, sin
+               códigos ASIN). "monto" = precio total pagado por esa línea (positivo, con
+               centavos; respeta cantidad × precio unitario si vienen separados).
+            2. "fecha" = fecha del pedido (ISO YYYY-MM-DD).
+            3. "tipo" = COMPRA. Devoluciones/reembolsos = ABONO. Cargos de envío o
+               suscripción (Prime) = COMPRA.
+            4. MSI: si la compra fue "a meses"/"MSI", esMsi=true (msiPlazo/msiNumero si
+               se indican, si no null).
+            5. emisor = "Amazon" o "Mercado Libre"; last4/periodo/saldo/tasa/pagos = null.
+            6. El NOMBRE DEL PRODUCTO es tu MEJOR señal de categoría y beneficiario:
+               úsalo (p. ej. crema facial → cuidado personal del hijo destinatario;
+               herramienta dev → software/Norma; juguete/útil escolar → el hijo).
+               Si el pedido trae DESTINATARIO/dirección de un miembro, ése es el
+               beneficiario.
+            $HOUSEHOLD_RULES
+            7. Si el texto no es un historial de compras, devuelve campos null y
+               "movimientos": [].
+        """.trimIndent()
+
+        /** Movimientos de dinero de una wallet (Mercado Pago "Movimientos"). */
+        val WALLET_PROMPT = """
+            Eres un extractor de MOVIMIENTOS DE DINERO de una billetera digital mexicana
+            (Mercado Pago). Recibes filas parseadas de un CSV de movimientos. Devuelve
+            EXCLUSIVAMENTE un objeto JSON del mismo esquema; cada "movimiento" es una
+            transacción. Sin markdown ni explicaciones.
+
+            $SCHEMA
+
+            REGLAS:
+            1. "monto" positivo siempre; la dirección la da "tipo".
+            2. TIPO: pagos/compras/retiros/transferencias enviadas = COMPRA o CARGO;
+               depósitos/ingresos/cobros recibidos/cashback = ABONO; disposición de
+               crédito o préstamo ("Acreditación Préstamo", línea de crédito) = OTRO
+               (es deuda, no gasto).
+            3. "concepto" = descripción del comercio/contraparte. "fecha" ISO.
+            4. esMsi/msiPlazo/msiNumero = null (las wallets no traen MSI por línea).
+            5. emisor = "Mercado Pago"; periodo según el rango del reporte; saldoTotal =
+               saldo final si aparece.
+            $HOUSEHOLD_RULES
+            6. Si el texto no son movimientos de dinero, devuelve campos null y
+               "movimientos": [].
+        """.trimIndent()
+
+        /** Facturas CFDI (SAT descarga masiva) — texto/valores de los XML. */
+        val CFDI_PROMPT = """
+            Eres un extractor de FACTURAS CFDI mexicanas (SAT). Recibes el texto/valores
+            de uno o más comprobantes. Devuelve EXCLUSIVAMENTE un objeto JSON del mismo
+            esquema; cada CONCEPTO facturado es un "movimiento". Sin markdown.
+
+            $SCHEMA
+
+            REGLAS:
+            1. Un concepto de la factura = un movimiento. "concepto" = descripción del
+               bien/servicio. "monto" = importe del concepto (positivo, con centavos).
+            2. "fecha" = fecha de emisión (ISO). emisor = razón social del emisor.
+               El IVA del comprobante = un movimiento tipo IVA.
+            3. tipo: bienes/servicios recibidos = COMPRA; si es una factura EMITIDA por
+               el hogar (ingreso) = ABONO.
+            4. esMsi = false salvo que el concepto lo indique.
+            $HOUSEHOLD_RULES
+            5. Si el texto no es una factura, devuelve campos null y "movimientos": [].
         """.trimIndent()
 
         /**
@@ -302,3 +459,28 @@ class NvidiaNimClient(
         """.trimIndent()
     }
 }
+
+/**
+ * Tipo de documento financiero que la app puede ingerir. Selecciona el prompt/
+ * esquema de NVIDIA y el modo de extracción local. El esquema de salida es el
+ * mismo ([ParsedStatement]) para todos: cada "movimiento" es un cargo, compra o
+ * transacción, de modo que el flujo de materialización (gasto + atribución) se
+ * reutiliza tal cual.
+ */
+enum class DocumentKind(val displayName: String) {
+    BANK_STATEMENT("Estado de cuenta"),
+    PURCHASE_HISTORY("Historial de compras (Amazon / Mercado Libre)"),
+    WALLET_MOVEMENTS("Movimientos de dinero (Mercado Pago)"),
+    INVOICE_CFDI("Facturas CFDI (SAT)"),
+}
+
+/**
+ * Contexto opcional del hogar que se inyecta al prompt para que el modelo sugiera
+ * `categoriaSugerida` y `beneficiariosSugeridos` por movimiento. Se arma desde los
+ * repos (miembros beneficiarios + categorías hoja del catálogo).
+ */
+data class StatementLlmContext(
+    val miembros: List<String>,
+    /** Cada entrada en formato "CODIGO — Nombre" (ej. "FOOD.DESPENSA — Despensa"). */
+    val categorias: List<String>,
+)

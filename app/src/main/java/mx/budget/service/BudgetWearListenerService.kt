@@ -55,6 +55,12 @@ class BudgetWearListenerService : WearableListenerService() {
                 val id = String(messageEvent.data).trim()
                 if (id.isNotEmpty()) app.dismissPendingFromWatch(id)
             }
+            WearPaths.PATH_REQUEST_SYNC -> {
+                // Pull-on-open: el reloj pide un snapshot fresco al abrir (§G.3.3).
+                // Re-empujamos el estado para que "Disponible" refleje la cifra real
+                // sin depender de que el dashboard del teléfono esté en foreground.
+                app.pushWearSnapshot()
+            }
             else -> super.onMessageReceived(messageEvent)
         }
     }

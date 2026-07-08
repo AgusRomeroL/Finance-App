@@ -109,5 +109,21 @@ data class RecurrenceTemplateEntity(
      * JSON array para trazabilidad.
      */
     @ColumnInfo(name = "learned_from_expense_ids")
-    val learnedFromExpenseIds: String = "[]"
+    val learnedFromExpenseIds: String = "[]",
+
+    /**
+     * Tercero que paga por adelantado este gasto recurrente (reembolsable).
+     * Null = nadie externo (comportamiento normal). Al materializar, la
+     * instancia PLANNED usa el wallet externo y atribuye el 100% del pago a
+     * este miembro (v16→v17).
+     */
+    @ColumnInfo(name = "default_external_payer_member_id")
+    val defaultExternalPayerMemberId: String? = null,
+
+    /**
+     * Estado de liquidación por defecto de las instancias materializadas:
+     * NONE | PENDING_REIMBURSEMENT. Se propaga a `expense.settlement_status`.
+     */
+    @ColumnInfo(name = "default_settlement_status", defaultValue = "'NONE'")
+    val defaultSettlementStatus: String = "NONE"
 )

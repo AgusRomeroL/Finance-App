@@ -28,10 +28,12 @@ import mx.budget.ui.tutorial.TutorialController
 import mx.budget.ui.tutorial.TutorialOverlay
 import mx.budget.ui.tutorial.TutorialSpec
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import androidx.compose.runtime.collectAsState
 import mx.budget.ui.analytics.AnalyticsScreen
 import mx.budget.ui.analytics.AnalyticsViewModel
@@ -43,6 +45,8 @@ import mx.budget.ui.calendar.CalendarViewModel
 import mx.budget.ui.calendar.NewPlannedViewModel
 import mx.budget.ui.calendar.RecurrenceViewModel
 import mx.budget.ui.calendar.TemplatesScreen
+import mx.budget.ui.capture.CaptureBottomSheet
+import mx.budget.ui.capture.CaptureSheetMode
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardScreen
 import mx.budget.ui.dashboard.DashboardViewModel
@@ -65,6 +69,7 @@ object BudgetDestinations {
     const val TEMPLATES = "templates"
     const val LEDGER = "ledger"
     const val WALLETS = "wallets"
+    const val MEMBER_BALANCES = "member_balances"
     const val ANALYTICS = "analytics"
     const val PROFILE = "profile"
     const val ATTRIBUTION_REVIEW = "attribution_review"
@@ -76,6 +81,7 @@ object BudgetDestinations {
     const val MASTERS_CATEGORIES = "masters_categories"
     const val MASTERS_INCOME = "masters_income"
     const val STATEMENTS = "statements"
+    const val STATEMENTS_MONTH = "statements_month"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -98,6 +104,7 @@ fun BudgetNavGraph(
     newPlannedViewModel: NewPlannedViewModel,
     recurrenceViewModel: RecurrenceViewModel,
     walletsViewModel: WalletsViewModel,
+    memberBalancesViewModel: mx.budget.ui.settle.MemberBalancesViewModel? = null,
     analyticsViewModel: AnalyticsViewModel? = null,
     ledgerViewModel: LedgerViewModel? = null,
     aiAssistantViewModel: mx.budget.ai.AiAssistantViewModel? = null,
@@ -121,6 +128,7 @@ fun BudgetNavGraph(
     incomeSourcesMasterViewModel: mx.budget.ui.masters.IncomeSourcesMasterViewModel? = null,
     startOnboarding: Boolean = false,
     statementImportViewModel: mx.budget.ui.statements.StatementImportViewModel? = null,
+    statementsChecklistViewModel: mx.budget.ui.statements.StatementsChecklistViewModel? = null,
     nvidiaApiKey: String = "",
     onNvidiaApiKeyChange: (String) -> Unit = {},
     startTutorial: Boolean = false,
@@ -129,6 +137,11 @@ fun BudgetNavGraph(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: BudgetDestinations.DASHBOARD
+
+    // Captura hoisted al grafo: el "+" del pill flotante / rail (MainShell) y las
+    // sugerencias del dashboard abren el MISMO sheet desde aquí. null = cerrado.
+    var captureMode by remember { mutableStateOf<CaptureSheetMode?>(null) }
+    val onOpenCapture: (CaptureSheetMode) -> Unit = { captureMode = it }
 
     val onNavigate: (String) -> Unit = { route ->
         if (route != currentRoute) {
@@ -143,15 +156,15 @@ fun BudgetNavGraph(
         }
     }
 
-    // Rutas de nivel superior: llevan barra persistente (rail/bottom nav) provista por
-    // MainShell y comparten la transición fade-through (M3) entre sí.
+    // Rutas de nivel superior: llevan barra persistente (pill flotante / rail) provista
+    // por MainShell y comparten la transición fade-through (M3) entre sí. Perfil YA NO
+    // es top-level: se abre desde el avatar de la barra superior como ruta secundaria.
     val topLevelRoutes = remember {
         setOf(
             BudgetDestinations.DASHBOARD,
             BudgetDestinations.CALENDAR,
             BudgetDestinations.WALLETS,
             BudgetDestinations.ANALYTICS,
-            BudgetDestinations.PROFILE,
         )
     }
     val isTopLevel = currentRoute in topLevelRoutes
@@ -201,6 +214,7 @@ fun BudgetNavGraph(
         isExpanded = isExpanded,
         showBar = isTopLevel,
         onNavigate = onNavigate,
+        onCapture = { onOpenCapture(CaptureSheetMode.New) },
         tutorialController = tutorialController,
     ) {
     NavHost(
@@ -238,6 +252,8 @@ fun BudgetNavGraph(
                 onOpenReview = { onNavigate(BudgetDestinations.ATTRIBUTION_REVIEW) },
                 onOpenSearch = { onNavigate(BudgetDestinations.SEARCH) },
                 onOpenSuggestions = { onNavigate(BudgetDestinations.SUGGESTIONS) },
+                onOpenCapture = onOpenCapture,
+                onOpenProfile = { onNavigate(BudgetDestinations.PROFILE) },
                 tutorialController = tutorialController,
                 tutorialCaptureOpen = tutorialCaptureOpen,
             )
@@ -324,8 +340,26 @@ fun BudgetNavGraph(
                 viewModel = walletsViewModel,
                 windowWidthDp = windowWidthDp.dp,
                 onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
-                tutorialController = tutorialController
+                onOpenMemberBalances = if (memberBalancesViewModel != null) {
+                    { onNavigate(BudgetDestinations.MEMBER_BALANCES) }
+                } else null,
+                tutorialController = tutorialController,
             )
+        }
+
+        composable(
+            route = BudgetDestinations.MEMBER_BALANCES,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
+            if (memberBalancesViewModel != null) {
+                mx.budget.ui.settle.MemberBalancesScreen(
+                    viewModel = memberBalancesViewModel,
+                    onBack = { onNavigate(BudgetDestinations.WALLETS) },
+                )
+            } else {
+                PlaceholderScreen("Cuentas entre miembros", onNavigate)
+            }
         }
 
         composable(route = BudgetDestinations.ANALYTICS) {
@@ -344,7 +378,11 @@ fun BudgetNavGraph(
             }
         }
 
-        composable(route = BudgetDestinations.PROFILE) {
+        composable(
+            route = BudgetDestinations.PROFILE,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             val pendingReviewCount by dashboardViewModel.pendingReviewCount.collectAsState()
             ProfileScreen(
                 dynamicColor = dynamicColor,
@@ -378,25 +416,71 @@ fun BudgetNavGraph(
                 nvidiaApiKey = nvidiaApiKey,
                 onNvidiaApiKeyChange = onNvidiaApiKeyChange,
                 onImportStatement = if (statementImportViewModel != null) {
-                    { onNavigate(BudgetDestinations.STATEMENTS) }
+                    {
+                        onNavigate(
+                            if (statementsChecklistViewModel != null) BudgetDestinations.STATEMENTS_MONTH
+                            else BudgetDestinations.STATEMENTS
+                        )
+                    }
                 } else null,
                 onShowTutorial = { tutorialController.start(firstRun = false) },
             )
         }
 
         composable(
-            route = BudgetDestinations.STATEMENTS,
+            route = "${BudgetDestinations.STATEMENTS}?walletId={walletId}",
+            arguments = listOf(
+                navArgument("walletId") {
+                    type = NavType.StringType; nullable = true; defaultValue = null
+                }
+            ),
             enterTransition = slideEnter, exitTransition = slideExit,
             popEnterTransition = slideEnter, popExitTransition = slideExit,
-        ) {
+        ) { backStackEntry ->
+            val walletId = backStackEntry.arguments?.getString("walletId")
             if (statementImportViewModel != null) {
+                // Entrada desde el checklist: resetea y preselecciona el wallet (el
+                // VM es activity-scoped, así que el reset explícito es obligatorio).
+                androidx.compose.runtime.LaunchedEffect(walletId) {
+                    if (walletId != null) {
+                        statementImportViewModel.reset()
+                        statementImportViewModel.presetWallet(walletId)
+                    }
+                }
+                val backRoute =
+                    if (walletId != null && statementsChecklistViewModel != null)
+                        BudgetDestinations.STATEMENTS_MONTH
+                    else BudgetDestinations.PROFILE
                 mx.budget.ui.statements.StatementImportScreen(
                     viewModel = statementImportViewModel,
-                    onBack = { onNavigate(BudgetDestinations.PROFILE) },
+                    onBack = { onNavigate(backRoute) },
                     onOpenProfile = { onNavigate(BudgetDestinations.PROFILE) },
                 )
             } else {
                 PlaceholderScreen("Importar estado de cuenta", onNavigate)
+            }
+        }
+
+        composable(
+            route = BudgetDestinations.STATEMENTS_MONTH,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
+            if (statementsChecklistViewModel != null) {
+                val statuses by statementsChecklistViewModel.statuses.collectAsState()
+                val progress by statementsChecklistViewModel.progress.collectAsState()
+                mx.budget.ui.statements.StatementsChecklistScreen(
+                    statuses = statuses,
+                    imported = progress.first,
+                    total = progress.second,
+                    onImportWallet = { wid ->
+                        onNavigate("${BudgetDestinations.STATEMENTS}?walletId=$wid")
+                    },
+                    onImportAny = { onNavigate(BudgetDestinations.STATEMENTS) },
+                    onBack = { onNavigate(BudgetDestinations.PROFILE) },
+                )
+            } else {
+                PlaceholderScreen("Estados del mes", onNavigate)
             }
         }
 
@@ -509,6 +593,15 @@ fun BudgetNavGraph(
                     Text("Comenzar")
                 }
             },
+        )
+    }
+    // Sheet de captura hoisted: overlay global sobre cualquier ruta (lo abre el "+"
+    // del pill/rail y las sugerencias del dashboard).
+    captureMode?.let { mode ->
+        CaptureBottomSheet(
+            viewModel = captureViewModel,
+            onDismiss = { captureMode = null },
+            mode = mode,
         )
     }
     } // Box

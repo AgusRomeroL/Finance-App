@@ -786,10 +786,22 @@ class CaptureViewModel(
      */
     fun onWalletSelected(walletId: String) {
         _selectedWalletId.value = walletId
-        if (_payerShares.value.isEmpty()) {
-            val owner = wallets.value.firstOrNull { it.id == walletId }?.ownerMemberId
-                ?: members.value.firstOrNull { it.role == "PAYER_ADULT" }?.id
-            if (owner != null) _payerShares.value = mapOf(owner to 100)
+        // Dueño de la cuenta, garantizado adulto-cuenta (PAYER_ADULT); si el wallet no
+        // tiene dueño válido, el primer PAYER_ADULT del hogar.
+        val ownerPayer = wallets.value.firstOrNull { it.id == walletId }?.ownerMemberId
+            ?.takeIf { id -> members.value.any { it.id == id && it.role == "PAYER_ADULT" } }
+            ?: members.value.firstOrNull { it.role == "PAYER_ADULT" }?.id
+        if (_payerShares.value.isEmpty() && ownerPayer != null) {
+            _payerShares.value = mapOf(ownerPayer to 100)
+        }
+        // Ingreso: solo un Pagador (adulto-cuenta) puede recibir ingreso — dar dinero a
+        // un dependiente es un egreso (mesada/transferencia), no un ingreso. El default
+        // es el dueño de la cuenta destino; corrige también una selección no-pagadora.
+        val currentIsPayer = members.value.any {
+            it.id == _incomeMemberId.value && it.role == "PAYER_ADULT"
+        }
+        if (!currentIsPayer && ownerPayer != null) {
+            _incomeMemberId.value = ownerPayer
         }
     }
 

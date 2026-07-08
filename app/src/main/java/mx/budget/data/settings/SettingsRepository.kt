@@ -30,10 +30,14 @@ class SettingsRepository(private val context: Context) {
 
     private val dynamicColorKey = booleanPreferencesKey("dynamic_color")
     private val retroLabelingDoneKey = booleanPreferencesKey("retro_labeling_done")
+    private val statementSeedDoneKey = booleanPreferencesKey("statement_seed_done")
+    private val statementSeedV2DoneKey = booleanPreferencesKey("statement_seed_v2_done")
     private val bankCaptureEnabledKey = booleanPreferencesKey("bank_capture_enabled")
     private val reminderLeadDaysKey = intPreferencesKey("reminder_lead_days")
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
     private val dismissedTemplateSuggestionsKey = stringSetPreferencesKey("dismissed_template_suggestions")
+    private val statementCycleNotifiedKey = stringSetPreferencesKey("statement_cycle_notified")
+    private val paymentDueNotifiedKey = stringSetPreferencesKey("payment_due_notified")
     private val calendarMirrorEnabledKey = booleanPreferencesKey("calendar_mirror_enabled")
     private val calendarMirrorIdKey = longPreferencesKey("calendar_mirror_id")
     private val calendarEventMapKey = stringPreferencesKey("calendar_event_map_json")
@@ -61,6 +65,27 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setRetroLabelingDone(done: Boolean) {
         context.dataStore.edit { prefs -> prefs[retroLabelingDoneKey] = done }
+    }
+
+    /**
+     * Sembrado único de "estados de cuenta ya importados" (Tarea 4): marca en el
+     * primer arranque las tarjetas de Norma cuyos estados reales ya procesamos
+     * (corte + saldo + fila `statement_import`), para que el checklist arranque en
+     * verde. Idempotente vía este flag.
+     */
+    suspend fun isStatementSeedDone(): Boolean =
+        context.dataStore.data.first()[statementSeedDoneKey] ?: false
+
+    suspend fun setStatementSeedDone(done: Boolean) {
+        context.dataStore.edit { prefs -> prefs[statementSeedDoneKey] = done }
+    }
+
+    /** Sembrado histórico v2 (compras clasificadas + intereses + planes + transferencias). */
+    suspend fun isStatementSeedV2Done(): Boolean =
+        context.dataStore.data.first()[statementSeedV2DoneKey] ?: false
+
+    suspend fun setStatementSeedV2Done(done: Boolean) {
+        context.dataStore.edit { prefs -> prefs[statementSeedV2DoneKey] = done }
     }
 
     /**
@@ -140,6 +165,26 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[dismissedTemplateSuggestionsKey] = (prefs[dismissedTemplateSuggestionsKey] ?: emptySet()) + canonicalKey
         }
+    }
+
+    // ── Dedupe del recordatorio de estados de cuenta (Tarea 4) ──────────────────
+    // Claves "walletId:corteISO" ya notificadas este ciclo, para no repetir el aviso
+    // mensual. Se reemplaza el set completo en cada corrida (poda al ciclo vigente).
+
+    suspend fun getStatementCycleNotified(): Set<String> =
+        context.dataStore.data.first()[statementCycleNotifiedKey] ?: emptySet()
+
+    suspend fun setStatementCycleNotified(keys: Set<String>) {
+        context.dataStore.edit { prefs -> prefs[statementCycleNotifiedKey] = keys }
+    }
+
+    // Dedupe del recordatorio de fecha límite de pago de tarjeta (estados v2 Fase 5).
+    // Claves "walletId:fechaLimiteISO:tramo" ya notificadas.
+    suspend fun getPaymentDueNotified(): Set<String> =
+        context.dataStore.data.first()[paymentDueNotifiedKey] ?: emptySet()
+
+    suspend fun setPaymentDueNotified(keys: Set<String>) {
+        context.dataStore.edit { prefs -> prefs[paymentDueNotifiedKey] = keys }
     }
 
     // ── Espejo Google Calendar (Apéndice G.2, Fase 6) ───────────────────────────
