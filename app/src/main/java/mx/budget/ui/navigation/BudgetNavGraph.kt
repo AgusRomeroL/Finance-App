@@ -17,7 +17,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -39,6 +41,8 @@ import mx.budget.ui.calendar.CalendarViewModel
 import mx.budget.ui.calendar.NewPlannedViewModel
 import mx.budget.ui.calendar.RecurrenceViewModel
 import mx.budget.ui.calendar.TemplatesScreen
+import mx.budget.ui.capture.CaptureBottomSheet
+import mx.budget.ui.capture.CaptureSheetMode
 import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardScreen
 import mx.budget.ui.dashboard.DashboardViewModel
@@ -128,6 +132,11 @@ fun BudgetNavGraph(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: BudgetDestinations.DASHBOARD
 
+    // Captura hoisted al grafo: el "+" del pill flotante / rail (MainShell) y las
+    // sugerencias del dashboard abren el MISMO sheet desde aquí. null = cerrado.
+    var captureMode by remember { mutableStateOf<CaptureSheetMode?>(null) }
+    val onOpenCapture: (CaptureSheetMode) -> Unit = { captureMode = it }
+
     val onNavigate: (String) -> Unit = { route ->
         if (route != currentRoute) {
             navController.navigate(route) {
@@ -141,15 +150,15 @@ fun BudgetNavGraph(
         }
     }
 
-    // Rutas de nivel superior: llevan barra persistente (rail/bottom nav) provista por
-    // MainShell y comparten la transición fade-through (M3) entre sí.
+    // Rutas de nivel superior: llevan barra persistente (pill flotante / rail) provista
+    // por MainShell y comparten la transición fade-through (M3) entre sí. Perfil YA NO
+    // es top-level: se abre desde el avatar de la barra superior como ruta secundaria.
     val topLevelRoutes = remember {
         setOf(
             BudgetDestinations.DASHBOARD,
             BudgetDestinations.CALENDAR,
             BudgetDestinations.WALLETS,
             BudgetDestinations.ANALYTICS,
-            BudgetDestinations.PROFILE,
         )
     }
     val isTopLevel = currentRoute in topLevelRoutes
@@ -182,6 +191,7 @@ fun BudgetNavGraph(
         isExpanded = isExpanded,
         showBar = isTopLevel,
         onNavigate = onNavigate,
+        onCapture = { onOpenCapture(CaptureSheetMode.New) },
     ) {
     NavHost(
         navController = navController,
@@ -217,7 +227,9 @@ fun BudgetNavGraph(
                 onNavigate = onNavigate,
                 onOpenReview = { onNavigate(BudgetDestinations.ATTRIBUTION_REVIEW) },
                 onOpenSearch = { onNavigate(BudgetDestinations.SEARCH) },
-                onOpenSuggestions = { onNavigate(BudgetDestinations.SUGGESTIONS) }
+                onOpenSuggestions = { onNavigate(BudgetDestinations.SUGGESTIONS) },
+                onOpenCapture = onOpenCapture,
+                onOpenProfile = { onNavigate(BudgetDestinations.PROFILE) }
             )
         }
 
@@ -336,7 +348,11 @@ fun BudgetNavGraph(
             }
         }
 
-        composable(route = BudgetDestinations.PROFILE) {
+        composable(
+            route = BudgetDestinations.PROFILE,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
             val pendingReviewCount by dashboardViewModel.pendingReviewCount.collectAsState()
             ProfileScreen(
                 dynamicColor = dynamicColor,
@@ -492,6 +508,16 @@ fun BudgetNavGraph(
         }
     }
     } // MainShell
+
+    // Sheet de captura hoisted: overlay global sobre cualquier ruta (lo abre el "+"
+    // del pill/rail y las sugerencias del dashboard).
+    captureMode?.let { mode ->
+        CaptureBottomSheet(
+            viewModel = captureViewModel,
+            onDismiss = { captureMode = null },
+            mode = mode,
+        )
+    }
 }
 
 @Composable

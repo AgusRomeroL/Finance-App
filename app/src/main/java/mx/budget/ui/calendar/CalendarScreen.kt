@@ -142,16 +142,19 @@ fun CalendarScreen(
                     showAdd = true
                 },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
+                // Se eleva por encima del pill de navegación flotante del shell.
+                modifier = Modifier.padding(bottom = 84.dp),
             ) {
                 Icon(Icons.Filled.Add, "Nuevo pago planeado", tint = MaterialTheme.colorScheme.onPrimaryContainer)
             }
         },
     ) { inner ->
         Column(
+            // Edge-to-edge: el Scaffold ya aporta los insets reales de las barras vía
+            // [inner]; NO se añade statusBarsPadding (duplicaría el inset superior).
             modifier = Modifier
                 .fillMaxSize()
-                .padding(inner)
-                .statusBarsPadding(),
+                .padding(inner),
         ) {
             Header(
                 onBack = onBack,
@@ -162,7 +165,7 @@ fun CalendarScreen(
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 28.dp),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item(key = "month") {

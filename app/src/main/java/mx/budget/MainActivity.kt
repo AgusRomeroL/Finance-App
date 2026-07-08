@@ -1,9 +1,12 @@
 package mx.budget
 
 import android.Manifest
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -309,6 +312,14 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Edge-to-edge: barras del sistema transparentes para que la superficie de
+        // la app se vea a través de ellas (blend). La APARIENCIA de los íconos
+        // (claro/oscuro) la fija BudgetAppTheme según el tema Compose. Ambas barras
+        // transparentes; en nav de 3 botones el scrim automático cuida el contraste.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
+        )
         super.onCreate(savedInstanceState)
         val windowWidthDp = resources.displayMetrics.let {
             (it.widthPixels / it.density).toInt()

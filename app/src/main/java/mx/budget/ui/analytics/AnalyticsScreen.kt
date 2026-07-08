@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -94,10 +96,12 @@ fun AnalyticsScreen(
     val totalCommitment by viewModel.totalCommitment.collectAsState()
     val totalReceivable by viewModel.totalReceivable.collectAsState()
 
-    Box(Modifier.fillMaxSize()) {
+    // Edge-to-edge: Analytics no está dentro de un Scaffold, así que aplica su propio
+    // inset superior (si no, el header quedaría bajo la barra de estado transparente).
+    Box(Modifier.fillMaxSize().statusBarsPadding()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 104.dp),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item {
@@ -357,7 +361,9 @@ fun AnalyticsScreen(
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(24.dp),
+                    .navigationBarsPadding()
+                    // Se eleva por encima del pill de navegación flotante del shell.
+                    .padding(end = 24.dp, bottom = 84.dp),
             )
         }
     }

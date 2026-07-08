@@ -206,14 +206,17 @@ fun WalletsScreen(
                 text = { Text("Nueva cuenta") },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                // Se eleva por encima del pill de navegación flotante del shell.
+                modifier = Modifier.padding(bottom = 84.dp),
             )
         },
     ) { inner ->
         Column(
+            // Edge-to-edge: el Scaffold ya aporta los insets reales de las barras vía
+            // [inner]; NO se añade statusBarsPadding (duplicaría el inset superior).
             modifier = Modifier
                 .fillMaxSize()
-                .padding(inner)
-                .statusBarsPadding(),
+                .padding(inner),
         ) {
             Header(
                 onBack = onBack,
@@ -527,7 +530,7 @@ private fun WalletList(
 
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 28.dp),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item(key = "kpis") {
