@@ -22,10 +22,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import androidx.compose.runtime.collectAsState
 import mx.budget.ui.analytics.AnalyticsScreen
 import mx.budget.ui.analytics.AnalyticsViewModel
@@ -71,6 +73,7 @@ object BudgetDestinations {
     const val MASTERS_CATEGORIES = "masters_categories"
     const val MASTERS_INCOME = "masters_income"
     const val STATEMENTS = "statements"
+    const val STATEMENTS_MONTH = "statements_month"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,6 +120,7 @@ fun BudgetNavGraph(
     incomeSourcesMasterViewModel: mx.budget.ui.masters.IncomeSourcesMasterViewModel? = null,
     startOnboarding: Boolean = false,
     statementImportViewModel: mx.budget.ui.statements.StatementImportViewModel? = null,
+    statementsChecklistViewModel: mx.budget.ui.statements.StatementsChecklistViewModel? = null,
     nvidiaApiKey: String = "",
     onNvidiaApiKeyChange: (String) -> Unit = {},
 ) {
@@ -366,24 +370,70 @@ fun BudgetNavGraph(
                 nvidiaApiKey = nvidiaApiKey,
                 onNvidiaApiKeyChange = onNvidiaApiKeyChange,
                 onImportStatement = if (statementImportViewModel != null) {
-                    { onNavigate(BudgetDestinations.STATEMENTS) }
+                    {
+                        onNavigate(
+                            if (statementsChecklistViewModel != null) BudgetDestinations.STATEMENTS_MONTH
+                            else BudgetDestinations.STATEMENTS
+                        )
+                    }
                 } else null,
             )
         }
 
         composable(
-            route = BudgetDestinations.STATEMENTS,
+            route = "${BudgetDestinations.STATEMENTS}?walletId={walletId}",
+            arguments = listOf(
+                navArgument("walletId") {
+                    type = NavType.StringType; nullable = true; defaultValue = null
+                }
+            ),
             enterTransition = slideEnter, exitTransition = slideExit,
             popEnterTransition = slideEnter, popExitTransition = slideExit,
-        ) {
+        ) { backStackEntry ->
+            val walletId = backStackEntry.arguments?.getString("walletId")
             if (statementImportViewModel != null) {
+                // Entrada desde el checklist: resetea y preselecciona el wallet (el
+                // VM es activity-scoped, así que el reset explícito es obligatorio).
+                androidx.compose.runtime.LaunchedEffect(walletId) {
+                    if (walletId != null) {
+                        statementImportViewModel.reset()
+                        statementImportViewModel.presetWallet(walletId)
+                    }
+                }
+                val backRoute =
+                    if (walletId != null && statementsChecklistViewModel != null)
+                        BudgetDestinations.STATEMENTS_MONTH
+                    else BudgetDestinations.PROFILE
                 mx.budget.ui.statements.StatementImportScreen(
                     viewModel = statementImportViewModel,
-                    onBack = { onNavigate(BudgetDestinations.PROFILE) },
+                    onBack = { onNavigate(backRoute) },
                     onOpenProfile = { onNavigate(BudgetDestinations.PROFILE) },
                 )
             } else {
                 PlaceholderScreen("Importar estado de cuenta", onNavigate)
+            }
+        }
+
+        composable(
+            route = BudgetDestinations.STATEMENTS_MONTH,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
+            if (statementsChecklistViewModel != null) {
+                val statuses by statementsChecklistViewModel.statuses.collectAsState()
+                val progress by statementsChecklistViewModel.progress.collectAsState()
+                mx.budget.ui.statements.StatementsChecklistScreen(
+                    statuses = statuses,
+                    imported = progress.first,
+                    total = progress.second,
+                    onImportWallet = { wid ->
+                        onNavigate("${BudgetDestinations.STATEMENTS}?walletId=$wid")
+                    },
+                    onImportAny = { onNavigate(BudgetDestinations.STATEMENTS) },
+                    onBack = { onNavigate(BudgetDestinations.PROFILE) },
+                )
+            } else {
+                PlaceholderScreen("Estados del mes", onNavigate)
             }
         }
 

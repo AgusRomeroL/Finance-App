@@ -94,10 +94,24 @@ class StatementImportManager(
 
     /** Paso 2: envía SOLO el texto al LLM cloud y obtiene el JSON estructurado. */
     suspend fun analyze(statementText: String): AnalyzeResult =
-        when (val r = nimClient.analyze(statementText)) {
+        when (val r = nimClient.analyze(statementText, buildLlmContext())) {
             is NvidiaNimClient.Result.Success -> AnalyzeResult.Success(r.statement, r.rawJson)
             is NvidiaNimClient.Result.Failure -> AnalyzeResult.Failure(r.message)
         }
+
+    /**
+     * Contexto del hogar (miembros beneficiarios + categorías hoja) para que el LLM
+     * pueble `categoriaSugerida`/`beneficiariosSugeridos`. Best-effort: si falla, se
+     * envía sin contexto (el modelo sigue extrayendo los campos base).
+     */
+    private suspend fun buildLlmContext(): StatementLlmContext? = runCatching {
+        val miembros = activeHouseholdMembers().map { it.displayName }
+        val categorias = categoryDao.getAll(householdId)
+            .filter { it.parentId != null }               // hojas asignables
+            .map { "${it.code} — ${it.displayName}" }
+        if (miembros.isEmpty() && categorias.isEmpty()) null
+        else StatementLlmContext(miembros = miembros, categorias = categorias)
+    }.getOrNull()
 
     /**
      * Paso 3 (ruta SIN reescritura — sin wallet elegido o legado C1):

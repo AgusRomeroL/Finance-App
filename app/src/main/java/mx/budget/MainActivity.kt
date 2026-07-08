@@ -231,6 +231,11 @@ class MainActivity : ComponentActivity() {
         ViewModelProvider(this, StatementImportViewModelFactory(app))[mx.budget.ui.statements.StatementImportViewModel::class.java]
     }
 
+    private val statementsChecklistViewModel: mx.budget.ui.statements.StatementsChecklistViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, StatementsChecklistViewModelFactory(app))[mx.budget.ui.statements.StatementsChecklistViewModel::class.java]
+    }
+
     private val captureViewModel: CaptureViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, CaptureViewModelFactory(
@@ -417,12 +422,27 @@ class MainActivity : ComponentActivity() {
                     incomeSourcesMasterViewModel = incomeSourcesMasterViewModel,
                     startOnboarding = app.needsOnboarding,
                     statementImportViewModel = statementImportViewModel,
+                    statementsChecklistViewModel = statementsChecklistViewModel,
                     nvidiaApiKey = nvidiaApiKey,
                     onNvidiaApiKeyChange = { key -> scope.launch { settings.setNvidiaApiKey(key) } },
                 )
                 }
             }
         }
+    }
+}
+
+/** Factory del checklist "Estados del mes" (Tarea 4 — alimentación mensual). */
+class StatementsChecklistViewModelFactory(
+    private val app: BudgetApplication,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.statements.StatementsChecklistViewModel(
+            walletRepository = app.walletRepository,
+            statementImportDao = app.database.statementImportDao(),
+            householdId = app.householdId,
+        ) as T
     }
 }
 

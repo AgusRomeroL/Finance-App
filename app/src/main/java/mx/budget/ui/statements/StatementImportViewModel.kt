@@ -86,6 +86,18 @@ class StatementImportViewModel(
     private val _selectedWalletId = MutableStateFlow<String?>(null)
     val selectedWalletId: StateFlow<String?> = _selectedWalletId.asStateFlow()
 
+    /**
+     * Wallet preseleccionado al entrar desde el checklist "Estados del mes": si el
+     * `last4` del PDF no resuelve un wallet, se usa este como fallback. El VM es
+     * activity-scoped, así que quien navega aquí debe llamar `reset()` + `presetWallet`.
+     */
+    private var presetWalletId: String? = null
+
+    fun presetWallet(id: String?) {
+        presetWalletId = id
+        _selectedWalletId.value = id
+    }
+
     // ── Estado del paso "Reescribir movimientos" ────────────────────────────────
 
     /** Compras del estado, con checkbox (MSI default deseleccionado). */
@@ -133,8 +145,10 @@ class StatementImportViewModel(
                         is StatementImportManager.AnalyzeResult.Success -> {
                             rawJson = res.rawJson
                             _draft.value = res.statement
-                            // Prefill del wallet por last4 si coincide con alguno.
-                            _selectedWalletId.value = matchWalletByLast4(res.statement.last4)
+                            // Prefill del wallet por last4; si no resuelve, cae al
+                            // preseleccionado desde el checklist (si lo hubo).
+                            _selectedWalletId.value =
+                                matchWalletByLast4(res.statement.last4) ?: presetWalletId
                             _phase.value = ImportPhase.Preview
                         }
                     }
@@ -288,6 +302,7 @@ class StatementImportViewModel(
         _phase.value = ImportPhase.Idle
         _draft.value = ParsedStatement()
         _selectedWalletId.value = null
+        presetWalletId = null
         _rewritePurchases.value = emptyList()
         _rewriteAggregates.value = emptyList()
         _rewritePayerName.value = null
