@@ -191,3 +191,18 @@ data class AttributionRow(
     val memberId: String,
     val shareBps: Int
 )
+
+/**
+ * Fila de atribución enriquecida con el monto del gasto, para el cómputo de
+ * "Cuentas entre miembros" (netting). Trae ambos roles (PAYER/BENEFICIARY);
+ * la pantalla agrega por gasto para derivar la matriz de deudas B→P.
+ *
+ * Alimenta [mx.budget.ui.settle.MemberBalancesViewModel]. Solo lectura.
+ */
+data class NettingAttributionRow(
+    val expenseId: String,
+    val amountMxn: Double,
+    val role: String,
+    val memberId: String,
+    val shareAmountMxn: Double
+)

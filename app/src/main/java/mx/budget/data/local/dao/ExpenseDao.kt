@@ -300,6 +300,18 @@ interface ExpenseDao {
     @Query("UPDATE expense SET concept_canonical = :canonical WHERE id = :id")
     suspend fun updateConceptCanonical(id: String, canonical: String?)
 
+    /**
+     * Marca un gasto como liquidado por netting ("Cuentas entre miembros"):
+     * `settlement_status = 'NETTED'`. El gate `= 'NONE'` garantiza que NO pise el
+     * flujo "alguien más pagó" (PENDING_REIMBURSEMENT/REIMBURSED/ABSORBED): solo
+     * transiciona gastos normales aún no liquidados. Sube `updated_at` para el LWW.
+     */
+    @Query(
+        "UPDATE expense SET settlement_status = 'NETTED', updated_at = :ts " +
+            "WHERE id = :id AND settlement_status = 'NONE'"
+    )
+    suspend fun markNetted(id: String, ts: Long)
+
     @Query(
         """
         SELECT

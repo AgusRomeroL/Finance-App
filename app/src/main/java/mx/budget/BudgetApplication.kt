@@ -263,7 +263,8 @@ class BudgetApplication : Application() {
                 BudgetDatabase.MIGRATION_11_12,
                 BudgetDatabase.MIGRATION_12_13,
                 BudgetDatabase.MIGRATION_13_14,
-                BudgetDatabase.MIGRATION_14_15
+                BudgetDatabase.MIGRATION_14_15,
+                BudgetDatabase.MIGRATION_15_16
             )
             .build()
 
@@ -549,6 +550,17 @@ class BudgetApplication : Application() {
      */
     fun captureNaturalLanguage(rawText: String, source: String) {
         appScope.launch { bankCaptureManager.ingestText(rawText, source) }
+    }
+
+    /**
+     * Empuja un snapshot fresco al reloj (saldo + quincena + colecciones) desde el
+     * [appScope], que sobrevive al [mx.budget.service.BudgetWearListenerService]
+     * efímero que lo dispara. Es la respuesta al "pull-on-open" del reloj
+     * ([mx.budget.core.wear.WearPaths.PATH_REQUEST_SYNC], §G.3.3): el espejo en vivo
+     * teléfono→reloj deja de depender de que el dashboard del teléfono esté abierto.
+     */
+    fun pushWearSnapshot() {
+        appScope.launch { mx.budget.service.WearSnapshotBuilder.push(this@BudgetApplication) }
     }
 
     // ── Fase B: multi-tenant (Google Sign-In + re-anclaje de sync) ──────────────

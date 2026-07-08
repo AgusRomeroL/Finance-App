@@ -7,12 +7,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.rememberScrollState
@@ -21,11 +24,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -33,7 +44,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -64,6 +78,7 @@ fun LazyListScope.balanceSheetSections(
     loans: List<LoanEntity>,
     installments: List<InstallmentPlanEntity>,
     memberNames: Map<String, String>,
+    walletNames: Map<String, String>,
     money: NumberFormat,
     onEditSavings: (SavingsGoalEntity?) -> Unit,
     onEditLoan: (LoanEntity?) -> Unit,
@@ -137,6 +152,14 @@ fun LazyListScope.balanceSheetSections(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                     )
+                    loanScheduleSummary(l, money)?.let { summary ->
+                        Text(
+                            summary,
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 2,
+                        )
+                    }
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(horizontalAlignment = Alignment.End) {
@@ -164,32 +187,176 @@ fun LazyListScope.balanceSheetSections(
     item(key = "header_installments") { BalanceSectionHeader("Planes a meses (MSI)") }
     items(installments.size, key = { "plan_${installments[it].id}" }) { i ->
         val p = installments[i]
-        BalanceRowCard(onClick = { onEditInstallment(p) }) {
+        InstallmentPlanCard(
+            plan = p,
+            walletNames = walletNames,
+            money = money,
+            onClick = { onEditInstallment(p) },
+        )
+    }
+    item(key = "add_installment") { AddRow("Nuevo plan a meses") { onEditInstallment(null) } }
+}
+
+/**
+ * Tarjeta rica de un plan a meses / MSI. Muestra las tres cosas que interesan:
+ *  (1) la tarjeta/cuenta con la que se financió la compra (`payment_method_id`),
+ *  (2) las condiciones de compra (cuotas, monto por cuota, total, interés y avance),
+ *  (3) cómo se va a pagar la tarjeta (cargo mensual sobre esa misma cuenta).
+ *
+ * Nota de esquema: `installment_plan` solo guarda `payment_method_id` (la cuenta
+ * donde se cargó la compra), pero NO una cuenta-fuente desde la que se liquida la
+ * tarjeta cada mes. Por eso "cómo se paga" se expresa con lo disponible. Para
+ * modelar "de qué cuenta se paga la tarjeta" haría falta un campo nuevo
+ * (p. ej. `funding_payment_method_id`) — ver reporte.
+ */
+@Composable
+private fun InstallmentPlanCard(
+    plan: InstallmentPlanEntity,
+    walletNames: Map<String, String>,
+    money: NumberFormat,
+    onClick: () -> Unit,
+) {
+    val fc = MaterialTheme.financeColors
+    val cardName = plan.paymentMethodId?.let { walletNames[it] }
+    val paid = plan.currentInstallment.coerceIn(0, plan.totalInstallments)
+    val total = plan.totalInstallments.coerceAtLeast(1)
+    val remaining = (plan.totalInstallments - paid).coerceAtLeast(0) * plan.installmentAmountMxn
+    val hasInterest = plan.interestRateApr != null && plan.interestRateApr != 0.0
+    val interestLabel = if (hasInterest) "APR ${plan.interestRateApr!!.asPercent()}" else "Sin intereses (MSI)"
+
+    val target = (paid.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+    val fraction by animateFloatAsState(
+        targetValue = target,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "planFill",
+    )
+
+    BalanceRowCard(onClick = onClick) {
+        Column(Modifier.fillMaxWidth()) {
+            // Título + saldo restante ────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text(p.displayName, style = MaterialTheme.typography.bodyLarge, maxLines = 2)
+                Text(
+                    plan.displayName,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier.weight(1f),
+                    maxLines = 2,
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        "Cuota ${p.currentInstallment} de ${p.totalInstallments} · ${money.format(p.installmentAmountMxn)} c/u",
-                        style = MaterialTheme.typography.bodySmall,
+                        money.format(remaining),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = fc.expense,
+                        maxLines = 1,
+                    )
+                    Text(
+                        "restante",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
                     )
                 }
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    money.format((p.totalInstallments - p.currentInstallment) * p.installmentAmountMxn),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.financeColors.expense,
-                    maxLines = 1,
+            }
+
+            // (1) Tarjeta usada ───────────────────────────────────────────────────
+            Spacer(Modifier.height(12.dp))
+            PlanInfoLine(
+                icon = Icons.Filled.CreditCard,
+                label = "Tarjeta usada",
+                value = cardName ?: "Sin tarjeta vinculada",
+            )
+
+            // (2) Condiciones de compra: avance + interés ─────────────────────────
+            Spacer(Modifier.height(12.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(fraction)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(fc.expense),
                 )
             }
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Text(
+                    "Pago $paid de ${plan.totalInstallments}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    interestLabel,
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                    color = if (hasInterest) fc.warning else fc.income,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "${money.format(plan.installmentAmountMxn)} al mes × ${plan.totalInstallments} · total ${money.format(plan.principalMxn)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+            )
+
+            // (3) Cómo se paga la tarjeta ─────────────────────────────────────────
+            Spacer(Modifier.height(12.dp))
+            PlanInfoLine(
+                icon = Icons.Filled.Payments,
+                label = "Cómo se paga",
+                value = if (cardName != null)
+                    "Cargo mensual de ${money.format(plan.installmentAmountMxn)} a $cardName"
+                else
+                    "Cargo mensual de ${money.format(plan.installmentAmountMxn)}",
+            )
         }
     }
-    item(key = "add_installment") { AddRow("Nuevo plan a meses") { onEditInstallment(null) } }
+}
+
+/** Renglón etiquetado con icono para las secciones de un plan (tarjeta / pago). */
+@Composable
+private fun PlanInfoLine(icon: ImageVector, label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 3,
+            )
+        }
+    }
+}
+
+/** Formatea una tasa anual (guardada como porcentaje, p. ej. 24.0) → "24%". */
+private fun Double.asPercent(): String {
+    val s = if (this % 1.0 == 0.0) toLong().toString() else "%.1f".format(this)
+    return "$s%"
 }
 
 @Composable
@@ -296,14 +463,23 @@ fun SavingsGoalSheet(
 }
 
 /** Alta/edición de préstamo, con abono ("Registrar pago") y borrado. */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun LoanSheet(
     existing: LoanEntity?,
     members: List<MemberEntity>,
-    onSave: (debtorMemberId: String, principal: Double, notes: String?) -> Unit,
+    onSave: (
+        debtorMemberId: String,
+        principal: Double,
+        notes: String?,
+        paymentCount: Int?,
+        paymentFrequency: String?,
+        paymentAmountMxn: Double?,
+        scheduleStartDate: String?,
+    ) -> Unit,
     onPayment: (loanId: String, amount: Double) -> Unit,
     onDelete: (LoanEntity) -> Unit,
+    onCreateDebtor: (name: String, select: (String) -> Unit) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var debtorId by remember { mutableStateOf(existing?.debtorMemberId) }
@@ -311,6 +487,50 @@ fun LoanSheet(
     var notes by remember { mutableStateOf(existing?.notes ?: "") }
     var payment by remember { mutableStateOf("") }
     val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
+
+    // ── Esquema de pago (v16) ────────────────────────────────────────────────
+    var frequency by remember { mutableStateOf(existing?.paymentFrequency ?: "BIWEEKLY") }
+    var count by remember { mutableStateOf(existing?.paymentCount?.toString() ?: "") }
+    var perPayment by remember { mutableStateOf(existing?.paymentAmountMxn?.toPlainString() ?: "") }
+    var amountEdited by remember { mutableStateOf(existing?.paymentAmountMxn != null) }
+    var startDate by remember { mutableStateOf(existing?.scheduleStartDate ?: java.time.LocalDate.now().toString()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    val isLump = frequency == "LUMP_SUM"
+    // Auto-sugerencia del monto por pago = principal / nº pagos (mientras el
+    // usuario no lo edite a mano y no sea pago único).
+    LaunchedEffect(principal, count, frequency) {
+        if (!amountEdited && !isLump) {
+            val p = principal.toDoubleOrNull()
+            val n = count.toIntOrNull()
+            if (p != null && n != null && n > 0) {
+                val each = p / n
+                perPayment = if (each % 1.0 == 0.0) each.toLong().toString() else "%.2f".format(each)
+            }
+        }
+    }
+
+    if (showDatePicker) {
+        val initMillis = try {
+            java.time.LocalDate.parse(startDate)
+        } catch (e: Exception) {
+            java.time.LocalDate.now()
+        }.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = initMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let { ms ->
+                        startDate = java.time.Instant.ofEpochMilli(ms)
+                            .atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
+                    }
+                    showDatePicker = false
+                }) { Text("Aceptar") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancelar") } },
+        ) { DatePicker(state = pickerState) }
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetMaxWidth = 640.dp) {
         Column(
@@ -324,11 +544,11 @@ fun LoanSheet(
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             )
             Spacer(Modifier.height(14.dp))
-            MemberPicker(
-                label = "Deudor",
+            DebtorPicker(
                 members = members,
                 selectedId = debtorId,
                 onSelect = { debtorId = it },
+                onCreateDebtor = onCreateDebtor,
             )
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(
@@ -343,6 +563,67 @@ fun LoanSheet(
                 value = notes, onValueChange = { notes = it },
                 label = { Text("Notas") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
+
+            // ── Esquema de pago ──────────────────────────────────────────────
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Esquema de pago",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FrequencyChip("Semanal", "WEEKLY", frequency) { frequency = it }
+                FrequencyChip("Quincenal", "BIWEEKLY", frequency) { frequency = it }
+                FrequencyChip("Mensual", "MONTHLY", frequency) { frequency = it }
+                FrequencyChip("Pago único", "LUMP_SUM", frequency) { frequency = it }
+            }
+            if (!isLump) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = count,
+                        onValueChange = { count = it.filter { c -> c.isDigit() }.take(3) },
+                        label = { Text("N.º de pagos") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = perPayment,
+                        onValueChange = { perPayment = it.moneyInput(); amountEdited = true },
+                        label = { Text("Monto por pago") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { showDatePicker = true }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.CalendarMonth, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        if (isLump) "Fecha de pago" else "Primer pago",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        formatShortDate(startDate),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
 
             if (existing != null) {
                 Spacer(Modifier.height(14.dp))
@@ -378,13 +659,133 @@ fun LoanSheet(
                 }
                 TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancelar") }
                 Button(
-                    onClick = { onSave(debtorId!!, principal.toDoubleOrNull() ?: 0.0, notes.ifBlank { null }) },
+                    onClick = {
+                        val principalValue = principal.toDoubleOrNull() ?: 0.0
+                        val pc: Int? = if (isLump) 1 else count.toIntOrNull()
+                        val pa: Double? = if (isLump) principalValue else perPayment.toDoubleOrNull()
+                        onSave(
+                            debtorId!!,
+                            principalValue,
+                            notes.ifBlank { null },
+                            pc,
+                            frequency,
+                            pa,
+                            startDate,
+                        )
+                    },
                     enabled = debtorId != null && (principal.toDoubleOrNull() ?: 0.0) > 0,
                     modifier = Modifier.weight(1f),
                 ) { Text("Guardar") }
             }
         }
     }
+}
+
+/** Un chip de frecuencia del esquema de pago; resalta el seleccionado. */
+@Composable
+private fun FrequencyChip(
+    label: String,
+    value: String,
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    FilterChip(
+        selected = selected == value,
+        onClick = { onSelect(value) },
+        label = { Text(label) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
+    )
+}
+
+/**
+ * Selector de deudor que además permite **crear una persona en el momento**
+ * (rol EXTERNAL_DEBTOR) reutilizando el camino del ViewModel. El deudor recién
+ * creado queda seleccionado vía [onCreateDebtor]'s callback.
+ */
+@Composable
+private fun DebtorPicker(
+    members: List<MemberEntity>,
+    selectedId: String?,
+    onSelect: (String) -> Unit,
+    onCreateDebtor: (name: String, select: (String) -> Unit) -> Unit,
+) {
+    var creating by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxWidth()) {
+        MemberPicker(
+            label = "Deudor",
+            members = members,
+            selectedId = selectedId,
+            onSelect = onSelect,
+        )
+        Spacer(Modifier.height(4.dp))
+        if (!creating) {
+            TextButton(
+                onClick = { creating = true },
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Crear deudor…")
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = { Text("Nombre del deudor") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = {
+                        onCreateDebtor(newName) { id -> onSelect(id) }
+                        newName = ""
+                        creating = false
+                    },
+                    enabled = newName.isNotBlank(),
+                ) { Text("Crear") }
+            }
+        }
+    }
+}
+
+/** Resumen legible del esquema de pago de un préstamo, o null si no lo tiene. */
+private fun loanScheduleSummary(l: LoanEntity, money: NumberFormat): String? {
+    val freq = l.paymentFrequency ?: return null
+    val amt = l.paymentAmountMxn?.let { money.format(it) }
+    val start = l.scheduleStartDate?.let { formatShortDate(it) }
+    if (freq == "LUMP_SUM") {
+        val head = "Pago único" + (amt?.let { " de $it" } ?: "")
+        return listOfNotNull(head, start?.let { "para $it" }).joinToString(" · ")
+    }
+    val word = when (freq) {
+        "WEEKLY" -> "semanales"
+        "BIWEEKLY" -> "quincenales"
+        "MONTHLY" -> "mensuales"
+        else -> return null
+    }
+    val head = buildString {
+        append(l.paymentCount?.let { "$it pagos $word" } ?: "Pagos $word")
+        if (amt != null) append(" de $amt")
+    }
+    return listOfNotNull(head, start?.let { "desde $it" }).joinToString(" · ")
+}
+
+/** ISO "2026-07-08" → "8 jul" (es-MX, sin punto). */
+private fun formatShortDate(iso: String): String = try {
+    java.time.LocalDate.parse(iso)
+        .format(java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale("es", "MX")))
+        .replace(".", "")
+} catch (e: Exception) {
+    iso
 }
 
 /** Alta/edición de plan de cuotas, con acción "Avanzar cuota". */

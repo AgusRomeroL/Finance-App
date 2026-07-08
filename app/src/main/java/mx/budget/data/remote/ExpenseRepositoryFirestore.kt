@@ -151,6 +151,16 @@ class ExpenseRepositoryFirestore(
         awaitClose { listener.remove() }
     }
 
+    // Netting (cuentas entre miembros): el cómputo lee SIEMPRE de Room (fuente de
+    // verdad) y el estado 'NETTED' viaja a la nube en el push del gasto editado.
+    // Stubs consistentes con el resto del lado nube (solo push).
+    override fun observeNettingRows(
+        householdId: String
+    ): Flow<List<mx.budget.data.local.result.NettingAttributionRow>> =
+        kotlinx.coroutines.flow.flowOf(emptyList())
+
+    override suspend fun markNetted(expenseIds: List<String>) {}
+
     // El repo PÚBLICO cableado es la impl Room (fuente de verdad); este método
     // nunca se invoca por la ruta nube. Devuelve la entidad determinista sin
     // persistir, por contrato de la interfaz.

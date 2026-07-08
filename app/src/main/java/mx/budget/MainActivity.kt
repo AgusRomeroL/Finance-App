@@ -134,6 +134,15 @@ class MainActivity : ComponentActivity() {
         ))[WalletsViewModel::class.java]
     }
 
+    private val memberBalancesViewModel: mx.budget.ui.settle.MemberBalancesViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, MemberBalancesViewModelFactory(
+            app.expenseRepository,
+            app.memberRepository,
+            app.householdId,
+        ))[mx.budget.ui.settle.MemberBalancesViewModel::class.java]
+    }
+
     private val analyticsViewModel: mx.budget.ui.analytics.AnalyticsViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, AnalyticsViewModelFactory(
@@ -335,6 +344,7 @@ class MainActivity : ComponentActivity() {
                     newPlannedViewModel = newPlannedViewModel,
                     recurrenceViewModel = recurrenceViewModel,
                     walletsViewModel = walletsViewModel,
+                    memberBalancesViewModel = memberBalancesViewModel,
                     analyticsViewModel = analyticsViewModel,
                     ledgerViewModel = ledgerViewModel,
                     aiAssistantViewModel = aiAssistantViewModel,
@@ -673,6 +683,22 @@ class WalletsViewModelFactory(
             savingsRepository = savingsRepository,
             loanRepository = loanRepository,
             installmentRepository = installmentRepository,
+        ) as T
+    }
+}
+
+/** Factory para MemberBalancesViewModel ("Cuentas entre miembros" / netting). */
+class MemberBalancesViewModelFactory(
+    private val expenseRepository: ExpenseRepository,
+    private val memberRepository: MemberRepository,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.settle.MemberBalancesViewModel(
+            expenseRepository = expenseRepository,
+            memberRepository = memberRepository,
+            householdId = householdId,
         ) as T
     }
 }

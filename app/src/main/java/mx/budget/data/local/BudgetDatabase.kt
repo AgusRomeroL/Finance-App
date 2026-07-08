@@ -72,7 +72,7 @@ import mx.budget.data.local.entity.WalletTransferEntity
         WalletTransferEntity::class,
         StatementImportEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -387,6 +387,25 @@ abstract class BudgetDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `statement_import` (`id` TEXT NOT NULL, `household_id` TEXT NOT NULL, `wallet_id` TEXT, `emisor` TEXT, `last4` TEXT, `periodo_inicio` TEXT, `periodo_fin` TEXT, `fecha_corte` TEXT, `fecha_limite_pago` TEXT, `saldo_total` REAL, `pago_minimo` REAL, `pago_no_intereses` REAL, `tasa_anual` REAL, `payload_json` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `applied_at` INTEGER, PRIMARY KEY(`id`))")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_import_household_id` ON `statement_import` (`household_id`)")
+            }
+        }
+
+        /**
+         * v15 → v16: **esquema de pago configurable del préstamo por cobrar**.
+         * Añade a `loan` cuatro columnas NULLABLE que describen cómo el deudor
+         * liquidará la deuda (nº de pagos, frecuencia, monto por pago, fecha de
+         * inicio). Los préstamos sembrados quedan en null (sin esquema).
+         *
+         * Columnas nuevas por `ALTER TABLE ADD COLUMN` (no aparecen como CREATE en
+         * `app/schemas/16.json`; Room valida columnas por nombre/tipo, no por orden),
+         * todas nullable, coincidentes con `LoanEntity`. Sin índice.
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `loan` ADD COLUMN `payment_count` INTEGER")
+                db.execSQL("ALTER TABLE `loan` ADD COLUMN `payment_frequency` TEXT")
+                db.execSQL("ALTER TABLE `loan` ADD COLUMN `payment_amount_mxn` REAL")
+                db.execSQL("ALTER TABLE `loan` ADD COLUMN `schedule_start_date` TEXT")
             }
         }
     }
