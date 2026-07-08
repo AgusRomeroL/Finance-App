@@ -531,6 +531,18 @@ class BudgetApplication : Application() {
         mx.budget.data.statements.StatementReminderNotifier.ensureChannel(this)
         scheduleStatementReminders()
 
+        // Sembrado único de estados ya importados (Tarea 4): marca en verde las
+        // tarjetas de Norma cuyos estados reales ya procesamos. No-op sin el asset.
+        appScope.launch {
+            mx.budget.data.statements.StatementSeedInitializer.seedOnce(
+                context = this@BudgetApplication,
+                settings = settingsRepository,
+                walletRepository = walletRepository,
+                statementImportDao = database.statementImportDao(),
+                householdId = householdId,
+            )
+        }
+
         // Espejo Google Calendar (§G.2 Fase 6). Best-effort: si está activado y hay
         // permiso, reconcilia los PLANNED al arrancar; si no, no hace nada.
         calendarMirror = CalendarMirror(

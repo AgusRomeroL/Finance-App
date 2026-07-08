@@ -30,6 +30,7 @@ class SettingsRepository(private val context: Context) {
 
     private val dynamicColorKey = booleanPreferencesKey("dynamic_color")
     private val retroLabelingDoneKey = booleanPreferencesKey("retro_labeling_done")
+    private val statementSeedDoneKey = booleanPreferencesKey("statement_seed_done")
     private val bankCaptureEnabledKey = booleanPreferencesKey("bank_capture_enabled")
     private val reminderLeadDaysKey = intPreferencesKey("reminder_lead_days")
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
@@ -60,6 +61,19 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setRetroLabelingDone(done: Boolean) {
         context.dataStore.edit { prefs -> prefs[retroLabelingDoneKey] = done }
+    }
+
+    /**
+     * Sembrado único de "estados de cuenta ya importados" (Tarea 4): marca en el
+     * primer arranque las tarjetas de Norma cuyos estados reales ya procesamos
+     * (corte + saldo + fila `statement_import`), para que el checklist arranque en
+     * verde. Idempotente vía este flag.
+     */
+    suspend fun isStatementSeedDone(): Boolean =
+        context.dataStore.data.first()[statementSeedDoneKey] ?: false
+
+    suspend fun setStatementSeedDone(done: Boolean) {
+        context.dataStore.edit { prefs -> prefs[statementSeedDoneKey] = done }
     }
 
     /**
