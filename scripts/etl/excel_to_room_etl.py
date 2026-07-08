@@ -20,8 +20,8 @@ Entidades pobladas
   6. income_source             — ingresos quincenales de Benjamín y Norma
   7. expense                   — una fila por cada línea presupuestada > 0
   8. expense_attribution       — reparto BENEFICIARY / PAYER en basis points
-  9. installment_plan          — planes de cuotas (se siembran vacíos)
- 10. recurrence_template       — vacía (la app la llena al detectar patrones)
+  9. installment_plan          — planes MSI reales (Mercado Libre, Buró)
+ 10. recurrence_template       — plantillas de obligaciones fijas recurrentes
  11. loan                      — préstamo a Jaudiel
  12. savings_goal              — Ahorro Empresa como meta seed
 
@@ -1361,6 +1361,39 @@ def split_amount_mxn(total: float, count: int) -> list[float]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  BLOQUE 6.4 · PLANTILLAS DE RECURRENCIA + PLANES MSI (modelo de futuro)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Agustín (2026-07-07): la semilla ya no siembra el futuro como gastos PLANNED.
+# En su lugar, las OBLIGACIONES FIJAS recurrentes se modelan como
+# `recurrence_template` (la app materializa PLANNED en runtime cada quincena) y
+# las series a meses reales como `installment_plan`.
+#
+# Conceptos a templatizar: una plantilla por cada obligación fija recurrente.
+# Se EXCLUYEN los gastos variables (comida, despensa, limpieza, gasolinas,
+# diversión). Los conceptos se identifican por su forma CANÓNICA ya persistida
+# en `expense.concept` (ver CANONICAL_CONCEPT_RULES / SPLIT_RULES).
+#
+# NOTA sobre "Normita, David y Agus": la lista de Agustín menciona "Normita" y
+# "David y Agus (seguro)" por separado, pero en el Excel/semilla es UN solo
+# concepto de seguro de los tres hijos mayores ("Normita, David y Agus"), así
+# que produce UNA plantilla (36 en total, no 37).
+RECURRENCE_TEMPLATE_CONCEPTS: tuple[str, ...] = (
+    "Hipoteca", "Internet", "Agua", "Electricidad",
+    "Netflix", "Prime", "HBO", "Spotify", "YouTube",
+    "Adobe", "Google", "Google Nest", "Kigo", "Coursera",
+    "Suscripción Nivel 6",
+    "Teléfono Norma", "Teléfono Normita", "Teléfono David",
+    "Teléfono Santi", "Teléfono Benji",
+    "Walmart", "Banamex Clásica", "Liverpool", "Sears", "Coppel",
+    "Mercado Pago", "DiDi", "Klar",
+    "Comida Gatas", "Psicóloga", "Préstamo Omar",
+    "Benji", "Normita, David y Agus",
+    "Escuela David", "Escuela Santiago", "Escuela Normita",
+)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  BLOQUE 7 · ORQUESTADOR ETL
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1423,6 +1456,8 @@ class EtlPipeline:
             self._insert_seed(conn)
             self._ingest_sheets(conn, wb)
             self._insert_oneoff_seeds(conn)
+            self._seed_recurrence_templates(conn)
+            self._seed_installment_plans(conn)
             self._finalize(conn)
 
         LOG.info("ETL completado: %s", self.stats)
@@ -1534,9 +1569,27 @@ class EtlPipeline:
         sheet_names = wb.sheetnames
         periods = build_sheet_periods(sheet_names)
 
+        # MODELO DE FUTURO (Agustín, 2026-07-07): la semilla NO emite quincenas
+        # futuras. Solo se conserva hasta la quincena ACTIVA (la que cubre HOY);
+        # las posteriores las crea el rollover de la app al llegar la fecha.
+        # `active_end` = último día de la quincena activa: 15 si HOY cae en la
+        # primera mitad, o el fin de mes real si cae en la segunda.
+        if TODAY.day <= 15:
+            active_end = date(TODAY.year, TODAY.month, 15)
+        else:
+            last_day = calendar.monthrange(TODAY.year, TODAY.month)[1]
+            active_end = date(TODAY.year, TODAY.month, last_day)
+
         for name in sheet_names:
             period = periods.get(name)
             if period is None:
+                self.stats.skipped_sheets.append(name)
+                continue
+
+            # Descartar hojas cuyo período empieza DESPUÉS de la quincena activa
+            # (p. ej. jul-2ª, ago-1ª, ago-2ª cuando HOY = 2026-07-07). No se
+            # siembran quincena/ingresos/gastos para el futuro.
+            if period.start_date > active_end:
                 self.stats.skipped_sheets.append(name)
                 continue
 
@@ -1724,6 +1777,15 @@ class EtlPipeline:
             occurred_at / 1000, tz=timezone.utc
         ).date()
         status = "POSTED" if occurred_date <= TODAY else "PLANNED"
+
+        # CERO gastos PLANNED sembrados (Agustín, 2026-07-07): la semilla solo
+        # persiste lo ya ocurrido (POSTED). Los pagos futuros de la quincena
+        # activa (p. ej. jul 8-15) NO se materializan aquí — los genera la app
+        # en runtime desde las plantillas de recurrencia (recurrence_template).
+        # Esto también cubre los hijos de split, porque el split se resuelve
+        # después de este punto.
+        if status != "POSTED":
+            return
 
         category_code = resolve_category_code(line)
         category_id = CATEGORIES_BY_CODE[category_code].id
@@ -2061,6 +2123,199 @@ class EtlPipeline:
              "nota baja a $1,900. Deudor por identificar/renombrar en la app."),
         )
         conn.commit()
+
+    # ── paso 3.8: plantillas de recurrencia (obligaciones fijas) ────────────
+
+    @staticmethod
+    def _next_expected_date(cadence: str, day: int, today: date) -> Optional[str]:
+        """
+        Próxima fecha futura (> today) según cadencia + día típico. Genera las
+        ocurrencias candidatas de los próximos ~5 meses y devuelve la primera
+        posterior a hoy en ISO yyyy-MM-dd. Formato de cadencia = enum que parsea
+        RecurrenceMaterializer (QUINCENAL_EVERY / MONTHLY_SPECIFIC_HALF).
+        """
+        cands: list[date] = []
+        for i in range(5):
+            mm = today.month + i
+            yy = today.year + (mm - 1) // 12
+            mm = (mm - 1) % 12 + 1
+            last = calendar.monthrange(yy, mm)[1]
+            if cadence == "QUINCENAL_EVERY":
+                cands.append(date(yy, mm, min(max(day, 1), 15)))
+                cands.append(date(yy, mm, min(max(day, 16), last)))
+            else:  # MONTHLY_SPECIFIC_HALF
+                cands.append(date(yy, mm, min(max(day, 1), last)))
+        future = [d for d in cands if d > today]
+        return min(future).isoformat() if future else None
+
+    def _seed_recurrence_templates(self, conn: sqlite3.Connection) -> None:
+        """
+        Puebla `recurrence_template` con UNA plantilla por obligación fija
+        recurrente (RECURRENCE_TEMPLATE_CONCEPTS). Deriva monto (mediana),
+        categoría/wallet/beneficiarios/pagador (del gasto más reciente) y
+        cadencia (del patrón de mitades). Solo lee gastos POSTED ya sembrados.
+
+        Contrato JSON (verificado contra RecurrenceMaterializer.kt):
+          * cadence: "QUINCENAL_EVERY" (≈2/mes, ambas mitades) |
+                     "MONTHLY_SPECIFIC_HALF" (≈1/mes, la mitad del día).
+          * cadence_detail: {"day_of_month": <1-31>}. El materializador lo
+            coacciona a 1-15 (primera mitad) / 16-fin (segunda) según cadencia.
+          * default_beneficiary_ids: JSON array ["<member_id>", ...] (reparto
+            equitativo — formato histórico que parsea parseBeneficiaries()).
+          * default_payer_split: JSON object {"<member_id>": <bps>} (parsePayerSplit()).
+        """
+        cur = conn.cursor()
+        created = 0
+        for concept in RECURRENCE_TEMPLATE_CONCEPTS:
+            rows = cur.execute(
+                """SELECT id, occurred_at, amount_mxn, category_id, payment_method_id
+                   FROM expense
+                   WHERE concept = ? AND status = 'POSTED'
+                   ORDER BY occurred_at""",
+                (concept,),
+            ).fetchall()
+            if not rows:
+                LOG.warning("Plantilla omitida: sin gastos POSTED para %r", concept)
+                continue
+
+            amounts = sorted(r[2] for r in rows)
+            median_amount = amounts[len(amounts) // 2]
+
+            # Patrón de mitades por mes → cadencia.
+            months: dict[tuple[int, int], set[str]] = {}
+            days: list[int] = []
+            quincenas: set[str] = set()
+            for _id, oa, _amt, _cat, _pm in rows:
+                d = datetime.fromtimestamp(oa / 1000, tz=timezone.utc).date()
+                days.append(d.day)
+                months.setdefault((d.year, d.month), set()).add(
+                    "F" if d.day <= 15 else "S"
+                )
+            both = sum(1 for hs in months.values() if len(hs) == 2)
+            both_ratio = both / len(months) if months else 0.0
+            cadence = ("QUINCENAL_EVERY" if both_ratio >= 0.5
+                       else "MONTHLY_SPECIFIC_HALF")
+            days.sort()
+            median_day = days[len(days) // 2]
+
+            # Distintas quincenas → confidence.
+            nq = len(set(
+                cur.execute(
+                    "SELECT quincena_id FROM expense WHERE concept=? AND status='POSTED'",
+                    (concept,),
+                ).fetchall()
+            ))
+            confidence = min(1.0, nq / 12.0)
+
+            # Gasto más reciente → categoría, wallet, atribuciones default.
+            recent = rows[-1]
+            recent_id, _, _, category_id, payment_method_id = recent
+            beneficiary_ids = [
+                r[0] for r in cur.execute(
+                    """SELECT member_id FROM expense_attribution
+                       WHERE expense_id=? AND role='BENEFICIARY'
+                       ORDER BY share_bps DESC""",
+                    (recent_id,),
+                ).fetchall()
+            ]
+            payer_rows = cur.execute(
+                """SELECT member_id, share_bps FROM expense_attribution
+                   WHERE expense_id=? AND role='PAYER'""",
+                (recent_id,),
+            ).fetchall()
+            payer_split = {mid: bps for mid, bps in payer_rows}
+
+            cadence_detail = json.dumps({"day_of_month": median_day})
+            next_date = self._next_expected_date(cadence, median_day, TODAY)
+            learned = json.dumps([r[0] for r in rows[:5]])
+            tpl_id = did(f"rectpl:{_normalize(concept)}")
+
+            cur.execute(
+                """INSERT INTO recurrence_template
+                       (id, household_id, concept, category_id,
+                        default_amount_mxn, default_payment_method_id,
+                        cadence, cadence_detail, next_expected_date,
+                        default_beneficiary_ids, default_payer_split,
+                        is_active, confidence_score, learned_from_expense_ids)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+                (
+                    tpl_id, HOUSEHOLD_ID, concept, category_id,
+                    median_amount, payment_method_id,
+                    cadence, cadence_detail, next_date,
+                    json.dumps(beneficiary_ids),
+                    json.dumps(payer_split),
+                    confidence, learned,
+                ),
+            )
+            created += 1
+        conn.commit()
+        LOG.info("Plantillas de recurrencia sembradas: %d", created)
+
+    # ── paso 3.9: planes MSI reales (installment_plan) ──────────────────────
+
+    def _seed_installment_plans(self, conn: sqlite3.Connection) -> None:
+        """
+        Siembra `installment_plan` para las series a meses reales documentadas
+        en el concepto del Excel:
+          * "Mercado Libre MSI" → 1 plan de 12 pagos (LOANS.MERCADO_LIBRE).
+          * "Buró de Crédito"   → 1 plan de 3 pagos (LOANS.BURO).
+        Deriva monto de cuota (mediana), principal (cuota × total),
+        current_installment (pagos POSTED ≤ hoy), status (ACTIVE/PAID),
+        start_date (primer pago) y wallet del propio gasto.
+
+        NO se siembran Walmart/Coppel/Sears/Liverpool/Banamex como
+        installment_plan: son crédito REVOLVENTE (saldo rotativo, no una serie
+        cerrada de N cuotas), y ya viven como plantillas de recurrencia.
+        """
+        cur = conn.cursor()
+        plans = (
+            # (concept, key, display_name, total, category_code)
+            ("Mercado Libre MSI", "mercado_libre",
+             "Mercado Libre 12 MSI", 12, "LOANS.MERCADO_LIBRE"),
+            ("Buró de Crédito", "buro",
+             "Buró de Crédito 3 pagos", 3, "LOANS.BURO"),
+        )
+        created = 0
+        for concept, key, display_name, total, cat_code in plans:
+            rows = cur.execute(
+                """SELECT amount_mxn, occurred_at, payment_method_id
+                   FROM expense
+                   WHERE concept = ? AND status = 'POSTED'
+                   ORDER BY occurred_at""",
+                (concept,),
+            ).fetchall()
+            if not rows:
+                LOG.warning("Plan MSI omitido: sin gastos para %r", concept)
+                continue
+
+            amounts = sorted(r[0] for r in rows)
+            installment_amount = amounts[len(amounts) // 2]  # mediana
+            principal = round(installment_amount * total, 2)
+            current = min(len(rows), total)  # pagos ya ocurridos (todos POSTED)
+            status = "PAID" if current >= total else "ACTIVE"
+            start_date = datetime.fromtimestamp(
+                rows[0][1] / 1000, tz=timezone.utc
+            ).date().isoformat()
+            payment_method_id = rows[-1][2]
+            category_id = CATEGORIES_BY_CODE[cat_code].id
+
+            cur.execute(
+                """INSERT INTO installment_plan
+                       (id, household_id, display_name, creditor_member_id,
+                        payment_method_id, principal_mxn, total_installments,
+                        installment_amount_mxn, interest_rate_apr, start_date,
+                        current_installment, status, category_id)
+                   VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 0.0, ?, ?, ?, ?)""",
+                (
+                    did(f"installment:{key}"), HOUSEHOLD_ID, display_name,
+                    payment_method_id, principal, total,
+                    installment_amount, start_date, current, status,
+                    category_id,
+                ),
+            )
+            created += 1
+        conn.commit()
+        LOG.info("Planes MSI sembrados: %d", created)
 
     def _finalize(self, conn: sqlite3.Connection) -> None:
         # Meta "Ahorro Empresa anual": current_mxn = suma de lo YA apartado

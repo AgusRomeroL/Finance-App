@@ -139,6 +139,7 @@ class MainActivity : ComponentActivity() {
         ViewModelProvider(this, AnalyticsViewModelFactory(
             app.analyticsRepository,
             app.database.analyticsDao(),
+            app.expenseRepository,
             app.quincenaRepository,
             app.incomeRepository,
             app.savingsRepository,
@@ -680,6 +681,7 @@ class WalletsViewModelFactory(
 class AnalyticsViewModelFactory(
     private val analyticsRepository: mx.budget.data.repository.AnalyticsRepository,
     private val analyticsDao: mx.budget.data.local.dao.AnalyticsDao,
+    private val expenseRepository: mx.budget.data.repository.ExpenseRepository,
     private val quincenaRepository: QuincenaRepository,
     private val incomeRepository: mx.budget.data.repository.IncomeRepository,
     private val savingsRepository: mx.budget.data.repository.SavingsRepository,
@@ -692,6 +694,7 @@ class AnalyticsViewModelFactory(
         return mx.budget.ui.analytics.AnalyticsViewModel(
             analyticsRepository = analyticsRepository,
             analyticsDao = analyticsDao,
+            expenseRepository = expenseRepository,
             quincenaRepository = quincenaRepository,
             incomeRepository = incomeRepository,
             savingsRepository = savingsRepository,

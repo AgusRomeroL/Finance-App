@@ -240,3 +240,40 @@ Totales finales: **919 gastos** ($2,129,911.13 = 2,103,111.13 del presupuesto + 
 3. **Correo apartado en Firebase Auth**: `normly@gmail.com` (CORRECCIÓN: gmail, no hotmail) creado vía Admin SDK — uid `fQP5T1frbuZyShweNq7m3bTnVqg2`, display name "Norma". Sigue pendiente habilitar el proveedor anónimo (y Google) en la consola para el sign-in del cliente.
 
 Totales sin cambio: 919 gastos / $2,129,911.13 / 54 ingresos / 2 préstamos / 10 miembros. Golden re-promovido, verificado en emulador (instalación fresca, migra 1→15, sin crash).
+
+## 11. Ronda 5 — modelo de futuro: solo quincena activa + plantillas de recurrencia + MSI (2026-07-07)
+
+Agustín rediseñó cómo la semilla representa el **futuro**. Antes el ETL sembraba ~85 gastos PLANNED con fechas repartidas por todo el periodo (el calendario marcaba casi todos los días) y 3 quincenas futuras (jul-2ª, ago-1ª, ago-2ª). Nuevo modelo: la semilla **solo llega hasta la quincena activa** y las obligaciones fijas se expresan como **plantillas de recurrencia** que la app materializa en runtime.
+
+### Qué se quitó
+- **Quincenas futuras eliminadas.** `_ingest_sheets` descarta toda hoja cuyo `start_date` sea posterior al `end_date` de la quincena activa (2026-07-15). Se saltaron 3 hojas: `Quincena 16 al 30 de Julio`, `Quincena 1al 15 Agosto`, `Quincena 16 al 30 Agosto`. Resultado: **34 quincenas** (33 CLOSED + 1 ACTIVE `2026-07-FIRST`, **0 PROVISIONED**). Las futuras las creará el rollover de la app.
+- **Cero gastos PLANNED.** `_insert_expense` ahora hace early-return si el status derivado no es POSTED. La semilla solo persiste lo ya ocurrido (`occurred_at <= HOY`). En la quincena activa quedan solo los gastos de jul 1-7; jul 8-15 ya no se siembran (vendrán de las plantillas). Ningún ingreso queda PLANNED tampoco.
+
+### Plantillas de recurrencia (`recurrence_template`) — 36 creadas
+Una plantilla por obligación fija recurrente. **Excluidos** por variables: Comida, Despensa, Limpieza, Gasolina, Gasolina Camioneta, Gasolina Cochecito, Diversión. Cada plantilla deriva de los gastos POSTED históricos del concepto: `default_amount_mxn` = mediana; `category_id`/`default_payment_method_id`/`default_beneficiary_ids`/`default_payer_split` = del gasto más reciente (pagador Norma 100% por la regla del hogar desde oct-2025, salvo **Spotify** que paga Benjamín); `confidence_score` = min(1, nq/12); `learned_from_expense_ids` = primeros 5 ids.
+
+**Esquema JSON usado (verificado contra `RecurrenceMaterializer.kt` para que la app lo parsee):**
+- `cadence`: enum que reconoce el materializador — **`QUINCENAL_EVERY`** (≈2/mes, aparece en ambas mitades en ≥50% de los meses) o **`MONTHLY_SPECIFIC_HALF`** (≈1/mes). *(Nota: un literal `"QUINCENAL"`/`"MONTHLY"` NO lo parsea la app y no materializaría nada.)*
+- `cadence_detail`: `{"day_of_month": <1-31>}` (mediana del día de `occurred_at`). El materializador lo coacciona a 1-15 (primera mitad) / 16-fin (segunda) según la cadencia.
+- `default_beneficiary_ids`: array JSON `["<member_id>", …]` (reparto equitativo — formato histórico de `parseBeneficiaries()`).
+- `default_payer_split`: objeto JSON `{"<member_id>": <bps>}` que suma 10000 (`parsePayerSplit()`).
+- `next_expected_date`: primera fecha futura (> HOY) según cadencia + día típico (ISO), rango generado 2026-07-08 … 2026-08-07.
+
+Distribución de cadencias: **5 `QUINCENAL_EVERY`** (Hipoteca, DiDi, Comida Gatas, Psicóloga, Normita/David/Agus) + **31 `MONTHLY_SPECIFIC_HALF`** (el resto).
+
+Conceptos templatizados (36): Hipoteca, Internet, Agua, Electricidad, Netflix, Prime, HBO, Spotify, YouTube, Adobe, Google, Google Nest, Kigo, Coursera, Suscripción Nivel 6, Teléfono Norma/Normita/David/Santi/Benji, Walmart, Banamex Clásica, Liverpool, Sears, Coppel, Mercado Pago, DiDi, Klar, Comida Gatas, Psicóloga, Préstamo Omar, Benji (seguro), Escuela David/Santiago/Normita, y **Normita, David y Agus** (seguro de los tres hijos mayores). *(La lista de Agustín mencionaba "Normita" y "David y Agus (seguro)" por separado, pero en la semilla es UN solo concepto de seguro → 36 plantillas, no 37.)*
+
+### Planes MSI (`installment_plan`) — 2 creados
+Series a meses reales documentadas en el concepto del Excel:
+- **Mercado Libre 12 MSI** — 12 cuotas, cuota mediana $1,342, principal $16,104, `current_installment` 8, `ACTIVE`, inicio 2025-05-23, wallet Mercado Libre BNPL, categoría `LOANS.MERCADO_LIBRE`, interés 0%.
+- **Buró de Crédito 3 pagos** — 3 pagos, cuota mediana $4,300, principal $12,900, `current_installment` 2, `ACTIVE`, inicio 2025-10-12, categoría `LOANS.BURO`, interés 0%.
+
+**NO** se siembran Walmart/Coppel/Sears/Liverpool/Banamex Clásica como `installment_plan`: son crédito **revolvente** (saldo rotativo, no una serie cerrada de N cuotas). Sí viven como plantillas de recurrencia.
+
+### Conteos finales
+- **34 quincenas** (33 CLOSED + 1 ACTIVE `2026-07-FIRST`; 0 PROVISIONED).
+- **834 gastos** (todos POSTED; 0 PLANNED; 0 con `occurred_at > HOY`). *(919 − 70 de las 3 quincenas futuras − 15 PLANNED de la 2ª semana de la activa.)*
+- **51 ingresos** (54 − 3 futuros; 0 PLANNED), **4,038 atribuciones** (bps=10000 por gasto/rol), **36 plantillas**, **2 planes MSI**, 2 préstamos, 10 miembros, 88 categorías, 12 wallets.
+- Total MXN POSTED ≈ $1,919,956.73. `user_version=1`, `household_id=default_household`, `PRAGMA foreign_key_check` limpio.
+
+Golden re-promovido (`seed/budget_database.golden.db` + `.sha256` = `686a2eb1…93282f`), `scripts/check_seed_integrity.sh` → `OK: asset == golden`.
