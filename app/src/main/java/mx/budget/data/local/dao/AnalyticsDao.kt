@@ -190,7 +190,7 @@ interface AnalyticsDao {
 
     @Query(
         """
-        SELECT COALESCE(e.concept_canonical, e.concept) AS concept,
+        SELECT e.concept AS concept,
                SUM(e.amount_mxn) AS totalMxn,
                COUNT(*) AS timesCount
         FROM expense e
