@@ -5,7 +5,7 @@
  excel_to_room_etl.py  —  Puente de datos: Excel quincenal → Room SQLite
 ================================================================================
 
-Lee ``Copy of presupuesto 2.5.xlsx`` (33 hojas quincenales manuales con layout
+Lee el Excel de presupuesto quincenal (hojas manuales con layout
 variable, typos, y formatos de fecha inconsistentes) y emite un archivo
 ``budget_database.db`` cuyo esquema es bit-compatible con el generado por Room
 para ``mx.budget.data.local.BudgetDatabase`` (version = 1).
@@ -20,8 +20,8 @@ Entidades pobladas
   6. income_source             — ingresos quincenales de Benjamín y Norma
   7. expense                   — una fila por cada línea presupuestada > 0
   8. expense_attribution       — reparto BENEFICIARY / PAYER en basis points
-  9. installment_plan          — planes de cuotas (se siembran vacíos)
- 10. recurrence_template       — vacía (la app la llena al detectar patrones)
+  9. installment_plan          — planes MSI reales (Mercado Libre, Buró)
+ 10. recurrence_template       — plantillas de obligaciones fijas recurrentes
  11. loan                      — préstamo a Jaudiel
  12. savings_goal              — Ahorro Empresa como meta seed
 
@@ -78,6 +78,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Iterable, Optional
+from zoneinfo import ZoneInfo
 
 import pandas as pd  # noqa: F401  — se usa para analítica de los conteos finales.
 from openpyxl import load_workbook
@@ -111,6 +112,13 @@ ROOM_IDENTITY_HASH = "9b889298fe2edb27e8865dc8239ef354"
 # en el que se generó la base de datos, en UTC.
 NOW_EPOCH_MS = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
 
+# "Hoy" en la zona horaria del hogar. Gobierna los status derivados de la
+# fecha de generación: quincenas CLOSED/ACTIVE/PROVISIONED, gastos
+# POSTED/PLANNED e ingresos POSTED/PLANNED. Se usa la zona del hogar (no UTC)
+# porque el corte quincenal es un concepto local: a las 19:00 de CDMX ya es
+# "mañana" en UTC y sin esto la quincena activa podría cerrarse antes de tiempo.
+TODAY = datetime.now(ZoneInfo(HOUSEHOLD_TZ)).date()
+
 
 # ── 1.1 Miembros del hogar ────────────────────────────────────────────────────
 
@@ -132,8 +140,10 @@ MEMBERS: tuple[MemberSeed, ...] = (
                ("benji", "benjamin", "benjamín"), 45_000.0),
     MemberSeed("norma",    "Norma",     "PAYER_ADULT",
                ("norma",), 60_000.0),
-    MemberSeed("pau",      "Pau",       "BENEFICIARY_DEPENDENT",
-               ("pau", "paulina", "pau,", "pau ")),
+    # Pau se llama "Normita" en la app (pedido de Agustín 2026-07-07); el key
+    # y los alias conservan "pau" porque así aparece en el Excel.
+    MemberSeed("pau",      "Normita",   "BENEFICIARY_DEPENDENT",
+               ("pau", "paulina", "pau,", "pau ", "normita")),
     MemberSeed("david",    "David",     "BENEFICIARY_DEPENDENT",
                ("david", "dav", "dave")),
     MemberSeed("agustin",  "Agustín",   "BENEFICIARY_DEPENDENT",
@@ -146,6 +156,10 @@ MEMBERS: tuple[MemberSeed, ...] = (
                ("jaudiel",)),
     MemberSeed("araceli",  "Araceli",   "EXTERNAL_SERVICE",
                ("araceli",)),
+    # Deudor de la cuenta por cobrar "Deben $3,600 — Medicina + rotafolio"
+    # (notas del Excel oct-dic 2025). Norma sabe quién es; renombrar en la app.
+    MemberSeed("deudor_pendiente", "Por identificar", "EXTERNAL_DEBTOR",
+               ("deudor",)),
 )
 
 MEMBERS_BY_KEY: dict[str, MemberSeed] = {m.key: m for m in MEMBERS}
@@ -235,6 +249,7 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("HOUSING.AGUA",             "Agua",             "HOUSING",        "EXPENSE_VARIABLE",  None),
     CategorySeed("HOUSING.TELEFONO",         "Teléfono",         "HOUSING",        "EXPENSE_FIXED",     None),
     CategorySeed("HOUSING.FRACCIONAMIENTO",  "Fraccionamiento",  "HOUSING",        "EXPENSE_FIXED",     None),
+    CategorySeed("HOUSING.MUEBLES",          "Muebles",          "HOUSING",        "EXPENSE_VARIABLE",  None),
 
     CategorySeed("TRANSPORTATION.GASOLINA",  "Gasolina",         "TRANSPORTATION", "EXPENSE_VARIABLE", 2600.0),
     CategorySeed("TRANSPORTATION.INSURANCE", "Seguro vehículo",  "TRANSPORTATION", "EXPENSE_FIXED",     None),
@@ -269,6 +284,7 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("LOANS.OMAR",               "Préstamo Omar",    "LOANS",          "EXPENSE_INSTALLMENT", None),
     CategorySeed("LOANS.DIDI",               "Didi Card",        "LOANS",          "EXPENSE_INSTALLMENT", None),
     CategorySeed("LOANS.BURO",               "Buró de crédito",  "LOANS",          "EXPENSE_INSTALLMENT", None),
+    CategorySeed("LOANS.KLAR",               "Klar",             "LOANS",          "EXPENSE_INSTALLMENT", None),
 
     CategorySeed("SEGUROS_MEDICOS.BENJI",    "Seguro Benji",     "SEGUROS_MEDICOS","EXPENSE_FIXED",     None),
     CategorySeed("SEGUROS_MEDICOS.NORMA",    "Seguro Norma",     "SEGUROS_MEDICOS","EXPENSE_FIXED",     None),
@@ -276,7 +292,7 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("SEGUROS_MEDICOS.SANTI",    "Seguro Santi",     "SEGUROS_MEDICOS","EXPENSE_FIXED",     None),
 
     CategorySeed("TRANSFERENCIAS_FAMILIARES.DAVID",    "Mesada David",    "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
-    CategorySeed("TRANSFERENCIAS_FAMILIARES.PAU",      "Mesada Pau",      "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
+    CategorySeed("TRANSFERENCIAS_FAMILIARES.PAU",      "Mesada Normita",  "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
     CategorySeed("TRANSFERENCIAS_FAMILIARES.SANTIAGO", "Mesada Santiago", "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
     CategorySeed("TRANSFERENCIAS_FAMILIARES.NORMA",    "Mesada Norma",    "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
     CategorySeed("TRANSFERENCIAS_FAMILIARES.AGUSTIN",  "Mesada Agustín",  "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
@@ -284,7 +300,7 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("TRANSFERENCIAS_FAMILIARES.INSCRIPCIONES", "Inscripciones", "TRANSFERENCIAS_FAMILIARES", "TRANSFER_INTRA_HOUSEHOLD", None),
 
     CategorySeed("ESCUELA.DAVID",            "Colegiatura David",    "ESCUELA",    "EXPENSE_FIXED",     None),
-    CategorySeed("ESCUELA.PAU",              "Colegiatura Pau",      "ESCUELA",    "EXPENSE_FIXED",     None),
+    CategorySeed("ESCUELA.PAU",              "Colegiatura Normita",  "ESCUELA",    "EXPENSE_FIXED",     None),
     CategorySeed("ESCUELA.SANTIAGO",          "Colegiatura Santiago", "ESCUELA",    "EXPENSE_FIXED",     None),
 
     CategorySeed("SAVINGS.EMPRESA",          "Ahorro Empresa",   "SAVINGS",        "SAVINGS",           None),
@@ -292,16 +308,21 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("SAVINGS.RETIREMENT",       "Retiro",           "SAVINGS",        "SAVINGS",           None),
     CategorySeed("SAVINGS.INVESTMENT",       "Inversión",        "SAVINGS",        "SAVINGS",           None),
     CategorySeed("SAVINGS.EFECTIVO",         "Ahorro efectivo",  "SAVINGS",        "SAVINGS",           None),
+    # Caja Chica es un ahorro para todos (confirmado por Agustín 2026-07-07),
+    # no un gasto "Otros" — vive bajo SAVINGS.
+    CategorySeed("SAVINGS.CAJA_CHICA",       "Caja Chica",       "SAVINGS",        "SAVINGS",           None),
 
     CategorySeed("SERVICIOS_EXTERNOS.ARACELI","Araceli",         "SERVICIOS_EXTERNOS", "EXPENSE_FIXED",  None),
     CategorySeed("SERVICIOS_EXTERNOS.PSICOLOGA","Psicóloga",     "SERVICIOS_EXTERNOS", "EXPENSE_FIXED",  None),
+    CategorySeed("SERVICIOS_EXTERNOS.BERNARDO","Bernardo",       "SERVICIOS_EXTERNOS", "EXPENSE_VARIABLE", None),
+    CategorySeed("SERVICIOS_EXTERNOS.CONTADOR","Contador",       "SERVICIOS_EXTERNOS", "EXPENSE_VARIABLE", None),
 
     CategorySeed("OTHER.TELEFONO",           "Teléfono celular", "OTHER",          "EXPENSE_FIXED",     None),
     CategorySeed("OTHER.SALUD",              "Salud (psicóloga)","OTHER",          "EXPENSE_FIXED",     900.0),
     CategorySeed("OTHER.HAWAIANO",           "Clases hawaiano", "OTHER",          "EXPENSE_VARIABLE",  None),
     CategorySeed("OTHER.ADOBE",              "Adobe Creative",  "OTHER",          "EXPENSE_FIXED",     249.0),
     CategorySeed("OTHER.GOOGLE_ONE",         "Google One",       "OTHER",          "EXPENSE_FIXED",      39.0),
-    CategorySeed("OTHER.GOOGLE_HOME",        "Google Nest/Home", "OTHER",          "EXPENSE_FIXED",     200.0),
+    CategorySeed("OTHER.GOOGLE_HOME",        "Google Home",      "OTHER",          "EXPENSE_FIXED",     200.0),
     CategorySeed("OTHER.KIGO",               "Kigo",             "OTHER",          "EXPENSE_FIXED",     100.0),
     CategorySeed("OTHER.COURSERA",           "Coursera",         "OTHER",          "EXPENSE_FIXED",     288.0),
     CategorySeed("OTHER.MARY",               "Mary",             "OTHER",          "EXPENSE_VARIABLE",  None),
@@ -786,6 +807,16 @@ def parse_sheet_name(name: str, fallback_year: int) -> Optional[SheetPeriod]:
         end = last_day
 
     half = "FIRST" if start <= 15 else "SECOND"
+
+    # Las quincenas SECOND cubren hasta el último día REAL del mes aunque el
+    # nombre de la hoja diga "al 30" en un mes de 31 (mar/may/jul/ago/dic):
+    # el autor del Excel usa "16 al 30" como plantilla fija. Sin esta
+    # extensión, el día 31 quedaría fuera de toda quincena y los gastos
+    # distribuidos por `occurred_at` nunca caerían en él.
+    if half == "SECOND" and end < last_day:
+        LOG.debug("Extendiendo día fin %d → %d (fin de mes real) en hoja %r",
+                  end, last_day, name)
+        end = last_day
     return SheetPeriod(
         year=year,
         month=month,
@@ -1015,19 +1046,24 @@ _ATTRIBUTION_RULES: list[AttributionRule] = []
 
 # ── 6.1 Resolvers con soporte de reglas ──────────────────────────────────────
 
-def resolve_category(line: BudgetLine) -> str:
+def resolve_category_code(line: BudgetLine) -> str:
     """
-    Devuelve el ``id`` de la categoria. Prioridad:
+    Devuelve el ``code`` de la categoria resuelta. Prioridad:
       1. Regla explicita de attribution_rules.json
       2. Matching heuristico contra hojas hijas
       3. Fallback: raiz de la seccion
+
+    Se expone el CODE (no el id) porque la capa de canonicalizacion de
+    conceptos condiciona sus mapeos por la categoria RESUELTA (el mismo
+    token "DAVID"/"PAU"/"SANTIAGO" cae en categorias distintas segun la
+    seccion del Excel).
     """
     # 1. Regla explicita
     rule = match_rule(line, _ATTRIBUTION_RULES)
     if rule and rule.override_category:
         code = rule.override_category
         if code in CATEGORIES_BY_CODE:
-            return CATEGORIES_BY_CODE[code].id
+            return code
         # Si la regla referencia una categoria que no existe, log y fallback
         LOG.warning("Regla '%s' referencia categoria inexistente '%s'", rule.rule_id, code)
 
@@ -1039,10 +1075,15 @@ def resolve_category(line: BudgetLine) -> str:
         leaf = cat.code.rsplit(".", 1)[-1]
         leaf_display = _normalize(cat.display_name)
         if leaf in concept_norm or leaf_display in concept_norm:
-            return cat.id
+            return cat.code
 
     # 3. Fallback: raiz de la seccion.
-    return CATEGORIES_BY_CODE[line.section_code].id
+    return line.section_code
+
+
+def resolve_category(line: BudgetLine) -> str:
+    """Devuelve el ``id`` de la categoria resuelta (wrapper de conveniencia)."""
+    return CATEGORIES_BY_CODE[resolve_category_code(line)].id
 
 
 def resolve_payment_method(line: BudgetLine) -> str:
@@ -1136,6 +1177,222 @@ def split_basis_points(count: int) -> list[int]:
     return shares
 
 
+# ── 6.2 Canonicalizacion de conceptos ────────────────────────────────────────
+#
+# El Excel nombra el MISMO cargo de formas distintas entre hojas ("Didi",
+# "Didi Card", "Didi tarjeta"; "Cochecito"/"Gasolina chochecito"; "David
+# Abril"/"Inscripcion David"; "Prestamo Omar 3..10"). Esta capa renombra el
+# concepto a una forma canonica ANTES de insertar, preservando el texto crudo
+# del Excel en `notes` ("Concepto original Excel: <crudo>") para trazabilidad.
+#
+# IMPORTANTE: los mapeos que dependen de nombres de hijos se condicionan por
+# la categoria RESUELTA (o la seccion), no solo por el texto: el token
+# "DAVID" es colegiatura en TRANSFERENCIAS, telefono en HOUSING, etc.
+# Las reglas se evaluan en orden: la primera que matchea gana.
+
+PAYER_RULE_CUTOVER = date(2025, 10, 1)  # ver _derive_payer_shares
+
+
+@dataclass(frozen=True)
+class CanonicalConceptRule:
+    """Renombra un concepto crudo del Excel a su forma canonica."""
+    pattern: str                          # regex FULLMATCH sobre concepto normalizado
+    canonical: str                        # concepto canonico a persistir
+    category_filter: Optional[str] = None # code de la categoria RESUELTA
+    section_filter: Optional[str] = None  # seccion raiz del Excel
+    note: Optional[str] = None            # nota extra; admite {n} de grupos del regex
+
+
+CANONICAL_CONCEPT_RULES: tuple[CanonicalConceptRule, ...] = (
+    # Personas / servicios externos.
+    CanonicalConceptRule(r"BERNA(RDO)?", "Bernardo"),
+
+    # DiDi: la tarjeta de credito DiDi aparece como "Didi", "Didi Card" y
+    # "Didi tarjeta" — es el mismo cargo.
+    CanonicalConceptRule(r"DIDI( CARD| TARJETA)?", "DiDi"),
+
+    # Escuela: colegiaturas/inscripciones/libros con mes o beneficiario
+    # embebido en el concepto. Se condiciona por categoria resuelta para no
+    # tocar los "DAVID"/"PAU"/"SANTIAGO" de otras secciones.
+    CanonicalConceptRule(r".*", "Escuela David",    category_filter="ESCUELA.DAVID"),
+    CanonicalConceptRule(r".*", "Escuela Santiago", category_filter="ESCUELA.SANTIAGO"),
+    CanonicalConceptRule(r".*", "Escuela Normita",  category_filter="ESCUELA.PAU"),
+
+    # Transferencias a Normita (Pau) que NO son colegiatura (el "Pau" de $800
+    # en OTHER y "Pau Raul" — Raul es el novio de Normita, el gasto es de ella).
+    CanonicalConceptRule(r"PAU RAUL", "Normita",
+                         note="gasto de Normita (Pau); Raúl es su novio"),
+    CanonicalConceptRule(r"PAU", "Normita",
+                         category_filter="TRANSFERENCIAS_FAMILIARES.PAU"),
+
+    # Seguro de los tres hijos mayores (sección PERSONAL del Excel).
+    CanonicalConceptRule(r"PAU,? DAVID,? AGUS", "Normita, David y Agus"),
+
+    # Typos y tildes.
+    CanonicalConceptRule(r"HAWAI?[NI]?ANO", "Hawaiano"),   # HAWAIANO / HAWAINANO
+    CanonicalConceptRule(r"DIVERSION", "Diversión"),
+
+    # Cochecito: "COCHECITO" (quincenas 1-15) y "GASOLINA CHOCHECITO"
+    # (quincenas 16-fin) son el MISMO cargo de gasolina con nombre
+    # inconsistente — verificado DISJUNTOS por quincena en el Excel
+    # (2026-07-07: nunca coinciden en la misma hoja). Se unifican.
+    CanonicalConceptRule(r"(GASOLINA CHOCHECITO|COCHECITO)", "Gasolina Cochecito",
+                         section_filter="TRANSPORTATION"),
+    # El COCHECITO de $8,000 en OTHERS es un servicio/reparacion, no gasolina.
+    CanonicalConceptRule(r"COCHECITO", "Cochecito (servicio)",
+                         section_filter="OTHER"),
+
+    # Prestamo Omar: serie de pagos numerados en el concepto.
+    CanonicalConceptRule(r"PRESTAMO OMAR (?P<n>\d+)", "Préstamo Omar",
+                         note="pago {n} de la serie"),
+    CanonicalConceptRule(r"PRESTAMO (?P<n>\d+) \(?OMAR\)?", "Préstamo Omar",
+                         note="pago {n} de la serie"),
+
+    # MSI / series con "N de M" embebido. NO se crea installment_plan
+    # (montos inconsistentes entre pagos); queda anotado como mejora futura.
+    CanonicalConceptRule(r"MERCADO LIBRE (?P<n>\d+) DE 12", "Mercado Libre MSI",
+                         note="pago {n} de 12"),
+    CanonicalConceptRule(r"BURO DE CREDITO (?P<n>\d+) DE 3", "Buró de Crédito",
+                         note="pago {n} de 3"),
+
+    # Telefonos por persona (tildes + el "David" de $249 suelto en HOUSING,
+    # que la regla housing_david_solo ya manda a OTHER.TELEFONO).
+    CanonicalConceptRule(r"DAVID", "Teléfono David", category_filter="OTHER.TELEFONO"),
+    CanonicalConceptRule(r"TELEFONO DAVID", "Teléfono David"),
+    CanonicalConceptRule(r"TELEFONO NORMA", "Teléfono Norma"),
+    CanonicalConceptRule(r"TELEFONO SANTI", "Teléfono Santi"),
+    CanonicalConceptRule(r"TELEFONO BENJI", "Teléfono Benji"),
+    CanonicalConceptRule(r"TELEFONO PAU", "Teléfono Normita"),
+
+    # Pulido cosmético: capitalización/tildes consistentes para conceptos que
+    # el Excel trae en minúsculas/MAYÚSCULAS crudas (una sola variante cada
+    # uno; no cambia clasificación, solo presentación).
+    CanonicalConceptRule(r"CAJA CHICA", "Caja Chica"),
+    CanonicalConceptRule(r"KIGO", "Kigo"),
+    CanonicalConceptRule(r"GOOGLE NEST", "Google Home"),
+    CanonicalConceptRule(r"MERCADO PAGO", "Mercado Pago"),
+    CanonicalConceptRule(r"SUSCRIPCION NIVEL 6", "Suscripción Nivel 6"),
+    CanonicalConceptRule(r"MARCO Y OMAR", "Marco y Omar"),
+    CanonicalConceptRule(r"PSICOLOGA", "Psicóloga"),
+    CanonicalConceptRule(r"BANAMEX CLASICA", "Banamex Clásica"),
+    CanonicalConceptRule(r"YOUTUBE", "YouTube"),
+)
+
+
+def canonicalize_concept(
+    concept_raw: str,
+    section_code: str,
+    category_code: str,
+) -> tuple[str, Optional[str]]:
+    """
+    Devuelve ``(concepto_canonico, nota_extra)``. Si ninguna regla matchea,
+    el concepto queda tal cual vino del Excel y la nota es ``None``.
+    """
+    concept_norm = _normalize(concept_raw)
+    for rule in CANONICAL_CONCEPT_RULES:
+        if rule.section_filter is not None and rule.section_filter != section_code:
+            continue
+        if rule.category_filter is not None and rule.category_filter != category_code:
+            continue
+        m = re.fullmatch(rule.pattern, concept_norm)
+        if not m:
+            continue
+        note = None
+        if rule.note:
+            groups = {k: v for k, v in m.groupdict().items() if v}
+            note = rule.note.format(**groups) if groups else rule.note
+        return rule.canonical, note
+    return concept_raw.strip(), None
+
+
+# ── 6.3 Split de lineas compartidas (una linea del Excel → N gastos) ─────────
+#
+# Objetivo (Agustín, 2026-07-07): "por persona un mismo cargo con mismo
+# concepto cada mes". Las lineas de telefono que agrupan a varias personas
+# ("Telefono Pau y David", "Telefono Movistar") se parten en N gastos hijos,
+# uno por persona, con montos repartidos equitativamente (residuo de
+# centavos al ultimo — el total exacto se preserva) y beneficiario 100% el
+# miembro respectivo. Los ids son deterministas (id del padre + member_key).
+
+@dataclass(frozen=True)
+class SplitRule:
+    """Parte una linea del Excel en N gastos hijos, uno por miembro."""
+    pattern: str                              # regex FULLMATCH sobre concepto normalizado
+    section_filter: Optional[str]
+    children: tuple[tuple[str, str], ...]     # (member_key, concepto canonico hijo)
+
+
+SPLIT_RULES: tuple[SplitRule, ...] = (
+    SplitRule(r"TELEFONO PAU Y DAVID", "HOUSING", (
+        ("pau",   "Teléfono Normita"),
+        ("david", "Teléfono David"),
+    )),
+    SplitRule(r"TELEFONO MOVISTAR", "HOUSING", (
+        ("norma",    "Teléfono Norma"),
+        ("pau",      "Teléfono Normita"),
+        ("david",    "Teléfono David"),
+        ("santiago", "Teléfono Santi"),
+    )),
+)
+
+
+def match_split_rule(line: BudgetLine) -> Optional[SplitRule]:
+    concept_norm = _normalize(line.concept)
+    for rule in SPLIT_RULES:
+        if rule.section_filter is not None and rule.section_filter != line.section_code:
+            continue
+        if re.fullmatch(rule.pattern, concept_norm):
+            return rule
+    return None
+
+
+def split_amount_mxn(total: float, count: int) -> list[float]:
+    """
+    Reparte ``total`` en ``count`` montos iguales trabajando en centavos;
+    el residuo va al ultimo para que la suma sea EXACTAMENTE el total.
+    """
+    if count <= 0:
+        raise ValueError("count debe ser > 0")
+    total_cents = round(total * 100)
+    base = total_cents // count
+    cents = [base] * count
+    cents[-1] += total_cents - base * count
+    return [c / 100.0 for c in cents]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  BLOQUE 6.4 · PLANTILLAS DE RECURRENCIA + PLANES MSI (modelo de futuro)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Agustín (2026-07-07): la semilla ya no siembra el futuro como gastos PLANNED.
+# En su lugar, las OBLIGACIONES FIJAS recurrentes se modelan como
+# `recurrence_template` (la app materializa PLANNED en runtime cada quincena) y
+# las series a meses reales como `installment_plan`.
+#
+# Conceptos a templatizar: una plantilla por cada obligación fija recurrente.
+# Se EXCLUYEN los gastos variables (comida, despensa, limpieza, gasolinas,
+# diversión). Los conceptos se identifican por su forma CANÓNICA ya persistida
+# en `expense.concept` (ver CANONICAL_CONCEPT_RULES / SPLIT_RULES).
+#
+# NOTA sobre "Normita, David y Agus": la lista de Agustín menciona "Normita" y
+# "David y Agus (seguro)" por separado, pero en el Excel/semilla es UN solo
+# concepto de seguro de los tres hijos mayores ("Normita, David y Agus"), así
+# que produce UNA plantilla (36 en total, no 37).
+RECURRENCE_TEMPLATE_CONCEPTS: tuple[str, ...] = (
+    "Hipoteca", "Internet", "Agua", "Electricidad",
+    "Netflix", "Prime", "HBO", "Spotify", "YouTube",
+    "Adobe", "Google", "Google Home", "Kigo", "Coursera",
+    "Suscripción Nivel 6",
+    "Teléfono Norma", "Teléfono Normita", "Teléfono David",
+    "Teléfono Santi", "Teléfono Benji",
+    "Walmart", "Banamex Clásica", "Liverpool", "Sears", "Coppel",
+    "Mercado Pago", "DiDi", "Klar",
+    "Comida Gatas", "Psicóloga", "Préstamo Omar",
+    "Benji", "Normita, David y Agus",
+    "Escuela David", "Escuela Santiago", "Escuela Normita",
+)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  BLOQUE 7 · ORQUESTADOR ETL
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1164,6 +1421,9 @@ class EtlPipeline:
         self.db_path = db_path
         self.rules_path = rules_path
         self.stats = EtlStats()
+        # Suma de la celda E9 ("Ahorro empresa") de las hojas ya iniciadas;
+        # se vuelca a savings_goal.current_mxn en _finalize.
+        self._ahorro_empresa_mxn = 0.0
 
     # ── punto de entrada ─────────────────────────────────────────────────────
 
@@ -1195,6 +1455,9 @@ class EtlPipeline:
             self._create_schema(conn)
             self._insert_seed(conn)
             self._ingest_sheets(conn, wb)
+            self._insert_oneoff_seeds(conn)
+            self._seed_recurrence_templates(conn)
+            self._seed_installment_plans(conn)
             self._finalize(conn)
 
         LOG.info("ETL completado: %s", self.stats)
@@ -1306,9 +1569,27 @@ class EtlPipeline:
         sheet_names = wb.sheetnames
         periods = build_sheet_periods(sheet_names)
 
+        # MODELO DE FUTURO (Agustín, 2026-07-07): la semilla NO emite quincenas
+        # futuras. Solo se conserva hasta la quincena ACTIVA (la que cubre HOY);
+        # las posteriores las crea el rollover de la app al llegar la fecha.
+        # `active_end` = último día de la quincena activa: 15 si HOY cae en la
+        # primera mitad, o el fin de mes real si cae en la segunda.
+        if TODAY.day <= 15:
+            active_end = date(TODAY.year, TODAY.month, 15)
+        else:
+            last_day = calendar.monthrange(TODAY.year, TODAY.month)[1]
+            active_end = date(TODAY.year, TODAY.month, last_day)
+
         for name in sheet_names:
             period = periods.get(name)
             if period is None:
+                self.stats.skipped_sheets.append(name)
+                continue
+
+            # Descartar hojas cuyo período empieza DESPUÉS de la quincena activa
+            # (p. ej. jul-2ª, ago-1ª, ago-2ª cuando HOY = 2026-07-07). No se
+            # siembran quincena/ingresos/gastos para el futuro.
+            if period.start_date > active_end:
                 self.stats.skipped_sheets.append(name)
                 continue
 
@@ -1325,22 +1606,74 @@ class EtlPipeline:
         cur = conn.cursor()
 
         # 3.1 · Extraer montos fijos de ingresos (celdas E4 y E5).
-        benja_income = _as_float(ws["E4"].value) or MEMBERS_BY_KEY["benjamin"].default_income or 0.0
-        norma_income = _as_float(ws["E5"].value) or MEMBERS_BY_KEY["norma"].default_income or 0.0
-        projected_income = (benja_income or 0.0) + (norma_income or 0.0)
+        # Fieles al Excel: si la celda está vacía NO se inventa un fallback al
+        # default del miembro — un E4 vacío significa que ese ingreso ya no
+        # existe (Benjamín deja de percibir sueldo desde oct-2025) y un E5
+        # cambiante refleja los aumentos reales de Norma (60k → 75k → 85k).
+        # `_insert_income` ya descarta montos <= 0, así que la quincena queda
+        # sin income_source para ese miembro, que es exactamente lo correcto.
+        benja_income = _as_float(ws["E4"].value) or 0.0
+        norma_income = _as_float(ws["E5"].value) or 0.0
+        projected_income = benja_income + norma_income
 
         # 3.2 · Extraer las líneas de presupuesto (gastos).
         lines = extract_budget_lines(ws)
 
         projected_expenses = sum(l.projected for l in lines)
 
-        # 3.3 · Insertar Quincena.
+        # 3.2b · Precomputar la fecha de cada gasto ANTES de insertar la
+        # quincena: la quincena ACTIVE necesita saber cuántos de sus gastos
+        # quedarán POSTED (occurred <= hoy) para escribir actual_expenses.
+        # occurred_at se distribuye uniformemente dentro del período para que
+        # las consultas temporales de la app tengan sentido.
+        span_days = max((period.end_date - period.start_date).days, 1)
+        dated_lines: list[tuple[BudgetLine, date, int]] = []
+        for idx, line in enumerate(lines):
+            day_offset = (idx * span_days) // max(len(lines), 1)
+            expense_date = date.fromordinal(period.start_date.toordinal() + day_offset)
+            occurred_at = int(datetime.combine(
+                expense_date,
+                time(hour=12),
+                tzinfo=timezone.utc,
+            ).timestamp() * 1000)
+            dated_lines.append((line, expense_date, occurred_at))
+
+        # 3.3 · Insertar Quincena, con status derivado de la fecha de
+        # generación (TODAY) en vez del 'CLOSED' histórico:
+        #   * terminó antes de hoy      → CLOSED, actual = projected (histórico)
+        #   * hoy cae dentro            → ACTIVE, actuales = solo lo ya POSTED
+        #   * empieza después de hoy    → PROVISIONED, actuales en cero
+        if period.end_date < TODAY:
+            status = "CLOSED"
+            closed_at: Optional[int] = NOW_EPOCH_MS
+            actual_income = projected_income
+            actual_expenses = projected_expenses
+        elif period.start_date > TODAY:
+            status = "PROVISIONED"
+            closed_at = None
+            actual_income = 0.0
+            actual_expenses = 0.0
+        else:
+            status = "ACTIVE"
+            closed_at = None
+            # Solo cuenta la mitad ya transcurrida: los gastos cuya fecha
+            # distribuida quedará POSTED y los ingresos ya cobrados (la fecha
+            # esperada es el inicio del período, que para la ACTIVE ya pasó).
+            actual_expenses = sum(
+                l.projected for l, expense_date, _ in dated_lines
+                if expense_date <= TODAY
+            )
+            actual_income = sum(
+                amount for amount in (benja_income, norma_income)
+                if amount > 0 and period.start_date <= TODAY
+            )
+
         cur.execute(
             """INSERT INTO quincena
                    (id, household_id, year, month, half, start_date, end_date,
                     label, projected_income_mxn, projected_expenses_mxn,
                     actual_income_mxn, actual_expenses_mxn, status, closed_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CLOSED', ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 period.quincena_id,
                 HOUSEHOLD_ID,
@@ -1352,9 +1685,10 @@ class EtlPipeline:
                 period.label,
                 projected_income,
                 projected_expenses,
-                projected_income,        # histórico: actual = projected
-                projected_expenses,
-                NOW_EPOCH_MS,
+                actual_income,
+                actual_expenses,
+                status,
+                closed_at,
             ),
         )
         self.stats.quincenas_written += 1
@@ -1375,20 +1709,15 @@ class EtlPipeline:
             payment_method_key="bbva",
         )
 
-        # 3.5 · Insertar gastos + atribuciones.
-        # occurred_at se distribuye uniformemente dentro del período para que
-        # las consultas temporales de la app tengan sentido.
-        span_days = max((period.end_date - period.start_date).days, 1)
-        for idx, line in enumerate(lines):
-            day_offset = (idx * span_days) // max(len(lines), 1)
-            expense_day = period.start_date.toordinal() + day_offset
-            occurred_at = int(datetime.combine(
-                date.fromordinal(expense_day),
-                time(hour=12),
-                tzinfo=timezone.utc,
-            ).timestamp() * 1000)
-
+        # 3.5 · Insertar gastos + atribuciones (fechas precomputadas en 3.2b).
+        for line, _, occurred_at in dated_lines:
             self._insert_expense(cur, period, line, occurred_at)
+
+        # 3.6 · Acumular el ahorro empresa ya apartado (celda E9): alimenta
+        # el current_mxn de la meta "Ahorro Empresa anual" en _finalize.
+        # Solo cuentan períodos ya iniciados — lo futuro aún no está apartado.
+        if period.start_date <= TODAY:
+            self._ahorro_empresa_mxn += _as_float(ws["E9"].value) or 0.0
 
         conn.commit()
 
@@ -1406,12 +1735,15 @@ class EtlPipeline:
         if amount <= 0:
             return
         income_id = did(f"income:{period.quincena_id}:{member_key}")
+        # POSTED solo si el ingreso ya debió cobrarse (expected_date = inicio
+        # del período <= hoy); los de quincenas futuras nacen PLANNED.
+        status = "POSTED" if period.start_date <= TODAY else "PLANNED"
         cur.execute(
             """INSERT INTO income_source
                    (id, household_id, quincena_id, member_id, label,
                     amount_mxn, cadence, expected_date, payment_method_id,
                     status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, 'QUINCENAL', ?, ?, 'POSTED', ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, 'QUINCENAL', ?, ?, ?, ?)""",
             (
                 income_id,
                 HOUSEHOLD_ID,
@@ -1421,6 +1753,7 @@ class EtlPipeline:
                 amount,
                 period.start_date.isoformat(),
                 PAYMENT_METHODS_BY_KEY[payment_method_key].id,
+                status,
                 NOW_EPOCH_MS,
             ),
         )
@@ -1435,12 +1768,52 @@ class EtlPipeline:
         line: BudgetLine,
         occurred_at: int,
     ) -> None:
+        # POSTED solo si el gasto ya "ocurrió" respecto a la fecha de
+        # generación; lo futuro (quincenas PROVISIONED y la mitad restante de
+        # la ACTIVE) nace PLANNED, que es como la app modela pagos pendientes
+        # confirmables. La fecha se lee del propio occurred_at en UTC porque
+        # así se generó (mediodía UTC del día distribuido).
+        occurred_date = datetime.fromtimestamp(
+            occurred_at / 1000, tz=timezone.utc
+        ).date()
+        status = "POSTED" if occurred_date <= TODAY else "PLANNED"
+
+        # CERO gastos PLANNED sembrados (Agustín, 2026-07-07): la semilla solo
+        # persiste lo ya ocurrido (POSTED). Los pagos futuros de la quincena
+        # activa (p. ej. jul 8-15) NO se materializan aquí — los genera la app
+        # en runtime desde las plantillas de recurrencia (recurrence_template).
+        # Esto también cubre los hijos de split, porque el split se resuelve
+        # después de este punto.
+        if status != "POSTED":
+            return
+
+        category_code = resolve_category_code(line)
+        category_id = CATEGORIES_BY_CODE[category_code].id
+        wallet_id = resolve_payment_method(line)
+
+        # ¿La linea se parte en N gastos hijos (uno por persona)?
+        split = match_split_rule(line)
+        if split is not None:
+            self._insert_split_children(
+                cur, period, line, occurred_at, occurred_date, status,
+                category_id, wallet_id, split,
+            )
+            return
+
         expense_id = did(
             f"expense:{period.quincena_id}:{line.section_code}:"
             f"{_normalize(line.concept)}"
         )
-        category_id = resolve_category(line)
-        wallet_id = resolve_payment_method(line)
+
+        # Canonicalizacion: renombra el concepto y preserva el crudo en notes.
+        concept, extra_note = canonicalize_concept(
+            line.concept, line.section_code, category_code,
+        )
+        notes = f"Importado desde hoja '{line.sheet_name}'"
+        if concept != line.concept.strip():
+            notes += f" · Concepto original Excel: {line.concept.strip()}"
+        if extra_note:
+            notes += f" · {extra_note}"
 
         cur.execute(
             """INSERT INTO expense
@@ -1451,17 +1824,18 @@ class EtlPipeline:
                     installment_interest_mxn, status, notes, created_at,
                     created_by_member_id)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL,
-                       'POSTED', ?, ?, NULL)""",
+                       ?, ?, ?, NULL)""",
             (
                 expense_id,
                 HOUSEHOLD_ID,
                 occurred_at,
                 period.quincena_id,
                 category_id,
-                line.concept[:64],
+                concept[:64],
                 line.projected,
                 wallet_id,
-                f"Importado desde hoja '{line.sheet_name}'",
+                status,
+                notes,
                 NOW_EPOCH_MS,
             ),
         )
@@ -1481,28 +1855,127 @@ class EtlPipeline:
             )
             self.stats.attributions_written += 1
 
-        # Atribuciones PAYER: se deduce de las columnas Norma/Benjamin.
-        payer_shares = self._derive_payer_shares(line)
-        for member_id, share, amount in payer_shares:
+        # Atribuciones PAYER.
+        self._insert_payer_attributions(
+            cur, expense_id, line, line.projected, occurred_date, concept,
+        )
+
+    def _insert_split_children(
+        self,
+        cur: sqlite3.Cursor,
+        period: SheetPeriod,
+        line: BudgetLine,
+        occurred_at: int,
+        occurred_date: date,
+        status: str,
+        category_id: str,
+        wallet_id: str,
+        split: SplitRule,
+    ) -> None:
+        """
+        Emite N gastos hijos a partir de una linea compartida del Excel.
+        Cada hijo: id determinista (padre + member_key), monto equitativo
+        (residuo de centavos al ultimo — el total exacto se preserva),
+        beneficiario 100% el miembro respectivo, y nota de trazabilidad.
+        """
+        amounts = split_amount_mxn(line.projected, len(split.children))
+        for (member_key, child_concept), amount in zip(split.children, amounts):
+            member_id = MEMBERS_BY_KEY[member_key].id
+            child_id = did(
+                f"expense:{period.quincena_id}:{line.section_code}:"
+                f"{_normalize(line.concept)}:{member_key}"
+            )
+            notes = (
+                f"Importado desde hoja '{line.sheet_name}' · Parte de línea "
+                f"compartida del Excel: {line.concept.strip()} "
+                f"(${line.projected:,.2f})"
+            )
+            cur.execute(
+                """INSERT INTO expense
+                       (id, household_id, occurred_at, quincena_id, category_id,
+                        concept, amount_mxn, payment_method_id,
+                        recurrence_template_id, installment_plan_id,
+                        installment_number, installment_principal_mxn,
+                        installment_interest_mxn, status, notes, created_at,
+                        created_by_member_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL,
+                           ?, ?, ?, NULL)""",
+                (
+                    child_id,
+                    HOUSEHOLD_ID,
+                    occurred_at,
+                    period.quincena_id,
+                    category_id,
+                    child_concept[:64],
+                    amount,
+                    wallet_id,
+                    status,
+                    notes,
+                    NOW_EPOCH_MS,
+                ),
+            )
+            self.stats.expenses_written += 1
+
+            # BENEFICIARY: 100% el miembro del hijo.
+            attr_id = did(f"attr:{child_id}:BEN:{member_id}")
+            cur.execute(
+                """INSERT INTO expense_attribution
+                       (id, expense_id, member_id, role, share_bps, share_amount_mxn)
+                   VALUES (?, ?, ?, 'BENEFICIARY', 10000, ?)""",
+                (attr_id, child_id, member_id, amount),
+            )
+            self.stats.attributions_written += 1
+
+            # PAYER: misma regla que el padre, prorrateada al monto del hijo.
+            self._insert_payer_attributions(
+                cur, child_id, line, amount, occurred_date, child_concept,
+            )
+
+    def _insert_payer_attributions(
+        self,
+        cur: sqlite3.Cursor,
+        expense_id: str,
+        line: BudgetLine,
+        amount: float,
+        expense_date: date,
+        concept: str,
+    ) -> None:
+        payer_shares = self._derive_payer_shares(line, amount, expense_date, concept)
+        for member_id, share, share_amount in payer_shares:
             attr_id = did(f"attr:{expense_id}:PAY:{member_id}")
             cur.execute(
                 """INSERT INTO expense_attribution
                        (id, expense_id, member_id, role, share_bps, share_amount_mxn)
                    VALUES (?, ?, ?, 'PAYER', ?, ?)""",
-                (attr_id, expense_id, member_id, share, amount),
+                (attr_id, expense_id, member_id, share, share_amount),
             )
             self.stats.attributions_written += 1
 
     def _derive_payer_shares(
-        self, line: BudgetLine
+        self,
+        line: BudgetLine,
+        amount: float,
+        expense_date: date,
+        concept: str,
     ) -> list[tuple[str, int, float]]:
         """
-        Calcula el reparto PAYER a partir de las columnas Norma/Benjamin.
-        Retorna lista de ``(member_id, share_bps, share_amount_mxn)``.
-        Si ambas columnas están vacías, Norma asume el 100%.
+        Calcula el reparto PAYER. Retorna lista de
+        ``(member_id, share_bps, share_amount_mxn)``.
+
+        REGLA DE NEGOCIO (confirmada por Agustín 2026-07-07): Benjamín no
+        percibe sueldo desde oct-2025 (la celda E4 del Excel está vacía desde
+        entonces), así que todo gasto con fecha >= 2025-10-01 lo paga Norma
+        al 100%, con la ÚNICA excepción de Spotify, que Benjamín sigue
+        pagando de su bolsillo. Antes de esa fecha el reparto se deriva fiel
+        de las columnas Norma/Benjamín del Excel.
         """
         norma_id = MEMBERS_BY_KEY["norma"].id
         benja_id = MEMBERS_BY_KEY["benjamin"].id
+
+        if expense_date >= PAYER_RULE_CUTOVER:
+            if "SPOTIFY" in _normalize(concept):
+                return [(benja_id, 10_000, amount)]
+            return [(norma_id, 10_000, amount)]
 
         # Los montos del Excel ocasionalmente llegan en negativo cuando el
         # autor anotó un "ajuste" o devolución (p.ej. Benjamin = -200). Para
@@ -1515,7 +1988,7 @@ class EtlPipeline:
 
         if total <= 0:
             # Asume Norma al 100% — es la pagadora principal del hogar.
-            return [(norma_id, 10_000, line.projected)]
+            return [(norma_id, 10_000, amount)]
 
         # Normaliza por el total declarado (no por `projected`): las columnas
         # del Excel a veces suman un poco más o un poco menos que el Projected
@@ -1529,18 +2002,343 @@ class EtlPipeline:
         result: list[tuple[str, int, float]] = []
         if n_bps > 0:
             result.append((norma_id, n_bps,
-                           round(line.projected * n_bps / 10_000, 2)))
+                           round(amount * n_bps / 10_000, 2)))
         if b_bps > 0:
             result.append((benja_id, b_bps,
-                           round(line.projected * b_bps / 10_000, 2)))
+                           round(amount * b_bps / 10_000, 2)))
         return result
 
     # ── paso 4: cierre ──────────────────────────────────────────────────────
 
+    # ── paso 3.7: seeds one-off fuera de las secciones presupuestales ───────
+
+    def _insert_oneoff_seeds(self, conn: sqlite3.Connection) -> None:
+        """
+        Registros confirmados por Agustín (2026-07-07) que viven en las NOTAS
+        del Excel, no en las secciones presupuestales:
+
+        1. Fondo de $59,000 de Q1 feb-2025 (filas 69-75): aguinaldo de Norma
+           gastado fuera del presupuesto. Se registra el ingreso y los dos
+           gastos que NO duplican líneas presupuestadas (Mueble $19,900 y
+           Reparación coche $6,900); los demás renglones del fondo
+           (Liverpool/Sears/Despensa/Pau) ya existen como líneas del
+           presupuesto. Los actuales de la quincena se ajustan (dejan de ser
+           == projected: hubo gasto extra real cubierto por el aguinaldo).
+        2. Cuenta por cobrar "Deben $3,600 — Medicina + rotafolio" (oct-2025),
+           reducida a $1,900 en dic-2025/ene-2026 → loan por cobrar con
+           deudor "Por identificar" (Norma lo renombra en la app).
+        """
+        cur = conn.cursor()
+        q_feb = did("quincena:2025-02-FIRST")
+        norma = MEMBERS_BY_KEY["norma"]
+        efectivo_id = PAYMENT_METHODS_BY_KEY["efectivo"].id
+
+        # 1a. Ingreso del aguinaldo (en efectivo: el fondo se siguió en las
+        # notas "Ahorro Efectivo", no en un banco).
+        cur.execute(
+            """INSERT INTO income_source
+                   (id, household_id, quincena_id, member_id, label,
+                    amount_mxn, cadence, expected_date, payment_method_id,
+                    status, created_at)
+               VALUES (?, ?, ?, ?, 'Aguinaldo', 59000.0, 'UNICO',
+                       '2025-02-01', ?, 'POSTED', ?)""",
+            (did(f"income:{q_feb}:aguinaldo"), HOUSEHOLD_ID, q_feb,
+             norma.id, efectivo_id, NOW_EPOCH_MS),
+        )
+        self.stats.incomes_written += 1
+
+        # 1b. Gastos one-off pagados del aguinaldo.
+        occurred = int(datetime(2025, 2, 8, 12, tzinfo=timezone.utc)
+                       .timestamp() * 1000)
+        fondo_nota = ("Pagado del aguinaldo de $59,000 (fondo de feb-2025, "
+                      "notas del Excel filas 69-75)")
+        oneoffs = (
+            ("mueble", "Mueble", 19_900.0, "HOUSING.MUEBLES",
+             ["benjamin", "norma", "pau", "david", "agustin", "santiago"]),
+            ("reparacion_coche", "Reparación coche", 6_900.0,
+             "TRANSPORTATION.MAINTENANCE", ["agustin", "david", "pau"]),
+        )
+        for key, concepto, monto, cat_code, bene_keys in oneoffs:
+            expense_id = did(f"expense:oneoff:2025-02:{key}")
+            cur.execute(
+                """INSERT INTO expense
+                       (id, household_id, occurred_at, quincena_id, category_id,
+                        concept, amount_mxn, payment_method_id,
+                        recurrence_template_id, installment_plan_id,
+                        installment_number, installment_principal_mxn,
+                        installment_interest_mxn, status, notes, created_at,
+                        created_by_member_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL,
+                           NULL, 'POSTED', ?, ?, NULL)""",
+                (expense_id, HOUSEHOLD_ID, occurred, q_feb,
+                 CATEGORIES_BY_CODE[cat_code].id, concepto, monto,
+                 efectivo_id, fondo_nota, NOW_EPOCH_MS),
+            )
+            self.stats.expenses_written += 1
+            bene_ids = [MEMBERS_BY_KEY[k].id for k in bene_keys]
+            for member_id, share in zip(bene_ids,
+                                        split_basis_points(len(bene_ids))):
+                cur.execute(
+                    """INSERT INTO expense_attribution
+                           (id, expense_id, member_id, role, share_bps,
+                            share_amount_mxn)
+                       VALUES (?, ?, ?, 'BENEFICIARY', ?, ?)""",
+                    (did(f"attr:{expense_id}:BEN:{member_id}"), expense_id,
+                     member_id, share, round(monto * share / 10_000, 2)),
+                )
+                self.stats.attributions_written += 1
+            # Pagado por Norma (de su aguinaldo).
+            cur.execute(
+                """INSERT INTO expense_attribution
+                       (id, expense_id, member_id, role, share_bps,
+                        share_amount_mxn)
+                   VALUES (?, ?, ?, 'PAYER', 10000, ?)""",
+                (did(f"attr:{expense_id}:PAY:{norma.id}"), expense_id,
+                 norma.id, monto),
+            )
+            self.stats.attributions_written += 1
+
+        # 1c. Ajustar actuales de la quincena (CLOSED venía con
+        # actual == projected; el fondo fue movimiento real extra).
+        cur.execute(
+            """UPDATE quincena
+               SET actual_income_mxn = actual_income_mxn + 59000.0,
+                   actual_expenses_mxn = actual_expenses_mxn + 26800.0
+               WHERE id = ?""",
+            (q_feb,),
+        )
+
+        # 2. Cuenta por cobrar "Deben".
+        cur.execute(
+            """INSERT INTO loan
+                   (id, household_id, debtor_member_id, principal_mxn,
+                    remaining_balance_mxn, agreed_interest_mxn, issued_at,
+                    due_at, payment_schedule_id, notes)
+               VALUES (?, ?, ?, 3600.0, 1900.0, 0.0, '2025-10-01', NULL,
+                       NULL, ?)""",
+            (did("loan:deben_medicina_rotafolio"), HOUSEHOLD_ID,
+             MEMBERS_BY_KEY["deudor_pendiente"].id,
+             "Cuenta por cobrar de las notas del Excel: 'Deben $3,600 — "
+             "Medicina + rotafolio' (oct-2025); para dic-2025/ene-2026 la "
+             "nota baja a $1,900. Deudor por identificar/renombrar en la app."),
+        )
+        conn.commit()
+
+    # ── paso 3.8: plantillas de recurrencia (obligaciones fijas) ────────────
+
+    @staticmethod
+    def _next_expected_date(cadence: str, day: int, today: date) -> Optional[str]:
+        """
+        Próxima fecha futura (> today) según cadencia + día típico. Genera las
+        ocurrencias candidatas de los próximos ~5 meses y devuelve la primera
+        posterior a hoy en ISO yyyy-MM-dd. Formato de cadencia = enum que parsea
+        RecurrenceMaterializer (QUINCENAL_EVERY / MONTHLY_SPECIFIC_HALF).
+        """
+        cands: list[date] = []
+        for i in range(5):
+            mm = today.month + i
+            yy = today.year + (mm - 1) // 12
+            mm = (mm - 1) % 12 + 1
+            last = calendar.monthrange(yy, mm)[1]
+            if cadence == "QUINCENAL_EVERY":
+                cands.append(date(yy, mm, min(max(day, 1), 15)))
+                cands.append(date(yy, mm, min(max(day, 16), last)))
+            else:  # MONTHLY_SPECIFIC_HALF
+                cands.append(date(yy, mm, min(max(day, 1), last)))
+        future = [d for d in cands if d > today]
+        return min(future).isoformat() if future else None
+
+    def _seed_recurrence_templates(self, conn: sqlite3.Connection) -> None:
+        """
+        Puebla `recurrence_template` con UNA plantilla por obligación fija
+        recurrente (RECURRENCE_TEMPLATE_CONCEPTS). Deriva monto (mediana),
+        categoría/wallet/beneficiarios/pagador (del gasto más reciente) y
+        cadencia (del patrón de mitades). Solo lee gastos POSTED ya sembrados.
+
+        Contrato JSON (verificado contra RecurrenceMaterializer.kt):
+          * cadence: "QUINCENAL_EVERY" (≈2/mes, ambas mitades) |
+                     "MONTHLY_SPECIFIC_HALF" (≈1/mes, la mitad del día).
+          * cadence_detail: {"day_of_month": <1-31>}. El materializador lo
+            coacciona a 1-15 (primera mitad) / 16-fin (segunda) según cadencia.
+          * default_beneficiary_ids: JSON array ["<member_id>", ...] (reparto
+            equitativo — formato histórico que parsea parseBeneficiaries()).
+          * default_payer_split: JSON object {"<member_id>": <bps>} (parsePayerSplit()).
+        """
+        cur = conn.cursor()
+        created = 0
+        for concept in RECURRENCE_TEMPLATE_CONCEPTS:
+            rows = cur.execute(
+                """SELECT id, occurred_at, amount_mxn, category_id, payment_method_id
+                   FROM expense
+                   WHERE concept = ? AND status = 'POSTED'
+                   ORDER BY occurred_at""",
+                (concept,),
+            ).fetchall()
+            if not rows:
+                LOG.warning("Plantilla omitida: sin gastos POSTED para %r", concept)
+                continue
+
+            amounts = sorted(r[2] for r in rows)
+            median_amount = amounts[len(amounts) // 2]
+
+            # Patrón de mitades por mes → cadencia.
+            months: dict[tuple[int, int], set[str]] = {}
+            days: list[int] = []
+            quincenas: set[str] = set()
+            for _id, oa, _amt, _cat, _pm in rows:
+                d = datetime.fromtimestamp(oa / 1000, tz=timezone.utc).date()
+                days.append(d.day)
+                months.setdefault((d.year, d.month), set()).add(
+                    "F" if d.day <= 15 else "S"
+                )
+            both = sum(1 for hs in months.values() if len(hs) == 2)
+            both_ratio = both / len(months) if months else 0.0
+            cadence = ("QUINCENAL_EVERY" if both_ratio >= 0.5
+                       else "MONTHLY_SPECIFIC_HALF")
+            days.sort()
+            median_day = days[len(days) // 2]
+
+            # Distintas quincenas → confidence.
+            nq = len(set(
+                cur.execute(
+                    "SELECT quincena_id FROM expense WHERE concept=? AND status='POSTED'",
+                    (concept,),
+                ).fetchall()
+            ))
+            confidence = min(1.0, nq / 12.0)
+
+            # Gasto más reciente → categoría, wallet, atribuciones default.
+            recent = rows[-1]
+            recent_id, _, _, category_id, payment_method_id = recent
+            beneficiary_ids = [
+                r[0] for r in cur.execute(
+                    """SELECT member_id FROM expense_attribution
+                       WHERE expense_id=? AND role='BENEFICIARY'
+                       ORDER BY share_bps DESC""",
+                    (recent_id,),
+                ).fetchall()
+            ]
+            payer_rows = cur.execute(
+                """SELECT member_id, share_bps FROM expense_attribution
+                   WHERE expense_id=? AND role='PAYER'""",
+                (recent_id,),
+            ).fetchall()
+            payer_split = {mid: bps for mid, bps in payer_rows}
+
+            cadence_detail = json.dumps({"day_of_month": median_day})
+            next_date = self._next_expected_date(cadence, median_day, TODAY)
+            learned = json.dumps([r[0] for r in rows[:5]])
+            tpl_id = did(f"rectpl:{_normalize(concept)}")
+
+            cur.execute(
+                """INSERT INTO recurrence_template
+                       (id, household_id, concept, category_id,
+                        default_amount_mxn, default_payment_method_id,
+                        cadence, cadence_detail, next_expected_date,
+                        default_beneficiary_ids, default_payer_split,
+                        is_active, confidence_score, learned_from_expense_ids)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+                (
+                    tpl_id, HOUSEHOLD_ID, concept, category_id,
+                    median_amount, payment_method_id,
+                    cadence, cadence_detail, next_date,
+                    json.dumps(beneficiary_ids),
+                    json.dumps(payer_split),
+                    confidence, learned,
+                ),
+            )
+            created += 1
+        conn.commit()
+        LOG.info("Plantillas de recurrencia sembradas: %d", created)
+
+    # ── paso 3.9: planes MSI reales (installment_plan) ──────────────────────
+
+    def _seed_installment_plans(self, conn: sqlite3.Connection) -> None:
+        """
+        Siembra `installment_plan` para las series a meses reales documentadas
+        en el concepto del Excel:
+          * "Mercado Libre MSI" → 1 plan de 12 pagos (LOANS.MERCADO_LIBRE).
+          * "Buró de Crédito"   → 1 plan de 3 pagos (LOANS.BURO).
+        Deriva monto de cuota (mediana), principal (cuota × total),
+        current_installment (pagos POSTED ≤ hoy), status (ACTIVE/PAID),
+        start_date (primer pago) y wallet del propio gasto.
+
+        NO se siembran Walmart/Coppel/Sears/Liverpool/Banamex como
+        installment_plan: son crédito REVOLVENTE (saldo rotativo, no una serie
+        cerrada de N cuotas), y ya viven como plantillas de recurrencia.
+        """
+        cur = conn.cursor()
+        plans = (
+            # (concept, key, display_name, total, category_code)
+            ("Mercado Libre MSI", "mercado_libre",
+             "Mercado Libre 12 MSI", 12, "LOANS.MERCADO_LIBRE"),
+            ("Buró de Crédito", "buro",
+             "Buró de Crédito 3 pagos", 3, "LOANS.BURO"),
+        )
+        created = 0
+        for concept, key, display_name, total, cat_code in plans:
+            rows = cur.execute(
+                """SELECT amount_mxn, occurred_at, payment_method_id
+                   FROM expense
+                   WHERE concept = ? AND status = 'POSTED'
+                   ORDER BY occurred_at""",
+                (concept,),
+            ).fetchall()
+            if not rows:
+                LOG.warning("Plan MSI omitido: sin gastos para %r", concept)
+                continue
+
+            amounts = sorted(r[0] for r in rows)
+            installment_amount = amounts[len(amounts) // 2]  # mediana
+            principal = round(installment_amount * total, 2)
+            current = min(len(rows), total)  # pagos ya ocurridos (todos POSTED)
+            status = "PAID" if current >= total else "ACTIVE"
+            start_date = datetime.fromtimestamp(
+                rows[0][1] / 1000, tz=timezone.utc
+            ).date().isoformat()
+            payment_method_id = rows[-1][2]
+            category_id = CATEGORIES_BY_CODE[cat_code].id
+
+            cur.execute(
+                """INSERT INTO installment_plan
+                       (id, household_id, display_name, creditor_member_id,
+                        payment_method_id, principal_mxn, total_installments,
+                        installment_amount_mxn, interest_rate_apr, start_date,
+                        current_installment, status, category_id)
+                   VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 0.0, ?, ?, ?, ?)""",
+                (
+                    did(f"installment:{key}"), HOUSEHOLD_ID, display_name,
+                    payment_method_id, principal, total,
+                    installment_amount, start_date, current, status,
+                    category_id,
+                ),
+            )
+            created += 1
+        conn.commit()
+        LOG.info("Planes MSI sembrados: %d", created)
+
     def _finalize(self, conn: sqlite3.Connection) -> None:
+        # Meta "Ahorro Empresa anual": current_mxn = suma de lo YA apartado
+        # (celda E9 de cada hoja con período iniciado), acumulado en 3.6.
+        # El target sigue siendo el seed de 60k; solo se actualiza el avance.
+        conn.execute(
+            "UPDATE savings_goal SET current_mxn = ? WHERE id = ?",
+            (self._ahorro_empresa_mxn, did("savings_goal:ahorro_empresa")),
+        )
+        conn.commit()
+        LOG.info("Ahorro Empresa acumulado a la fecha: $%.2f",
+                 self._ahorro_empresa_mxn)
+
         # Reactiva FK para futuras sesiones (Room lo hace al abrir).
         conn.execute("PRAGMA foreign_keys = ON")
-        # VACUUM compacta el archivo final.
+        # user_version = 1 es OBLIGATORIO: el asset declara schema v1. Si
+        # queda en 0, el SQLiteOpenHelper de Android llama onCreate (no
+        # onUpgrade) en instalación fresca y createAllTables de Room intenta
+        # crear índices del schema actual sobre tablas del asset que no tienen
+        # esas columnas → crash al primer arranque (footgun documentado en
+        # CLAUDE.md). Debe fijarse ANTES del commit/cierre final.
+        conn.execute("PRAGMA user_version = 1")
+        # VACUUM compacta el archivo final (preserva user_version).
         conn.execute("VACUUM")
         conn.commit()
 
@@ -1584,7 +2382,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     print("=" * 70)
     print(f"  Base generada: {args.output}")
     print("-" * 70)
-    print(f"  Hojas procesadas:      {stats.sheets_parsed} / 33")
+    print(f"  Hojas procesadas:      {stats.sheets_parsed}")
     print(f"  Quincenas creadas:     {stats.quincenas_written}")
     print(f"  Ingresos creados:      {stats.incomes_written}")
     print(f"  Gastos creados:        {stats.expenses_written}")
