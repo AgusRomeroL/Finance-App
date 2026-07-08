@@ -324,8 +324,10 @@ fun CaptureBottomSheet(
                                     onSelect = { viewModel?.onWalletSelected(it) }
                                 )
                                 Spacer(Modifier.height(14.dp))
+                                // Solo un Pagador (adulto-cuenta) puede recibir ingreso;
+                                // el dinero a un dependiente es egreso (mesada), no ingreso.
                                 IncomeMemberCard(
-                                    members = members,
+                                    members = members.filter { it.role == "PAYER_ADULT" },
                                     selectedMemberId = incomeMemberId,
                                     onSelect = { viewModel?.onIncomeMemberSelected(it) }
                                 )
@@ -1223,6 +1225,10 @@ private fun MoreSection(
     // hay campos por decidir aquí dentro (Review) o si pagó un tercero.
     val autoOpen = notes.isNotBlank() || datePending || payerPending || thirdPartyPayerId != null
     var open by rememberSaveable(autoOpen) { mutableStateOf(autoOpen) }
+    // Solo los adultos-cuenta pueden ser "pagador" (Benjamín, Norma). El default es
+    // el dueño del wallet (ver CaptureViewModel.onWalletSelected). Los dependientes y
+    // externos que adelantan van en "Pagó un tercero", no aquí.
+    val payerMembers = remember(members) { members.filter { it.role == "PAYER_ADULT" } }
     val payerNames = members.filter { it.id in payerShares.keys }.joinToString(", ") { it.displayName }
     val formatter = remember { DateTimeFormatter.ofPattern("d MMM yyyy", Locale("es", "MX")) }
     val dateSummary = selectedDate?.format(formatter)
@@ -1273,15 +1279,8 @@ private fun MoreSection(
                 }
                 // Fase B/B3: ¿pagó un tercero? Con tercero seleccionado, ese tercero ES
                 // el pagador, así que el editor normal de % por miembro se oculta.
-                ThirdPartyPayerSection(
-                    allMembers = allMembers,
-                    selectedPayerId = thirdPartyPayerId,
-                    mode = thirdPartyMode,
-                    onSelected = onThirdPartySelected,
-                    onModeChange = onThirdPartyMode,
-                    onCreate = onCreateExternalPayer,
-                )
-                Spacer(Modifier.height(18.dp))
+                // Caso normal: el pagador es un adulto-cuenta (default = dueño del
+                // wallet). Va PRIMERO. Se oculta si un tercero adelantó (abajo).
                 AnimatedVisibility(visible = thirdPartyPayerId == null) {
                     Column {
                         AttributionDimension(
@@ -1289,7 +1288,7 @@ private fun MoreSection(
                             iconTint = MaterialTheme.colorScheme.onSurface,
                             iconBg = MaterialTheme.colorScheme.surfaceContainerHighest,
                             title = "Pagó · adelantó",
-                            members = members,
+                            members = payerMembers,
                             shares = payerShares,
                             onToggle = onPayerToggle,
                             onDelta = onPayerDelta,
@@ -1299,6 +1298,16 @@ private fun MoreSection(
                         Spacer(Modifier.height(18.dp))
                     }
                 }
+                // Excepción: un tercero (hijo/externo, no cuenta del hogar) adelantó.
+                ThirdPartyPayerSection(
+                    allMembers = allMembers,
+                    selectedPayerId = thirdPartyPayerId,
+                    mode = thirdPartyMode,
+                    onSelected = onThirdPartySelected,
+                    onModeChange = onThirdPartyMode,
+                    onCreate = onCreateExternalPayer,
+                )
+                Spacer(Modifier.height(18.dp))
                 // Fecha — por defecto hoy; el DatePicker M3 permite cambiarla y la
                 // quincena se resuelve determinista según la fecha (A3 §5).
                 DateRow(
@@ -1348,9 +1357,12 @@ private fun ThirdPartyPayerSection(
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     val normalizedQuery = query.trim()
-    val matches = if (normalizedQuery.isBlank()) allMembers
-    else allMembers.filter { it.displayName.contains(normalizedQuery, ignoreCase = true) }
-    val exactExists = allMembers.any { it.displayName.equals(normalizedQuery, ignoreCase = true) }
+    // Terceros = hijos/dependientes y externos; NO los adultos-cuenta (Benjamín/
+    // Norma), que ya son el pagador normal en la sección de arriba.
+    val candidates = remember(allMembers) { allMembers.filter { it.role != "PAYER_ADULT" } }
+    val matches = if (normalizedQuery.isBlank()) candidates
+    else candidates.filter { it.displayName.contains(normalizedQuery, ignoreCase = true) }
+    val exactExists = candidates.any { it.displayName.equals(normalizedQuery, ignoreCase = true) }
 
     Column(
         modifier = Modifier

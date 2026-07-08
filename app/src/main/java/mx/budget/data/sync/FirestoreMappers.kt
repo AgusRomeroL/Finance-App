@@ -195,6 +195,10 @@ fun DocumentSnapshot.toLoanEntity(): LoanEntity? {
         dueAt = str("dueAt", "due_at"),
         paymentScheduleId = str("paymentScheduleId", "payment_schedule_id"),
         notes = str("notes", "notes"),
+        paymentCount = int("paymentCount", "payment_count"),
+        paymentFrequency = str("paymentFrequency", "payment_frequency"),
+        paymentAmountMxn = dbl("paymentAmountMxn", "payment_amount_mxn"),
+        scheduleStartDate = str("scheduleStartDate", "schedule_start_date"),
         updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }

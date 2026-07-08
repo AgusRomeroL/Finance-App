@@ -134,11 +134,22 @@ class MainActivity : ComponentActivity() {
         ))[WalletsViewModel::class.java]
     }
 
+    private val memberBalancesViewModel: mx.budget.ui.settle.MemberBalancesViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, MemberBalancesViewModelFactory(
+            app.expenseRepository,
+            app.loanRepository,
+            app.memberRepository,
+            app.householdId,
+        ))[mx.budget.ui.settle.MemberBalancesViewModel::class.java]
+    }
+
     private val analyticsViewModel: mx.budget.ui.analytics.AnalyticsViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, AnalyticsViewModelFactory(
             app.analyticsRepository,
             app.database.analyticsDao(),
+            app.expenseRepository,
             app.quincenaRepository,
             app.incomeRepository,
             app.savingsRepository,
@@ -334,6 +345,7 @@ class MainActivity : ComponentActivity() {
                     newPlannedViewModel = newPlannedViewModel,
                     recurrenceViewModel = recurrenceViewModel,
                     walletsViewModel = walletsViewModel,
+                    memberBalancesViewModel = memberBalancesViewModel,
                     analyticsViewModel = analyticsViewModel,
                     ledgerViewModel = ledgerViewModel,
                     aiAssistantViewModel = aiAssistantViewModel,
@@ -676,10 +688,29 @@ class WalletsViewModelFactory(
     }
 }
 
+/** Factory para MemberBalancesViewModel ("Cuentas entre miembros" — deudas explícitas). */
+class MemberBalancesViewModelFactory(
+    private val expenseRepository: ExpenseRepository,
+    private val loanRepository: mx.budget.data.repository.LoanRepository,
+    private val memberRepository: MemberRepository,
+    private val householdId: String,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.settle.MemberBalancesViewModel(
+            expenseRepository = expenseRepository,
+            loanRepository = loanRepository,
+            memberRepository = memberRepository,
+            householdId = householdId,
+        ) as T
+    }
+}
+
 /** Factory para AnalyticsViewModel (MVP Fase 3). */
 class AnalyticsViewModelFactory(
     private val analyticsRepository: mx.budget.data.repository.AnalyticsRepository,
     private val analyticsDao: mx.budget.data.local.dao.AnalyticsDao,
+    private val expenseRepository: mx.budget.data.repository.ExpenseRepository,
     private val quincenaRepository: QuincenaRepository,
     private val incomeRepository: mx.budget.data.repository.IncomeRepository,
     private val savingsRepository: mx.budget.data.repository.SavingsRepository,
@@ -692,6 +723,7 @@ class AnalyticsViewModelFactory(
         return mx.budget.ui.analytics.AnalyticsViewModel(
             analyticsRepository = analyticsRepository,
             analyticsDao = analyticsDao,
+            expenseRepository = expenseRepository,
             quincenaRepository = quincenaRepository,
             incomeRepository = incomeRepository,
             savingsRepository = savingsRepository,

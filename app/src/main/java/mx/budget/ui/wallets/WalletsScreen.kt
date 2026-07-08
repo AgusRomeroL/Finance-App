@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowRightAlt
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
@@ -140,6 +141,7 @@ fun WalletsScreen(
     viewModel: WalletsViewModel,
     windowWidthDp: Dp,
     onBack: () -> Unit,
+    onOpenMemberBalances: (() -> Unit)? = null,
 ) {
     val balances by viewModel.balances.collectAsState()
     val revolvingDebt by viewModel.revolvingDebt.collectAsState()
@@ -179,12 +181,14 @@ fun WalletsScreen(
     var planDraft by remember { mutableStateOf<mx.budget.data.local.entity.InstallmentPlanEntity?>(null) }
     val moneyFmt = remember { java.text.NumberFormat.getCurrencyInstance(java.util.Locale("es", "MX")) }
     val memberNames = remember(members) { members.associate { it.id to it.displayName } }
+    val walletNames = remember(entities) { entities.associate { it.id to it.displayName } }
     val balanceSections: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
         balanceSheetSections(
             savings = savingsGoals,
             loans = loans,
             installments = installments,
             memberNames = memberNames,
+            walletNames = walletNames,
             money = moneyFmt,
             onEditSavings = { savingsDraft = it; savingsSheetOpen = true },
             onEditLoan = { loanDraft = it; loanSheetOpen = true },
@@ -228,6 +232,7 @@ fun WalletsScreen(
                         transfers = transfers,
                         onTransferLongPress = { transferToDelete = it },
                         extraSections = balanceSections,
+                        onOpenMemberBalances = onOpenMemberBalances,
                         modifier = Modifier.weight(0.62f).fillMaxHeight(),
                     )
                     DetailPane(
@@ -249,6 +254,7 @@ fun WalletsScreen(
                     transfers = transfers,
                     onTransferLongPress = { transferToDelete = it },
                     extraSections = balanceSections,
+                    onOpenMemberBalances = onOpenMemberBalances,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -334,9 +340,16 @@ fun WalletsScreen(
         LoanSheet(
             existing = loanDraft,
             members = members,
-            onSave = { debtorId, principal, notes ->
+            onSave = { debtorId, principal, notes, paymentCount, paymentFrequency, paymentAmount, scheduleStart ->
                 viewModel.saveLoan(
-                    loanDraft?.copy(debtorMemberId = debtorId, notes = notes)
+                    loanDraft?.copy(
+                        debtorMemberId = debtorId,
+                        notes = notes,
+                        paymentCount = paymentCount,
+                        paymentFrequency = paymentFrequency,
+                        paymentAmountMxn = paymentAmount,
+                        scheduleStartDate = scheduleStart,
+                    )
                         ?: mx.budget.data.local.entity.LoanEntity(
                             id = java.util.UUID.randomUUID().toString(),
                             householdId = viewModel.household,
@@ -345,12 +358,17 @@ fun WalletsScreen(
                             remainingBalanceMxn = principal,
                             issuedAt = java.time.LocalDate.now().toString(),
                             notes = notes,
+                            paymentCount = paymentCount,
+                            paymentFrequency = paymentFrequency,
+                            paymentAmountMxn = paymentAmount,
+                            scheduleStartDate = scheduleStart,
                         )
                 )
                 loanSheetOpen = false
             },
             onPayment = { loanId, amount -> viewModel.applyLoanPayment(loanId, amount) },
             onDelete = { viewModel.deleteLoan(it); loanSheetOpen = false },
+            onCreateDebtor = { name, select -> viewModel.createDebtor(name, select) },
             onDismiss = { loanSheetOpen = false },
         )
     }
@@ -484,6 +502,7 @@ private fun WalletList(
     transfers: List<TransferWithNames>,
     onTransferLongPress: (TransferWithNames) -> Unit,
     extraSections: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
+    onOpenMemberBalances: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     // Agrupa por sección preservando el orden definido; el resto cae en "Otras".
@@ -505,6 +524,12 @@ private fun WalletList(
         item(key = "kpis") {
             KpiRow(liquidTotal = liquidTotal, revolvingDebt = revolvingDebt)
             Spacer(Modifier.height(6.dp))
+        }
+
+        if (onOpenMemberBalances != null) {
+            item(key = "member_balances_entry") {
+                MemberBalancesEntry(onClick = onOpenMemberBalances)
+            }
         }
 
         if (balances.isEmpty()) {
@@ -592,6 +617,58 @@ private fun KpiCard(label: String, amount: Double, tone: FinancialTone, modifier
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color = sem.onContainer,
             maxLines = 1,
+        )
+    }
+}
+
+/**
+ * Fila de acceso a "Cuentas entre miembros" (netting). Punto de entrada desde
+ * Cuentas: aquí ya vive el concepto de saldos, así que comparte encabezado/estilo
+ * sin duplicar lógica de dominio.
+ */
+@Composable
+private fun MemberBalancesEntry(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Balance,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondary,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Cuentas entre miembros",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Text(
+                "Quién le debe a quién y saldar",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.ArrowRightAlt,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.size(22.dp),
         )
     }
 }

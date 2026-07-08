@@ -621,6 +621,26 @@ private fun CompactDashboard(
                             }
                         }
                         item { CollapsedHealthCard(state = state) }
+                        // Paridad con el layout expandido (Fold): el desglose "Gasto por
+                        // miembro" (toggle Beneficiario/Pagador + barras) también va en
+                        // compacto. Se oculta en hogar de una sola persona (igual que el
+                        // panel expandido usa singleMember).
+                        if (!reimbursementUi.singleMember) {
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(28.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                                        .padding(24.dp)
+                                ) {
+                                    MemberDistributionSection(
+                                        beneficiary = state.beneficiaryDistribution,
+                                        payer = state.payerDistribution
+                                    )
+                                }
+                            }
+                        }
                         if (state.viewingActive) {
                             item {
                                 FilterPillsRow(
@@ -1026,7 +1046,10 @@ private fun MainHealthPane(
             .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .verticalScroll(rememberScrollState())
-            .padding(36.dp)
+            // bottom holgado: la BottomActionBar flotante (búsqueda + mic + "+") se
+            // superpone al pie del panel; sin esta reserva el final del scroll
+            // ("Ver desglose" / última barra por miembro) queda tapado en el Fold.
+            .padding(start = 36.dp, top = 36.dp, end = 36.dp, bottom = 120.dp)
     ) {
         HeroKpi(state = state)
         // Fase B/B3: en un hogar de una sola persona el desglose por miembro (toggle

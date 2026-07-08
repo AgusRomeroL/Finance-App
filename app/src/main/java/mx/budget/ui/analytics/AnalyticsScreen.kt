@@ -81,6 +81,7 @@ fun AnalyticsScreen(
 
     val quincena by viewModel.activeQuincena.collectAsState()
     val byCategory by viewModel.spendByCategory.collectAsState()
+    val byMember by viewModel.spendByMember.collectAsState()
     val postedIncome by viewModel.postedIncome.collectAsState()
     val trend by viewModel.trend.collectAsState()
     val topConcepts by viewModel.topConcepts.collectAsState()
@@ -162,12 +163,30 @@ fun AnalyticsScreen(
                 }
             }
 
-            // ── Widget: distribución del gasto (dona) ─────────────────────────
+            // ── Widget: distribución del gasto por categoría (dona) ───────────
             item {
                 WidgetCard(title = "Distribución del gasto") {
                     val spent = byCategory.filter { it.actual > 0 }.sortedByDescending { it.actual }
                     if (spent.isEmpty()) EmptyHint("Sin gastos en la quincena activa.")
-                    else SpendDonut(rows = spent, money = money)
+                    else SpendDonut(
+                        entries = spent.map { it.categoryName to it.actual },
+                        money = money,
+                    )
+                }
+            }
+
+            // ── Widget: distribución del gasto por miembro (dona) ─────────────
+            // Misma dona que la de categorías, pero por BENEFICIARY (quién consume).
+            item {
+                WidgetCard(title = "Distribución por miembro") {
+                    val perMember = byMember
+                        .filter { it.totalMxn > 0 }
+                        .sortedByDescending { it.totalMxn }
+                    if (perMember.isEmpty()) EmptyHint("Sin gastos atribuidos en la quincena activa.")
+                    else SpendDonut(
+                        entries = perMember.map { it.memberName to it.totalMxn },
+                        money = money,
+                    )
                 }
             }
 
@@ -505,22 +524,25 @@ private fun buildSmartSummary(
 private const val DONUT_SLICES = 5
 
 /**
- * Dona de distribución del gasto por categoría (top 5 + "Otros"), en Compose
- * puro (Canvas, sin lib de charts). El barrido se anima con spring y cada
- * rebanada lleva leyenda con nombre + monto + % (redundancia no-cromática).
+ * Dona de distribución genérica (top 5 + "Otros"), en Compose puro (Canvas, sin
+ * lib de charts). Recibe una lista de rebanadas (etiqueta → monto) **ya ordenada
+ * descendente**; agrupa el sobrante en "Otros" con el mismo criterio para ambas
+ * donas (categoría y miembro), garantizando la misma paleta y comportamiento.
+ * El barrido se anima con spring y cada rebanada lleva leyenda con nombre + monto
+ * + % (redundancia no-cromática).
  */
 @Composable
-private fun SpendDonut(rows: List<SpendByCategory>, money: NumberFormat) {
-    val total = rows.sumOf { it.actual }
+private fun SpendDonut(entries: List<Pair<String, Double>>, money: NumberFormat) {
+    val total = entries.sumOf { it.second }
     if (total <= 0) {
         EmptyHint("Sin gastos en la quincena activa.")
         return
     }
 
-    val top = rows.take(DONUT_SLICES)
-    val othersTotal = rows.drop(DONUT_SLICES).sumOf { it.actual }
+    val top = entries.take(DONUT_SLICES)
+    val othersTotal = entries.drop(DONUT_SLICES).sumOf { it.second }
     val slices = buildList {
-        top.forEach { add(it.categoryName to it.actual) }
+        top.forEach { add(it.first to it.second) }
         if (othersTotal > 0) add("Otros" to othersTotal)
     }
 

@@ -263,7 +263,8 @@ class BudgetApplication : Application() {
                 BudgetDatabase.MIGRATION_11_12,
                 BudgetDatabase.MIGRATION_12_13,
                 BudgetDatabase.MIGRATION_13_14,
-                BudgetDatabase.MIGRATION_14_15
+                BudgetDatabase.MIGRATION_14_15,
+                BudgetDatabase.MIGRATION_15_16
             )
             .build()
 
@@ -336,9 +337,11 @@ class BudgetApplication : Application() {
             db = database
         )
 
-        // Fase C (paquete C1): importar estados de cuenta con LLM cloud. Extractor
-        // local (PDFBox/ML Kit) + cliente NVIDIA NIM (la key se lee del DataStore
-        // en cada llamada, nunca hardcodeada) + reconciliación contra wallet/MSI.
+        // Fase C (paquete C1 + reescritura): importar estados de cuenta con LLM
+        // cloud. Extractor local (PDFBox/ML Kit) + cliente NVIDIA NIM (la key se
+        // lee del DataStore en cada llamada, nunca hardcodeada) + reconciliación
+        // contra wallet/MSI + reescritura confirmada de movimientos (gastos
+        // itemizados por los repos públicos y pago agregado → transferencia RF-41).
         statementImportManager = mx.budget.data.statements.StatementImportManager(
             extractor = mx.budget.data.statements.StatementTextExtractor(this),
             nimClient = mx.budget.data.statements.NvidiaNimClient(
@@ -347,6 +350,14 @@ class BudgetApplication : Application() {
             walletRepository = walletRepository,
             installmentRepository = installmentRepository,
             statementImportDao = database.statementImportDao(),
+            expenseRepository = expenseRepository,
+            transferRepository = transferRepository,
+            expenseDao = expenseDao,
+            categoryDao = database.categoryDao(),
+            memberDao = database.memberDao(),
+            quincenaDao = database.quincenaDao(),
+            attributionReviewDao = database.attributionReviewDao(),
+            db = database,
             householdId = householdId,
         )
 
@@ -539,6 +550,17 @@ class BudgetApplication : Application() {
      */
     fun captureNaturalLanguage(rawText: String, source: String) {
         appScope.launch { bankCaptureManager.ingestText(rawText, source) }
+    }
+
+    /**
+     * Empuja un snapshot fresco al reloj (saldo + quincena + colecciones) desde el
+     * [appScope], que sobrevive al [mx.budget.service.BudgetWearListenerService]
+     * efímero que lo dispara. Es la respuesta al "pull-on-open" del reloj
+     * ([mx.budget.core.wear.WearPaths.PATH_REQUEST_SYNC], §G.3.3): el espejo en vivo
+     * teléfono→reloj deja de depender de que el dashboard del teléfono esté abierto.
+     */
+    fun pushWearSnapshot() {
+        appScope.launch { mx.budget.service.WearSnapshotBuilder.push(this@BudgetApplication) }
     }
 
     // ── Fase B: multi-tenant (Google Sign-In + re-anclaje de sync) ──────────────

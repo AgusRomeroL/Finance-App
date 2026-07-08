@@ -3,6 +3,7 @@ package mx.budget.ui.statements
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -53,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import mx.budget.data.statements.StatementMovement
+import java.text.NumberFormat
+import java.util.Locale
 
 /**
  * Pantalla "Importar estado de cuenta" (Fase C, paquete C1).
@@ -125,7 +129,9 @@ fun StatementImportScreen(
                 is ImportPhase.Extracting -> ProgressContent("Extrayendo texto del archivo…", "Todo local: el archivo no sale de tu teléfono.")
                 is ImportPhase.Analyzing -> ProgressContent("Analizando con IA…", "Solo el texto viaja a la nube para estructurarlo.")
                 is ImportPhase.Preview -> PreviewContent(viewModel)
-                is ImportPhase.Applied -> AppliedContent(current.msiCount, onDone = onBack, onAnother = viewModel::reset)
+                is ImportPhase.BuildingRewrite -> ProgressContent("Preparando la reescritura…", "Buscando pagos de tarjeta y sugiriendo categorías.")
+                is ImportPhase.RewriteReview -> RewriteReviewContent(viewModel)
+                is ImportPhase.Applied -> AppliedContent(current, onDone = onBack, onAnother = viewModel::reset)
                 is ImportPhase.Error -> ErrorContent(current.message, onRetry = viewModel::reset, onOpenProfile = onOpenProfile)
             }
         }
@@ -138,7 +144,9 @@ private fun IdleContent(hasApiKey: Boolean, onPick: () -> Unit, onOpenProfile: (
         Text(
             "Sube tu estado de cuenta en PDF o imagen. Se extrae el texto en tu " +
                 "teléfono y solo ese texto se envía a la IA para estructurarlo. " +
-                "Nunca modifica tus gastos: solo añade corte, límite de pago y planes a meses.",
+                "Reconcilia corte, límite de pago y planes a meses; y si eliges la " +
+                "cuenta, podrás reescribir los movimientos de la tarjeta — nada se " +
+                "aplica sin tu confirmación.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -206,7 +214,8 @@ private fun PreviewContent(viewModel: StatementImportViewModel) {
             Spacer(Modifier.height(4.dp))
             Text(
                 "Elige a qué cuenta pertenece este estado. Se ajustan corte, límite " +
-                    "de pago, saldo y tasa; los gastos no se tocan.",
+                    "de pago, saldo y tasa. Con una cuenta elegida podrás además " +
+                    "reescribir los movimientos de la tarjeta (con tu confirmación).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -270,8 +279,8 @@ private fun PreviewContent(viewModel: StatementImportViewModel) {
         }
 
         Spacer(Modifier.height(20.dp))
-        Button(onClick = viewModel::apply, modifier = Modifier.fillMaxWidth()) {
-            Text("Aplicar")
+        Button(onClick = viewModel::continueFromPreview, modifier = Modifier.fillMaxWidth()) {
+            Text(if (selectedWalletId != null) "Continuar" else "Aplicar")
         }
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = viewModel::reset, modifier = Modifier.fillMaxWidth()) {
@@ -280,6 +289,203 @@ private fun PreviewContent(viewModel: StatementImportViewModel) {
         Spacer(Modifier.height(16.dp))
     }
 }
+
+// ── Paso "Reescribir movimientos" ───────────────────────────────────────────
+
+@Composable
+private fun RewriteReviewContent(viewModel: StatementImportViewModel) {
+    val purchases by viewModel.rewritePurchases.collectAsStateWithLifecycle()
+    val aggregates by viewModel.rewriteAggregates.collectAsStateWithLifecycle()
+    val payerName by viewModel.rewritePayerName.collectAsStateWithLifecycle()
+    val beneficiaryCount by viewModel.rewriteBeneficiaryCount.collectAsStateWithLifecycle()
+    val wallets by viewModel.wallets.collectAsStateWithLifecycle()
+    val selectedWalletId by viewModel.selectedWalletId.collectAsStateWithLifecycle()
+    val walletName = wallets.firstOrNull { it.id == selectedWalletId }?.displayName ?: "la tarjeta"
+
+    val selectedPurchases = purchases.filter { it.selected }
+    val selectedAggregates = aggregates.filter { it.selected }
+    val purchasesTotal = selectedPurchases.sumOf { it.item.montoMxn }
+    val aggregatesTotal = selectedAggregates.sumOf { it.item.amountMxn }
+
+    Column {
+        // Resumen
+        Card {
+            SectionLabel("REESCRIBIR MOVIMIENTOS")
+            Spacer(Modifier.height(8.dp))
+            Text(
+                buildString {
+                    append("${selectedPurchases.size} compra(s) por ${mxn(purchasesTotal)} ")
+                    append("se registrarán como gastos de $walletName")
+                    if (selectedAggregates.isNotEmpty()) {
+                        append(" y ${selectedAggregates.size} pago(s) por ${mxn(aggregatesTotal)} ")
+                        append("se convertirán en transferencia a la tarjeta")
+                    }
+                    append(".")
+                },
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                buildString {
+                    append("Las compras quedan a nombre de ")
+                    append(if (beneficiaryCount > 0) "los $beneficiaryCount miembros por partes iguales" else "todos por partes iguales")
+                    payerName?.let { append(", pagadas por $it") }
+                    append(", y se marcan para revisar quién se benefició (Revisión de atribuciones o el detalle de cada gasto).")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Pagos agregados detectados → transferencia
+        if (aggregates.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Card {
+                SectionLabel("PAGOS DE TARJETA DETECTADOS (${aggregates.size})")
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Estos gastos parecen el pago agregado de la tarjeta. Al convertirlos " +
+                        "se vuelven transferencia banco→tarjeta: dejan de contar como gasto " +
+                        "y quedan como abono a la deuda.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                aggregates.forEachIndexed { i, entry ->
+                    SelectableRow(
+                        selected = entry.selected,
+                        onToggle = { viewModel.toggleAggregate(i) },
+                        title = entry.item.concept,
+                        subtitle = "${isoDay(entry.item.occurredAt)} · desde ${entry.item.fromWalletName} · ${entry.item.categoryName}",
+                        amount = mxn(entry.item.amountMxn),
+                        badge = "→ transferencia",
+                    )
+                    if (i != aggregates.lastIndex) Spacer(Modifier.height(8.dp))
+                }
+            }
+        }
+
+        // Compras itemizadas → gastos
+        Spacer(Modifier.height(16.dp))
+        Card {
+            SectionLabel("COMPRAS DEL ESTADO (${purchases.size})")
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Cada compra marcada se inserta como gasto pagado con $walletName. " +
+                    "Las de meses sin intereses vienen desmarcadas: ya se registran como plan a meses.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            if (purchases.isEmpty()) {
+                Text(
+                    "No hay compras para registrar.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                purchases.forEachIndexed { i, entry ->
+                    SelectableRow(
+                        selected = entry.selected,
+                        onToggle = { viewModel.togglePurchase(i) },
+                        title = entry.item.concepto,
+                        subtitle = listOfNotNull(
+                            entry.item.fecha ?: "sin fecha",
+                            entry.item.suggestedCategoryName ?: "categoría por decidir",
+                        ).joinToString(" · "),
+                        amount = mxn(entry.item.montoMxn),
+                        badge = if (entry.item.esMsi) "MSI" else null,
+                    )
+                    if (i != purchases.lastIndex) Spacer(Modifier.height(8.dp))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        Button(onClick = viewModel::applyRewrite, modifier = Modifier.fillMaxWidth()) {
+            Text("Aplicar")
+        }
+        Spacer(Modifier.height(8.dp))
+        TextButton(onClick = viewModel::backToPreview, modifier = Modifier.fillMaxWidth()) {
+            Text("Atrás")
+        }
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+/**
+ * Fila seleccionable del paso de reescritura: checkbox + concepto + detalle +
+ * monto. El fondo anima la selección con resorte (regla de motion expresivo).
+ */
+@Composable
+private fun SelectableRow(
+    selected: Boolean,
+    onToggle: () -> Unit,
+    title: String,
+    subtitle: String,
+    amount: String,
+    badge: String?,
+) {
+    val background by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "rowBackground",
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(background)
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = selected, onCheckedChange = { onToggle() })
+        Spacer(Modifier.width(6.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                amount,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (badge != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    badge,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+/** Formatea MXN para los resúmenes del paso de reescritura. */
+private fun mxn(amount: Double): String =
+    NumberFormat.getCurrencyInstance(Locale("es", "MX")).format(amount)
+
+/** Fecha corta `YYYY-MM-DD` de un epoch millis en zona de México. */
+private fun isoDay(epochMs: Long): String =
+    java.time.Instant.ofEpochMilli(epochMs)
+        .atZone(java.time.ZoneId.of("America/Mexico_City"))
+        .toLocalDate()
+        .toString()
 
 @Composable
 private fun MovementRow(
@@ -336,7 +542,7 @@ private fun MovementRow(
 }
 
 @Composable
-private fun AppliedContent(msiCount: Int, onDone: () -> Unit, onAnother: () -> Unit) {
+private fun AppliedContent(applied: ImportPhase.Applied, onDone: () -> Unit, onAnother: () -> Unit) {
     Card {
         Text(
             "Estado de cuenta aplicado",
@@ -347,8 +553,25 @@ private fun AppliedContent(msiCount: Int, onDone: () -> Unit, onAnother: () -> U
         Text(
             buildString {
                 append("Se actualizaron los datos de la cuenta")
-                if (msiCount > 0) append(" y se registraron/actualizaron $msiCount plan(es) a meses")
-                append(". Tus gastos no se modificaron.")
+                if (applied.msiCount > 0) {
+                    append(" y se registraron/actualizaron ${applied.msiCount} plan(es) a meses")
+                }
+                append(".")
+                if (applied.insertedCount > 0) {
+                    append(
+                        " Se insertaron ${applied.insertedCount} compra(s) por " +
+                            "${mxn(applied.insertedTotalMxn)} (pendientes de revisar atribución)."
+                    )
+                }
+                if (applied.convertedCount > 0) {
+                    append(
+                        " ${applied.convertedCount} pago(s) de tarjeta se convirtieron " +
+                            "en transferencia."
+                    )
+                }
+                if (applied.insertedCount == 0 && applied.convertedCount == 0) {
+                    append(" Tus gastos no se modificaron.")
+                }
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

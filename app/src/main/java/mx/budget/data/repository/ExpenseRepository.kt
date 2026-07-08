@@ -5,7 +5,9 @@ import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.result.ExpenseWithDetails
+import mx.budget.data.local.result.NettingAttributionRow
 import mx.budget.data.local.result.PendingReimbursementByPayer
+import mx.budget.data.local.result.PendingReimbursementExpense
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.local.result.MemberSpendByCategory
 import mx.budget.data.local.result.TopExpense
@@ -56,6 +58,40 @@ interface ExpenseRepository {
      * (`external_payer_member_id`): cuánto le debe el hogar a cada quién.
      */
     fun observePendingReimbursementTotals(householdId: String): Flow<List<PendingReimbursementByPayer>>
+
+    /**
+     * Gastos pendientes de reembolso con el tercero que los adelantó, para la
+     * pantalla "Cuentas entre miembros" (deudas explícitas *por pagar*): el hogar
+     * le debe a cada tercero que adelantó un gasto. Solo lectura.
+     */
+    fun observePendingReimbursementExpenses(householdId: String): Flow<List<PendingReimbursementExpense>>
+
+    /**
+     * Marca un gasto adelantado por un tercero como **reembolsado**
+     * (`settlement_status = 'REIMBURSED'`): el hogar ya le repuso el dinero. NO
+     * mueve saldos de wallet — la reposición ocurre fuera del ledger (efectivo/
+     * transferencia manual). Difiere de [reimburseFrom], que reasigna el gasto a
+     * un wallet real y sí ajusta ese saldo. Encola push de sync (LWW). No-op si el
+     * gasto no está `PENDING_REIMBURSEMENT`.
+     */
+    suspend fun markReimbursed(expenseId: String)
+
+    // ── Cuentas entre miembros (netting) ─────────────────────────────────────────
+
+    /**
+     * Filas de atribución (PAYER + BENEFICIARY, con monto del gasto) de todos los
+     * gastos POSTED aún no liquidados (`settlement_status = 'NONE'`). La pantalla
+     * "Cuentas entre miembros" las agrega para computar cuánto se deben entre sí.
+     */
+    fun observeNettingRows(householdId: String): Flow<List<NettingAttributionRow>>
+
+    /**
+     * Marca los [expenseIds] como liquidados por netting (`settlement_status =
+     * 'NETTED'`) en una sola transacción, encolando el push de cada uno. Solo
+     * afecta gastos actualmente en `'NONE'` (no toca el flujo de terceros). NO
+     * mueve saldos de wallet: el netting solo cancela deudas entre personas.
+     */
+    suspend fun markNetted(expenseIds: List<String>)
 
     // ── Lectura ─────────────────────────────────────────────────
 

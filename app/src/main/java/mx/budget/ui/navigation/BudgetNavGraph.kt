@@ -59,6 +59,7 @@ object BudgetDestinations {
     const val TEMPLATES = "templates"
     const val LEDGER = "ledger"
     const val WALLETS = "wallets"
+    const val MEMBER_BALANCES = "member_balances"
     const val ANALYTICS = "analytics"
     const val PROFILE = "profile"
     const val ATTRIBUTION_REVIEW = "attribution_review"
@@ -92,6 +93,7 @@ fun BudgetNavGraph(
     newPlannedViewModel: NewPlannedViewModel,
     recurrenceViewModel: RecurrenceViewModel,
     walletsViewModel: WalletsViewModel,
+    memberBalancesViewModel: mx.budget.ui.settle.MemberBalancesViewModel? = null,
     analyticsViewModel: AnalyticsViewModel? = null,
     ledgerViewModel: LedgerViewModel? = null,
     aiAssistantViewModel: mx.budget.ai.AiAssistantViewModel? = null,
@@ -293,8 +295,26 @@ fun BudgetNavGraph(
             WalletsScreen(
                 viewModel = walletsViewModel,
                 windowWidthDp = windowWidthDp.dp,
-                onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
+                onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
+                onOpenMemberBalances = if (memberBalancesViewModel != null) {
+                    { onNavigate(BudgetDestinations.MEMBER_BALANCES) }
+                } else null,
             )
+        }
+
+        composable(
+            route = BudgetDestinations.MEMBER_BALANCES,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
+            if (memberBalancesViewModel != null) {
+                mx.budget.ui.settle.MemberBalancesScreen(
+                    viewModel = memberBalancesViewModel,
+                    onBack = { onNavigate(BudgetDestinations.WALLETS) },
+                )
+            } else {
+                PlaceholderScreen("Cuentas entre miembros", onNavigate)
+            }
         }
 
         composable(route = BudgetDestinations.ANALYTICS) {

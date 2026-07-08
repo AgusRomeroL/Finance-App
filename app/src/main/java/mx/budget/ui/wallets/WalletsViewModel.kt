@@ -237,6 +237,37 @@ class WalletsViewModel(
         viewModelScope.launch { savingsRepository?.insert(goal) }
     }
 
+    /**
+     * Crea un deudor nuevo (rol EXTERNAL_DEBTOR) desde el editor de préstamo y lo
+     * deja seleccionado vía [onCreated]. Reutiliza el mismo camino que la captura
+     * ([CaptureViewModel.onCreateExternalPayer]): inserta por [memberRepository]
+     * (encola sync + LWW). Idempotente por nombre: si ya existe un miembro con ese
+     * displayName lo reutiliza (el índice único household+display_name lo exige).
+     */
+    fun createDebtor(name: String, onCreated: (String) -> Unit) {
+        val trimmed = name.trim().take(48)
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            val existing = members.value.firstOrNull { it.displayName.equals(trimmed, ignoreCase = true) }
+            if (existing != null) {
+                onCreated(existing.id)
+                return@launch
+            }
+            val aliasJson = "[\"" + trimmed.replace("\\", "\\\\").replace("\"", "\\\"") + "\"]"
+            val member = MemberEntity(
+                id = UUID.randomUUID().toString(),
+                householdId = householdId,
+                displayName = trimmed,
+                shortAliases = aliasJson,
+                role = "EXTERNAL_DEBTOR",
+                isActive = true,
+                updatedAt = System.currentTimeMillis(),
+            )
+            memberRepository.insert(member)
+            onCreated(member.id)
+        }
+    }
+
     /** Alta/edición de préstamo (insert es REPLACE). */
     fun saveLoan(loan: LoanEntity) {
         viewModelScope.launch { loanRepository?.insert(loan) }

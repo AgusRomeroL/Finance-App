@@ -12,11 +12,13 @@ import kotlinx.coroutines.flow.stateIn
 import mx.budget.data.local.result.InterestByWallet
 import mx.budget.data.local.result.QuincenaSnapshot
 import mx.budget.data.local.result.SpendByCategory
+import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.local.result.TopConcept
 import mx.budget.data.local.result.WalletBalanceInfo
 import mx.budget.data.local.dao.AnalyticsDao
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.repository.AnalyticsRepository
+import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.InstallmentRepository
 import mx.budget.data.repository.LoanRepository
@@ -34,6 +36,7 @@ import mx.budget.data.repository.SavingsRepository
 class AnalyticsViewModel(
     private val analyticsRepository: AnalyticsRepository,
     private val analyticsDao: AnalyticsDao,
+    private val expenseRepository: ExpenseRepository,
     quincenaRepository: QuincenaRepository,
     private val incomeRepository: IncomeRepository,
     savingsRepository: SavingsRepository,
@@ -51,6 +54,20 @@ class AnalyticsViewModel(
         activeQuincena.flatMapLatest { q ->
             if (q == null) flowOf(emptyList())
             else analyticsRepository.observeSpendByCategory(householdId, q.id)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Distribución del gasto por MIEMBRO (rol BENEFICIARY = quién consume) de la
+     * quincena activa. Reutiliza el mismo flujo que alimenta las barras por miembro
+     * del dashboard (`ExpenseAttributionDao.observeSpendByMember(quincenaId, role)`,
+     * agrega `share_amount_mxn` sobre gastos POSTED y trae `display_name` por JOIN,
+     * así que no requiere mapeo manual member_id→nombre). Alimenta la dona
+     * "Distribución por miembro".
+     */
+    val spendByMember: StateFlow<List<SpendByMember>> =
+        activeQuincena.flatMapLatest { q ->
+            if (q == null) flowOf(emptyList())
+            else expenseRepository.observeSpendByMember(q.id)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
