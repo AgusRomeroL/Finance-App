@@ -41,6 +41,20 @@ import java.util.UUID
  * Solo lectura. Toda la lógica de saldos vive ya en la capa de datos
  * ([WalletRepository.observeBalances]); aquí solo se compone y se expone.
  */
+/** Fila del panel de deuda por tarjeta (estados v2 Fase 5). */
+data class CardDebt(
+    val walletId: String,
+    val name: String,
+    val last4: String?,
+    val saldo: Double,
+    val limite: Double?,
+    val utilizationPct: Double?,
+    val apr: Double?,
+    val pagoMinimo: Double?,
+    val pagoNoIntereses: Double?,
+    val fechaLimite: String?,
+)
+
 class WalletsViewModel(
     private val walletRepository: WalletRepository,
     private val transferRepository: TransferRepository,
@@ -53,6 +67,7 @@ class WalletsViewModel(
     private val savingsRepository: SavingsRepository? = null,
     private val loanRepository: LoanRepository? = null,
     private val installmentRepository: InstallmentRepository? = null,
+    private val statementImportDao: mx.budget.data.local.dao.StatementImportDao? = null,
 ) : ViewModel() {
 
     /** Kinds líquidos (saldo disponible, no deuda). */
@@ -86,6 +101,35 @@ class WalletsViewModel(
     val revolvingDebt: StateFlow<Double> =
         walletRepository.observeTotalRevolvingDebt(householdId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0.0)
+
+    /** Panel de deuda por tarjeta: saldo/límite/tasa del wallet + pago mínimo y fecha
+     *  límite del último estado importado (estados v2 Fase 5). */
+    val cardDebts: StateFlow<List<CardDebt>> =
+        kotlinx.coroutines.flow.combine(
+            walletRepository.observeActive(householdId),
+            statementImportDao?.observeLatestFullByWallet(householdId)
+                ?: kotlinx.coroutines.flow.flowOf(emptyList()),
+        ) { wallets, imports ->
+            val byWallet = imports.associateBy { it.walletId }
+            wallets.filter {
+                mx.budget.data.statements.StatementCycleTracker.isStatementCard(it.kind)
+            }.map { w ->
+                val imp = byWallet[w.id]
+                CardDebt(
+                    walletId = w.id,
+                    name = w.displayName,
+                    last4 = w.last4,
+                    saldo = w.currentBalanceMxn,
+                    limite = w.creditLimitMxn,
+                    utilizationPct = w.creditLimitMxn?.takeIf { it > 0 }
+                        ?.let { (w.currentBalanceMxn / it * 100).coerceIn(0.0, 999.0) },
+                    apr = w.interestApr,
+                    pagoMinimo = imp?.pagoMinimo,
+                    pagoNoIntereses = imp?.pagoNoIntereses,
+                    fechaLimite = imp?.fechaLimitePago,
+                )
+            }.sortedByDescending { it.saldo }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Líquido disponible: suma de saldos de wallets de tipo líquido. */
     val liquidTotal: StateFlow<Double> =

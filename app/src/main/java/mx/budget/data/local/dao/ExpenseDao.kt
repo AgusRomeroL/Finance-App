@@ -323,6 +323,13 @@ interface ExpenseDao {
     @Query("SELECT * FROM expense WHERE household_id = :householdId")
     suspend fun getAll(householdId: String): List<ExpenseEntity>
 
+    /** Gasto (cualquier status) de una cuota MSI concreta — dedupe del materializador. */
+    @Query(
+        "SELECT * FROM expense WHERE household_id = :householdId AND installment_plan_id = :planId " +
+            "AND installment_number = :number LIMIT 1"
+    )
+    suspend fun getByPlanAndNumber(householdId: String, planId: String, number: Int): ExpenseEntity?
+
     /**
      * Ids de categoría usados más recientemente en gastos POSTED del hogar,
      * ordenados por último uso (v13, A0). Alimenta las "recientes" reales de

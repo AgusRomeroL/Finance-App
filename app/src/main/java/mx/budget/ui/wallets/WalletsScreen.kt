@@ -154,6 +154,7 @@ fun WalletsScreen(
     val savingsGoals by viewModel.savingsGoals.collectAsState()
     val loans by viewModel.loans.collectAsState()
     val installments by viewModel.installments.collectAsState()
+    val cardDebts by viewModel.cardDebts.collectAsState()
 
     val expanded = windowWidthDp >= 600.dp
 
@@ -233,6 +234,7 @@ fun WalletsScreen(
                         onTransferLongPress = { transferToDelete = it },
                         extraSections = balanceSections,
                         onOpenMemberBalances = onOpenMemberBalances,
+                        cardDebts = cardDebts,
                         modifier = Modifier.weight(0.62f).fillMaxHeight(),
                     )
                     DetailPane(
@@ -255,6 +257,7 @@ fun WalletsScreen(
                     onTransferLongPress = { transferToDelete = it },
                     extraSections = balanceSections,
                     onOpenMemberBalances = onOpenMemberBalances,
+                    cardDebts = cardDebts,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -508,6 +511,7 @@ private fun WalletList(
     onTransferLongPress: (TransferWithNames) -> Unit,
     extraSections: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
     onOpenMemberBalances: (() -> Unit)? = null,
+    cardDebts: List<CardDebt> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     // Agrupa por sección preservando el orden definido; el resto cae en "Otras".
@@ -529,6 +533,13 @@ private fun WalletList(
         item(key = "kpis") {
             KpiRow(liquidTotal = liquidTotal, revolvingDebt = revolvingDebt)
             Spacer(Modifier.height(6.dp))
+        }
+
+        if (cardDebts.isNotEmpty()) {
+            item(key = "debt_panel") {
+                DebtPanelCard(cardDebts)
+                Spacer(Modifier.height(6.dp))
+            }
         }
 
         if (onOpenMemberBalances != null) {

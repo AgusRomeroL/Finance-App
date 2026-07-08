@@ -542,6 +542,22 @@ class BudgetApplication : Application() {
         // engancha cuando exista el rollover automático.
         materializeRecurringForActiveQuincena()
 
+        // Proyección de cuotas MSI restantes como PLANNED en la quincena activa
+        // (estados v2 Fase 4). Idempotente; corre tras el sembrado/recurrencias.
+        appScope.launch {
+            runCatching {
+                mx.budget.data.installments.InstallmentMaterializer(
+                    householdId = householdId,
+                    installmentRepository = installmentRepository,
+                    walletRepository = walletRepository,
+                    quincenaDao = database.quincenaDao(),
+                    expenseDao = database.expenseDao(),
+                    expenseRepository = expenseRepository,
+                    memberDao = database.memberDao(),
+                ).materialize()
+            }
+        }
+
         // Recordatorios de gastos PLANNED (§G.2 Fase 3). Canal + trabajo periódico.
         ReminderNotifier.ensureChannel(this)
         scheduleReminders()
@@ -549,6 +565,16 @@ class BudgetApplication : Application() {
         // Recordatorio mensual de estados de cuenta por importar (Tarea 4).
         mx.budget.data.statements.StatementReminderNotifier.ensureChannel(this)
         scheduleStatementReminders()
+
+        // Recordatorio de fecha límite de pago por tarjeta (estados v2 Fase 5).
+        mx.budget.data.statements.PaymentDueNotifier.ensureChannel(this)
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            mx.budget.data.statements.PaymentDueReminderWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<mx.budget.data.statements.PaymentDueReminderWorker>(
+                24, TimeUnit.HOURS,
+            ).build(),
+        )
 
         // Espejo Google Calendar (§G.2 Fase 6). Best-effort: si está activado y hay
         // permiso, reconcilia los PLANNED al arrancar; si no, no hace nada.

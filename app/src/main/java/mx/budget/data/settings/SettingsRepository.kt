@@ -37,6 +37,7 @@ class SettingsRepository(private val context: Context) {
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
     private val dismissedTemplateSuggestionsKey = stringSetPreferencesKey("dismissed_template_suggestions")
     private val statementCycleNotifiedKey = stringSetPreferencesKey("statement_cycle_notified")
+    private val paymentDueNotifiedKey = stringSetPreferencesKey("payment_due_notified")
     private val calendarMirrorEnabledKey = booleanPreferencesKey("calendar_mirror_enabled")
     private val calendarMirrorIdKey = longPreferencesKey("calendar_mirror_id")
     private val calendarEventMapKey = stringPreferencesKey("calendar_event_map_json")
@@ -159,6 +160,15 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setStatementCycleNotified(keys: Set<String>) {
         context.dataStore.edit { prefs -> prefs[statementCycleNotifiedKey] = keys }
+    }
+
+    // Dedupe del recordatorio de fecha límite de pago de tarjeta (estados v2 Fase 5).
+    // Claves "walletId:fechaLimiteISO:tramo" ya notificadas.
+    suspend fun getPaymentDueNotified(): Set<String> =
+        context.dataStore.data.first()[paymentDueNotifiedKey] ?: emptySet()
+
+    suspend fun setPaymentDueNotified(keys: Set<String>) {
+        context.dataStore.edit { prefs -> prefs[paymentDueNotifiedKey] = keys }
     }
 
     // ── Espejo Google Calendar (Apéndice G.2, Fase 6) ───────────────────────────
