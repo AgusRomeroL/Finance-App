@@ -71,6 +71,14 @@ data class InstallmentPlanEntity(
     @ColumnInfo(name = "payment_method_id")
     val paymentMethodId: String? = null,
 
+    /**
+     * Wallet desde la que se liquida el cargo mensual del MSI ("Se paga desde").
+     * Distinto de [paymentMethodId] (la tarjeta con la que se hizo la compra).
+     * Sin FK: nullable, no atado al borrado del wallet (v16→v17).
+     */
+    @ColumnInfo(name = "funding_payment_method_id")
+    val fundingPaymentMethodId: String? = null,
+
     /** Capital original prestado o financiado. */
     @ColumnInfo(name = "principal_mxn")
     val principalMxn: Double,

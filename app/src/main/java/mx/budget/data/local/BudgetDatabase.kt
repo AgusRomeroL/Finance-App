@@ -72,7 +72,7 @@ import mx.budget.data.local.entity.WalletTransferEntity
         WalletTransferEntity::class,
         StatementImportEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -406,6 +406,32 @@ abstract class BudgetDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `loan` ADD COLUMN `payment_frequency` TEXT")
                 db.execSQL("ALTER TABLE `loan` ADD COLUMN `payment_amount_mxn` REAL")
                 db.execSQL("ALTER TABLE `loan` ADD COLUMN `schedule_start_date` TEXT")
+            }
+        }
+
+        /**
+         * v16 → v17: **funding del plan MSI + reembolso recurrente**.
+         *
+         * - `installment_plan.funding_payment_method_id` (nullable): wallet desde
+         *   la que se liquida el cargo mensual del MSI (distinto de la tarjeta con
+         *   la que se hizo la compra, `payment_method_id`). Sin FK para no
+         *   complicar el borrado de wallets (mismo criterio que otras columnas
+         *   opcionales).
+         * - `recurrence_template.default_external_payer_member_id` (nullable):
+         *   tercero que paga por adelantado un gasto recurrente reembolsable.
+         * - `recurrence_template.default_settlement_status`
+         *   (`NOT NULL DEFAULT 'NONE'`): estado de liquidación por defecto de las
+         *   instancias materializadas (NONE | PENDING_REIMBURSEMENT).
+         *
+         * Columnas nuevas por `ALTER TABLE ADD COLUMN`, coincidentes con los
+         * `@ColumnInfo(defaultValue = ...)` de sus entidades para que el
+         * identityHash de `app/schemas/17.json` valide (mismo patrón que v13→v14).
+         */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `installment_plan` ADD COLUMN `funding_payment_method_id` TEXT")
+                db.execSQL("ALTER TABLE `recurrence_template` ADD COLUMN `default_external_payer_member_id` TEXT")
+                db.execSQL("ALTER TABLE `recurrence_template` ADD COLUMN `default_settlement_status` TEXT NOT NULL DEFAULT 'NONE'")
             }
         }
     }

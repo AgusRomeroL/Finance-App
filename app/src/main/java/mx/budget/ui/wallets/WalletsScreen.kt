@@ -376,13 +376,16 @@ fun WalletsScreen(
     if (planSheetOpen) {
         InstallmentSheet(
             existing = planDraft,
-            onSave = { name, principal, total, amount, startIso ->
+            wallets = entities,
+            onSave = { name, principal, total, amount, startIso, cardWalletId, fundingWalletId ->
                 viewModel.saveInstallment(
                     planDraft?.copy(
                         displayName = name,
                         principalMxn = principal,
                         totalInstallments = total,
                         installmentAmountMxn = amount,
+                        paymentMethodId = cardWalletId,
+                        fundingPaymentMethodId = fundingWalletId,
                     ) ?: mx.budget.data.local.entity.InstallmentPlanEntity(
                         id = java.util.UUID.randomUUID().toString(),
                         householdId = viewModel.household,
@@ -391,6 +394,8 @@ fun WalletsScreen(
                         totalInstallments = total,
                         installmentAmountMxn = amount,
                         startDate = startIso,
+                        paymentMethodId = cardWalletId,
+                        fundingPaymentMethodId = fundingWalletId,
                     )
                 )
                 planSheetOpen = false

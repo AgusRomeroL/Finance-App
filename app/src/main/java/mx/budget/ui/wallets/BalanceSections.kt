@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import mx.budget.data.local.entity.InstallmentPlanEntity
 import mx.budget.data.local.entity.LoanEntity
 import mx.budget.data.local.entity.MemberEntity
+import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.SavingsGoalEntity
 import mx.budget.ui.theme.financeColors
 import java.text.NumberFormat
@@ -201,13 +202,12 @@ fun LazyListScope.balanceSheetSections(
  * Tarjeta rica de un plan a meses / MSI. Muestra las tres cosas que interesan:
  *  (1) la tarjeta/cuenta con la que se financió la compra (`payment_method_id`),
  *  (2) las condiciones de compra (cuotas, monto por cuota, total, interés y avance),
- *  (3) cómo se va a pagar la tarjeta (cargo mensual sobre esa misma cuenta).
+ *  (3) cómo se va a pagar la tarjeta (cargo mensual desde `funding_payment_method_id`).
  *
- * Nota de esquema: `installment_plan` solo guarda `payment_method_id` (la cuenta
- * donde se cargó la compra), pero NO una cuenta-fuente desde la que se liquida la
- * tarjeta cada mes. Por eso "cómo se paga" se expresa con lo disponible. Para
- * modelar "de qué cuenta se paga la tarjeta" haría falta un campo nuevo
- * (p. ej. `funding_payment_method_id`) — ver reporte.
+ * Nota de esquema: `installment_plan` guarda `payment_method_id` (la tarjeta con la
+ * que se hizo la compra) y `funding_payment_method_id` (la cuenta desde la que se
+ * liquida el cargo mensual, v16→v17). "Tarjeta usada" usa el primero; "cómo se
+ * paga" el segundo, cayendo a un texto genérico si aún no se eligió.
  */
 @Composable
 private fun InstallmentPlanCard(
@@ -218,6 +218,7 @@ private fun InstallmentPlanCard(
 ) {
     val fc = MaterialTheme.financeColors
     val cardName = plan.paymentMethodId?.let { walletNames[it] }
+    val fundingName = plan.fundingPaymentMethodId?.let { walletNames[it] }
     val paid = plan.currentInstallment.coerceIn(0, plan.totalInstallments)
     val total = plan.totalInstallments.coerceAtLeast(1)
     val remaining = (plan.totalInstallments - paid).coerceAtLeast(0) * plan.installmentAmountMxn
@@ -317,10 +318,10 @@ private fun InstallmentPlanCard(
             PlanInfoLine(
                 icon = Icons.Filled.Payments,
                 label = "Cómo se paga",
-                value = if (cardName != null)
-                    "Cargo mensual de ${money.format(plan.installmentAmountMxn)} a $cardName"
+                value = if (fundingName != null)
+                    "Cargo mensual de ${money.format(plan.installmentAmountMxn)} a $fundingName"
                 else
-                    "Cargo mensual de ${money.format(plan.installmentAmountMxn)}",
+                    "Se liquida desde la cuenta que elijas",
             )
         }
     }
@@ -793,7 +794,8 @@ private fun formatShortDate(iso: String): String = try {
 @Composable
 fun InstallmentSheet(
     existing: InstallmentPlanEntity?,
-    onSave: (displayName: String, principal: Double, totalInstallments: Int, installmentAmount: Double, startDateIso: String) -> Unit,
+    wallets: List<PaymentMethodEntity>,
+    onSave: (displayName: String, principal: Double, totalInstallments: Int, installmentAmount: Double, startDateIso: String, paymentMethodId: String?, fundingPaymentMethodId: String?) -> Unit,
     onAdvance: (planId: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -801,6 +803,8 @@ fun InstallmentSheet(
     var principal by remember { mutableStateOf(existing?.principalMxn?.toPlainString() ?: "") }
     var total by remember { mutableStateOf(existing?.totalInstallments?.toString() ?: "") }
     var amount by remember { mutableStateOf(existing?.installmentAmountMxn?.toPlainString() ?: "") }
+    var cardWalletId by remember { mutableStateOf(existing?.paymentMethodId) }
+    var fundingWalletId by remember { mutableStateOf(existing?.fundingPaymentMethodId) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetMaxWidth = 640.dp) {
         Column(
@@ -842,6 +846,21 @@ fun InstallmentSheet(
                 )
             }
 
+            Spacer(Modifier.height(10.dp))
+            WalletPicker(
+                label = "Tarjeta de la compra",
+                wallets = wallets,
+                selectedId = cardWalletId,
+                onSelect = { cardWalletId = it },
+            )
+            Spacer(Modifier.height(10.dp))
+            WalletPicker(
+                label = "Se paga desde",
+                wallets = wallets,
+                selectedId = fundingWalletId,
+                onSelect = { fundingWalletId = it },
+            )
+
             if (existing != null) {
                 Spacer(Modifier.height(14.dp))
                 Text(
@@ -868,6 +887,8 @@ fun InstallmentSheet(
                             total.toIntOrNull() ?: 0,
                             amount.toDoubleOrNull() ?: 0.0,
                             existing?.startDate ?: java.time.LocalDate.now().toString(),
+                            cardWalletId,
+                            fundingWalletId,
                         )
                     },
                     enabled = name.isNotBlank() && (total.toIntOrNull() ?: 0) > 0 &&
@@ -903,6 +924,42 @@ private fun MemberPicker(
                 DropdownMenuItem(
                     text = { Text(m.displayName) },
                     onClick = { onSelect(m.id); expanded = false },
+                )
+            }
+        }
+    }
+}
+
+/** Selector de wallet (cuenta/tarjeta) reutilizable, con opción "Sin definir". */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WalletPicker(
+    label: String,
+    wallets: List<PaymentMethodEntity>,
+    selectedId: String?,
+    onSelect: (String?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedName = wallets.firstOrNull { it.id == selectedId }?.displayName ?: ""
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+        OutlinedTextField(
+            value = selectedName,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            placeholder = { Text("Sin definir") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.menuAnchor().fillMaxWidth(),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Sin definir") },
+                onClick = { onSelect(null); expanded = false },
+            )
+            wallets.forEach { w ->
+                DropdownMenuItem(
+                    text = { Text(w.displayName) },
+                    onClick = { onSelect(w.id); expanded = false },
                 )
             }
         }

@@ -210,6 +210,7 @@ fun DocumentSnapshot.toInstallmentPlanEntity(): InstallmentPlanEntity? {
         displayName = str("displayName", "display_name") ?: return null,
         creditorMemberId = str("creditorMemberId", "creditor_member_id"),
         paymentMethodId = str("paymentMethodId", "payment_method_id"),
+        fundingPaymentMethodId = str("fundingPaymentMethodId", "funding_payment_method_id"),
         principalMxn = dbl("principalMxn", "principal_mxn") ?: return null,
         totalInstallments = int("totalInstallments", "total_installments") ?: return null,
         installmentAmountMxn = dbl("installmentAmountMxn", "installment_amount_mxn") ?: return null,

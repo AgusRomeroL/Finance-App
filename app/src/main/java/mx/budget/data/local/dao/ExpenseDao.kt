@@ -212,6 +212,7 @@ interface ExpenseDao {
         LEFT JOIN installment_plan ip ON ip.id = e.installment_plan_id
         WHERE e.household_id = :householdId
           AND e.settlement_status = 'PENDING_REIMBURSEMENT'
+          AND e.status = 'POSTED'
         ORDER BY e.occurred_at DESC
         """
     )
@@ -233,6 +234,7 @@ interface ExpenseDao {
         FROM expense e
         WHERE e.household_id = :householdId
           AND e.settlement_status = 'PENDING_REIMBURSEMENT'
+          AND e.status = 'POSTED'
         GROUP BY e.external_payer_member_id
         ORDER BY totalMxn DESC
         """
@@ -258,6 +260,7 @@ interface ExpenseDao {
         FROM expense e
         WHERE e.household_id = :householdId
           AND e.settlement_status = 'PENDING_REIMBURSEMENT'
+          AND e.status = 'POSTED'
         ORDER BY e.occurred_at DESC
         """
     )
