@@ -509,6 +509,25 @@ class BudgetApplication : Application() {
         // push. Firestore cachea offline, así que es seguro aunque no haya red.
         appScope.launch {
             authManager.signInAnonymously()
+            // Sembrado histórico de estados (v2) ANTES de arrancar el pull, para que
+            // el pull no escriba por DAO directo a mitad del seed; el drain empuja
+            // todo lo sembrado de una vez. No-op sin el asset o si ya corrió.
+            runCatching {
+                mx.budget.data.statements.StatementSeedInitializer(
+                    context = this@BudgetApplication,
+                    settings = settingsRepository,
+                    householdId = householdId,
+                    categoryRepository = categoryRepository,
+                    walletRepository = walletRepository,
+                    installmentRepository = installmentRepository,
+                    expenseRepository = expenseRepository,
+                    transferRepository = transferRepository,
+                    expenseDao = database.expenseDao(),
+                    memberDao = database.memberDao(),
+                    quincenaDao = database.quincenaDao(),
+                    statementImportDao = database.statementImportDao(),
+                ).seedOnce()
+            }
             remotePullSync.start()
             syncManager.drain()
         }
@@ -530,18 +549,6 @@ class BudgetApplication : Application() {
         // Recordatorio mensual de estados de cuenta por importar (Tarea 4).
         mx.budget.data.statements.StatementReminderNotifier.ensureChannel(this)
         scheduleStatementReminders()
-
-        // Sembrado único de estados ya importados (Tarea 4): marca en verde las
-        // tarjetas de Norma cuyos estados reales ya procesamos. No-op sin el asset.
-        appScope.launch {
-            mx.budget.data.statements.StatementSeedInitializer.seedOnce(
-                context = this@BudgetApplication,
-                settings = settingsRepository,
-                walletRepository = walletRepository,
-                statementImportDao = database.statementImportDao(),
-                householdId = householdId,
-            )
-        }
 
         // Espejo Google Calendar (§G.2 Fase 6). Best-effort: si está activado y hay
         // permiso, reconcilia los PLANNED al arrancar; si no, no hace nada.

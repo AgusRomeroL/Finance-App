@@ -27,6 +27,39 @@ interface StatementImportDao {
     @Query("UPDATE statement_import SET applied_at = :appliedAt, wallet_id = :walletId WHERE id = :id")
     suspend fun markApplied(id: String, walletId: String?, appliedAt: Long)
 
+    /** Borra las filas sintéticas del sembrado v1 (payload vacío y sin fecha límite). */
+    @Query("DELETE FROM statement_import WHERE household_id = :householdId AND payload_json = '{}' AND fecha_limite_pago IS NULL")
+    suspend fun deleteSyntheticV1(householdId: String)
+
+    /** Fila de estado más reciente por wallet (para el panel de deuda y el recordatorio de pago). */
+    @Query(
+        """
+        SELECT * FROM statement_import s
+        WHERE s.household_id = :householdId AND s.wallet_id IS NOT NULL AND s.applied_at IS NOT NULL
+          AND s.fecha_limite_pago IS NOT NULL
+          AND s.created_at = (
+              SELECT MAX(s2.created_at) FROM statement_import s2
+              WHERE s2.wallet_id = s.wallet_id AND s2.household_id = :householdId
+                AND s2.applied_at IS NOT NULL AND s2.fecha_limite_pago IS NOT NULL
+          )
+        """
+    )
+    fun observeLatestFullByWallet(householdId: String): Flow<List<StatementImportEntity>>
+
+    @Query(
+        """
+        SELECT * FROM statement_import s
+        WHERE s.household_id = :householdId AND s.wallet_id IS NOT NULL AND s.applied_at IS NOT NULL
+          AND s.fecha_limite_pago IS NOT NULL
+          AND s.created_at = (
+              SELECT MAX(s2.created_at) FROM statement_import s2
+              WHERE s2.wallet_id = s.wallet_id AND s2.household_id = :householdId
+                AND s2.applied_at IS NOT NULL AND s2.fecha_limite_pago IS NOT NULL
+          )
+        """
+    )
+    suspend fun getLatestFullByWallet(householdId: String): List<StatementImportEntity>
+
     /**
      * Fin de periodo (o fecha de corte como respaldo) del último estado APLICADO por
      * wallet. Insumo de [mx.budget.data.statements.StatementCycleTracker]. Las fechas

@@ -31,6 +31,7 @@ class SettingsRepository(private val context: Context) {
     private val dynamicColorKey = booleanPreferencesKey("dynamic_color")
     private val retroLabelingDoneKey = booleanPreferencesKey("retro_labeling_done")
     private val statementSeedDoneKey = booleanPreferencesKey("statement_seed_done")
+    private val statementSeedV2DoneKey = booleanPreferencesKey("statement_seed_v2_done")
     private val bankCaptureEnabledKey = booleanPreferencesKey("bank_capture_enabled")
     private val reminderLeadDaysKey = intPreferencesKey("reminder_lead_days")
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
@@ -74,6 +75,14 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setStatementSeedDone(done: Boolean) {
         context.dataStore.edit { prefs -> prefs[statementSeedDoneKey] = done }
+    }
+
+    /** Sembrado histórico v2 (compras clasificadas + intereses + planes + transferencias). */
+    suspend fun isStatementSeedV2Done(): Boolean =
+        context.dataStore.data.first()[statementSeedV2DoneKey] ?: false
+
+    suspend fun setStatementSeedV2Done(done: Boolean) {
+        context.dataStore.edit { prefs -> prefs[statementSeedV2DoneKey] = done }
     }
 
     /**
