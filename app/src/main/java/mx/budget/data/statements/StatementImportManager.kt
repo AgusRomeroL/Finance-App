@@ -141,7 +141,7 @@ class StatementImportManager(
             .filter { it.status == "POSTED" }
 
         val purchases = statement.movimientos
-            .filter { (it.monto ?: 0.0) > 0.0 }
+            .filter { (it.monto ?: 0.0) > 0.0 && !isPaymentMovement(it) }
             .map { mov ->
                 val concepto = mov.concepto?.trim().orEmpty().ifBlank { "Compra tarjeta" }
                 val categoryId = suggestCategory(concepto, history)
@@ -285,6 +285,18 @@ class StatementImportManager(
             insertedTotalMxn = insertedTotal,
             convertedTransfers = converted,
         )
+    }
+
+    /**
+     * ¿El movimiento es un pago/abono (dinero a favor), no una compra? El esquema
+     * extendido trae `tipo` (PAGO/ABONO); para respuestas viejas sin `tipo` cae a una
+     * heurística por concepto. Evita reinsertar pagos como gastos al reescribir.
+     */
+    private fun isPaymentMovement(mov: StatementMovement): Boolean {
+        val tipo = mov.tipo?.trim()?.uppercase()
+        if (tipo == "PAGO" || tipo == "ABONO") return true
+        val concepto = mov.concepto?.uppercase().orEmpty()
+        return PAYMENT_CONCEPT_REGEX.containsMatchIn(concepto)
     }
 
     // ── Detección de agregados ──────────────────────────────────────────────────
@@ -628,4 +640,10 @@ class StatementImportManager(
     }
 
     private fun today(): String = LocalDate.now(zone).toString()
+
+    companion object {
+        /** Heurística de respaldo para clasificar pagos cuando el LLM no da `tipo`. */
+        private val PAYMENT_CONCEPT_REGEX =
+            Regex("SU PAGO|PAGO GRACIAS|GRACIAS POR SU PAGO|ABONO|BONIFICAC|DEVOLUC|DEPOSITO|CASHBACK")
+    }
 }
