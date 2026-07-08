@@ -14,6 +14,7 @@ import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.repository.WalletRepository
 import mx.budget.data.settings.SettingsRepository
 import mx.budget.data.statements.AggregateCandidate
+import mx.budget.data.statements.DocumentKind
 import mx.budget.data.statements.ParsedStatement
 import mx.budget.data.statements.PlannedPurchase
 import mx.budget.data.statements.RewriteMember
@@ -86,6 +87,15 @@ class StatementImportViewModel(
     /** Wallet elegido para la reconciliación (null = solo auditar). */
     private val _selectedWalletId = MutableStateFlow<String?>(null)
     val selectedWalletId: StateFlow<String?> = _selectedWalletId.asStateFlow()
+
+    /**
+     * Tipo de documento a importar (estado de cuenta por defecto). Selecciona el
+     * prompt/esquema de NVIDIA y el modo de extracción (PDF/imagen vs CSV/ZIP/XML/JSON).
+     */
+    private val _docType = MutableStateFlow(DocumentKind.BANK_STATEMENT)
+    val docType: StateFlow<DocumentKind> = _docType.asStateFlow()
+
+    fun setDocType(kind: DocumentKind) { _docType.value = kind }
 
     /**
      * Wallet preseleccionado al entrar desde el checklist "Estados del mes": si el
@@ -183,7 +193,7 @@ class StatementImportViewModel(
                 }
                 is StatementImportManager.ExtractResult.Success -> {
                     _phase.value = ImportPhase.Analyzing
-                    when (val res = manager.analyze(ext.text)) {
+                    when (val res = manager.analyze(ext.text, _docType.value)) {
                         is StatementImportManager.AnalyzeResult.Failure -> {
                             _phase.value = ImportPhase.Error(res.message)
                         }

@@ -92,9 +92,15 @@ class StatementImportManager(
             is StatementTextExtractor.Result.Failure -> ExtractResult.Failure(r.message)
         }
 
-    /** Paso 2: envía SOLO el texto al LLM cloud y obtiene el JSON estructurado. */
-    suspend fun analyze(statementText: String): AnalyzeResult =
-        when (val r = nimClient.analyze(statementText, buildLlmContext())) {
+    /**
+     * Paso 2: envía SOLO el texto al LLM cloud y obtiene el JSON estructurado.
+     * [kind] selecciona el prompt/esquema (estado de cuenta, compras, movimientos…).
+     */
+    suspend fun analyze(
+        statementText: String,
+        kind: DocumentKind = DocumentKind.BANK_STATEMENT,
+    ): AnalyzeResult =
+        when (val r = nimClient.analyze(statementText, buildLlmContext(), kind)) {
             is NvidiaNimClient.Result.Success -> AnalyzeResult.Success(r.statement, r.rawJson)
             is NvidiaNimClient.Result.Failure -> AnalyzeResult.Failure(r.message)
         }
