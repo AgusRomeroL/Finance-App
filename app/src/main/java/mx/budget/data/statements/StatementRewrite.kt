@@ -51,6 +51,18 @@ data class PlannedPurchase(
     val esMsi: Boolean,
     val suggestedCategoryId: String?,
     val suggestedCategoryName: String?,
+    /**
+     * Miembros que se benefician de esta compra (memberIds). Precargados desde
+     * `beneficiariosSugeridos` del LLM; el usuario los ajusta con chips en el paso
+     * de reescritura. Vacío = reparto equitativo entre todos los miembros.
+     */
+    val suggestedBeneficiaryIds: List<String> = emptyList(),
+)
+
+/** Miembro del hogar para los chips de beneficiario del paso de reescritura. */
+data class RewriteMember(
+    val id: String,
+    val name: String,
 )
 
 /**
@@ -64,6 +76,10 @@ data class RewritePlan(
     val payerName: String?,
     /** Cuántos miembros reciben el reparto equitativo como BENEFICIARY. */
     val beneficiaryCount: Int,
+    /** Miembros del hogar disponibles para los chips de beneficiario. */
+    val members: List<RewriteMember> = emptyList(),
+    /** Categorías hoja (id → nombre) para el dropdown de categoría por compra. */
+    val categories: List<RewriteMember> = emptyList(),
 )
 
 /** Resultado de aplicar el estado de cuenta con reescritura. */

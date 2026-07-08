@@ -46,6 +46,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -385,6 +388,8 @@ private fun RewriteReviewContent(viewModel: StatementImportViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
+                val members by viewModel.rewriteMembers.collectAsStateWithLifecycle()
+                val categoryOptions by viewModel.rewriteCategories.collectAsStateWithLifecycle()
                 purchases.forEachIndexed { i, entry ->
                     SelectableRow(
                         selected = entry.selected,
@@ -397,6 +402,17 @@ private fun RewriteReviewContent(viewModel: StatementImportViewModel) {
                         amount = mxn(entry.item.montoMxn),
                         badge = if (entry.item.esMsi) "MSI" else null,
                     )
+                    // Chips de beneficiario + categoría (solo si la compra se insertará).
+                    if (entry.selected) {
+                        PurchaseAttributionRow(
+                            members = members,
+                            categories = categoryOptions,
+                            selectedBeneficiaryIds = entry.item.suggestedBeneficiaryIds,
+                            categoryName = entry.item.suggestedCategoryName,
+                            onToggleBeneficiary = { id -> viewModel.togglePurchaseBeneficiary(i, id) },
+                            onPickCategory = { id, name -> viewModel.updatePurchaseCategory(i, id, name) },
+                        )
+                    }
                     if (i != purchases.lastIndex) Spacer(Modifier.height(8.dp))
                 }
             }
@@ -411,6 +427,60 @@ private fun RewriteReviewContent(viewModel: StatementImportViewModel) {
             Text("Atrás")
         }
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+/**
+ * Bajo cada compra a insertar: chips de beneficiario (toggle, reparto equitativo
+ * entre los seleccionados) + chip de categoría con dropdown. Precargados desde las
+ * sugerencias del LLM; el ajuste es de bajo esfuerzo (un toque por miembro).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PurchaseAttributionRow(
+    members: List<mx.budget.data.statements.RewriteMember>,
+    categories: List<mx.budget.data.statements.RewriteMember>,
+    selectedBeneficiaryIds: List<String>,
+    categoryName: String?,
+    onToggleBeneficiary: (String) -> Unit,
+    onPickCategory: (String, String) -> Unit,
+) {
+    // Vacío = todos por igual (se refleja mostrando todos los chips activos).
+    val effective = selectedBeneficiaryIds.ifEmpty { members.map { it.id } }.toSet()
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 40.dp, top = 4.dp, bottom = 4.dp)) {
+        Text(
+            "Beneficia a",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            members.forEach { m ->
+                FilterChip(
+                    selected = m.id in effective,
+                    onClick = { onToggleBeneficiary(m.id) },
+                    label = { Text(m.name) },
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        var expanded by remember { mutableStateOf(false) }
+        Box {
+            androidx.compose.material3.AssistChip(
+                onClick = { expanded = true },
+                label = { Text(categoryName ?: "Elegir categoría") },
+            )
+            androidx.compose.material3.DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                categories.forEach { c ->
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(c.name) },
+                        onClick = { onPickCategory(c.id, c.name); expanded = false },
+                    )
+                }
+            }
+        }
     }
 }
 

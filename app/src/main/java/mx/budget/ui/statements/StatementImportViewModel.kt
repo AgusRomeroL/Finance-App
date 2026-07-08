@@ -16,6 +16,7 @@ import mx.budget.data.settings.SettingsRepository
 import mx.budget.data.statements.AggregateCandidate
 import mx.budget.data.statements.ParsedStatement
 import mx.budget.data.statements.PlannedPurchase
+import mx.budget.data.statements.RewriteMember
 import mx.budget.data.statements.StatementImportManager
 import mx.budget.data.statements.StatementMovement
 import mx.budget.data.statements.StatementPeriod
@@ -115,6 +116,14 @@ class StatementImportViewModel(
     /** Cuántos miembros reciben el reparto equitativo (copy del resumen). */
     private val _rewriteBeneficiaryCount = MutableStateFlow(0)
     val rewriteBeneficiaryCount: StateFlow<Int> = _rewriteBeneficiaryCount.asStateFlow()
+
+    /** Miembros del hogar para los chips de beneficiario por compra. */
+    private val _rewriteMembers = MutableStateFlow<List<RewriteMember>>(emptyList())
+    val rewriteMembers: StateFlow<List<RewriteMember>> = _rewriteMembers.asStateFlow()
+
+    /** Categorías hoja (id → nombre) para el dropdown de categoría por compra. */
+    private val _rewriteCategories = MutableStateFlow<List<RewriteMember>>(emptyList())
+    val rewriteCategories: StateFlow<List<RewriteMember>> = _rewriteCategories.asStateFlow()
 
     // JSON crudo original del LLM, para auditoría al aplicar.
     private var rawJson: String = "{}"
@@ -226,6 +235,8 @@ class StatementImportViewModel(
                 _rewriteAggregates.value = plan.aggregates.map { RewriteItem(it, selected = true) }
                 _rewritePayerName.value = plan.payerName
                 _rewriteBeneficiaryCount.value = plan.beneficiaryCount
+                _rewriteMembers.value = plan.members
+                _rewriteCategories.value = plan.categories
                 _phase.value = ImportPhase.RewriteReview
             }.onFailure { e ->
                 _phase.value = ImportPhase.Error(
@@ -253,6 +264,30 @@ class StatementImportViewModel(
     fun togglePurchase(index: Int) {
         _rewritePurchases.value = _rewritePurchases.value.mapIndexed { i, item ->
             if (i == index) item.copy(selected = !item.selected) else item
+        }
+    }
+
+    /** Alterna a un miembro como beneficiario de la compra [index] (reparto equitativo). */
+    fun togglePurchaseBeneficiary(index: Int, memberId: String) {
+        val allIds = _rewriteMembers.value.map { it.id }
+        _rewritePurchases.value = _rewritePurchases.value.mapIndexed { i, item ->
+            if (i != index) return@mapIndexed item
+            // Vacío = "todos por igual": al primer toque se materializa a todos y se
+            // quita el tocado, para que el chip se comporte como esperaría el usuario.
+            val current = item.item.suggestedBeneficiaryIds.ifEmpty { allIds }
+            val next = if (memberId in current) current - memberId else current + memberId
+            item.copy(item = item.item.copy(suggestedBeneficiaryIds = next))
+        }
+    }
+
+    /** Fija la categoría de la compra [index] (dropdown del paso de reescritura). */
+    fun updatePurchaseCategory(index: Int, categoryId: String, categoryName: String) {
+        _rewritePurchases.value = _rewritePurchases.value.mapIndexed { i, item ->
+            if (i != index) return@mapIndexed item
+            item.copy(item = item.item.copy(
+                suggestedCategoryId = categoryId,
+                suggestedCategoryName = categoryName,
+            ))
         }
     }
 
@@ -307,6 +342,8 @@ class StatementImportViewModel(
         _rewriteAggregates.value = emptyList()
         _rewritePayerName.value = null
         _rewriteBeneficiaryCount.value = 0
+        _rewriteMembers.value = emptyList()
+        _rewriteCategories.value = emptyList()
         rawJson = "{}"
     }
 }

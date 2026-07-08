@@ -150,15 +150,29 @@ class StatementImportManager(
         val wallet = walletRepository.getById(walletId)
         val categories = categoryDao.getAll(householdId)
         val categoriesById = categories.associateBy { it.id }
+        // Categorías hoja por código (para mapear la categoriaSugerida del LLM).
+        val leafByCode = categories.filter { it.parentId != null }.associateBy { it.code }
         val history = runCatching { expenseDao.getAll(householdId) }
             .getOrDefault(emptyList())
             .filter { it.status == "POSTED" }
+
+        val members = activeHouseholdMembers()
+        val payer = resolveDefaultPayer(members, wallet)
+        // Índice nombre-sin-acentos → memberId para resolver beneficiariosSugeridos.
+        val memberByName = members.associateBy { it.displayName.unaccent().lowercase() }
 
         val purchases = statement.movimientos
             .filter { (it.monto ?: 0.0) > 0.0 && !isPaymentMovement(it) }
             .map { mov ->
                 val concepto = mov.concepto?.trim().orEmpty().ifBlank { "Compra tarjeta" }
-                val categoryId = suggestCategory(concepto, history)
+                // Categoría: la sugerida por el LLM si matchea el catálogo; si no, la
+                // heurística por historial.
+                val llmCategoryId = mov.categoriaSugerida?.let { leafByCode[it.trim()]?.id }
+                val categoryId = llmCategoryId ?: suggestCategory(concepto, history)
+                // Beneficiarios: nombres del LLM → memberIds (los no resueltos se ignoran).
+                val benIds = mov.beneficiariosSugeridos.orEmpty().mapNotNull { name ->
+                    memberByName[name.unaccent().lowercase()]?.id
+                }
                 PlannedPurchase(
                     fecha = mov.fecha,
                     concepto = concepto,
@@ -166,19 +180,20 @@ class StatementImportManager(
                     esMsi = mov.esMsi && (mov.msiPlazo ?: 0) > 1,
                     suggestedCategoryId = categoryId,
                     suggestedCategoryName = categoryId?.let { categoriesById[it]?.displayName },
+                    suggestedBeneficiaryIds = benIds,
                 )
             }
 
         val aggregates = if (wallet != null) detectAggregates(statement, wallet) else emptyList()
-
-        val members = activeHouseholdMembers()
-        val payer = resolveDefaultPayer(members, wallet)
 
         return RewritePlan(
             purchases = purchases,
             aggregates = aggregates,
             payerName = payer?.displayName,
             beneficiaryCount = members.size,
+            members = members.map { RewriteMember(it.id, it.displayName) },
+            categories = categories.filter { it.parentId != null }
+                .map { RewriteMember(it.id, it.displayName) },
         )
     }
 
@@ -239,9 +254,16 @@ class StatementImportManager(
                 val importTag = buildImportTag(statement)
 
                 if (members.isNotEmpty() && payer != null && fallbackCategoryId != null) {
-                    val beneficiaryBps = equalSplit(members.map { it.id })
+                    val allIds = members.map { it.id }
                     val payerBps = mapOf(payer.id to 10_000)
                     for (purchase in purchases) {
+                        // Beneficiarios por compra: los ajustados con chips (o los del
+                        // LLM); si ninguno, reparto equitativo entre todos.
+                        val benIds = purchase.suggestedBeneficiaryIds
+                            .filter { it in allIds }
+                            .ifEmpty { allIds }
+                        val beneficiaryBps = equalSplit(benIds)
+                        val hadSuggestion = purchase.suggestedBeneficiaryIds.isNotEmpty()
                         val occurredAt = resolveOccurredAt(purchase.fecha, statement)
                         val quincenaId = resolveQuincenaId(occurredAt) ?: continue
                         val expenseId = UUID.randomUUID().toString()
@@ -275,7 +297,8 @@ class StatementImportManager(
                                     ListSerializer(SuggestedShare.serializer()),
                                     beneficiaryBps.map { SuggestedShare(it.key, it.value) },
                                 ),
-                                confidence = 0.0,
+                                // Confianza > 0 si el reparto vino del LLM/usuario (no el default equitativo).
+                                confidence = if (hadSuggestion) 0.5 else 0.0,
                                 sampleSize = 0,
                                 conceptCanonical = null,
                                 status = "PENDING",
