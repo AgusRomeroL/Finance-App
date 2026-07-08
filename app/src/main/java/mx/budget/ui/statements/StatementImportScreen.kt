@@ -57,6 +57,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import mx.budget.data.statements.DocumentKind
 import mx.budget.data.statements.StatementMovement
 import java.text.NumberFormat
 import java.util.Locale
@@ -77,6 +78,7 @@ fun StatementImportScreen(
 ) {
     val phase by viewModel.phase.collectAsStateWithLifecycle()
     val hasApiKey by viewModel.hasApiKey.collectAsStateWithLifecycle()
+    val docType by viewModel.docType.collectAsStateWithLifecycle()
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -128,7 +130,7 @@ fun StatementImportScreen(
             label = "phase",
         ) { current ->
             when (current) {
-                is ImportPhase.Idle -> IdleContent(hasApiKey, onPick = { picker.launch("*/*") }, onOpenProfile = onOpenProfile)
+                is ImportPhase.Idle -> IdleContent(hasApiKey, docType, viewModel::setDocType, onPick = { picker.launch("*/*") }, onOpenProfile = onOpenProfile)
                 is ImportPhase.Extracting -> ProgressContent("Extrayendo texto del archivo…", "Todo local: el archivo no sale de tu teléfono.")
                 is ImportPhase.Analyzing -> ProgressContent("Analizando con IA…", "Solo el texto viaja a la nube para estructurarlo.")
                 is ImportPhase.Preview -> PreviewContent(viewModel)
@@ -141,15 +143,47 @@ fun StatementImportScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun IdleContent(hasApiKey: Boolean, onPick: () -> Unit, onOpenProfile: () -> Unit) {
+private fun IdleContent(
+    hasApiKey: Boolean,
+    docType: DocumentKind,
+    onSelectDocType: (DocumentKind) -> Unit,
+    onPick: () -> Unit,
+    onOpenProfile: () -> Unit,
+) {
+    val esEstado = docType == DocumentKind.BANK_STATEMENT
     Card {
         Text(
-            "Sube tu estado de cuenta en PDF o imagen. Se extrae el texto en tu " +
-                "teléfono y solo ese texto se envía a la IA para estructurarlo. " +
-                "Reconcilia corte, límite de pago y planes a meses; y si eliges la " +
-                "cuenta, podrás reescribir los movimientos de la tarjeta — nada se " +
-                "aplica sin tu confirmación.",
+            "TIPO DE DOCUMENTO",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            letterSpacing = 1.4.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DocumentKind.entries.forEach { kind ->
+                FilterChip(
+                    selected = docType == kind,
+                    onClick = { onSelectDocType(kind) },
+                    label = { Text(kind.displayName) },
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            if (esEstado) {
+                "Sube tu estado de cuenta en PDF o imagen. Se extrae el texto en tu " +
+                    "teléfono y solo ese texto se envía a la IA para estructurarlo. " +
+                    "Reconcilia corte, límite de pago y planes a meses; y si eliges la " +
+                    "cuenta, podrás reescribir los movimientos — nada se aplica sin tu " +
+                    "confirmación."
+            } else {
+                "Sube el archivo que exportaste (CSV, ZIP, XML o JSON). Se lee en tu " +
+                    "teléfono; solo el texto (producto/monto/fecha) viaja a la IA para " +
+                    "clasificar categoría y beneficiario por producto. Revisa y confirma " +
+                    "antes de aplicar — nada se guarda sin tu OK."
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -174,7 +208,7 @@ private fun IdleContent(hasApiKey: Boolean, onPick: () -> Unit, onOpenProfile: (
             Button(onClick = onPick, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Filled.UploadFile, null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Elegir archivo (PDF o imagen)")
+                Text(if (esEstado) "Elegir archivo (PDF o imagen)" else "Elegir archivo (CSV, ZIP, XML, JSON)")
             }
         }
     }
