@@ -341,6 +341,17 @@ interface ExpenseDao {
     )
     suspend fun getRecentPosted(householdId: String, sinceEpochMs: Long): List<ExpenseEntity>
 
+    /**
+     * Próximos gastos PLANNED del hogar con vencimiento en/ tras `nowMs`, ordenados
+     * por fecha ascendente — alimenta el snapshot del reloj (tile "Próximos pagos").
+     * Añadir un método @Dao no cambia el esquema.
+     */
+    @Query(
+        "SELECT * FROM expense WHERE household_id = :hh AND status = 'PLANNED' " +
+            "AND occurred_at >= :nowMs ORDER BY occurred_at ASC LIMIT :limit"
+    )
+    suspend fun getUpcomingPlanned(hh: String, nowMs: Long, limit: Int): List<ExpenseEntity>
+
     /** Gasto (cualquier status) de una cuota MSI concreta — dedupe del materializador. */
     @Query(
         "SELECT * FROM expense WHERE household_id = :householdId AND installment_plan_id = :planId " +

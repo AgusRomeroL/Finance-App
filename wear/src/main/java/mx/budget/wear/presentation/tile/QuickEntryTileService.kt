@@ -20,10 +20,11 @@ import com.google.android.horologist.tiles.SuspendingTileService
 import mx.budget.wear.presentation.CapturaActivity
 
 /**
- * Tile B — **Captura**. Tres accesos (Gasto, Ingreso, Dictar) que lanzan la
+ * Tile B — **Captura**. Dos accesos (Gasto, Ingreso) que lanzan la
  * [CapturaActivity] ligera pasando el modo por extra. Un tile no admite texto
- * libre, así que el teclado/voz viven en la actividad; el tile es solo el disparo
- * glanceable. ProtoLayout (estable, sin Compose) → sin el jank del tile Glance.
+ * libre NI scroll, así que el teclado/voz (incluido el dictado) viven en la
+ * actividad; el tile es solo el disparo glanceable. ProtoLayout (estable, sin
+ * Compose) → sin el jank del tile Glance.
  */
 class QuickEntryTileService : SuspendingTileService() {
 
@@ -42,11 +43,12 @@ class QuickEntryTileService : SuspendingTileService() {
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
             .addContent(header)
             .addContent(spacer())
+            // Solo 2 chips: un tile ProtoLayout NO scrollea, y 3 chips + header no
+            // caben en un reloj redondo (el 3º quedaba recortado e inalcanzable).
+            // "Dictar" (voz) vive ahora dentro de CapturaActivity/CapturaScreen (mic).
             .addContent(actionChip(deviceParams, "Gasto", CapturaActivity.MODE_EXPENSE))
             .addContent(spacer())
             .addContent(actionChip(deviceParams, "Ingreso", CapturaActivity.MODE_INCOME))
-            .addContent(spacer())
-            .addContent(actionChip(deviceParams, "🎤 Dictar", CapturaActivity.MODE_VOICE))
             .build()
 
         val layout = PrimaryLayout.Builder(deviceParams).setContent(content).build()

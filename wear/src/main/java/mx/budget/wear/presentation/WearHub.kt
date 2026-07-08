@@ -88,7 +88,11 @@ fun WearHub() {
 private fun cacheVersion(context: Context): Int {
     val version by produceState(initialValue = 0, context) {
         val prefs = context.getSharedPreferences(WearCache.PREFS, Context.MODE_PRIVATE)
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> value++ }
+        // Reacciona SOLO a la clave de versión (escrita LAST por el listener del push),
+        // no a cada una de las ~8 claves del snapshot → un push = una recomposición.
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == WearCache.K_CACHE_VERSION) value++
+        }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         awaitDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }

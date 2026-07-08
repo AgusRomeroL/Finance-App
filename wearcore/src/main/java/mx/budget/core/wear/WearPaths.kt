@@ -36,6 +36,17 @@ object WearPaths {
     const val KEY_QUINCENA_LABEL = "key_quincena_label"
     const val KEY_TIMESTAMP = "key_timestamp"
 
+    /** Denominador del arco "Disponible": ingreso proyectado de la quincena activa. */
+    const val KEY_BUDGET_TOTAL = "budget_total"
+
+    /**
+     * Versión monotónica del snapshot: cambia UNA vez por push (se escribe LAST en
+     * el DataMap y en las SharedPreferences del reloj). Sirve para colapsar el
+     * fan-out de callbacks de `OnSharedPreferenceChangeListener` (un push reescribe
+     * ~8 claves → 1 sola recomposición reaccionando solo a esta clave).
+     */
+    const val KEY_CACHE_VERSION = "cache_version"
+
     const val KEY_EXPENSE_CONCEPT = "key_expense_concept"
     const val KEY_EXPENSE_AMOUNT = "key_expense_amount"
     const val KEY_NL_TEXT = "key_nl_text"
@@ -52,4 +63,7 @@ object WearPaths {
 
     /** Gasto por miembro (rol BENEFICIARY): JSON array de `{name, total}`. */
     const val KEY_MEMBER_SPEND_JSON = "key_member_spend_json"
+
+    /** Próximos pagos PLANNED: JSON array de `{concept, amount, dueDate}`. */
+    const val KEY_UPCOMING_JSON = "upcoming_json"
 }

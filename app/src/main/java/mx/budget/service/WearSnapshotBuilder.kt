@@ -51,6 +51,7 @@ object WearSnapshotBuilder {
         }.getOrNull()
 
         val balance = quincena?.let { it.projectedIncomeMxn - it.actualExpensesMxn } ?: 0.0
+        val budgetTotal = quincena?.projectedIncomeMxn ?: 0.0
         val label = quincena?.label ?: "Sin Quincena"
 
         val sinceEpochMs = System.currentTimeMillis() - RECENT_WINDOW_MS
@@ -127,16 +128,35 @@ object WearSnapshotBuilder {
             }
         }.getOrDefault("[]")
 
+        val upcomingJson = runCatching {
+            val upcoming = app.database.expenseDao()
+                .getUpcomingPlanned(householdId, System.currentTimeMillis(), MAX_UPCOMING)
+            JSONArray().apply {
+                upcoming.forEach { e ->
+                    put(
+                        JSONObject()
+                            .put("concept", e.concept)
+                            .put("amount", e.amountMxn)
+                            .put("dueDate", e.occurredAt)
+                    )
+                }
+            }.toString()
+        }.getOrDefault("[]")
+
         runCatching {
             val req = PutDataMapRequest.create(WearPaths.PATH_BUDGET_SYNC)
             req.dataMap.apply {
                 putDouble(WearPaths.KEY_BALANCE_DISPONIBLE, balance)
+                putDouble(WearPaths.KEY_BUDGET_TOTAL, budgetTotal)
                 putString(WearPaths.KEY_QUINCENA_LABEL, label)
                 putLong(WearPaths.KEY_TIMESTAMP, System.currentTimeMillis())
                 putString(WearPaths.KEY_SUGGESTIONS_JSON, suggestionsJson)
                 putString(WearPaths.KEY_MOVEMENTS_JSON, movementsJson)
                 putString(WearPaths.KEY_PENDING_JSON, pendingJson)
                 putString(WearPaths.KEY_MEMBER_SPEND_JSON, memberSpendJson)
+                putString(WearPaths.KEY_UPCOMING_JSON, upcomingJson)
+                // LAST: versión monotónica que cambia una vez por push.
+                putLong(WearPaths.KEY_CACHE_VERSION, System.currentTimeMillis())
             }
             Wearable.getDataClient(context).putDataItem(req.asPutDataRequest().setUrgent())
         }

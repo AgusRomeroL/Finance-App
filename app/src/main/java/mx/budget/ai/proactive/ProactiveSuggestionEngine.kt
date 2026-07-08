@@ -37,12 +37,14 @@ data class ProactiveSuggestion(
  * pre-cómputo es opcional en la spec). El cálculo es puro y testeable: recibe el
  * historial, la quincena activa y `nowEpochMs`, y devuelve a lo más una sugerencia.
  *
- * Dos caminos, en orden de prioridad:
+ * Tres caminos, en orden de prioridad:
  *  1. **Inicio de quincena** (días ~1-2 / 16-17): prioriza los gastos grandes
  *     recurrentes del periodo (renta, servicios, colegiaturas) aún no registrados
  *     en la quincena activa → "¿ya registraste este gasto del periodo?".
  *  2. **Patrón hora+día**: el gasto que el hogar suele registrar este mismo día de
  *     la semana y franja horaria, excluyendo lo ya registrado hoy.
+ *  3. **Fallback más frecuentes/recientes**: si 1-2 no llenan el cupo, rellena con
+ *     los clusters más habituales para que la superficie rara vez quede vacía.
  */
 class ProactiveSuggestionEngine(
     private val zone: ZoneId = ZoneId.of("America/Mexico_City")
@@ -119,6 +121,24 @@ class ProactiveSuggestionEngine(
                     build(key, rows, "Sueles registrarlo ${dayPhrase(nowDow)} ${bandPhrase(nowHour)}")
                 }
             }
+
+        // ── Camino 3 (fallback): más frecuentes y recientes ────────────────────
+        // Si los caminos 1-2 no llenaron el cupo (estamos fuera de sus ventanas de
+        // hora/día o de arranque de quincena), rellena con los clusters que el hogar
+        // registra con más frecuencia y más recientemente. Así la superficie (tile
+        // "Recomendados" del reloj / dashboard) rara vez queda vacía. Excluye lo ya
+        // registrado hoy y lo ya elegido por los caminos anteriores.
+        if (out.size < limit) {
+            posted
+                .filter { it.conceptCanonical !in registeredToday }
+                .groupBy { it.conceptCanonical!! }
+                .filter { (key, rows) -> rows.size >= MIN_OCCURRENCES && key !in out }
+                .entries
+                .sortedByDescending { (_, rows) -> rows.size * RECENCY_SCALE + rows.maxOf { it.occurredAt } }
+                .forEach { (key, rows) ->
+                    out.getOrPut(key) { build(key, rows, "Sueles registrarlo seguido") }
+                }
+        }
 
         return out.values.take(limit)
     }

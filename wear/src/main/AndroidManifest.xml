@@ -81,5 +81,61 @@
                 android:resource="@drawable/ic_wear_launcher" />
         </service>
 
+        <!-- Tile — Disponible (arco héroe, ProtoLayout EdgeContentLayout). -->
+        <service
+            android:name=".presentation.tile.DisponibleTileService"
+            android:exported="true"
+            android:label="Disponible"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/ic_wear_launcher" />
+        </service>
+
+        <!-- Tile — Próximos pagos (PLANNED, ProtoLayout). -->
+        <service
+            android:name=".presentation.tile.UpcomingPaymentsTileService"
+            android:exported="true"
+            android:label="Próximos pagos"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/ic_wear_launcher" />
+        </service>
+
+        <!-- Tile — Gasto por miembro (mini-barras, ProtoLayout). -->
+        <service
+            android:name=".presentation.tile.MemberSpendTileService"
+            android:exported="true"
+            android:label="Gasto por miembro"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/ic_wear_launcher" />
+        </service>
+
+        <!-- Tile — Pendientes por confirmar (ProtoLayout, abre el hub). -->
+        <service
+            android:name=".presentation.tile.PendingConfirmTileService"
+            android:exported="true"
+            android:label="Pendientes"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/ic_wear_launcher" />
+        </service>
+
     </application>
 </manifest>

@@ -7,8 +7,12 @@ import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.WearableListenerService
 import mx.budget.core.wear.WearPaths
+import mx.budget.wear.presentation.tile.DisponibleTileService
+import mx.budget.wear.presentation.tile.MemberSpendTileService
+import mx.budget.wear.presentation.tile.PendingConfirmTileService
 import mx.budget.wear.presentation.tile.QuickEntryTileService
 import mx.budget.wear.presentation.tile.SuggestionsTileService
+import mx.budget.wear.presentation.tile.UpcomingPaymentsTileService
 
 /**
  * Servicio residente en el Reloj (Wear OS). Despierta con el push del móvil
@@ -36,11 +40,18 @@ class MobileSyncListenerService : WearableListenerService() {
                         WearCache.K_BALANCE,
                         map.getDouble(WearPaths.KEY_BALANCE_DISPONIBLE, 0.0).toFloat(),
                     )
+                    .putFloat(
+                        WearCache.K_BUDGET_TOTAL,
+                        map.getDouble(WearPaths.KEY_BUDGET_TOTAL, 0.0).toFloat(),
+                    )
                     .putString(WearCache.K_LABEL, map.getString(WearPaths.KEY_QUINCENA_LABEL, ""))
                     .putString(WearCache.K_SUGGESTIONS, map.getString(WearPaths.KEY_SUGGESTIONS_JSON, "[]"))
                     .putString(WearCache.K_MOVEMENTS, map.getString(WearPaths.KEY_MOVEMENTS_JSON, "[]"))
                     .putString(WearCache.K_PENDING, map.getString(WearPaths.KEY_PENDING_JSON, "[]"))
                     .putString(WearCache.K_MEMBER_SPEND, map.getString(WearPaths.KEY_MEMBER_SPEND_JSON, "[]"))
+                    .putString(WearCache.K_UPCOMING, map.getString(WearPaths.KEY_UPCOMING_JSON, "[]"))
+                    // LAST: la versión monotónica que dispara UNA sola recomposición.
+                    .putLong(WearCache.K_CACHE_VERSION, map.getLong(WearPaths.KEY_CACHE_VERSION, 0L))
                     .apply()
                 changed = true
             }
@@ -48,8 +59,13 @@ class MobileSyncListenerService : WearableListenerService() {
 
         if (changed) {
             runCatching {
-                TileService.getUpdater(this).requestUpdate(SuggestionsTileService::class.java)
-                TileService.getUpdater(this).requestUpdate(QuickEntryTileService::class.java)
+                val updater = TileService.getUpdater(this)
+                updater.requestUpdate(SuggestionsTileService::class.java)
+                updater.requestUpdate(QuickEntryTileService::class.java)
+                updater.requestUpdate(DisponibleTileService::class.java)
+                updater.requestUpdate(UpcomingPaymentsTileService::class.java)
+                updater.requestUpdate(MemberSpendTileService::class.java)
+                updater.requestUpdate(PendingConfirmTileService::class.java)
             }
         }
     }
