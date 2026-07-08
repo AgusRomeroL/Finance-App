@@ -38,3 +38,6 @@ ui_reference/claude_design/*.raw.json
 .kotlin/
 Copy of presupuesto 2.5 (1).xlsx
 scripts/etl/__pycache__/
+
+# Estados de cuenta reales de Norma (datos financieros personales — NUNCA commitear)
+Estados de Cuenta/
