@@ -209,6 +209,7 @@ private fun PreviewContent(viewModel: StatementImportViewModel) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val wallets by viewModel.wallets.collectAsStateWithLifecycle()
     val selectedWalletId by viewModel.selectedWalletId.collectAsStateWithLifecycle()
+    var showNewWallet by remember { mutableStateOf(false) }
 
     Column {
         // Wallet objetivo de la reconciliación
@@ -231,7 +232,21 @@ private fun PreviewContent(viewModel: StatementImportViewModel) {
                         label = { Text(w.displayName + (w.last4?.let { " ••$it" } ?: "")) },
                     )
                 }
+                // Crear una cuenta nueva desde el estado (ej. una tarjeta sin wallet).
+                androidx.compose.material3.AssistChip(
+                    onClick = { showNewWallet = true },
+                    label = { Text("+ Nueva cuenta") },
+                )
             }
+        }
+
+        if (showNewWallet) {
+            mx.budget.ui.wallets.WalletFormSheet(
+                initial = viewModel.newWalletFromDraft(),
+                householdId = viewModel.householdId,
+                onSave = { viewModel.createWalletAndSelect(it); showNewWallet = false },
+                onDismiss = { showNewWallet = false },
+            )
         }
 
         Spacer(Modifier.height(16.dp))

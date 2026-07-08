@@ -64,7 +64,7 @@ class StatementImportViewModel(
     private val manager: StatementImportManager,
     private val walletRepository: WalletRepository,
     private val settings: SettingsRepository,
-    private val householdId: String,
+    val householdId: String,
 ) : ViewModel() {
 
     private val _phase = MutableStateFlow<ImportPhase>(ImportPhase.Idle)
@@ -97,6 +97,42 @@ class StatementImportViewModel(
     fun presetWallet(id: String?) {
         presetWalletId = id
         _selectedWalletId.value = id
+    }
+
+    /**
+     * Entidad sintética prellenada con los datos del estado, para crear una cuenta
+     * nueva desde el selector (ej. una tarjeta que aún no existe como wallet). Trae id
+     * fresco; el sheet lo respeta (`initial?.id ?: UUID`).
+     */
+    fun newWalletFromDraft(): mx.budget.data.local.entity.PaymentMethodEntity {
+        val d = _draft.value
+        fun dayOf(iso: String?): Int? =
+            iso?.takeIf { it.length >= 10 }?.substring(8, 10)?.toIntOrNull()
+        return mx.budget.data.local.entity.PaymentMethodEntity(
+            id = java.util.UUID.randomUUID().toString(),
+            householdId = householdId,
+            displayName = d.emisor?.trim().orEmpty().ifBlank { "Nueva tarjeta" },
+            kind = "CREDIT_CARD",
+            issuer = d.emisor?.trim(),
+            last4 = d.last4?.trim()?.ifBlank { null },
+            cutoffDay = dayOf(d.fechaCorte),
+            dueDay = dayOf(d.fechaLimitePago),
+            creditLimitMxn = null,
+            currentBalanceMxn = 0.0,
+            openingBalanceMxn = 0.0,
+            interestApr = d.tasaAnual,
+            ownerMemberId = null,
+            isActive = true,
+        )
+    }
+
+    /** Inserta la cuenta nueva (sync) y la deja seleccionada como destino del estado. */
+    fun createWalletAndSelect(entity: mx.budget.data.local.entity.PaymentMethodEntity) {
+        viewModelScope.launch {
+            walletRepository.insert(entity)
+            presetWalletId = entity.id
+            _selectedWalletId.value = entity.id
+        }
     }
 
     // ── Estado del paso "Reescribir movimientos" ────────────────────────────────

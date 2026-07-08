@@ -293,10 +293,13 @@ private fun InstallmentPlanCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
             ) {
+                val remainingCount = (plan.totalInstallments - paid).coerceAtLeast(0)
                 Text(
-                    "Pago $paid de ${plan.totalInstallments}",
+                    if (remainingCount > 0) "Pago $paid de ${plan.totalInstallments} · faltan $remainingCount"
+                    else "Pago $paid de ${plan.totalInstallments} · liquidado",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
@@ -306,8 +309,15 @@ private fun InstallmentPlanCard(
                 )
             }
             Spacer(Modifier.height(4.dp))
+            val endDate = mx.budget.data.installments.InstallmentSchedule.parseIso(plan.startDate)
+                ?.let { mx.budget.data.installments.InstallmentSchedule.estimatedEndDate(it, plan.totalInstallments, null) }
             Text(
-                "${money.format(plan.installmentAmountMxn)} al mes × ${plan.totalInstallments} · total ${money.format(plan.principalMxn)}",
+                buildString {
+                    append("${money.format(plan.installmentAmountMxn)} al mes × ${plan.totalInstallments} · total ${money.format(plan.principalMxn)}")
+                    if (endDate != null && paid < plan.totalInstallments) {
+                        append(" · termina ~${endDate.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale("es", "MX"))} ${endDate.year}")
+                    }
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,

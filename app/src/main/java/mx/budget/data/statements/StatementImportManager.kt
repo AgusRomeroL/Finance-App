@@ -618,7 +618,9 @@ class StatementImportManager(
         walletId: String?,
         existing: List<InstallmentPlanEntity>,
     ): Boolean {
-        val plazo = mov.msiPlazo ?: return false
+        // Plazo: del LLM, o inferido del concepto (caso Klar: "12 MSI"/"a 6 meses").
+        val plazo = mov.msiPlazo ?: inferPlazoFromConcept(mov.concepto) ?: return false
+        if (plazo <= 1) return false
         val concepto = mov.concepto?.trim().orEmpty().ifBlank { "MSI" }
         val last4 = statement.last4.orEmpty()
         val displayName = buildString {
@@ -626,22 +628,29 @@ class StatementImportManager(
             if (last4.isNotBlank()) append(" ****$last4")
         }.take(120)
         val monto = mov.monto ?: return false
+        val normSelf = normalizeMsiConcept(concepto)
 
-        // Match best-effort: mismo displayName (case-insensitive) y mismo plazo total.
-        val match = existing.firstOrNull {
-            it.totalInstallments == plazo &&
-                it.displayName.equals(displayName, ignoreCase = true)
+        // Match robusto: mismo wallet + concepto normalizado (sin "( n DE m )" ni
+        // "PP####") + mismo plazo + cuota ±1% (tolera redondeos entre cortes).
+        val match = existing.firstOrNull { plan ->
+            plan.totalInstallments == plazo &&
+                (walletId == null || plan.paymentMethodId == walletId) &&
+                normalizeMsiConcept(plan.displayName) == normSelf &&
+                (plan.installmentAmountMxn == 0.0 ||
+                    kotlin.math.abs(plan.installmentAmountMxn - monto) <= monto * 0.01 + 0.5)
         }
 
         return if (match != null) {
-            // Actualiza el avance si el estado de cuenta lo trae más adelantado.
-            val current = (mov.msiNumero ?: match.currentInstallment)
-                .coerceIn(0, plazo)
+            // Avanza solo si el estado trae un número mayor (guard anti-doble-avance
+            // ante re-import del mismo estado).
+            val current = (mov.msiNumero ?: match.currentInstallment).coerceIn(0, plazo)
             if (current > match.currentInstallment || statement.tasaAnual != null) {
                 installmentRepository.update(
                     match.copy(
                         currentInstallment = current,
                         interestRateApr = statement.tasaAnual ?: match.interestRateApr,
+                        // Vincula el wallet de la cuota si aún no lo tenía.
+                        paymentMethodId = match.paymentMethodId ?: walletId,
                     )
                 )
                 true
@@ -655,7 +664,6 @@ class StatementImportManager(
                     householdId = householdId,
                     displayName = displayName,
                     paymentMethodId = walletId,
-                    // Principal estimado = cuota × plazo (el estado suele dar la cuota).
                     principalMxn = monto * plazo,
                     totalInstallments = plazo,
                     installmentAmountMxn = monto,
@@ -668,6 +676,21 @@ class StatementImportManager(
             )
             true
         }
+    }
+
+    /** Normaliza el concepto de un MSI para el match: mayúsculas, sin "( n DE m )"
+     * ni referencias "PP####", espacios colapsados. */
+    private fun normalizeMsiConcept(s: String): String = s.uppercase()
+        .replace(Regex("\\(\\s*\\d+\\s*DE\\s*\\d+\\s*\\)"), " ")
+        .replace(Regex("\\bPP?\\d{3,}\\b"), " ")
+        .replace(Regex("\\*+\\d{2,}"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+
+    /** Infiere el plazo cuando el LLM no lo da (Klar: "12 MSI", "a 6 meses"). */
+    private fun inferPlazoFromConcept(concepto: String?): Int? {
+        val c = concepto?.uppercase() ?: return null
+        return Regex("(\\d{1,2})\\s*(MSI|MESES|MENS)").find(c)?.groupValues?.get(1)?.toIntOrNull()
     }
 
     /** Extrae el día del mes (1..31) de una fecha ISO YYYY-MM-DD; null si no parsea. */
