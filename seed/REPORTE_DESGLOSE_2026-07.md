@@ -54,3 +54,15 @@ Se evaluaron tres opciones para materializar el desglose:
 ## Insumo para la conciliación mensual (Tarea 4)
 
 El cruce cuenta-de-débito → tarjeta documenta la contraparte real de cada pago (útil para evitar doble conteo cuando la feature importe estados): las salidas `PAGO … A TB` (Banamex Clásica), `A KLAR "Pago tarjeta"`, `Pago didi tarjeta`, `Transf. a DIDI PR`, y `PAGO MI TELMEX` son los pagos reales que la feature debe reconciliar contra el agregado del seed, no capturar como gasto nuevo.
+
+---
+
+## Addendum v2 (2026-07-08): materialización del histórico clasificado
+
+La decisión "no mutar el seed" se **revisó con Agustín**: los estados SÍ traen compras reales clasificables (Netflix→todos, Telefónica→planes de Norma/David/Normita/Santiago, Google, DiDi Food, Amazon, CENEVAL, ropa…), no solo pagos de interés. Nueva decisión: **materializar el histórico completo mar–jun 2026 en runtime** (sin tocar el asset v1 ni el golden — asset==golden se mantiene).
+
+**Cómo:** `data/statements/StatementSeedInitializer` v2 lee `app/src/main/assets/seed_statements.json` v2 (18 estados clasificados, 129 movimientos [121 NEW / 8 MATCHED_SEED], 13 planes MSI, 16 pagos agregados, 6 categorías CUSTOM, DiDi Card) y en el primer arranque: convierte cada pago agregado del Excel en transferencia banco→tarjeta (borra el gasto agregado), inserta las compras clasificadas (categoría + beneficiarios reales) como POSTED, los intereses/comisiones como gasto con `installment_interest_mxn` (alimenta el widget "Intereses pagados"), omite lo ya sembrado (anti-doble-conteo por seedMatch), crea planes MSI con avance, fija saldos absolutos (reconcileFinal) y recalcula el snapshot de cada quincena tocada. Todo idempotente, ids deterministas, vía repos con sync.
+
+**Verificado en FinanceFold (install fresca):** DiDi Card creada, 6 CUSTOM, 15 planes MSI, 46 gastos de interés (Walmart $17,635 / DiDi $9,496 visibles), 40 cuotas MSI proyectadas como PLANNED, 16 transferencias, checklist verde, panel de deuda con saldo/límite/tasa/mínimo/fecha límite. Teléfono $850.95 → beneficiarios Norma/David/Normita/Santiago (correcto). Netflix no duplicado (anti-doble-conteo).
+
+**Decisiones de datos (Agustín):** 6 categorías CUSTOM creadas (INTERESES, COMPRAS_ONLINE, SOFTWARE, ROPA, ESTACIONAMIENTO, EXAMENES); PayClip Agustín = gasto de agustin; MP→Benjamín $4,000 = mesada (TRANSFERENCIAS_FAMILIARES/benjamin). Dudas de beneficiario menores (CENEVAL, ropa) quedan en `Estados de Cuenta/_gold/classified/_dudas_*.md` y Norma las ajusta en la app (Revisión de atribuciones). El clasificado por movimiento vive en `_gold/classified/` (gitignored).
