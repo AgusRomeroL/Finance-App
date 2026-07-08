@@ -54,7 +54,7 @@ object StatementSeedInitializer {
             val o = arr.getJSONObject(i)
             val wallet = byName[o.getString("wallet").trim().lowercase()] ?: continue
             val cutoff = o.optInt("cutoffDay").takeIf { o.has("cutoffDay") }
-            val last4 = o.optString("last4", "").ifBlank { null }
+            val last4 = if (o.isNull("last4")) null else o.optString("last4", "").ifBlank { null }
             val saldo = if (o.isNull("saldo")) null else o.optDouble("saldo")
             val tasa = if (o.isNull("tasa")) null else o.optDouble("tasa")
 
