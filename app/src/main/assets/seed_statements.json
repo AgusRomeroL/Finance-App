@@ -1,0 +1,11 @@
+{
+  "_comment": "Estados de cuenta reales de Norma (mar-jun 2026) ya procesados. StatementSeedInitializer los siembra en el primer arranque: fija corte/saldo/tasa en cada wallet e inserta una fila statement_import aplicada, para que el checklist 'Estados del mes' arranque en verde. Solo tarjetas con estado real; Coppel y Mercado Libre no tienen estado y quedan pendientes. Datos del gold verificado al centavo.",
+  "statements": [
+    { "wallet": "Walmart", "emisor": "Inbursa Walmart", "last4": "1240", "cutoffDay": 15, "saldo": 82151.93, "tasa": 73.0 },
+    { "wallet": "Banamex Clásica", "emisor": "Citibanamex", "last4": "5426", "cutoffDay": 22, "saldo": 15671.40, "tasa": 54.14 },
+    { "wallet": "Klar", "emisor": "Klar", "last4": null, "cutoffDay": 30, "saldo": 11226.12, "tasa": 90.76 },
+    { "wallet": "Sears", "emisor": "Sears", "last4": "1066", "cutoffDay": 21, "saldo": 7132.06, "tasa": 58.86 },
+    { "wallet": "Liverpool", "emisor": "Liverpool", "last4": null, "cutoffDay": 9, "saldo": 11330.77, "tasa": null },
+    { "wallet": "Mercado Pago", "emisor": "Mercado Pago", "last4": null, "cutoffDay": 30, "saldo": 2560.79, "tasa": null }
+  ]
+}
