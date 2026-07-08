@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -177,15 +180,24 @@ fun AnalyticsScreen(
 
             // ── Widget: distribución del gasto por miembro (dona) ─────────────
             // Misma dona que la de categorías, pero por BENEFICIARY (quién consume).
+            // Con pills de periodo (histórico por default) y etiqueta con nombre para
+            // el remanente cuando colapsa un solo miembro.
             item {
+                val memberPeriod by viewModel.memberPeriod.collectAsState()
                 WidgetCard(title = "Distribución por miembro") {
+                    MemberPeriodPills(
+                        selected = memberPeriod,
+                        onSelect = viewModel::onMemberPeriodSelected,
+                    )
+                    Spacer(Modifier.height(14.dp))
                     val perMember = byMember
                         .filter { it.totalMxn > 0 }
                         .sortedByDescending { it.totalMxn }
-                    if (perMember.isEmpty()) EmptyHint("Sin gastos atribuidos en la quincena activa.")
+                    if (perMember.isEmpty()) EmptyHint("Sin gastos atribuidos en este periodo.")
                     else SpendDonut(
                         entries = perMember.map { it.memberName to it.totalMxn },
                         money = money,
+                        smartRemainderLabel = true,
                     )
                 }
             }
@@ -530,9 +542,18 @@ private const val DONUT_SLICES = 5
  * donas (categoría y miembro), garantizando la misma paleta y comportamiento.
  * El barrido se anima con spring y cada rebanada lleva leyenda con nombre + monto
  * + % (redundancia no-cromática).
+ *
+ * [smartRemainderLabel]: cuando el sobrante colapsado ("Otros") tiene UN solo
+ * miembro/entrada, la rebanada toma su NOMBRE en vez de "Otros"; con varios usa
+ * "<nombre del mayor> y otros". Solo se activa en la dona por miembro (la de
+ * categorías conserva "Otros").
  */
 @Composable
-private fun SpendDonut(entries: List<Pair<String, Double>>, money: NumberFormat) {
+private fun SpendDonut(
+    entries: List<Pair<String, Double>>,
+    money: NumberFormat,
+    smartRemainderLabel: Boolean = false,
+) {
     val total = entries.sumOf { it.second }
     if (total <= 0) {
         EmptyHint("Sin gastos en la quincena activa.")
@@ -540,10 +561,19 @@ private fun SpendDonut(entries: List<Pair<String, Double>>, money: NumberFormat)
     }
 
     val top = entries.take(DONUT_SLICES)
-    val othersTotal = entries.drop(DONUT_SLICES).sumOf { it.second }
+    val dropped = entries.drop(DONUT_SLICES)
+    val othersTotal = dropped.sumOf { it.second }
+    // Etiqueta del remanente: "Otros" por default; con smartRemainderLabel toma el
+    // nombre del único colapsado, o "<mayor> y otros" si son varios (dropped ya
+    // viene ordenado desc, así que el primero es el de mayor monto).
+    val remainderLabel = when {
+        !smartRemainderLabel -> "Otros"
+        dropped.size == 1 -> dropped.first().first
+        else -> "${dropped.first().first} y otros"
+    }
     val slices = buildList {
         top.forEach { add(it.first to it.second) }
-        if (othersTotal > 0) add("Otros" to othersTotal)
+        if (othersTotal > 0) add(remainderLabel to othersTotal)
     }
 
     val palette = listOf(
@@ -625,6 +655,33 @@ private fun SpendDonut(entries: List<Pair<String, Double>>, money: NumberFormat)
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Pills de periodo para la dona por miembro (Histórico · Anual · Mensual ·
+ * Quincenal). Se usa `FlowRow` de `FilterChip` M3 para que reflowen a otra
+ * línea con fontScale alto + bold en vez de recortarse. El `FilterChip` ya anima
+ * su selección (M3); la dona se recompone sola con el flow del VM.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MemberPeriodPills(
+    selected: MemberPeriod,
+    onSelect: (MemberPeriod) -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        MemberPeriod.entries.forEach { period ->
+            FilterChip(
+                selected = period == selected,
+                onClick = { onSelect(period) },
+                label = { Text(period.label, maxLines = 1) },
+            )
         }
     }
 }

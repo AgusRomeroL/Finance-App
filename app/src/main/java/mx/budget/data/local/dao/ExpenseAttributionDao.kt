@@ -61,6 +61,40 @@ interface ExpenseAttributionDao {
     fun observeSpendByMember(quincenaId: String, role: String): Flow<List<SpendByMember>>
 
     /**
+     * Igual que [observeSpendByMember] pero agregando por RANGO de fechas del
+     * hogar (no por quincena): suma `share_amount_mxn` por miembro sobre gastos
+     * POSTED cuyo `occurred_at` cae en `[startMs, endMs]` (epoch millis). Alimenta
+     * la dona "Distribución por miembro" con periodo seleccionable (histórico/
+     * anual/mensual/quincenal). Para "histórico" llamar con `startMs=0` y un
+     * `endMs` muy grande (Long.MAX_VALUE). @Query NUEVO de solo lectura — NO altera
+     * el esquema.
+     */
+    @Query(
+        """
+        SELECT
+            a.member_id                          AS memberId,
+            m.display_name                       AS memberName,
+            COALESCE(SUM(a.share_amount_mxn), 0.0) AS totalMxn,
+            COUNT(DISTINCT a.expense_id)         AS expenseCount
+        FROM expense_attribution a
+        INNER JOIN expense e ON e.id = a.expense_id
+        INNER JOIN member  m ON m.id = a.member_id
+        WHERE e.household_id = :householdId
+          AND a.role = :role
+          AND e.status = 'POSTED'
+          AND e.occurred_at BETWEEN :startMs AND :endMs
+        GROUP BY a.member_id, m.display_name
+        ORDER BY totalMxn DESC
+        """
+    )
+    fun observeSpendByMemberRange(
+        householdId: String,
+        role: String,
+        startMs: Long,
+        endMs: Long
+    ): Flow<List<SpendByMember>>
+
+    /**
      * Atribuciones históricas de un [role] para todos los gastos que comparten
      * el [canonicalKey] dado, restringido a gastos cuya atribución de ese rol es
      * **válida** (suma exactamente 10,000 bps). Alimenta la inferencia del

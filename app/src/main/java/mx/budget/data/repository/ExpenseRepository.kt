@@ -44,6 +44,19 @@ interface ExpenseRepository {
     /** Gasto por miembro (PAYER = quién paga) en la quincena activa. */
     fun observePaidByMember(quincenaId: String): Flow<List<SpendByMember>>
 
+    /**
+     * Gasto por miembro ([role] = "BENEFICIARY" | "PAYER") agregado por RANGO de
+     * fechas del hogar (`occurred_at` en `[startMs, endMs]`, epoch millis), sobre
+     * gastos POSTED. Para "histórico" pasar `startMs=0` y `endMs=Long.MAX_VALUE`.
+     * Alimenta la dona "Distribución por miembro" con periodo seleccionable.
+     */
+    fun observeSpendByMemberRange(
+        householdId: String,
+        role: String,
+        startMs: Long,
+        endMs: Long
+    ): Flow<List<SpendByMember>>
+
     // ── "Alguien más pagó" / reembolsos (Fase B, paquete B3) ────────────────────
 
     /**

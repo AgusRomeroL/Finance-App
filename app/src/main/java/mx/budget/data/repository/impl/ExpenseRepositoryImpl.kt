@@ -52,6 +52,14 @@ class ExpenseRepositoryImpl(
     override fun observePaidByMember(quincenaId: String): Flow<List<SpendByMember>> =
         attributionDao.observeSpendByMember(quincenaId, "PAYER")
 
+    override fun observeSpendByMemberRange(
+        householdId: String,
+        role: String,
+        startMs: Long,
+        endMs: Long
+    ): Flow<List<SpendByMember>> =
+        attributionDao.observeSpendByMemberRange(householdId, role, startMs, endMs)
+
     override fun observePendingReimbursements(householdId: String): Flow<List<ExpenseWithDetails>> =
         dao.observePendingReimbursements(householdId)
 

@@ -3,12 +3,17 @@ package mx.budget.ui.analytics
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import java.time.LocalDate
+import java.time.ZoneId
 import mx.budget.data.local.result.InterestByWallet
 import mx.budget.data.local.result.QuincenaSnapshot
 import mx.budget.data.local.result.SpendByCategory
@@ -56,19 +61,64 @@ class AnalyticsViewModel(
             else analyticsRepository.observeSpendByCategory(householdId, q.id)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Periodo de agregación de la dona por miembro (default: histórico = todo). */
+    private val _memberPeriod = MutableStateFlow(MemberPeriod.HISTORICO)
+    val memberPeriod: StateFlow<MemberPeriod> = _memberPeriod.asStateFlow()
+
+    /** Cambia el periodo de agregación de la dona "Distribución por miembro". */
+    fun onMemberPeriodSelected(period: MemberPeriod) {
+        _memberPeriod.value = period
+    }
+
     /**
-     * Distribución del gasto por MIEMBRO (rol BENEFICIARY = quién consume) de la
-     * quincena activa. Reutiliza el mismo flujo que alimenta las barras por miembro
-     * del dashboard (`ExpenseAttributionDao.observeSpendByMember(quincenaId, role)`,
-     * agrega `share_amount_mxn` sobre gastos POSTED y trae `display_name` por JOIN,
-     * así que no requiere mapeo manual member_id→nombre). Alimenta la dona
-     * "Distribución por miembro".
+     * Distribución del gasto por MIEMBRO (rol BENEFICIARY = quién consume) para el
+     * [MemberPeriod] seleccionado. Reutiliza la agregación de atribuciones
+     * (`share_amount_mxn` sobre gastos POSTED, `display_name` por JOIN — sin mapeo
+     * manual member_id→nombre): para HISTORICO/ANUAL/MENSUAL usa un rango de fechas
+     * del hogar (`observeSpendByMemberRange`), y para QUINCENAL el rango
+     * `start_date..end_date` de la quincena activa. Alimenta la dona "Distribución
+     * por miembro" y su total central. El rango se calcula en `America/Mexico_City`.
      */
     val spendByMember: StateFlow<List<SpendByMember>> =
-        activeQuincena.flatMapLatest { q ->
-            if (q == null) flowOf(emptyList())
-            else expenseRepository.observeSpendByMember(q.id)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        combine(_memberPeriod, activeQuincena) { period, q -> period to q }
+            .flatMapLatest { (period, q) ->
+                val range = memberRangeMs(period, q)
+                if (range == null) flowOf(emptyList())
+                else expenseRepository.observeSpendByMemberRange(
+                    householdId, "BENEFICIARY", range.first, range.second
+                )
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Rango [startMs, endMs] (epoch millis, zona México) del [period]. Devuelve
+     * null solo cuando QUINCENAL no tiene quincena activa (dona vacía). HISTORICO
+     * abarca todo (0..Long.MAX_VALUE).
+     */
+    private fun memberRangeMs(period: MemberPeriod, quincena: QuincenaEntity?): Pair<Long, Long>? {
+        val zone = ZoneId.of("America/Mexico_City")
+        fun startMs(d: LocalDate) = d.atStartOfDay(zone).toInstant().toEpochMilli()
+        // Fin exclusivo → inclusivo: primer instante del día siguiente menos 1 ms.
+        fun endMs(exclusiveDay: LocalDate) = startMs(exclusiveDay) - 1
+        return when (period) {
+            MemberPeriod.HISTORICO -> 0L to Long.MAX_VALUE
+            MemberPeriod.ANUAL -> {
+                val today = LocalDate.now(zone)
+                val start = LocalDate.of(today.year, 1, 1)
+                startMs(start) to endMs(start.plusYears(1))
+            }
+            MemberPeriod.MENSUAL -> {
+                val today = LocalDate.now(zone)
+                val start = today.withDayOfMonth(1)
+                startMs(start) to endMs(start.plusMonths(1))
+            }
+            MemberPeriod.QUINCENAL -> {
+                if (quincena == null) return null
+                val start = runCatching { LocalDate.parse(quincena.startDate) }.getOrNull() ?: return null
+                val end = runCatching { LocalDate.parse(quincena.endDate) }.getOrNull() ?: return null
+                startMs(start) to endMs(end.plusDays(1))
+            }
+        }
+    }
 
     /**
      * Ingreso RECIBIDO (POSTED) en vivo de la quincena activa — como el dashboard.
@@ -126,4 +176,15 @@ class AnalyticsViewModel(
         const val TOP_N = 10
         const val NINETY_DAYS_MS = 90L * 24 * 60 * 60 * 1000
     }
+}
+
+/**
+ * Periodo de agregación de la dona "Distribución por miembro" (Analíticas).
+ * Cada valor lleva su etiqueta en español para las pills.
+ */
+enum class MemberPeriod(val label: String) {
+    HISTORICO("Histórico"),
+    ANUAL("Anual"),
+    MENSUAL("Mensual"),
+    QUINCENAL("Quincenal"),
 }

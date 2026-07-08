@@ -6,6 +6,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.tasks.await
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
@@ -112,6 +113,15 @@ class ExpenseRepositoryFirestore(
             }
         awaitClose { listener.remove() }
     }
+
+    // Analíticas lee SIEMPRE de Room (fuente de verdad); este lado nube es solo
+    // para sync. Stub consistente con observeSpendByMember de arriba.
+    override fun observeSpendByMemberRange(
+        householdId: String,
+        role: String,
+        startMs: Long,
+        endMs: Long
+    ): Flow<List<SpendByMember>> = emptyFlow()
 
     // El dashboard lee SIEMPRE de Room (fuente de verdad); este lado nube es solo
     // para sync. Stub consistente con observeSpendByMember de arriba.
