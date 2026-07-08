@@ -33,6 +33,11 @@ object WearSnapshotBuilder {
     private const val MAX_SUGGESTIONS = 5
     private const val MAX_MOVEMENTS = 8
     private const val MAX_PENDING = 8
+    private const val MAX_UPCOMING = 5
+    // Ventana móvil para el snapshot: 90 días de gastos POSTED bastan para las
+    // sugerencias (medianas/frecuencia) y los últimos movimientos, sin cargar el
+    // historial completo (~800 filas) en cada push.
+    private const val RECENT_WINDOW_MS = 90L * 24 * 60 * 60 * 1000
 
     /**
      * Reúne el estado y lo empuja al reloj. Suspende: consulta DAOs de Room.
@@ -48,9 +53,11 @@ object WearSnapshotBuilder {
         val balance = quincena?.let { it.projectedIncomeMxn - it.actualExpensesMxn } ?: 0.0
         val label = quincena?.label ?: "Sin Quincena"
 
-        val history = runCatching { app.database.expenseDao().getAll(householdId) }
+        val sinceEpochMs = System.currentTimeMillis() - RECENT_WINDOW_MS
+        val posted = runCatching { app.database.expenseDao().getRecentPosted(householdId, sinceEpochMs) }
             .getOrDefault(emptyList())
-        val posted = history.filter { it.status == "POSTED" }
+        // getRecentPosted ya devuelve solo POSTED; suggestMany filtra POSTED de todos modos.
+        val history = posted
 
         val suggestionsJson = runCatching {
             val engine = ProactiveSuggestionEngine()

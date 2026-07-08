@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -107,17 +108,18 @@ fun LedgerScreen(
 
         // Chips de filtro: categorías con gasto + wallets.
         // TUTORIAL: LED_FILTERS — ver TUTORIAL.md
+        val visibleCategories = remember(rows, categories, categoryFilter) {
+            val usedCategoryIds = rows.map { it.categoryId }.toSet()
+            categories.filter {
+                it.id in usedCategoryIds || it.id == categoryFilter
+            }
+        }
         LazyRow(
             modifier = Modifier.tutorialTarget(TutorialKey.LED_FILTERS, tutorialController),
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            val usedCategoryIds = rows.map { it.categoryId }.toSet()
-            val visibleCategories = categories.filter {
-                it.id in usedCategoryIds || it.id == categoryFilter
-            }
-            items(visibleCategories.size) { i ->
-                val c = visibleCategories[i]
+            items(visibleCategories, key = { "cat_${it.id}" }) { c ->
                 FilterChip(
                     selected = categoryFilter == c.id,
                     onClick = {
@@ -126,8 +128,7 @@ fun LedgerScreen(
                     label = { Text(c.displayName, maxLines = 1) },
                 )
             }
-            items(wallets.size) { i ->
-                val w = wallets[i]
+            items(wallets, key = { "wal_${it.id}" }) { w ->
                 FilterChip(
                     selected = walletFilter == w.displayName,
                     onClick = {
@@ -141,7 +142,7 @@ fun LedgerScreen(
         Spacer(Modifier.height(8.dp))
 
         // Total visible (con filtros aplicados) — solo POSTED.
-        val totalVisible = rows.filter { it.status == "POSTED" }.sumOf { it.amountMxn }
+        val totalVisible = remember(rows) { rows.filter { it.status == "POSTED" }.sumOf { it.amountMxn } }
         Text(
             "${rows.size} movimientos · ${money.format(totalVisible)}",
             style = MaterialTheme.typography.bodyMedium,
@@ -164,8 +165,7 @@ fun LedgerScreen(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(rows.size) { i ->
-                    val row = rows[i]
+                items(rows, key = { it.expenseId }) { row ->
                     LedgerRow(
                         row = row,
                         money = money,

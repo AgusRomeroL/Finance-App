@@ -391,7 +391,8 @@ class BudgetApplication : Application() {
         // directo (caso Norma). runBlocking: 3 consultas instantáneas, una sola vez.
         needsOnboarding = runBlocking {
             val hasHousehold = database.householdDao().count() > 0
-            val hasExpenses = expenseDao.getAll(householdId).isNotEmpty()
+            // EXISTS en vez de materializar los ~800 gastos en el hilo principal.
+            val hasExpenses = expenseDao.hasAny(householdId)
             !hasHousehold && activeMembers.isEmpty() && !hasExpenses
         }
 

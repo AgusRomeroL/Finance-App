@@ -8,7 +8,9 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -331,7 +333,13 @@ class MainActivity : ComponentActivity() {
         // Empuja el saldo "Disponible" al reloj (tile Glance) mientras la app está
         // abierta (§G.3). Observa el dashboard; si no hay reloj emparejado, el
         // Data Layer simplemente cachea/no-op.
-        WearSyncManager(this, dashboardViewModel, lifecycleScope).startSyncObservation()
+        // Scoped a STARTED: la observación (y los flujos Room del dashboard) se
+        // detienen al pasar a segundo plano; el refresco en background lo cubre
+        // ReminderWorker (~15 min).
+        val wearSync = WearSyncManager(this, dashboardViewModel)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) { wearSync.observe() }
+        }
         setContent {
             // Toggle de color dinámico persistido (brief §2.1): Material You por
             // default; el verde sembrado #016E3E es el fallback (toggle off).

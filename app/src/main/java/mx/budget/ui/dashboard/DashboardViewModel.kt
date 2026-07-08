@@ -222,21 +222,27 @@ class DashboardViewModel(
      * idéntico a Feature C. El filtro de descartados va ANTES del LLM para que
      * nunca razone sobre algo que el usuario ya ignoró esta sesión.
      */
-    val proactiveSuggestions: StateFlow<List<ProactiveSuggestion>> = combine(
-        activeQuincena, dismissedSuggestions
-    ) { quincena, dismissed -> quincena to dismissed }
-        .flatMapLatest { (quincena, dismissed) ->
+    // Candidatos ya razonados (SQL → LLM), recalculados SOLO cuando cambia la
+    // quincena. Antes esto colgaba de `dismissedSuggestions` también, así que cada
+    // "Ahora no" recargaba toda la tabla y re-corría el LLM; ahora el descarte se
+    // aplica aguas abajo sobre esta lista cacheada (ver [proactiveSuggestions]).
+    private val reasonedProactive: StateFlow<List<ProactiveSuggestion>> = activeQuincena
+        .flatMapLatest { quincena ->
             flow {
                 val now = System.currentTimeMillis()
                 val history = runCatching { expenseDao.getAll(householdId) }.getOrDefault(emptyList())
-                val candidates = proactiveEngine
-                    .suggestMany(history, quincena, now, limit = MAX_PROACTIVE)
-                    .filter { it.canonicalKey !in dismissed }
+                val candidates = proactiveEngine.suggestMany(history, quincena, now, limit = MAX_PROACTIVE)
                 emit(proactiveReasoner.reason(candidates, quincena, now))
             }
         }
         .catch { emit(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val proactiveSuggestions: StateFlow<List<ProactiveSuggestion>> = combine(
+        reasonedProactive, dismissedSuggestions
+    ) { candidates, dismissed ->
+        candidates.filter { it.canonicalKey !in dismissed }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** "Ahora no" → señal negativa implícita: oculta esa sugerencia esta sesión. */
     fun dismissProactiveSuggestion(canonicalKey: String) {

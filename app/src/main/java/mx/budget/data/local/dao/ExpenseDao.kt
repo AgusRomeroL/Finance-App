@@ -323,6 +323,24 @@ interface ExpenseDao {
     @Query("SELECT * FROM expense WHERE household_id = :householdId")
     suspend fun getAll(householdId: String): List<ExpenseEntity>
 
+    /**
+     * ¿Existe al menos un gasto del hogar? Para la detección de primer arranque
+     * (paquete B2) sin materializar toda la tabla en memoria en el hilo principal.
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM expense WHERE household_id = :householdId)")
+    suspend fun hasAny(householdId: String): Boolean
+
+    /**
+     * Gastos POSTED recientes (ventana móvil por `occurred_at`), para el snapshot
+     * del reloj y el motor de sugerencias: evita cargar el historial completo
+     * (~800 filas) en cada push. `sinceEpochMs` = ahora − ventana (p. ej. 90 días).
+     */
+    @Query(
+        "SELECT * FROM expense WHERE household_id = :householdId AND status = 'POSTED' " +
+            "AND occurred_at >= :sinceEpochMs ORDER BY occurred_at DESC"
+    )
+    suspend fun getRecentPosted(householdId: String, sinceEpochMs: Long): List<ExpenseEntity>
+
     /** Gasto (cualquier status) de una cuota MSI concreta — dedupe del materializador. */
     @Query(
         "SELECT * FROM expense WHERE household_id = :householdId AND installment_plan_id = :planId " +
