@@ -34,6 +34,7 @@ class SettingsRepository(private val context: Context) {
     private val reminderLeadDaysKey = intPreferencesKey("reminder_lead_days")
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
     private val dismissedTemplateSuggestionsKey = stringSetPreferencesKey("dismissed_template_suggestions")
+    private val statementCycleNotifiedKey = stringSetPreferencesKey("statement_cycle_notified")
     private val calendarMirrorEnabledKey = booleanPreferencesKey("calendar_mirror_enabled")
     private val calendarMirrorIdKey = longPreferencesKey("calendar_mirror_id")
     private val calendarEventMapKey = stringPreferencesKey("calendar_event_map_json")
@@ -124,6 +125,17 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[dismissedTemplateSuggestionsKey] = (prefs[dismissedTemplateSuggestionsKey] ?: emptySet()) + canonicalKey
         }
+    }
+
+    // ── Dedupe del recordatorio de estados de cuenta (Tarea 4) ──────────────────
+    // Claves "walletId:corteISO" ya notificadas este ciclo, para no repetir el aviso
+    // mensual. Se reemplaza el set completo en cada corrida (poda al ciclo vigente).
+
+    suspend fun getStatementCycleNotified(): Set<String> =
+        context.dataStore.data.first()[statementCycleNotifiedKey] ?: emptySet()
+
+    suspend fun setStatementCycleNotified(keys: Set<String>) {
+        context.dataStore.edit { prefs -> prefs[statementCycleNotifiedKey] = keys }
     }
 
     // ── Espejo Google Calendar (Apéndice G.2, Fase 6) ───────────────────────────

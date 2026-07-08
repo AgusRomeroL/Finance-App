@@ -527,6 +527,10 @@ class BudgetApplication : Application() {
         ReminderNotifier.ensureChannel(this)
         scheduleReminders()
 
+        // Recordatorio mensual de estados de cuenta por importar (Tarea 4).
+        mx.budget.data.statements.StatementReminderNotifier.ensureChannel(this)
+        scheduleStatementReminders()
+
         // Espejo Google Calendar (§G.2 Fase 6). Best-effort: si está activado y hay
         // permiso, reconcilia los PLANNED al arrancar; si no, no hace nada.
         calendarMirror = CalendarMirror(
@@ -712,6 +716,18 @@ class BudgetApplication : Application() {
         val request = PeriodicWorkRequestBuilder<ReminderWorker>(15, TimeUnit.MINUTES).build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             ReminderWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
+    }
+
+    /** Agenda el recordatorio mensual de estados de cuenta (Tarea 4), cada 24h. */
+    private fun scheduleStatementReminders() {
+        val request = PeriodicWorkRequestBuilder<mx.budget.data.statements.StatementReminderWorker>(
+            24, TimeUnit.HOURS,
+        ).build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            mx.budget.data.statements.StatementReminderWorker.UNIQUE_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
             request,
         )
