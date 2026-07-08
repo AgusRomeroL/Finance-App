@@ -2261,7 +2261,10 @@ class EtlPipeline:
           * "Buró de Crédito"   → 1 plan de 3 pagos (LOANS.BURO).
         Deriva monto de cuota (mediana), principal (cuota × total),
         current_installment (pagos POSTED ≤ hoy), status (ACTIVE/PAID),
-        start_date (primer pago) y wallet del propio gasto.
+        start_date (primer pago) y la tarjeta real (card_key). El
+        funding_payment_method_id (cuenta que liquida la tarjeta) NO se siembra:
+        es columna nueva de v17 y el asset queda en schema v1 — Norma lo fija
+        desde el editor de MSI.
 
         NO se siembran Walmart/Coppel/Sears/Liverpool/Banamex como
         installment_plan: son crédito REVOLVENTE (saldo rotativo, no una serie
@@ -2269,14 +2272,17 @@ class EtlPipeline:
         """
         cur = conn.cursor()
         plans = (
-            # (concept, key, display_name, total, category_code)
+            # (concept, key, display_name, total, category_code, card_key)
+            # card_key = tarjeta REAL donde vive la compra a meses (no el wallet
+            # del gasto, que resolvía a efectivo). Mercado Libre → su BNPL;
+            # Buró de Crédito → la tarjeta de crédito (Banamex Clásica).
             ("Mercado Libre MSI", "mercado_libre",
-             "Mercado Libre 12 MSI", 12, "LOANS.MERCADO_LIBRE"),
+             "Mercado Libre 12 MSI", 12, "LOANS.MERCADO_LIBRE", "mercado_libre"),
             ("Buró de Crédito", "buro",
-             "Buró de Crédito 3 pagos", 3, "LOANS.BURO"),
+             "Buró de Crédito 3 pagos", 3, "LOANS.BURO", "banamex_cc"),
         )
         created = 0
-        for concept, key, display_name, total, cat_code in plans:
+        for concept, key, display_name, total, cat_code, card_key in plans:
             rows = cur.execute(
                 """SELECT amount_mxn, occurred_at, payment_method_id
                    FROM expense
@@ -2296,7 +2302,7 @@ class EtlPipeline:
             start_date = datetime.fromtimestamp(
                 rows[0][1] / 1000, tz=timezone.utc
             ).date().isoformat()
-            payment_method_id = rows[-1][2]
+            payment_method_id = PAYMENT_METHODS_BY_KEY[card_key].id
             category_id = CATEGORIES_BY_CODE[cat_code].id
 
             cur.execute(
