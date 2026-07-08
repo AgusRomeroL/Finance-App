@@ -23,6 +23,14 @@ object WearPaths {
     /** El reloj descarta una captura de la bandeja (payload = pending_capture.id). */
     const val PATH_DISCARD_PENDING = "/budget/pending/discard"
 
+    /**
+     * El reloj pide al móvil un snapshot fresco (pull-on-open del espejo en vivo,
+     * §G.3.3). Payload vacío. El móvil responde re-empujando [PATH_BUDGET_SYNC] —
+     * así el reloj no depende de que el dashboard del teléfono esté abierto para
+     * ver la cifra "Disponible" real en su primer arranque.
+     */
+    const val PATH_REQUEST_SYNC = "/budget/sync/request"
+
     // ---- DataMap / Message Keys ----
     const val KEY_BALANCE_DISPONIBLE = "key_balance_disponible"
     const val KEY_QUINCENA_LABEL = "key_quincena_label"

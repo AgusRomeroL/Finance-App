@@ -45,6 +45,15 @@ class ExpenseSender(private val context: Context) {
     suspend fun sendNaturalLanguage(text: String): Result<Unit> =
         send(WearPaths.PATH_NEW_NL, text)
 
+    /**
+     * Pide al teléfono un snapshot fresco (pull-on-open del espejo en vivo, §G.3.3).
+     * El teléfono responde re-empujando el estado por el Data Layer → el cache del
+     * reloj se repuebla y "Disponible" refleja la cifra real aunque el dashboard del
+     * teléfono no esté abierto. Best-effort: falla en silencio si no hay teléfono.
+     */
+    suspend fun requestSync(): Result<Unit> =
+        send(WearPaths.PATH_REQUEST_SYNC, "")
+
     private suspend fun send(path: String, payload: String): Result<Unit> {
         return try {
             // Localiza el nodo conectado primario (El Teléfono)
