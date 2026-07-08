@@ -992,11 +992,9 @@
           "resolucion": "NEW",
           "categoria": "OTHER.TELEFONO",
           "beneficiarios": [
-            "benjamin",
             "norma",
-            "normita",
             "david",
-            "agustin",
+            "normita",
             "santiago"
           ],
           "msi": null,
@@ -1028,7 +1026,7 @@
           "resolucion": "MATCHED_SEED",
           "categoria": "OTHER.COURSERA",
           "beneficiarios": [
-            "agustin"
+            "norma"
           ],
           "msi": null,
           "seedMatch": {
@@ -1045,7 +1043,7 @@
           "resolucion": "NEW",
           "categoria": "CUSTOM.SOFTWARE",
           "beneficiarios": [
-            "agustin"
+            "norma"
           ],
           "msi": null,
           "seedMatch": null
@@ -1313,7 +1311,7 @@
           "resolucion": "NEW",
           "categoria": "CUSTOM.SOFTWARE",
           "beneficiarios": [
-            "agustin"
+            "norma"
           ],
           "msi": null,
           "seedMatch": null
@@ -1491,7 +1489,7 @@
           "resolucion": "NEW",
           "categoria": "CUSTOM.SOFTWARE",
           "beneficiarios": [
-            "agustin"
+            "norma"
           ],
           "msi": null,
           "seedMatch": null
@@ -2513,26 +2511,13 @@
         },
         {
           "fecha": "2026-04-09",
-          "concepto": "PAYPAL *GITHUB INC - Consumo contado",
-          "monto": 186.66,
-          "tipo": "COMPRA",
-          "resolucion": "NEW",
-          "categoria": "CUSTOM.SOFTWARE",
-          "beneficiarios": [
-            "agustin"
-          ],
-          "msi": null,
-          "seedMatch": null
-        },
-        {
-          "fecha": "2026-04-09",
           "concepto": "PAYPAL *MICROSOFT - OPM 150323DI1 - Consumo contado",
           "monto": 224.99,
           "tipo": "COMPRA",
           "resolucion": "NEW",
           "categoria": "CUSTOM.SOFTWARE",
           "beneficiarios": [
-            "agustin"
+            "norma"
           ],
           "msi": null,
           "seedMatch": null
@@ -2705,20 +2690,7 @@
           "resolucion": "NEW",
           "categoria": "CUSTOM.SOFTWARE",
           "beneficiarios": [
-            "agustin"
-          ],
-          "msi": null,
-          "seedMatch": null
-        },
-        {
-          "fecha": "2026-05-09",
-          "concepto": "PAYPAL *GITHUB INC - Consumo contado",
-          "monto": 181.86,
-          "tipo": "COMPRA",
-          "resolucion": "NEW",
-          "categoria": "CUSTOM.SOFTWARE",
-          "beneficiarios": [
-            "agustin"
+            "norma"
           ],
           "msi": null,
           "seedMatch": null
@@ -2917,7 +2889,7 @@
           "resolucion": "NEW",
           "categoria": "CUSTOM.SOFTWARE",
           "beneficiarios": [
-            "agustin"
+            "norma"
           ],
           "msi": null,
           "seedMatch": null
@@ -2930,7 +2902,7 @@
           "resolucion": "NEW",
           "categoria": "CUSTOM.SOFTWARE",
           "beneficiarios": [
-            "agustin"
+            "norma"
           ],
           "msi": null,
           "seedMatch": null

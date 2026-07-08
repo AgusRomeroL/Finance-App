@@ -69,6 +69,7 @@ import argparse
 import calendar
 import json
 import logging
+import os
 import re
 import sqlite3
 import sys
@@ -117,7 +118,13 @@ NOW_EPOCH_MS = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
 # POSTED/PLANNED e ingresos POSTED/PLANNED. Se usa la zona del hogar (no UTC)
 # porque el corte quincenal es un concepto local: a las 19:00 de CDMX ya es
 # "mañana" en UTC y sin esto la quincena activa podría cerrarse antes de tiempo.
-TODAY = datetime.now(ZoneInfo(HOUSEHOLD_TZ)).date()
+# La "fecha de generación" del seed. Por defecto = hoy en CDMX, pero se puede
+# FIJAR con la env var BUDGET_TODAY=YYYY-MM-DD para regeneraciones REPRODUCIBLES
+# (el golden se ancla a una fecha epoch fija en vez de derivar del día en que se
+# corre el ETL; el rollover de la app avanza las quincenas en runtime).
+_TODAY_OVERRIDE = os.environ.get("BUDGET_TODAY")
+TODAY = (date.fromisoformat(_TODAY_OVERRIDE) if _TODAY_OVERRIDE
+         else datetime.now(ZoneInfo(HOUSEHOLD_TZ)).date())
 
 
 # ── 1.1 Miembros del hogar ────────────────────────────────────────────────────
@@ -993,6 +1000,12 @@ class AttributionRule:
     override_category: Optional[str]
     override_beneficiaries: Optional[list[str]]  # member keys
     override_payment_method: Optional[str]       # payment_method key or None
+    # Reparto DESIGUAL de beneficiarios: mapa member_key -> peso relativo.
+    # Si está presente, tiene prioridad sobre override_beneficiaries (que
+    # reparte equitativo). Los pesos se normalizan a 10_000 bps con el
+    # residuo al último (ver weighted_basis_points). Ej. mesada de $3,500:
+    # {"agustin":1000,"david":1000,"pau":1000,"santiago":500}.
+    beneficiary_weights: Optional[dict[str, float]] = None
 
 
 def load_attribution_rules(rules_path: Path) -> list[AttributionRule]:
@@ -1012,6 +1025,7 @@ def load_attribution_rules(rules_path: Path) -> list[AttributionRule]:
             override_category=r.get("override_category"),
             override_beneficiaries=r.get("override_beneficiaries"),
             override_payment_method=r.get("override_payment_method"),
+            beneficiary_weights=r.get("beneficiary_weights"),
         ))
     LOG.info("Cargadas %d reglas de atribucion desde %s", len(rules), rules_path)
     return rules
@@ -1175,6 +1189,53 @@ def split_basis_points(count: int) -> list[int]:
     shares = [base] * count
     shares[-1] += 10_000 - (base * count)
     return shares
+
+
+def weighted_basis_points(weights: list[float]) -> list[int]:
+    """
+    Reparte 10_000 basis points proporcional a ``weights``. El residuo de
+    redondeo se suma a la última porción para garantizar ``sum == 10_000``
+    (misma convención que split_basis_points). Si la suma de pesos es <= 0
+    cae al reparto equitativo.
+    """
+    if not weights:
+        raise ValueError("weights no puede estar vacío")
+    total = sum(weights)
+    if total <= 0:
+        return split_basis_points(len(weights))
+    bps = [int(round(w / total * 10_000)) for w in weights]
+    bps[-1] += 10_000 - sum(bps)
+    return bps
+
+
+def resolve_beneficiary_shares(line: BudgetLine) -> list[tuple[str, int]]:
+    """
+    Devuelve ``[(member_id, share_bps), ...]`` con ``sum(bps) == 10_000``.
+    Prioridad:
+      1. Regla con ``beneficiary_weights`` (mapa member_key→peso) → reparto
+         PROPORCIONAL (para mesadas/consumibles con consumo desigual).
+      2. Regla con ``override_beneficiaries`` (lista plana) o heurística →
+         reparto EQUITATIVO (comportamiento histórico).
+    """
+    rule = match_rule(line, _ATTRIBUTION_RULES)
+    if rule and rule.beneficiary_weights:
+        members: list[str] = []
+        weights: list[float] = []
+        for key, w in rule.beneficiary_weights.items():
+            if key in MEMBERS_BY_KEY:
+                members.append(MEMBERS_BY_KEY[key].id)
+                weights.append(float(w))
+            else:
+                LOG.warning(
+                    "Regla '%s' referencia miembro inexistente '%s' en beneficiary_weights",
+                    rule.rule_id, key,
+                )
+        if members:
+            return list(zip(members, weighted_basis_points(weights)))
+
+    # Fallback: lista plana equitativa (resolve_beneficiaries + split igual).
+    beneficiaries = resolve_beneficiaries(line)
+    return list(zip(beneficiaries, split_basis_points(len(beneficiaries))))
 
 
 # ── 6.2 Canonicalizacion de conceptos ────────────────────────────────────────
@@ -1841,10 +1902,9 @@ class EtlPipeline:
         )
         self.stats.expenses_written += 1
 
-        # Atribuciones BENEFICIARY.
-        beneficiaries = resolve_beneficiaries(line)
-        bps = split_basis_points(len(beneficiaries))
-        for member_id, share in zip(beneficiaries, bps):
+        # Atribuciones BENEFICIARY (soporta reparto DESIGUAL vía
+        # beneficiary_weights; sin él, reparto equitativo como siempre).
+        for member_id, share in resolve_beneficiary_shares(line):
             attr_id = did(f"attr:{expense_id}:BEN:{member_id}")
             cur.execute(
                 """INSERT INTO expense_attribution

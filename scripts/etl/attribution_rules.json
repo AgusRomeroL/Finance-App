@@ -9,7 +9,7 @@
       "section_filter": null,
       "override_category": "OTHER.TELEFONO",
       "override_beneficiaries": ["norma"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "bbva"
     },
     {
       "id": "tel_pau_david",
@@ -19,7 +19,7 @@
       "section_filter": null,
       "override_category": "OTHER.TELEFONO",
       "override_beneficiaries": ["pau", "david"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "bbva"
     },
     {
       "id": "tel_pau",
@@ -29,7 +29,7 @@
       "section_filter": null,
       "override_category": "OTHER.TELEFONO",
       "override_beneficiaries": ["pau"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "bbva"
     },
     {
       "id": "tel_santi",
@@ -38,7 +38,7 @@
       "section_filter": null,
       "override_category": "OTHER.TELEFONO",
       "override_beneficiaries": ["santiago"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "bbva"
     },
     {
       "id": "tel_benji",
@@ -56,7 +56,7 @@
       "section_filter": null,
       "override_category": "OTHER.TELEFONO",
       "override_beneficiaries": ["david", "norma", "pau", "santiago"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "bbva"
     },
     {
       "id": "housing_david_solo",
@@ -95,7 +95,7 @@
       "section_filter": "HOUSING",
       "override_category": "HOUSING.INTERNET",
       "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "bbva"
     },
     {
       "id": "hipoteca",
@@ -256,7 +256,7 @@
       "section_filter": null,
       "override_category": "ENTERTAINMENT.HBO",
       "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "mercado_pago"
     },
     {
       "id": "suscripcion_nivel6",
@@ -266,7 +266,7 @@
       "section_filter": null,
       "override_category": "ENTERTAINMENT.MELI_PLUS",
       "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "mercado_pago"
     },
     {
       "id": "netflix",
@@ -275,7 +275,7 @@
       "section_filter": null,
       "override_category": "ENTERTAINMENT.NETFLIX",
       "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "banamex_cc"
     },
     {
       "id": "prime",
@@ -284,7 +284,7 @@
       "section_filter": "ENTERTAINMENT",
       "override_category": "ENTERTAINMENT.PRIME",
       "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "bbva"
     },
     {
       "id": "adobe",
@@ -303,7 +303,7 @@
       "section_filter": "ENTERTAINMENT",
       "override_category": "OTHER.GOOGLE_ONE",
       "override_beneficiaries": ["norma"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "klar"
     },
     {
       "id": "google_nest",
@@ -349,7 +349,7 @@
       "section_filter": null,
       "override_category": "OTHER.KIGO",
       "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "banamex_deb"
     },
     {
       "id": "spotify",
@@ -369,7 +369,7 @@
       "section_filter": null,
       "override_category": "OTHER.COURSERA",
       "override_beneficiaries": ["norma"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "banamex_deb"
     },
     {
       "id": "didi_tarjeta_ent",
@@ -426,7 +426,7 @@
       "section_filter": null,
       "override_category": "LOANS.BANAMEX_CC",
       "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "banamex_deb"
     },
     {
       "id": "sears",
@@ -436,7 +436,7 @@
       "section_filter": "LOANS",
       "override_category": "LOANS.SEARS",
       "override_beneficiaries": ["norma"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "banamex_deb"
     },
     {
       "id": "walmart",
@@ -454,7 +454,7 @@
       "section_filter": "LOANS",
       "override_category": "LOANS.MERCADO_PAGO",
       "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "bbva"
     },
     {
       "id": "coppel",
@@ -680,7 +680,7 @@
       "section_filter": null,
       "override_category": "LOANS.KLAR",
       "override_beneficiaries": ["benjamin", "norma", "pau", "david", "agustin", "santiago"],
-      "override_payment_method": "klar"
+      "override_payment_method": "banamex_deb"
     },
     {
       "id": "tel_david",
@@ -690,7 +690,7 @@
       "section_filter": null,
       "override_category": "OTHER.TELEFONO",
       "override_beneficiaries": ["david"],
-      "override_payment_method": "efectivo"
+      "override_payment_method": "bbva"
     },
     {
       "id": "inscripcion_david",
