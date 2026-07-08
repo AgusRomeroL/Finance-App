@@ -14,6 +14,7 @@ import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.MemberSpendByCategory
 import mx.budget.data.local.result.NettingAttributionRow
 import mx.budget.data.local.result.PendingReimbursementByPayer
+import mx.budget.data.local.result.PendingReimbursementExpense
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.local.result.TopExpense
 import mx.budget.data.repository.ExpenseRepository
@@ -56,6 +57,18 @@ class ExpenseRepositoryImpl(
 
     override fun observePendingReimbursementTotals(householdId: String): Flow<List<PendingReimbursementByPayer>> =
         dao.observePendingReimbursementTotals(householdId)
+
+    override fun observePendingReimbursementExpenses(householdId: String): Flow<List<PendingReimbursementExpense>> =
+        dao.observePendingReimbursementExpenses(householdId)
+
+    override suspend fun markReimbursed(expenseId: String) {
+        db.withTransaction {
+            // Marca REIMBURSED sin mover saldos: la reposición al tercero ocurre en
+            // efectivo/fuera del ledger. El estado viaja en el UPSERT del gasto.
+            dao.markReimbursed(expenseId, System.currentTimeMillis())
+            enqueueSync(expenseId, "UPSERT")
+        }
+    }
 
     override fun observeNettingRows(householdId: String): Flow<List<NettingAttributionRow>> =
         attributionDao.observeNettingRows(householdId)

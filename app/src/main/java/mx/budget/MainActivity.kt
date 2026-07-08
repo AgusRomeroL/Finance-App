@@ -138,6 +138,7 @@ class MainActivity : ComponentActivity() {
         val app = application as BudgetApplication
         ViewModelProvider(this, MemberBalancesViewModelFactory(
             app.expenseRepository,
+            app.loanRepository,
             app.memberRepository,
             app.householdId,
         ))[mx.budget.ui.settle.MemberBalancesViewModel::class.java]
@@ -687,9 +688,10 @@ class WalletsViewModelFactory(
     }
 }
 
-/** Factory para MemberBalancesViewModel ("Cuentas entre miembros" / netting). */
+/** Factory para MemberBalancesViewModel ("Cuentas entre miembros" — deudas explícitas). */
 class MemberBalancesViewModelFactory(
     private val expenseRepository: ExpenseRepository,
+    private val loanRepository: mx.budget.data.repository.LoanRepository,
     private val memberRepository: MemberRepository,
     private val householdId: String,
 ) : ViewModelProvider.Factory {
@@ -697,6 +699,7 @@ class MemberBalancesViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return mx.budget.ui.settle.MemberBalancesViewModel(
             expenseRepository = expenseRepository,
+            loanRepository = loanRepository,
             memberRepository = memberRepository,
             householdId = householdId,
         ) as T

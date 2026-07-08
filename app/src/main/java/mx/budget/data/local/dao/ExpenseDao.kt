@@ -240,6 +240,46 @@ interface ExpenseDao {
     fun observePendingReimbursementTotals(householdId: String): Flow<List<mx.budget.data.local.result.PendingReimbursementByPayer>>
 
     /**
+     * Gastos pendientes de reembolso con el tercero que los adelantó
+     * (`external_payer_member_id`), para la pantalla "Cuentas entre miembros"
+     * (deudas explícitas por pagar). A diferencia de [observePendingReimbursements],
+     * expone el pagador para agrupar por miembro y desglosar la deuda por concepto.
+     *
+     * @Query NUEVO de solo lectura — NO altera el esquema.
+     */
+    @Query(
+        """
+        SELECT
+            e.id                       AS expenseId,
+            e.concept                  AS concept,
+            e.amount_mxn               AS amountMxn,
+            e.occurred_at              AS occurredAt,
+            e.external_payer_member_id AS externalPayerMemberId
+        FROM expense e
+        WHERE e.household_id = :householdId
+          AND e.settlement_status = 'PENDING_REIMBURSEMENT'
+        ORDER BY e.occurred_at DESC
+        """
+    )
+    fun observePendingReimbursementExpenses(
+        householdId: String
+    ): Flow<List<mx.budget.data.local.result.PendingReimbursementExpense>>
+
+    /**
+     * Marca un gasto adelantado por un tercero como **reembolsado**
+     * (`settlement_status = 'REIMBURSED'`): el hogar ya le repuso el dinero al que
+     * lo adelantó. NO mueve saldos de wallet (la reposición ocurre en efectivo/fuera
+     * del ledger) — a diferencia de [mx.budget.data.repository.ExpenseRepository.reimburseFrom],
+     * que reasigna el gasto a un wallet real. Gate `PENDING_REIMBURSEMENT` para no
+     * pisar otros estados. Sube `updated_at` para el LWW del sync.
+     */
+    @Query(
+        "UPDATE expense SET settlement_status = 'REIMBURSED', updated_at = :ts " +
+            "WHERE id = :id AND settlement_status = 'PENDING_REIMBURSEMENT'"
+    )
+    suspend fun markReimbursed(id: String, ts: Long)
+
+    /**
      * Gastos `PLANNED` del hogar con el contexto que el [ReminderWorker] (Fase 3)
      * necesita para decidir si recordar: fecha prevista, inicio de la quincena y
      * el `cadence_detail` de la plantilla que los originó (LEFT JOIN: los PLANNED

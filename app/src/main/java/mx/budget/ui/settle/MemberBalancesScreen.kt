@@ -2,8 +2,10 @@ package mx.budget.ui.settle
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,19 +22,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowRightAlt
 import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Handshake
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,28 +44,44 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import mx.budget.ui.theme.FinancialTone
-import mx.budget.ui.theme.amountSemantic
+import mx.budget.data.local.entity.LoanEntity
+import mx.budget.ui.theme.financeColors
 import java.text.NumberFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val mxn: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "MX"))
 private fun Double.toMxn(): String = mxn.format(this)
+private val dateFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale("es", "MX"))
+private val zone: ZoneId = ZoneId.of("America/Mexico_City")
+private fun Long.toShortDate(): String =
+    Instant.ofEpochMilli(this).atZone(zone).toLocalDate().format(dateFmt).replace(".", "")
 
 /**
- * Pantalla "Cuentas entre miembros": muestra el neto que se deben entre sí los
- * miembros del hogar (computado de las atribuciones de gasto) y permite saldarlo.
+ * Pantalla "Cuentas entre miembros": **deudas explícitas y opt-in** en dos
+ * sentidos, agrupadas por miembro.
  *
- * Redundancia no-cromática ([amountSemantic]): "te deben" lleva signo + y tono
- * de ingreso; "debes" lleva − y tono de gasto — el significado nunca depende
- * solo del color. Motion expresivo (resortes) en aparición de filas y estados.
+ * - **Por pagar** (el hogar le debe a un miembro que adelantó un gasto): sale de
+ *   `expense.settlement_status = 'PENDING_REIMBURSEMENT'`. Acción "Marcar como
+ *   pagado" → `REIMBURSED` (no mueve saldos).
+ * - **Por cobrar** (un miembro le debe al hogar): sale de `loan.remaining_balance_mxn`.
+ *   Acción "Abonar" (reutiliza el flujo de préstamos).
+ *
+ * Un mismo miembro puede tener deuda en ambos sentidos: se muestran las dos sin
+ * netearlas. Redundancia no-cromática: etiquetas explícitas ("El hogar le debe" /
+ * "le debe al hogar") + tono financiero (ingreso/alerta), nunca solo el color.
+ * Motion expresivo (resortes) en aparición de filas y expansión de desgloses.
  */
 @Composable
 fun MemberBalancesScreen(
@@ -70,7 +89,6 @@ fun MemberBalancesScreen(
     onBack: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
-    var confirmGlobal by remember { mutableStateOf(false) }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.surface) { inner ->
         Column(
@@ -82,35 +100,23 @@ fun MemberBalancesScreen(
             Header(onBack = onBack)
 
             AnimatedVisibility(
-                visible = state.isSettled,
+                visible = state.isEmpty,
                 enter = fadeIn(spring(stiffness = 380f)),
                 exit = fadeOut(spring(stiffness = 380f)),
             ) {
-                SettledState()
+                EmptyState()
             }
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (state.memberNets.isNotEmpty()) {
-                    item(key = "nets") {
-                        MemberNetsStrip(state.memberNets)
-                        Spacer(Modifier.height(4.dp))
-                    }
-                }
-
-                if (state.pairs.isNotEmpty()) {
-                    item(key = "header_pairs") {
-                        SectionHeader("Quién le debe a quién")
-                    }
-                }
-
-                items(state.pairs, key = { it.debtorId + "→" + it.creditorId }) { pair ->
-                    PairRow(
-                        pair = pair,
-                        onSettle = { viewModel.settlePair(pair) },
+                items(state.rows, key = { it.memberId }) { row ->
+                    MemberCard(
+                        row = row,
+                        onMarkReimbursed = viewModel::markReimbursed,
+                        onLoanPayment = viewModel::applyLoanPayment,
                         modifier = Modifier.animateItem(
                             fadeInSpec = spring(stiffness = 380f),
                             fadeOutSpec = spring(stiffness = 380f),
@@ -118,39 +124,8 @@ fun MemberBalancesScreen(
                         ),
                     )
                 }
-
-                if (state.pairs.isNotEmpty()) {
-                    item(key = "settle_all") {
-                        Spacer(Modifier.height(8.dp))
-                        GlobalSettleCard(onClick = { confirmGlobal = true })
-                    }
-                }
             }
         }
-    }
-
-    if (confirmGlobal) {
-        AlertDialog(
-            onDismissRequest = { confirmGlobal = false },
-            icon = { Icon(Icons.Filled.Handshake, contentDescription = null) },
-            title = { Text("Saldar todas las cuentas") },
-            text = {
-                Text(
-                    "Marcará como saldados todos los gastos que hoy generan deudas " +
-                        "entre miembros. Los saldos quedarán en cero. No mueve dinero " +
-                        "de ninguna cuenta.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.settleAll(state.allExpenseIds)
-                    confirmGlobal = false
-                }) { Text("Saldar todo") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmGlobal = false }) { Text("Cancelar") }
-            },
-        )
     }
 }
 
@@ -184,7 +159,7 @@ private fun Header(onBack: () -> Unit) {
                 letterSpacing = 1.6.sp,
             )
             Text(
-                "Quién debe a quién",
+                "Deudas por saldar",
                 style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Light, fontSize = 26.sp),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
@@ -194,85 +169,159 @@ private fun Header(onBack: () -> Unit) {
 }
 
 @Composable
-private fun MemberNetsStrip(nets: List<MemberNet>) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(nets, key = { it.memberId }) { net ->
-            val positive = net.net >= 0
-            val sem = amountSemantic(if (positive) FinancialTone.INCOME else FinancialTone.EXPENSE)
-            Column(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(sem.container)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                Text(
-                    net.name,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = sem.onContainer,
-                    maxLines = 1,
+private fun MemberCard(
+    row: MemberDebtRow,
+    onMarkReimbursed: (String) -> Unit,
+    onLoanPayment: (String, Double) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(16.dp),
+    ) {
+        Text(
+            row.name,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+        )
+        Spacer(Modifier.height(4.dp))
+        // Resumen de ambos saldos, visibles simultáneamente (sin netear).
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (row.hasPayable) {
+                DirectionChip(
+                    modifier = Modifier.weight(1f),
+                    label = "El hogar le debe",
+                    amount = row.payableTotal,
+                    tone = ChipTone.INCOME,
                 )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    // Signo tipográfico redundante al color (accesibilidad).
-                    sem.sign + kotlin.math.abs(net.net).toMxn(),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = sem.onContainer,
-                    maxLines = 1,
+            }
+            if (row.hasReceivable) {
+                DirectionChip(
+                    modifier = Modifier.weight(1f),
+                    label = "Le debe al hogar",
+                    amount = row.receivableTotal,
+                    tone = ChipTone.WARNING,
                 )
-                Text(
-                    if (positive) "le deben" else "debe",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = sem.onContainer,
-                    maxLines = 1,
-                )
+            }
+        }
+
+        if (row.hasPayable) {
+            Spacer(Modifier.height(14.dp))
+            PayableSection(
+                name = row.name,
+                payables = row.payables,
+                onMarkReimbursed = onMarkReimbursed,
+            )
+        }
+        if (row.hasReceivable) {
+            Spacer(Modifier.height(14.dp))
+            ReceivableSection(
+                name = row.name,
+                loans = row.receivables,
+                onLoanPayment = onLoanPayment,
+            )
+        }
+    }
+}
+
+private enum class ChipTone { INCOME, WARNING }
+
+@Composable
+private fun DirectionChip(
+    modifier: Modifier,
+    label: String,
+    amount: Double,
+    tone: ChipTone,
+) {
+    val fc = MaterialTheme.financeColors
+    val container = if (tone == ChipTone.INCOME) fc.incomeContainer else fc.warningContainer
+    val onContainer = if (tone == ChipTone.INCOME) fc.onIncomeContainer else fc.onWarningContainer
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(container)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = onContainer,
+            maxLines = 2,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            amount.toMxn(),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = onContainer,
+            maxLines = 1,
+        )
+    }
+}
+
+/** "Por pagar": gastos que el miembro adelantó; el hogar decide reponerlos. */
+@Composable
+private fun PayableSection(
+    name: String,
+    payables: List<PayableExpense>,
+    onMarkReimbursed: (String) -> Unit,
+) {
+    var expanded by rememberSaveable(name) { mutableStateOf(true) }
+    SectionHeader(
+        title = "El hogar le debe a $name",
+        subtitle = "${payables.size} ${if (payables.size == 1) "gasto adelantado" else "gastos adelantados"}",
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+    )
+    AnimatedVisibility(
+        visible = expanded,
+        enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = 320f)) + fadeIn(),
+        exit = shrinkVertically(spring(dampingRatio = 0.85f, stiffness = 320f)) + fadeOut(),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Spacer(Modifier.height(8.dp))
+            payables.forEach { p ->
+                PayableRow(p = p, onMarkReimbursed = { onMarkReimbursed(p.expenseId) })
             }
         }
     }
 }
 
 @Composable
-private fun PairRow(
-    pair: PairDebt,
-    onSettle: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val sem = amountSemantic(FinancialTone.EXPENSE)
+private fun PayableRow(p: PayableExpense, onMarkReimbursed: () -> Unit) {
+    val fc = MaterialTheme.financeColors
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(16.dp),
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowRightAlt,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp),
-            )
-            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                // "Norma le debe a Agustín" — sujeto/verbo explícitos, sin depender del color.
                 Text(
-                    buildString {
-                        append(pair.debtorName)
-                        append(" le debe a ")
-                        append(pair.creditorName)
-                    },
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    p.concept,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
                 )
                 Text(
-                    sem.description, // "Gasto" → etiqueta semántica; el detalle real es el monto
+                    p.occurredAt.toShortDate(),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Spacer(Modifier.width(10.dp))
             Text(
-                sem.sign + pair.amount.toMxn(),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = sem.color,
+                p.amount.toMxn(),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = fc.income,
                 maxLines = 1,
             )
         }
@@ -280,67 +329,154 @@ private fun PairRow(
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (!pair.fullySettleable) {
-                Text(
-                    "Solo desde \"Saldar todo\"",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            TextButton(
-                onClick = onSettle,
-                enabled = pair.fullySettleable,
-            ) {
+            TextButton(onClick = onMarkReimbursed) {
                 Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Saldar")
+                Text("Marcar como pagado")
+            }
+        }
+    }
+}
+
+/** "Por cobrar": préstamos vivos que el miembro le debe al hogar. */
+@Composable
+private fun ReceivableSection(
+    name: String,
+    loans: List<LoanEntity>,
+    onLoanPayment: (String, Double) -> Unit,
+) {
+    var expanded by rememberSaveable("recv_$name") { mutableStateOf(true) }
+    SectionHeader(
+        title = "$name le debe al hogar",
+        subtitle = "${loans.size} ${if (loans.size == 1) "préstamo" else "préstamos"}",
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+    )
+    AnimatedVisibility(
+        visible = expanded,
+        enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = 320f)) + fadeIn(),
+        exit = shrinkVertically(spring(dampingRatio = 0.85f, stiffness = 320f)) + fadeOut(),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Spacer(Modifier.height(8.dp))
+            loans.forEach { l ->
+                LoanRow(l = l, onPayment = { amount -> onLoanPayment(l.id, amount) })
             }
         }
     }
 }
 
 @Composable
-private fun GlobalSettleCard(onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .clickable(onClick = onClick)
-            .padding(18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Icons.Filled.Handshake,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.size(24.dp),
-        )
-        Spacer(Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                "Saldar todas las cuentas",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Text(
-                "Deja a todos a mano. No mueve dinero.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettledState() {
+private fun LoanRow(l: LoanEntity, onPayment: (Double) -> Unit) {
+    val fc = MaterialTheme.financeColors
+    var payment by remember(l.id) { mutableStateOf("") }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 32.dp),
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Prestado ${l.principalMxn.toMxn()}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                )
+                loanScheduleSummary(l)?.let { summary ->
+                    Text(
+                        summary,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    l.remainingBalanceMxn.toMxn(),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = fc.warning,
+                    maxLines = 1,
+                )
+                Text(
+                    "pendiente",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            OutlinedTextField(
+                value = payment,
+                onValueChange = { s -> payment = s.filter { it.isDigit() || it == '.' } },
+                label = { Text("Abono recibido") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                onClick = {
+                    payment.toDoubleOrNull()?.let { onPayment(it) }
+                    payment = ""
+                },
+                enabled = (payment.toDoubleOrNull() ?: 0.0) > 0,
+            ) { Text("Abonar") }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    title: String,
+    subtitle: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onToggle)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+            contentDescription = if (expanded) "Ocultar" else "Mostrar",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
+@Composable
+private fun EmptyState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
@@ -355,22 +491,32 @@ private fun SettledState() {
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
-            "Las cuentas entre los miembros están a mano.",
+            "Cuando alguien más pague un gasto del hogar (captura → \"Pagó un tercero\") " +
+                "o registres un préstamo, aparecerá aquí.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp),
         )
     }
 }
 
-@Composable
-private fun SectionHeader(label: String) {
-    Text(
-        label.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        letterSpacing = 1.2.sp,
-        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp),
-    )
+/** Resumen legible del esquema de pago de un préstamo, o null si no lo tiene. */
+private fun loanScheduleSummary(l: LoanEntity): String? {
+    val freq = l.paymentFrequency ?: return l.dueAt?.let { "Vence $it" }
+    val amt = l.paymentAmountMxn?.toMxn()
+    if (freq == "LUMP_SUM") {
+        return "Pago único" + (amt?.let { " de $it" } ?: "")
+    }
+    val word = when (freq) {
+        "WEEKLY" -> "semanales"
+        "BIWEEKLY" -> "quincenales"
+        "MONTHLY" -> "mensuales"
+        else -> return null
+    }
+    return buildString {
+        append(l.paymentCount?.let { "$it pagos $word" } ?: "Pagos $word")
+        if (amt != null) append(" de $amt")
+    }
 }

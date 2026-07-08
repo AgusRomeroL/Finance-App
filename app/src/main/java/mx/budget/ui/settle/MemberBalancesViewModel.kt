@@ -8,42 +8,47 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import mx.budget.data.local.result.NettingAttributionRow
+import mx.budget.data.local.entity.LoanEntity
+import mx.budget.data.local.result.PendingReimbursementExpense
 import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.repository.LoanRepository
 import mx.budget.data.repository.MemberRepository
-import kotlin.math.abs
 
 /**
- * ViewModel de "Cuentas entre miembros" (netting automático).
+ * ViewModel de "Cuentas entre miembros" — **deudas EXPLÍCITAS y opt-in** en dos
+ * sentidos, por miembro (reemplaza el netting automático que sumaba TODAS las
+ * atribuciones y producía montos gigantes).
  *
- * Computa de forma **determinista** cuánto se deben entre sí los miembros del
- * hogar a partir de las atribuciones (PAYER / BENEFICIARY) de los gastos POSTED
- * no liquidados. No mueve dinero: solo cancela deudas persona-a-persona.
+ * ## Dos sentidos, ambos visibles (sin cancelación automática)
+ * - **Por pagar (el hogar debe):** gastos que un tercero adelantó y el hogar aún
+ *   le repondrá — `expense.settlement_status = 'PENDING_REIMBURSEMENT'`, agrupados
+ *   por `external_payer_member_id`. Ej.: David paga el cine del hogar → el hogar le
+ *   debe. Acción **"Marcar como pagado"** → `settlement_status = 'REIMBURSED'`
+ *   ([ExpenseRepository.markReimbursed]); NO mueve saldos (la reposición es en
+ *   efectivo, fuera del ledger).
+ * - **Por cobrar (le deben al hogar):** préstamos ([LoanEntity]) con saldo
+ *   pendiente, agrupados por deudor. Ej.: Agustín usó la tarjeta de Norma a meses.
+ *   Acción **"Abonar"** → [LoanRepository.applyPayment] (reutiliza el flujo de loans).
  *
- * ## Fórmula
- * Para cada gasto de monto `A` con beneficiario `B` (consumió `ben`) y pagador
- * `P` (puso `pay`), `B` le debe a `P`:  `ben * pay / A`  (para todo `B != P`).
- * Se acumula en `debt[deudor][acreedor]`; el neto del par (X,Y) =
- * `debt[X][Y] - debt[Y][X]`.
+ * Un mismo miembro puede aparecer con deuda en **ambos** sentidos: se muestran las
+ * dos cifras lado a lado, **sin** netearlas (decisión explícita del producto).
  *
- * ## Liquidación
- * - **Por par**: marca `NETTED` los gastos cuyos participantes son EXACTAMENTE
- *   ese par (2-party puro), de modo que nunca borra la deuda de un tercero que
- *   comparta el mismo gasto (un `settlement_status` es por gasto, indivisible).
- * - **Global**: marca `NETTED` todos los gastos vigentes → deja a todos a mano.
+ * No hay cálculo automático de "quién debe a quién" a partir de atribuciones.
  */
 class MemberBalancesViewModel(
     private val expenseRepository: ExpenseRepository,
+    private val loanRepository: LoanRepository,
     memberRepository: MemberRepository,
     private val householdId: String,
 ) : ViewModel() {
 
     val uiState: StateFlow<MemberBalancesUiState> =
         combine(
-            expenseRepository.observeNettingRows(householdId),
+            expenseRepository.observePendingReimbursementExpenses(householdId),
+            loanRepository.observeAll(householdId),
             memberRepository.observeAllMembers(householdId),
-        ) { rows, members ->
-            compute(rows, members.associate { it.id to it.displayName })
+        ) { reimbursements, loans, members ->
+            build(reimbursements, loans, members.associate { it.id to it.displayName })
         }
             .catch { emit(MemberBalancesUiState(loading = false)) }
             .stateIn(
@@ -52,135 +57,102 @@ class MemberBalancesViewModel(
                 MemberBalancesUiState(loading = true),
             )
 
-    /** Liquida (marca NETTED) los gastos 2-party puros del par indicado. */
-    fun settlePair(pair: PairDebt) {
-        if (pair.settleableExpenseIds.isEmpty()) return
-        viewModelScope.launch { expenseRepository.markNetted(pair.settleableExpenseIds) }
+    /** Marca un gasto adelantado por un tercero como reembolsado (el hogar ya pagó). */
+    fun markReimbursed(expenseId: String) {
+        viewModelScope.launch { expenseRepository.markReimbursed(expenseId) }
     }
 
-    /** Liquida absolutamente todos los gastos vigentes: deja a todos a mano. */
-    fun settleAll(allExpenseIds: List<String>) {
-        if (allExpenseIds.isEmpty()) return
-        viewModelScope.launch { expenseRepository.markNetted(allExpenseIds) }
+    /** Registra un abono a un préstamo por cobrar (reutiliza el flujo de loans). */
+    fun applyLoanPayment(loanId: String, amount: Double) {
+        if (amount <= 0.0) return
+        viewModelScope.launch { loanRepository.applyPayment(loanId, amount) }
     }
 
-    // ── Cómputo determinista ─────────────────────────────────────────────────
+    // ── Construcción de la vista por miembro ─────────────────────────────────────
 
-    private fun compute(
-        rows: List<NettingAttributionRow>,
+    private fun build(
+        reimbursements: List<PendingReimbursementExpense>,
+        loans: List<LoanEntity>,
         names: Map<String, String>,
     ): MemberBalancesUiState {
-        // Agrupa filas por gasto: monto, pagadores, beneficiarios, participantes.
-        data class Group(
-            val amount: Double,
-            val payers: MutableMap<String, Double> = mutableMapOf(),
-            val beneficiaries: MutableMap<String, Double> = mutableMapOf(),
-            val participants: MutableSet<String> = mutableSetOf(),
-        )
+        // Por pagar: agrupa los gastos adelantados por el tercero que los puso.
+        // TODO(multi-family): `external_payer_member_id` apunta a un miembro que en
+        // el futuro podría vivir en otra familia; agrupar por ese id ya deja la
+        // puerta abierta a sincronizar estos movimientos entre hogares/PWA.
+        val payableByMember: Map<String, List<PendingReimbursementExpense>> =
+            reimbursements
+                .filter { it.externalPayerMemberId != null }
+                .groupBy { it.externalPayerMemberId!! }
 
-        val groups = mutableMapOf<String, Group>()
-        for (r in rows) {
-            val g = groups.getOrPut(r.expenseId) { Group(amount = r.amountMxn) }
-            when (r.role) {
-                "PAYER" -> g.payers.merge(r.memberId, r.shareAmountMxn, Double::plus)
-                "BENEFICIARY" -> g.beneficiaries.merge(r.memberId, r.shareAmountMxn, Double::plus)
-            }
-            g.participants.add(r.memberId)
-        }
+        // Por cobrar: solo préstamos con saldo vivo, agrupados por deudor.
+        val receivableByMember: Map<String, List<LoanEntity>> =
+            loans
+                .filter { it.remainingBalanceMxn > 0.0 }
+                .groupBy { it.debtorMemberId }
 
-        // Matriz de deuda dirigida: debt[(deudor, acreedor)] = MXN.
-        val debt = mutableMapOf<Pair<String, String>, Double>()
-        // Gastos 2-party puros por par (para liquidación por par sin dañar a terceros).
-        val pureByPair = mutableMapOf<Set<String>, MutableList<String>>()
-        val allExpenseIds = mutableSetOf<String>()
+        val memberIds = (payableByMember.keys + receivableByMember.keys)
 
-        for ((expenseId, g) in groups) {
-            allExpenseIds.add(expenseId)
-            val a = g.amount
-            if (a <= 0.0) continue
-            for ((b, ben) in g.beneficiaries) {
-                for ((p, pay) in g.payers) {
-                    if (b == p) continue
-                    debt.merge(b to p, ben * pay / a, Double::plus)
-                }
-            }
-            // Gasto puro entre 2 personas → se puede liquidar sin tocar a nadie más.
-            if (g.participants.size == 2) {
-                pureByPair.getOrPut(g.participants.toSet()) { mutableListOf() }.add(expenseId)
-            }
-        }
-
-        // Netos por par (no dirigido) y por miembro.
-        val seen = mutableSetOf<Set<String>>()
-        val pairs = mutableListOf<PairDebt>()
-        val memberNet = mutableMapOf<String, Double>()
-
-        for ((key, _) in debt) {
-            val (x, y) = key
-            val unordered = setOf(x, y)
-            if (unordered.size < 2 || !seen.add(unordered)) continue
-            val xy = debt[x to y] ?: 0.0
-            val yx = debt[y to x] ?: 0.0
-            val net = xy - yx // >0 => x le debe a y
-            if (abs(net) < 0.01) continue
-            val (debtor, creditor, amount) =
-                if (net > 0) Triple(x, y, net) else Triple(y, x, -net)
-            memberNet.merge(debtor, -amount, Double::plus)
-            memberNet.merge(creditor, amount, Double::plus)
-            pairs += PairDebt(
-                debtorId = debtor,
-                debtorName = names[debtor] ?: "Miembro",
-                creditorId = creditor,
-                creditorName = names[creditor] ?: "Miembro",
-                amount = amount,
-                settleableExpenseIds = pureByPair[unordered].orEmpty(),
+        val rows = memberIds.map { id ->
+            val payables = payableByMember[id].orEmpty()
+            val receivables = receivableByMember[id].orEmpty()
+            MemberDebtRow(
+                memberId = id,
+                name = names[id] ?: "Miembro",
+                // El hogar le debe a este miembro (adelantó gastos del hogar).
+                payableTotal = payables.sumOf { it.amountMxn },
+                payables = payables.map {
+                    PayableExpense(
+                        expenseId = it.expenseId,
+                        concept = it.concept,
+                        occurredAt = it.occurredAt,
+                        amount = it.amountMxn,
+                    )
+                }.sortedByDescending { it.occurredAt },
+                // Este miembro le debe al hogar (préstamos pendientes).
+                receivableTotal = receivables.sumOf { it.remainingBalanceMxn },
+                receivables = receivables.sortedByDescending { it.remainingBalanceMxn },
             )
-        }
+        }.sortedByDescending { maxOf(it.payableTotal, it.receivableTotal) }
 
-        val memberNets = memberNet
-            .filter { abs(it.value) >= 0.01 }
-            .map { (id, v) -> MemberNet(id, names[id] ?: "Miembro", v) }
-            .sortedByDescending { it.net }
-
-        return MemberBalancesUiState(
-            pairs = pairs.sortedByDescending { it.amount },
-            memberNets = memberNets,
-            allExpenseIds = allExpenseIds.toList(),
-            loading = false,
-        )
+        return MemberBalancesUiState(rows = rows, loading = false)
     }
 }
 
-/** Deuda neta dirigida entre dos miembros. `amount` siempre > 0. */
-data class PairDebt(
-    val debtorId: String,
-    val debtorName: String,
-    val creditorId: String,
-    val creditorName: String,
+/**
+ * Un gasto que un tercero adelantó y el hogar aún le debe (deuda *por pagar*).
+ * `occurredAt` en epoch millis.
+ */
+data class PayableExpense(
+    val expenseId: String,
+    val concept: String,
+    val occurredAt: Long,
     val amount: Double,
-    /**
-     * Gastos 2-party puros entre este par: los únicos que se pueden marcar
-     * `NETTED` desde el botón "Saldar" sin borrar la deuda de un tercero que
-     * comparta el gasto. Vacío => solo liquidable vía "Saldar todo".
-     */
-    val settleableExpenseIds: List<String>,
-) {
-    /** true si el botón por par puede liquidar este neto por completo. */
-    val fullySettleable: Boolean get() = settleableExpenseIds.isNotEmpty()
-}
-
-/** Saldo neto de un miembro. `net` > 0 = le deben; `net` < 0 = debe. */
-data class MemberNet(
-    val memberId: String,
-    val name: String,
-    val net: Double,
 )
 
+/**
+ * Deudas explícitas de un miembro en ambos sentidos. Un miembro puede tener las
+ * dos: se muestran sin netear.
+ *
+ * @property payableTotal    Cuánto le debe el hogar (suma de gastos adelantados).
+ * @property payables        Desglose de esos gastos.
+ * @property receivableTotal Cuánto le debe él al hogar (saldo vivo de préstamos).
+ * @property receivables     Préstamos que lo componen.
+ */
+data class MemberDebtRow(
+    val memberId: String,
+    val name: String,
+    val payableTotal: Double,
+    val payables: List<PayableExpense>,
+    val receivableTotal: Double,
+    val receivables: List<LoanEntity>,
+) {
+    val hasPayable: Boolean get() = payableTotal > 0.0
+    val hasReceivable: Boolean get() = receivableTotal > 0.0
+}
+
 data class MemberBalancesUiState(
-    val pairs: List<PairDebt> = emptyList(),
-    val memberNets: List<MemberNet> = emptyList(),
-    val allExpenseIds: List<String> = emptyList(),
+    val rows: List<MemberDebtRow> = emptyList(),
     val loading: Boolean = true,
 ) {
-    val isSettled: Boolean get() = !loading && pairs.isEmpty()
+    val isEmpty: Boolean get() = !loading && rows.isEmpty()
 }

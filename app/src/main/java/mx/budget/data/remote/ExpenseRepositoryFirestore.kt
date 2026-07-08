@@ -151,6 +151,16 @@ class ExpenseRepositoryFirestore(
         awaitClose { listener.remove() }
     }
 
+    // Deudas explícitas (cuentas entre miembros): la pantalla lee SIEMPRE de Room
+    // (fuente de verdad); el estado REIMBURSED viaja a la nube en el push del gasto.
+    // Stubs consistentes con el resto del lado nube (solo push).
+    override fun observePendingReimbursementExpenses(
+        householdId: String
+    ): Flow<List<mx.budget.data.local.result.PendingReimbursementExpense>> =
+        kotlinx.coroutines.flow.flowOf(emptyList())
+
+    override suspend fun markReimbursed(expenseId: String) {}
+
     // Netting (cuentas entre miembros): el cómputo lee SIEMPRE de Room (fuente de
     // verdad) y el estado 'NETTED' viaja a la nube en el push del gasto editado.
     // Stubs consistentes con el resto del lado nube (solo push).

@@ -322,7 +322,7 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("OTHER.HAWAIANO",           "Clases hawaiano", "OTHER",          "EXPENSE_VARIABLE",  None),
     CategorySeed("OTHER.ADOBE",              "Adobe Creative",  "OTHER",          "EXPENSE_FIXED",     249.0),
     CategorySeed("OTHER.GOOGLE_ONE",         "Google One",       "OTHER",          "EXPENSE_FIXED",      39.0),
-    CategorySeed("OTHER.GOOGLE_HOME",        "Google Nest/Home", "OTHER",          "EXPENSE_FIXED",     200.0),
+    CategorySeed("OTHER.GOOGLE_HOME",        "Google Home",      "OTHER",          "EXPENSE_FIXED",     200.0),
     CategorySeed("OTHER.KIGO",               "Kigo",             "OTHER",          "EXPENSE_FIXED",     100.0),
     CategorySeed("OTHER.COURSERA",           "Coursera",         "OTHER",          "EXPENSE_FIXED",     288.0),
     CategorySeed("OTHER.MARY",               "Mary",             "OTHER",          "EXPENSE_VARIABLE",  None),
@@ -1269,7 +1269,7 @@ CANONICAL_CONCEPT_RULES: tuple[CanonicalConceptRule, ...] = (
     # uno; no cambia clasificación, solo presentación).
     CanonicalConceptRule(r"CAJA CHICA", "Caja Chica"),
     CanonicalConceptRule(r"KIGO", "Kigo"),
-    CanonicalConceptRule(r"GOOGLE NEST", "Google Nest"),
+    CanonicalConceptRule(r"GOOGLE NEST", "Google Home"),
     CanonicalConceptRule(r"MERCADO PAGO", "Mercado Pago"),
     CanonicalConceptRule(r"SUSCRIPCION NIVEL 6", "Suscripción Nivel 6"),
     CanonicalConceptRule(r"MARCO Y OMAR", "Marco y Omar"),
@@ -1381,7 +1381,7 @@ def split_amount_mxn(total: float, count: int) -> list[float]:
 RECURRENCE_TEMPLATE_CONCEPTS: tuple[str, ...] = (
     "Hipoteca", "Internet", "Agua", "Electricidad",
     "Netflix", "Prime", "HBO", "Spotify", "YouTube",
-    "Adobe", "Google", "Google Nest", "Kigo", "Coursera",
+    "Adobe", "Google", "Google Home", "Kigo", "Coursera",
     "Suscripción Nivel 6",
     "Teléfono Norma", "Teléfono Normita", "Teléfono David",
     "Teléfono Santi", "Teléfono Benji",
