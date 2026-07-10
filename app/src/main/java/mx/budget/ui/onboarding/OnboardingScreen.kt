@@ -48,6 +48,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -234,8 +235,8 @@ private fun StepMembers(state: OnboardingViewModel.UiState, vm: OnboardingViewMo
     )
     Spacer(Modifier.height(16.dp))
 
-    var name by remember { mutableStateOf("") }
-    var role by remember { mutableStateOf("PAYER_ADULT") }
+    var name by rememberSaveable { mutableStateOf("") }
+    var role by rememberSaveable { mutableStateOf("PAYER_ADULT") }
 
     OutlinedTextField(
         value = name,
@@ -284,7 +285,7 @@ private fun StepWallets(state: OnboardingViewModel.UiState, vm: OnboardingViewMo
     )
     Spacer(Modifier.height(16.dp))
 
-    var name by remember { mutableStateOf("") }
+    var name by rememberSaveable { mutableStateOf("") }
     var kind by remember { mutableStateOf("DEBIT_ACCOUNT") }
     var balance by remember { mutableStateOf("") }
 

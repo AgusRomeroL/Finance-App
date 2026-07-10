@@ -43,6 +43,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -227,7 +228,7 @@ fun HouseholdScreen(
         // ── Crear grupo ─────────────────────────────────────────────────────
         if (state.isLinked) {
             SectionCard(label = "CREAR GRUPO") {
-                var name by remember { mutableStateOf("") }
+                var name by rememberSaveable { mutableStateOf("") }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -252,7 +253,7 @@ fun HouseholdScreen(
 
             // ── Unirse por código ───────────────────────────────────────────
             SectionCard(label = "UNIRSE A UN GRUPO") {
-                var code by remember { mutableStateOf("") }
+                var code by rememberSaveable { mutableStateOf("") }
                 OutlinedTextField(
                     value = code,
                     onValueChange = { code = it },

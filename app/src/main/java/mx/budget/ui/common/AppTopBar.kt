@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
@@ -78,7 +79,10 @@ fun RowScope.TopBarTitle(text: String) {
     )
 }
 
-/** Avatar circular de perfil ("AS"). Reutilizable en la barra superior y el rail. */
+/**
+ * Avatar circular de perfil. Icono genérico de persona: la app es del hogar
+ * (sin sesión por miembro), así que unas iniciales fijas serían identidad falsa.
+ */
 @Composable
 fun ProfileAvatar(
     onClick: () -> Unit,
@@ -96,10 +100,11 @@ fun ProfileAvatar(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            "AS",
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        Icon(
+            Icons.Filled.Person,
+            contentDescription = "Perfil",
+            modifier = Modifier.size(22.dp),
+            tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
             else MaterialTheme.colorScheme.onSurface,
         )
     }

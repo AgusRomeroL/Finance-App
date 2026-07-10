@@ -246,6 +246,7 @@ fun CaptureBottomSheet(
                             onKey = { viewModel?.onNumpadKey(it) },
                             onRegister = { viewModel?.onRegister() },
                             canRegister = canRegister,
+                            isLoading = operationState is CaptureOperationState.Loading,
                             amountPending = CaptureField.AMOUNT in unresolvedFields,
                             conceptPending = CaptureField.CONCEPT in unresolvedFields
                         )
@@ -549,6 +550,7 @@ private fun AmountCard(
     onKey: (String) -> Unit,
     onRegister: () -> Unit,
     canRegister: Boolean,
+    isLoading: Boolean = false,
     amountPending: Boolean = false,
     conceptPending: Boolean = false
 ) {
@@ -619,12 +621,17 @@ private fun AmountCard(
             )
         )
         Spacer(Modifier.height(16.dp))
-        Keypad(onKey = onKey, onRegister = onRegister, canRegister = canRegister)
+        Keypad(onKey = onKey, onRegister = onRegister, canRegister = canRegister, isLoading = isLoading)
     }
 }
 
 @Composable
-private fun Keypad(onKey: (String) -> Unit, onRegister: () -> Unit, canRegister: Boolean) {
+private fun Keypad(
+    onKey: (String) -> Unit,
+    onRegister: () -> Unit,
+    canRegister: Boolean,
+    isLoading: Boolean = false,
+) {
     val rows = listOf(
         listOf("1", "2", "3", "DEL"),
         listOf("4", "5", "6", "."),
@@ -652,14 +659,24 @@ private fun Keypad(onKey: (String) -> Unit, onRegister: () -> Unit, canRegister:
                         if (canRegister) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.surfaceContainerHighest
                     )
-                    .clickable(enabled = canRegister, onClick = onRegister),
+                    .clickable(enabled = canRegister && !isLoading, onClick = onRegister),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Filled.Check, "Registrar",
-                    tint = if (canRegister) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp)
-                )
+                // Feedback de progreso: mismo patrón que CaptureFooter (el VM ya
+                // protege la reentrada; esto solo lo hace visible).
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Icon(
+                        Icons.Filled.Check, "Registrar",
+                        tint = if (canRegister) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
     }

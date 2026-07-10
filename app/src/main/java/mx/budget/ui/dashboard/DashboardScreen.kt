@@ -854,10 +854,11 @@ internal fun NavigationRailCustom(
                 .clickable { onNavigate?.invoke("profile") },
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                "AS",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                color = if (profileSelected) MaterialTheme.colorScheme.onPrimaryContainer
+            Icon(
+                Icons.Filled.Person,
+                contentDescription = "Perfil",
+                modifier = Modifier.size(22.dp),
+                tint = if (profileSelected) MaterialTheme.colorScheme.onPrimaryContainer
                 else MaterialTheme.colorScheme.onSurface
             )
         }
@@ -1170,114 +1171,6 @@ private fun AutoSizeAmountText(
     )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun HeroKpi(state: DashboardUiState.Success) {
-    val q = state.quincena
-    // Ingreso = budget proyectado, elevado por el ingreso real recibido (en vivo)
-    // si lo supera. maxOf evita doble conteo del sueldo ya presupuestado.
-    val income = maxOf(q?.projectedIncomeMxn ?: 0.0, state.actualIncome)
-    val spent = state.postedTotal
-    val planned = state.plannedTotal
-    val hasPlanned = planned > 0.0
-    val gross = income - spent          // histórico: Ingresos − Gastos POSTED
-    val net = gross - planned           // budget-aware: además reserva lo PLANNED (G.2.4)
-    // Toggle de presentación. Default = neto, según el propósito quincenal (reservar lo previsto
-    // ANTES de pagarlo). Solo aplica si hay PLANNED; sin ellos el KPI se comporta como siempre.
-    var showNet by rememberSaveable { mutableStateOf(true) }
-    val shown = if (hasPlanned && showNet) net else gross
-    // Interpola la cifra al alternar el modo — movimiento expresivo (M3), nunca un salto.
-    val animatedShown by animateFloatAsState(
-        targetValue = shown.toFloat(),
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
-        label = "heroAmount",
-    )
-    val progress = remember(q?.id) { computeProgress(q) }
-
-    Column {
-        // El mes/quincena NO se repite aquí: ya está en el header superior, en el
-        // chip de navegación y en "Día N de M" abajo. Repetirlo colisionaba con
-        // este eyebrow a fontScale alto ("GASTAR" + "JUNIO" encimados).
-        Eyebrow("Disponible para gastar")
-        Spacer(Modifier.height(12.dp))
-        // Cifra héroe: $ + número grande + MXN
-        Row(verticalAlignment = Alignment.Top) {
-            Text(
-                "$",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp)
-            )
-            Spacer(Modifier.width(6.dp))
-            AutoSizeAmountText(
-                text = animatedShown.toDouble().toGrouped(),
-                baseStyle = MaterialTheme.typography.displayLarge.copy(
-                    fontWeight = FontWeight.Light,
-                    letterSpacing = (-1).sp
-                ),
-                maxFontSp = 66f,
-                minFontSp = 44f,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                "MXN",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1, softWrap = false,
-                modifier = Modifier.padding(top = 18.dp)
-            )
-        }
-        Spacer(Modifier.height(12.dp))
-        // Fórmula: Ingresos − Gastos. FlowRow para que "Gastos $X" baje como unidad
-        // (no "Gastos"/"$X" partido) cuando no cabe a fontScale alto + panel angosto.
-        FlowRow(verticalArrangement = Arrangement.Center) {
-            val incomeC = amountSemantic(FinancialTone.INCOME)
-            val expenseC = amountSemantic(FinancialTone.EXPENSE)
-            Text(
-                "Ingresos ${income.toMxn()}",
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = incomeC.color,
-                maxLines = 1, softWrap = false
-            )
-            Text("  −  ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                "Gastos ${spent.toMxn()}",
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = expenseC.color,
-                maxLines = 1, softWrap = false
-            )
-            // Término "Reservado" sólo en modo neto: lo PLANNED no es ingreso ni gasto ejecutado,
-            // por eso tono neutral (tertiary) y la etiqueta porta el significado, no el color.
-            AnimatedVisibility(visible = hasPlanned && showNet) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("  −  ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        "Reservado ${planned.toMxn()}",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.tertiary,
-                        maxLines = 1, softWrap = false
-                    )
-                }
-            }
-        }
-        if (hasPlanned) {
-            Spacer(Modifier.height(14.dp))
-            ReserveToggle(showNet = showNet, onChange = { showNet = it })
-        }
-        Spacer(Modifier.height(20.dp))
-        QuincenaRhythm(progress = progress)
-        Spacer(Modifier.height(16.dp))
-        RitmoCard(
-            quincena = state.quincena,
-            postedTotal = state.postedTotal,
-            actualIncome = state.actualIncome,
-            viewingActive = state.viewingActive
-        )
-    }
-}
-
 /**
  * Segmentado mini para el KPI (G.2.4): "Neto" reserva lo PLANNED del periodo; "Bruto" sólo resta
  * lo ya pagado (POSTED). Redundancia no-cromática: el segmento activo va relleno + en negrita,
@@ -1323,56 +1216,6 @@ private fun ReserveSegment(label: String, selected: Boolean, onClick: () -> Unit
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 6.dp)
     )
-}
-
-@Composable
-private fun QuincenaRhythm(progress: QuincenaProgress) {
-    val pct = (progress.fraction * 100).toInt()
-    // Motion expresivo: la barra crece con resorte al aparecer/cambiar de quincena.
-    val animatedFraction by animateFloatAsState(
-        targetValue = progress.fraction,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
-        label = "quincenaFraction"
-    )
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Text(
-                "Día ${progress.dayIndex} de ${progress.totalDays} · $pct %",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1, softWrap = false,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "Quedan ${progress.daysRemaining} días",
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1, softWrap = false
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-        // Barra de progreso con marcador "hoy"
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(10.dp)
-                .clip(RoundedCornerShape(5.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(animatedFraction)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-        }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2167,7 +2010,7 @@ private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: M
             LazyColumn(
                 state = rememberLazyListState(),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
-                contentPadding = PaddingValues(bottom = 112.dp) // la BottomActionBar flotante (~76dp + insets) no debe tapar la última fila
+                contentPadding = PaddingValues(bottom = 112.dp) // el pill flotante de navegación no debe tapar la última fila
             ) {
                 itemsIndexed(transactions, key = { _, it -> it.expenseId }) { index, tx ->
                     // Motion expresivo: filas nuevas/reordenadas entran con resorte.
@@ -2338,11 +2181,14 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
                         modifier = Modifier.padding(top = 3.dp)
                     )
                     Spacer(Modifier.width(3.dp))
-                    Text(
-                        animatedShown.toDouble().toGrouped(),
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1
+                    // Cifra financiera: NUNCA recortar (un monto cortado es un dato
+                    // falso). Auto-escala hasta caber a fontScale 1.3 + bold.
+                    AutoSizeAmountText(
+                        text = animatedShown.toDouble().toGrouped(),
+                        baseStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
+                        maxFontSp = 24f,
+                        minFontSp = 13f,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 Spacer(Modifier.height(12.dp))

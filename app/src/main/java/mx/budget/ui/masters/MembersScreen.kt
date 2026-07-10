@@ -37,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -110,9 +111,9 @@ private fun MemberDialog(
     onDeactivate: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
-    var name by remember { mutableStateOf(initial?.displayName ?: "") }
-    var role by remember { mutableStateOf(initial?.role ?: "PAYER_ADULT") }
-    var active by remember { mutableStateOf(initial?.isActive ?: true) }
+    var name by rememberSaveable { mutableStateOf(initial?.displayName ?: "") }
+    var role by rememberSaveable { mutableStateOf(initial?.role ?: "PAYER_ADULT") }
+    var active by rememberSaveable { mutableStateOf(initial?.isActive ?: true) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
