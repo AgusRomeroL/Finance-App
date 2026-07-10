@@ -49,6 +49,12 @@ class NewPlannedViewModel(
     private val categoryRepository: CategoryRepository,
     private val walletRepository: WalletRepository,
     private val memberRepository: MemberRepository,
+    /**
+     * Member vinculado a la sesión (roles v2, `BudgetApplication.linkedMemberId`):
+     * si existe entre los members activos, es el pagador default de la siembra
+     * inicial — mismo criterio que la captura. null = cadena histórica.
+     */
+    private val sessionMemberId: String? = null,
 ) : ViewModel() {
 
     val members: StateFlow<List<MemberEntity>> =
@@ -104,7 +110,11 @@ class NewPlannedViewModel(
         viewModelScope.launch { applyDefaults() }
     }
 
-    /** Defaults: beneficiarios = todos por igual; pagador = dueño del primer wallet. */
+    /**
+     * Defaults: beneficiarios = todos por igual; pagador = member de la sesión
+     * (roles v2) si es un member activo, o la cadena histórica (dueño del primer
+     * wallet → primer PAYER_ADULT → primero).
+     */
     private suspend fun applyDefaults() {
         val activeMembers = memberRepository.observeActiveMembers(householdId).first()
             .filter { !it.role.startsWith("EXTERNAL_") }
@@ -114,7 +124,8 @@ class NewPlannedViewModel(
         val activeWallets = walletRepository.observeActive(householdId).first()
         if (_walletId.value == null) _walletId.value = activeWallets.firstOrNull()?.id
         if (_payerShares.value.isEmpty()) {
-            val owner = activeWallets.firstOrNull()?.ownerMemberId
+            val owner = sessionMemberId?.takeIf { id -> activeMembers.any { it.id == id } }
+                ?: activeWallets.firstOrNull()?.ownerMemberId
                 ?: activeMembers.firstOrNull { it.role == "PAYER_ADULT" }?.id
                 ?: activeMembers.firstOrNull()?.id
             if (owner != null) _payerShares.value = mapOf(owner to 100)

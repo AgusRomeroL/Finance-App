@@ -103,7 +103,9 @@ class MainActivity : ComponentActivity() {
             app.database.quincenaDao(),
             app.categoryRepository,
             app.walletRepository,
-            app.memberRepository
+            app.memberRepository,
+            // Pagador default de sesión (roles v2), mismo criterio que la captura.
+            sessionMemberId = app.linkedMemberId,
         ))[NewPlannedViewModel::class.java]
     }
 
@@ -200,6 +202,7 @@ class MainActivity : ComponentActivity() {
             authManager = app.authManager,
             membershipRepository = app.membershipRepository,
             activeHouseholdId = app.householdId,
+            memberRepository = app.memberRepository,
             onSignInWithGoogle = { app.linkGoogleAccount(this@MainActivity) },
             onSwitchHousehold = { hid ->
                 // Re-ancla el sync en caliente y recrea la Activity para que todos
@@ -262,6 +265,8 @@ class MainActivity : ComponentActivity() {
             quincenaDao = app.database.quincenaDao(),
             pendingCaptureDao = app.database.pendingCaptureDao(),
             membershipRepository = app.membershipRepository,
+            // Pagador default de sesión (roles v2): quién ES esta persona en el hogar.
+            sessionMemberId = app.linkedMemberId,
         ))[CaptureViewModel::class.java]
     }
 
@@ -497,6 +502,8 @@ class HouseholdViewModelFactory(
     private val authManager: mx.budget.data.remote.AuthManager,
     private val membershipRepository: mx.budget.data.remote.MembershipRepository,
     private val activeHouseholdId: String,
+    /** Members locales (Room) para el selector de invitación nominada (roles v2). */
+    private val memberRepository: MemberRepository,
     private val onSignInWithGoogle: suspend () -> Boolean,
     private val onSwitchHousehold: (String) -> Unit,
 ) : ViewModelProvider.Factory {
@@ -506,6 +513,7 @@ class HouseholdViewModelFactory(
             authManager = authManager,
             membershipRepository = membershipRepository,
             activeHouseholdId = activeHouseholdId,
+            memberRepository = memberRepository,
             onSignInWithGoogle = onSignInWithGoogle,
             onSwitchHousehold = onSwitchHousehold,
         ) as T
@@ -660,6 +668,8 @@ class NewPlannedViewModelFactory(
     private val categoryRepository: CategoryRepository,
     private val walletRepository: WalletRepository,
     private val memberRepository: MemberRepository,
+    /** Pagador default de sesión (roles v2): `BudgetApplication.linkedMemberId`. */
+    private val sessionMemberId: String? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -671,6 +681,7 @@ class NewPlannedViewModelFactory(
             categoryRepository = categoryRepository,
             walletRepository = walletRepository,
             memberRepository = memberRepository,
+            sessionMemberId = sessionMemberId,
         ) as T
     }
 }
@@ -911,6 +922,8 @@ class CaptureViewModelFactory(
     private val quincenaDao: QuincenaDao? = null,
     private val pendingCaptureDao: mx.budget.data.local.dao.PendingCaptureDao? = null,
     private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
+    /** Pagador default de sesión (roles v2): `BudgetApplication.linkedMemberId`. */
+    private val sessionMemberId: String? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -930,6 +943,7 @@ class CaptureViewModelFactory(
             quincenaDao = quincenaDao,
             pendingCaptureDao = pendingCaptureDao,
             membershipRepository = membershipRepository,
+            sessionMemberId = sessionMemberId,
         ) as T
     }
 }

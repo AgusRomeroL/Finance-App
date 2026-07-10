@@ -53,6 +53,8 @@ import mx.budget.data.settings.SettingsRepository
 import mx.budget.data.sync.RemotePullSync
 import mx.budget.data.sync.SyncManager
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.tasks.await
 
 /**
  * Aplicación base — contenedor manual de dependencias (sin Hilt).
@@ -147,6 +149,19 @@ class BudgetApplication : Application() {
      * ViewModels (onCreate corre antes que cualquier Activity).
      */
     var householdId: String = "default_household"
+        private set
+
+    /**
+     * Member del hogar activo vinculado a ESTA sesión (roles v2), o `null` si no
+     * hay vínculo (dueño legacy, instalación de un solo usuario u offline sin
+     * caché). Se resuelve de `households/{hid}/roles/{uid}.linkedMemberId` al
+     * arrancar y al cambiar de hogar ([switchActiveHousehold]); se cachea en
+     * DataStore para arranques offline. Es el **pagador default de sesión** de
+     * la captura ([mx.budget.ui.capture.CaptureViewModel]) y del pago planeado
+     * manual ([mx.budget.ui.calendar.NewPlannedViewModel]).
+     */
+    @Volatile
+    var linkedMemberId: String? = null
         private set
 
     /** Preferencias de usuario (toggle de color dinámico, etc.). */
@@ -284,7 +299,8 @@ class BudgetApplication : Application() {
                 BudgetDatabase.MIGRATION_14_15,
                 BudgetDatabase.MIGRATION_15_16,
                 BudgetDatabase.MIGRATION_16_17,
-                BudgetDatabase.MIGRATION_17_18
+                BudgetDatabase.MIGRATION_17_18,
+                BudgetDatabase.MIGRATION_18_19
             )
             .build()
 
@@ -305,6 +321,11 @@ class BudgetApplication : Application() {
                 ?: database.householdDao().getSingleId()
                 ?: "default_household"
         }
+
+        // Identidad de sesión (roles v2): arranca con el caché offline; la
+        // resolución online contra roles/{uid} corre al final de onCreate (ya
+        // con Firestore/Auth construidos) y refresca propiedad + caché.
+        linkedMemberId = runBlocking { settingsRepository.getSessionLinkedMemberId() }
 
         // DAOs de la fuente de verdad local.
         val expenseDao = database.expenseDao()
@@ -332,7 +353,14 @@ class BudgetApplication : Application() {
             syncQueueDao = syncQueueDao,
             db = database
         )
-        recurrenceRepository = RecurrenceRepositoryImpl(database.recurrenceTemplateDao())
+        // v19 (ANDROID-TEMPLATES): las plantillas recurrentes también se
+        // sincronizan (CRUD en la web) — el repo estampa updated_at y encola
+        // RECURRENCE en el outbox.
+        recurrenceRepository = RecurrenceRepositoryImpl(
+            dao = database.recurrenceTemplateDao(),
+            syncQueueDao = syncQueueDao,
+            db = database
+        )
         transferRepository = TransferRepositoryImpl(
             transferDao = database.walletTransferDao(),
             paymentMethodDao = database.paymentMethodDao(),
@@ -495,6 +523,8 @@ class BudgetApplication : Application() {
         val remoteCategoryRepository = mx.budget.data.remote.CategoryRepositoryFirestore(firestore)
         // Miembros (v14): push de altas/ediciones locales (wizard, CRUD de maestros).
         val remoteMemberRepository = mx.budget.data.remote.MemberRepositoryFirestore(firestore)
+        // Plantillas recurrentes (v19): push del CRUD local (también editable en la web).
+        val remoteRecurrenceRepository = mx.budget.data.remote.RecurrenceRepositoryFirestore(firestore, householdId)
 
         // Arranca el drenado del outbox (por conectividad + intento inicial).
         syncManager = SyncManager(
@@ -519,7 +549,9 @@ class BudgetApplication : Application() {
             categoryDao = database.categoryDao(),
             remoteCategoryRepository = remoteCategoryRepository,
             memberDao = database.memberDao(),
-            remoteMemberRepository = remoteMemberRepository
+            remoteMemberRepository = remoteMemberRepository,
+            recurrenceTemplateDao = database.recurrenceTemplateDao(),
+            remoteRecurrenceRepository = remoteRecurrenceRepository
         )
 
         // Dirección PULL (Firestore → Room). Comparte `appScope` y la misma
@@ -618,6 +650,30 @@ class BudgetApplication : Application() {
                 calendarMirror.reconcile()
             }
         }
+
+        // Identidad de sesión (roles v2): resuelve linkedMemberId online en cuanto
+        // haya usuario autenticado (el sign-in anónimo corre en paralelo arriba).
+        appScope.launch { refreshSessionIdentity(householdId) }
+    }
+
+    /**
+     * Resuelve el member vinculado a la sesión leyendo
+     * `households/{hid}/roles/{uid}.linkedMemberId` (mismo patrón de lectura que
+     * [mx.budget.data.sync.RemotePullSync] usa para las propuestas). Espera a que
+     * exista usuario autenticado (anónimo o Google). Si la lectura FALLA
+     * (offline), conserva el caché vigente; si tiene éxito, refresca propiedad y
+     * caché DataStore aunque el campo venga null (OWNER legacy sin vínculo).
+     */
+    private suspend fun refreshSessionIdentity(hid: String) {
+        val uid = authManager.currentUser.filterNotNull().first().uid
+        val snap = runCatching {
+            firestore.collection("households").document(hid)
+                .collection("roles").document(uid)
+                .get().await()
+        }.getOrNull() ?: return // offline / sin permisos: el caché manda
+        val resolved = snap.getString("linkedMemberId")
+        linkedMemberId = resolved
+        settingsRepository.setSessionLinkedMemberId(resolved)
     }
 
     /**
@@ -662,6 +718,15 @@ class BudgetApplication : Application() {
     fun switchActiveHousehold(newHouseholdId: String) {
         if (newHouseholdId == householdId) return
         householdId = newHouseholdId
+        // Identidad de sesión (roles v2): el member vinculado era del hogar
+        // anterior — se invalida ya (propiedad y caché) y se re-resuelve contra
+        // roles/{uid} del hogar nuevo. La Activity se recrea tras el switch, así
+        // que los ViewModels nuevos leerán el valor fresco (o null mientras tanto).
+        linkedMemberId = null
+        appScope.launch {
+            settingsRepository.setSessionLinkedMemberId(null)
+            refreshSessionIdentity(newHouseholdId)
+        }
         appScope.launch {
             settingsRepository.setActiveHouseholdId(newHouseholdId)
             // Re-ancla el PULL al nuevo hogar (stop viejo → new(hid).start()).
@@ -823,6 +888,7 @@ class BudgetApplication : Application() {
                     settings = settingsRepository,
                     householdId = householdId,
                     recurrenceDao = database.recurrenceTemplateDao(),
+                    recurrenceRepository = recurrenceRepository,
                     expenseDao = database.expenseDao(),
                     expenseRepository = expenseRepository,
                 ).curateOnce()

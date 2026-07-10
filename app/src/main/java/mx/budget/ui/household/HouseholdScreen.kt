@@ -10,6 +10,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -54,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import mx.budget.data.remote.MembershipRepository
 
 /**
  * Pantalla "Cuenta y grupos" (Fase B). Reúne, en una sola pantalla con scroll,
@@ -61,6 +65,7 @@ import androidx.compose.ui.unit.sp
  * grupo activo, crear un grupo, unirse por código y generar/compartir un código
  * de invitación. Resiliente a fontScale alto + bold (sin anchos fijos, wrap).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HouseholdScreen(
     viewModel: HouseholdViewModel,
@@ -221,7 +226,7 @@ fun HouseholdScreen(
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
-                                if (hh.role == "OWNER") "Dueño" else "Colaborador",
+                                roleLabel(hh.role),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -310,13 +315,71 @@ fun HouseholdScreen(
             SectionCard(label = "INVITAR A OTRO DISPOSITIVO") {
                 Text(
                     if (canInvite)
-                        "Genera un código de 8 caracteres y compártelo. Quien lo canjee (app o web) entra como colaborador de este grupo y puede proponer gastos que confirmas tú."
+                        "Elige quién del grupo es la persona invitada y genera un código de 8 caracteres. Quien lo canjee (app o web) queda vinculada a ese integrante — su rol deriva de él."
                     else
                         "Para invitar, primero crea un grupo (arriba) y selecciónalo. Los invitados entran a ese grupo — nunca a tu presupuesto personal.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(12.dp))
+
+                // ── Selector de member (invitación nominada, roles v2) ────────
+                // El código queda ligado a un member concreto del grupo; el rol
+                // DERIVA de ese member (PAYER_* → Administrador, resto →
+                // Colaborador). Sin selección, el botón Generar se deshabilita.
+                var inviteMemberId by rememberSaveable { mutableStateOf<String?>(null) }
+                val selectedMember = state.eligibleMembers.firstOrNull { it.id == inviteMemberId }
+                if (canInvite) {
+                    AnimatedVisibility(
+                        visible = state.eligibleMembers.isNotEmpty(),
+                        enter = fadeIn(spring()),
+                        exit = fadeOut(spring()),
+                    ) {
+                        Column {
+                            Text(
+                                "¿QUIÉN ES LA PERSONA INVITADA?",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                letterSpacing = 1.2.sp,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                state.eligibleMembers.forEach { member ->
+                                    FilterChip(
+                                        selected = member.id == inviteMemberId,
+                                        onClick = {
+                                            inviteMemberId =
+                                                if (inviteMemberId == member.id) null else member.id
+                                        },
+                                        label = { Text(member.displayName) },
+                                    )
+                                }
+                            }
+                            // Rol derivado del member elegido, visible ANTES de generar.
+                            AnimatedVisibility(
+                                visible = selectedMember != null,
+                                enter = fadeIn(spring()),
+                                exit = fadeOut(spring()),
+                            ) {
+                                val derived = selectedMember?.let { viewModel.deriveInviteRole(it) }
+                                Text(
+                                    if (derived == MembershipRepository.ROLE_PAYER)
+                                        "Se invitará como Administrador: registra gastos directo en el presupuesto."
+                                    else
+                                        "Se invitará como Colaborador: propone gastos que tú confirmas.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 10.dp),
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                        }
+                    }
+                }
+
                 if (state.inviteCode != null && canInvite) {
                     Text(
                         state.inviteCode!!,
@@ -331,8 +394,8 @@ fun HouseholdScreen(
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(
-                            onClick = { viewModel.generateInvite() },
-                            enabled = !state.busy,
+                            onClick = { inviteMemberId?.let { viewModel.generateInvite(it) } },
+                            enabled = !state.busy && inviteMemberId != null,
                             modifier = Modifier.weight(1f),
                         ) { Text("Otro código") }
                         Button(
@@ -352,14 +415,20 @@ fun HouseholdScreen(
                     }
                 } else {
                     Button(
-                        onClick = { viewModel.generateInvite() },
-                        enabled = !state.busy && canInvite,
+                        onClick = { inviteMemberId?.let { viewModel.generateInvite(it) } },
+                        enabled = !state.busy && canInvite && inviteMemberId != null,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         if (state.busy) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         } else {
-                            Text(if (canInvite) "Generar código" else "Crea un grupo primero")
+                            Text(
+                                when {
+                                    !canInvite -> "Crea un grupo primero"
+                                    inviteMemberId == null -> "Elige a la persona invitada"
+                                    else -> "Generar código"
+                                }
+                            )
                         }
                     }
                 }
@@ -369,6 +438,18 @@ fun HouseholdScreen(
         Spacer(Modifier.height(28.dp))
     }
 }
+
+/**
+ * Etiqueta en español del rol de pertenencia (vocabulario roles v2, con
+ * normalización de legacy): OWNER → "Dueño", PAYER → "Administrador",
+ * MEMBER/COLLABORATOR/desconocido → "Colaborador".
+ */
+private fun roleLabel(role: String): String =
+    when (MembershipRepository.normalizeRole(role)) {
+        MembershipRepository.ROLE_OWNER -> "Dueño"
+        MembershipRepository.ROLE_PAYER -> "Administrador"
+        else -> "Colaborador"
+    }
 
 /** Tarjeta con etiqueta de sección (mismo lenguaje visual que Perfil). */
 @Composable

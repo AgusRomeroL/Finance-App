@@ -152,7 +152,19 @@ class CaptureViewModel(
      * web del colaborador refleje el resultado. Opcional (emulador sin red OK).
      */
     private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
+    /**
+     * Member vinculado a la SESIÓN (roles v2, `BudgetApplication.linkedMemberId`):
+     * quién es esta persona en el hogar activo. Si existe entre los members
+     * activos, es el **pagador default** al elegir wallet o prellenar — por
+     * encima del dueño del wallet (un Administrador invitado registra gastos
+     * que paga él, no el titular de la cuenta). null = cadena default histórica.
+     */
+    private val sessionMemberId: String? = null,
 ) : ViewModel() {
+
+    /** [sessionMemberId] solo si corresponde a un member activo del hogar (si no, null). */
+    private fun sessionPayerOrNull(): String? =
+        sessionMemberId?.takeIf { id -> members.value.any { it.id == id } }
 
     /** Zona canónica del hogar (spec: America/Mexico_City). */
     private val zone: ZoneId = ZoneId.of("America/Mexico_City")
@@ -255,12 +267,14 @@ class CaptureViewModel(
         val payer = jsonToPercent(capture.suggestedPayerJson)
         if (payer.isNotEmpty()) _payerShares.value = payer
 
-        // Wallet: si no vino pagador en la frase, sembramos al dueño de la cuenta
-        // (mismo default que [onWalletSelected]).
+        // Wallet: si no vino pagador en la frase, sembramos al member de la sesión
+        // (roles v2) o, sin vínculo, al dueño de la cuenta (mismo default que
+        // [onWalletSelected]).
         capture.suggestedWalletId?.let { walletId ->
             _selectedWalletId.value = walletId
             if (_payerShares.value.isEmpty()) {
-                val owner = wallets.value.firstOrNull { it.id == walletId }?.ownerMemberId
+                val owner = sessionPayerOrNull()
+                    ?: wallets.value.firstOrNull { it.id == walletId }?.ownerMemberId
                     ?: members.value.firstOrNull { it.role == "PAYER_ADULT" }?.id
                 if (owner != null) _payerShares.value = mapOf(owner to 100)
             }
@@ -791,8 +805,12 @@ class CaptureViewModel(
         val ownerPayer = wallets.value.firstOrNull { it.id == walletId }?.ownerMemberId
             ?.takeIf { id -> members.value.any { it.id == id && it.role == "PAYER_ADULT" } }
             ?: members.value.firstOrNull { it.role == "PAYER_ADULT" }?.id
-        if (_payerShares.value.isEmpty() && ownerPayer != null) {
-            _payerShares.value = mapOf(ownerPayer to 100)
+        // Pagador default: PRIMERO el member de la sesión (roles v2 — quien opera
+        // este dispositivo paga sus capturas); si no hay vínculo, la cadena
+        // histórica (dueño del wallet → primer PAYER_ADULT).
+        val defaultPayer = sessionPayerOrNull() ?: ownerPayer
+        if (_payerShares.value.isEmpty() && defaultPayer != null) {
+            _payerShares.value = mapOf(defaultPayer to 100)
         }
         // Ingreso: solo un Pagador (adulto-cuenta) puede recibir ingreso — dar dinero a
         // un dependiente es un egreso (mesada/transferencia), no un ingreso. El default

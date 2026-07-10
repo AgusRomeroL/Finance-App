@@ -24,10 +24,10 @@ import kotlin.random.Random
  * - `users/{uid}` = { displayName, email, photoUrl, activeHouseholdId }
  * - `households/{hid}` = { name, updatedAt }  (doc del hogar; los datos cuelgan
  *   de sus subcolecciones ya existentes)
- * - `households/{hid}/roles/{uid}` = { role: OWNER|COLLABORATOR, linkedMemberId?, displayName }
- * - `users/{uid}/households/{hid}` = { role, joinedAt }  (espejo para listar mis hogares)
- * - `households/{hid}/invites/{code}` = { role, expiresAt(epochMs), maxUses, uses, createdBy }
- * - `invite_codes/{code}` = { householdId, role, expiresAt, maxUses, uses, createdBy, updatedAt }
+ * - `households/{hid}/roles/{uid}` = { role: OWNER|PAYER|MEMBER (legacy COLLABORATOR≡MEMBER), linkedMemberId?, displayName }
+ * - `users/{uid}/households/{hid}` = { role, joinedAt, linkedMemberId? }  (espejo para listar mis hogares)
+ * - `households/{hid}/invites/{code}` = { role, linkedMemberId, expiresAt(epochMs), maxUses, uses, createdBy }
+ * - `invite_codes/{code}` = { householdId, role, linkedMemberId, expiresAt, maxUses, uses, createdBy, updatedAt }
  *   (índice GLOBAL que resuelve un código opaco → household id)
  *
  * ── Código de invitación ─────────────────────────────────────────────────────
@@ -50,6 +50,19 @@ class MembershipRepository(
         val householdId: String,
         val role: String,
         val displayName: String,
+        /** Member del hogar al que está vinculada esta persona (roles v2), o null. */
+        val linkedMemberId: String? = null,
+    )
+
+    /**
+     * Miembro de un hogar leído de la subcolección Firestore `members` (roles v2:
+     * selector de invitación nominada cuando el hogar activo NO es el local).
+     */
+    data class HouseholdMemberInfo(
+        val id: String,
+        val displayName: String,
+        val role: String,
+        val isActive: Boolean,
     )
 
     /** Propuesta de gasto de un colaborador (propose-then-confirm). */
@@ -81,8 +94,10 @@ class MembershipRepository(
                 val list = snap?.documents?.map { doc ->
                     HouseholdMembership(
                         householdId = doc.id,
-                        role = doc.getString("role") ?: "COLLABORATOR",
+                        role = doc.getString("role") ?: ROLE_MEMBER,
                         displayName = doc.getString("displayName") ?: doc.id,
+                        // Espejos legacy no lo traen → null (sin vínculo nominado).
+                        linkedMemberId = doc.getString("linkedMemberId"),
                     )
                 }.orEmpty()
                 // Backfill best-effort: espejos escritos por versiones con el bug
@@ -232,22 +247,28 @@ class MembershipRepository(
     // ── Invitaciones ───────────────────────────────────────────────────────────
 
     /**
-     * Genera un código de invitación al hogar con el rol dado. Devuelve SOLO
-     * el código OPACO de 8 chars (ej. `7QX4K2AB`) para compartir — ya no el
-     * formato legacy `{hid}.{code}`, que exponía el household id.
+     * Genera un código de invitación NOMINADA (roles v2): el invite queda ligado
+     * a un [linkedMemberId] concreto del hogar — quien lo canjee ES esa persona
+     * en el presupuesto — y otorga el [role] derivado de ese member (PAYER para
+     * adultos-cuenta, MEMBER para el resto). Devuelve SOLO el código OPACO de
+     * 8 chars (ej. `7QX4K2AB`) para compartir — ya no el formato legacy
+     * `{hid}.{code}`, que exponía el household id.
      *
      * Escribe DOS docs: el invite en la subcolección del hogar (fuente de
      * verdad de la validación) y el índice global `invite_codes/{code}` que
-     * permite al canjeador resolver el hogar sin conocer su id.
+     * permite al canjeador resolver el hogar sin conocer su id. Ambos llevan
+     * `linkedMemberId` y `role` (las reglas v2 validan el vínculo al canjear).
      *
-     * @param role rol que recibirá quien lo canjee (default COLLABORATOR).
+     * @param linkedMemberId member del hogar que representa al invitado.
+     * @param role rol que recibirá quien lo canjee ([ROLE_PAYER] | [ROLE_MEMBER]).
      * @param maxUses usos permitidos (default 5).
      * @param ttlMillis vigencia desde ahora (default 7 días).
      */
     suspend fun generateInvite(
         householdId: String,
         createdBy: String,
-        role: String = ROLE_COLLABORATOR,
+        linkedMemberId: String,
+        role: String,
         maxUses: Int = 5,
         ttlMillis: Long = 7L * 24 * 60 * 60 * 1000,
     ): String {
@@ -257,6 +278,7 @@ class MembershipRepository(
         households().document(householdId).collection("invites").document(code).set(
             mapOf(
                 "role" to role,
+                "linkedMemberId" to linkedMemberId,
                 "expiresAt" to expiresAt,
                 "maxUses" to maxUses,
                 "uses" to 0,
@@ -269,6 +291,7 @@ class MembershipRepository(
             mapOf(
                 "householdId" to householdId,
                 "role" to role,
+                "linkedMemberId" to linkedMemberId,
                 "expiresAt" to expiresAt,
                 "maxUses" to maxUses,
                 "uses" to 0,
@@ -278,6 +301,31 @@ class MembershipRepository(
         ).await()
         return code
     }
+
+    /**
+     * Lee los miembros de un hogar desde la subcolección Firestore
+     * `households/{hid}/members` (get puntual). Se usa para el selector de
+     * invitación nominada cuando el hogar activo NO es el local (sus members no
+     * viven en Room). Normaliza los campos con fallback dual camelCase/snake_case
+     * (los docs pueden venir del push snake_case o de la web camelCase).
+     */
+    suspend fun getHouseholdMembers(householdId: String): List<HouseholdMemberInfo> =
+        runCatching {
+            households().document(householdId).collection("members").get().await()
+                .documents.map { doc ->
+                    HouseholdMemberInfo(
+                        id = doc.id,
+                        displayName = doc.getString("display_name")
+                            ?: doc.getString("displayName")
+                            ?: doc.id,
+                        role = doc.getString("role") ?: "",
+                        isActive = doc.getBoolean("is_active")
+                            ?: doc.getBoolean("isActive")
+                            ?: true,
+                    )
+                }
+        }.onFailure { Log.w(TAG, "getHouseholdMembers($householdId) falló", it) }
+            .getOrDefault(emptyList())
 
     /**
      * Canjea un código de invitación: valida vigencia/usos en cliente, crea
@@ -294,7 +342,8 @@ class MembershipRepository(
      */
     /** Resultado tipado del canje: la UI distingue unión, pertenencia previa e inválido. */
     sealed interface JoinResult {
-        data class Joined(val householdId: String) : JoinResult
+        /** Unido con éxito; [role] es el rol otorgado por el invite (crudo, normalizar con [normalizeRole]). */
+        data class Joined(val householdId: String, val role: String) : JoinResult
         data class AlreadyMember(val householdId: String, val role: String) : JoinResult
         data object Invalid : JoinResult
     }
@@ -350,7 +399,7 @@ class MembershipRepository(
                 Log.w(TAG, "Invitación sin usos: $hid/$code")
                 return JoinResult.Invalid
             }
-            val role = invite.getString("role") ?: ROLE_COLLABORATOR
+            val role = invite.getString("role") ?: ROLE_MEMBER
             val now = System.currentTimeMillis()
 
             // GUARD anti-degradacion: si el uid YA tiene rol en este hogar (p.ej.
@@ -369,25 +418,33 @@ class MembershipRepository(
             // `inviteCode` queda en el doc de rol: la regla valida que exista ese
             // invite y que su `role` coincida (así el colaborador solo obtiene el
             // rol que el invite otorga, no uno arbitrario).
+            // Vínculo nominado del invite (roles v2): a qué member del hogar
+            // corresponde quien canjea. Null en invites legacy.
+            val linkedMemberId = invite.getString("linkedMemberId")
             households().document(hid).collection("roles").document(uid).set(
                 mapOf(
                     "role" to role,
                     "displayName" to displayName,
-                    // Vínculo nominado del invite (roles v2): a qué member del hogar
-                    // corresponde quien canjea. Null en invites legacy.
-                    "linkedMemberId" to invite.getString("linkedMemberId"),
+                    "linkedMemberId" to linkedMemberId,
                     "inviteCode" to code,
                 )
             ).await()
+            // El espejo también lleva linkedMemberId: observeMyHouseholds lo lee
+            // sin ir al doc de rol del hogar (una sola fuente para el selector).
             users().document(uid).collection("households").document(hid).set(
-                mapOf("role" to role, "joinedAt" to now, "displayName" to (householdName ?: hid))
+                mapOf(
+                    "role" to role,
+                    "joinedAt" to now,
+                    "displayName" to (householdName ?: hid),
+                    "linkedMemberId" to linkedMemberId,
+                )
             ).await()
             inviteRef.update("uses", FieldValue.increment(1)).await()
             // Camino opaco: el contador también avanza en el índice global,
             // para que ambos docs reflejen los usos consumidos.
             globalCodeRef?.update("uses", FieldValue.increment(1))?.await()
 
-            JoinResult.Joined(hid)
+            JoinResult.Joined(hid, role)
         } catch (e: Exception) {
             Log.w(TAG, "joinByCode falló para $fullCode", e)
             JoinResult.Invalid
@@ -477,6 +534,23 @@ class MembershipRepository(
 
         const val ROLE_OWNER = "OWNER"
         const val ROLE_COLLABORATOR = "COLLABORATOR"
+
+        // Vocabulario roles v2. PAYER = adulto-cuenta invitado con escritura al
+        // ledger ("Administrador" en UI); MEMBER = colaborador que propone
+        // ("Colaborador" en UI, sucesor semántico de COLLABORATOR).
+        const val ROLE_PAYER = "PAYER"
+        const val ROLE_MEMBER = "MEMBER"
+
+        /**
+         * Normaliza un rol crudo (docs legacy o null) al vocabulario v2:
+         * COLLABORATOR (legacy) y null/desconocido → [ROLE_MEMBER];
+         * [ROLE_OWNER] y [ROLE_PAYER] pasan intactos.
+         */
+        fun normalizeRole(raw: String?): String = when (raw) {
+            ROLE_OWNER -> ROLE_OWNER
+            ROLE_PAYER -> ROLE_PAYER
+            else -> ROLE_MEMBER
+        }
 
         private const val CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         private const val CODE_LENGTH = 8

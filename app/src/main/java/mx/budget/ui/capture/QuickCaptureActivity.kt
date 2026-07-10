@@ -38,6 +38,8 @@ class QuickCaptureActivity : ComponentActivity() {
                 categoryDao = app.database.categoryDao(),
                 quincenaDao = app.database.quincenaDao(),
                 pendingCaptureDao = app.database.pendingCaptureDao(),
+                // Pagador default de sesión (roles v2), paridad con MainActivity.
+                sessionMemberId = app.linkedMemberId,
             ),
         )[CaptureViewModel::class.java]
     }

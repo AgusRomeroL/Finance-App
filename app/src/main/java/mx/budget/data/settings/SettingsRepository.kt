@@ -44,6 +44,7 @@ class SettingsRepository(private val context: Context) {
     private val calendarEventMapKey = stringPreferencesKey("calendar_event_map_json")
     private val locationCaptureLevelKey = stringPreferencesKey("location_capture_level")
     private val activeHouseholdIdKey = stringPreferencesKey("active_household_id")
+    private val sessionLinkedMemberIdKey = stringPreferencesKey("session_linked_member_id")
     private val nvidiaApiKeyKey = stringPreferencesKey("nvidia_api_key")
     private val suggestedChipHistoryKey = stringPreferencesKey("suggested_chip_history_json")
     private val hasSeenTutorialKey = booleanPreferencesKey("has_seen_tutorial")
@@ -263,6 +264,23 @@ class SettingsRepository(private val context: Context) {
     suspend fun setActiveHouseholdId(id: String?) {
         context.dataStore.edit { prefs ->
             if (id == null) prefs.remove(activeHouseholdIdKey) else prefs[activeHouseholdIdKey] = id
+        }
+    }
+
+    /**
+     * Caché offline del **member vinculado a la sesión** (roles v2): a qué member
+     * del hogar activo corresponde esta persona, resuelto de
+     * `households/{hid}/roles/{uid}.linkedMemberId`. `null` = sin vínculo (dueño
+     * legacy o instalación de un solo usuario). [mx.budget.BudgetApplication] lo
+     * lee síncrono al arrancar y lo refresca al resolver online; alimenta el
+     * pagador default de la captura. Se limpia al cambiar de hogar activo.
+     */
+    suspend fun getSessionLinkedMemberId(): String? =
+        context.dataStore.data.first()[sessionLinkedMemberIdKey]
+
+    suspend fun setSessionLinkedMemberId(id: String?) {
+        context.dataStore.edit { prefs ->
+            if (id == null) prefs.remove(sessionLinkedMemberIdKey) else prefs[sessionLinkedMemberIdKey] = id
         }
     }
 
