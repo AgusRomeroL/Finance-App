@@ -16,6 +16,16 @@ import androidx.room.PrimaryKey
  * El [confidenceScore] refleja qué tan confiable es la plantilla:
  * crece monotónicamente con cada confirmación sin conflicto (EMA α=0.2),
  * se resetea al detectar cambio de atribución.
+ *
+ * **Decisión de sync — tabla LOCAL-ONLY (deliberado):** las plantillas NO se
+ * sincronizan a Firestore (no encolan en `sync_queue` ni tienen repo remoto
+ * ni listener de pull). El aprendizaje de recurrencia es por dispositivo: los
+ * scores/cadencias se recalibran con el uso local y replicarlos generaría
+ * conflictos sin valor. Los gastos PLANNED **materializados** desde una
+ * plantilla SÍ syncan (son filas normales de `expense`). Consecuencia
+ * conocida y aceptada: un segundo dispositivo no ve las plantillas del
+ * primero — verá los gastos planificados que estas produzcan, y su propio
+ * motor puede volver a inferir plantillas equivalentes de ese historial.
  */
 @Entity(
     tableName = "recurrence_template",

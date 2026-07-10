@@ -5,6 +5,8 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.util.Log
+import com.google.firebase.firestore.FirebaseFirestoreException
+import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
@@ -40,10 +42,16 @@ import mx.budget.data.repository.WalletRepository
  * verdad; este manager solo empuja cambios locales hacia la nube de forma
  * eventual e idempotente.
  *
- * TODO(pull): No implementa la dirección Firestore → Room. Falta un
- *  observador remoto (snapshot listeners / cursor por updatedAt) que aplique
- *  cambios entrantes a Room resolviendo conflictos (last-write-wins o vector
- *  de versiones). Mientras tanto el flujo es unidireccional (solo push).
+ * Diseño bidireccional del sync (este manager es SOLO la mitad push):
+ * - **Push (aquí):** cada escritura por repo Room encola una fila en
+ *   `sync_queue`; `drain()` la empuja al repo Firestore correspondiente.
+ * - **Pull ([RemotePullSync]):** snapshot listeners sobre las subcolecciones
+ *   de Firestore reflejan los cambios remotos en Room. **Anti-eco:** el pull
+ *   escribe vía DAO directo (`upsert`), NUNCA por los repos — pasar por los
+ *   repos volvería a encolar en el outbox y crearía un bucle push↔pull.
+ * - **Conflictos:** last-write-wins por `updated_at` — el pull solo aplica un
+ *   doc remoto si su timestamp supera al local (seeds/legados con 0 nunca
+ *   pisan ediciones locales).
  *
  * @param remoteExpenseRepository implementación Firestore del
  *  [ExpenseRepository] (el "lado nube"), NO la implementación Room.
@@ -102,7 +110,7 @@ class SyncManager(
 
     @OptIn(FlowPreview::class)
     private suspend fun observeAndDrain() {
-        syncQueueDao.observeCount()
+        syncQueueDao.observeCount(MAX_ATTEMPTS)
             .debounce(500)
             .collect { pending -> if (pending > 0 && isOnline()) drain() }
     }
@@ -118,12 +126,27 @@ class SyncManager(
      * Procesa el outbox en orden FIFO. Usa un mutex para no solaparse con
      * otra invocación (p.ej. arranque + onAvailable simultáneos).
      *
-     * En caso de error de red, incrementa intentos y corta (`break`) para
-     * preservar el orden y reintentar en el siguiente disparo.
+     * Manejo de errores en dos clases:
+     * - **Error de conectividad** ([isConnectivityError]): corta el drenado
+     *   (`break`) SIN incrementar `attempts` — sin red no tiene caso seguir y
+     *   no es culpa de la fila; se reintenta completo al volver la conexión.
+     * - **Error por-fila** (p.ej. doc rechazado por las reglas de Firestore):
+     *   incrementa `attempts`, loguea en W con entityType/entityId y CONTINÚA
+     *   con la siguiente fila — un mensaje venenoso ya no congela la cola.
+     *
+     * **Dead-letter:** tras [MAX_ATTEMPTS] fallos por-fila, la fila queda como
+     * fallida definitiva: `getPending(MAX_ATTEMPTS)` deja de devolverla, así
+     * que no vuelve a reintentarse ni a bloquear el push. El dato local NO se
+     * borra (sigue en su tabla de origen); la fila permanece en `sync_queue`
+     * como evidencia diagnosticable.
+     *
+     * Nota consciente: al continuar tras un fallo por-fila se pierde el orden
+     * FIFO estricto entre filas de la misma entidad; es aceptable porque los
+     * UPSERT releen el estado local vigente al momento del push.
      */
     suspend fun drain() {
         mutex.withLock {
-            val pending = syncQueueDao.getPending()
+            val pending = syncQueueDao.getPending(MAX_ATTEMPTS)
             for (row in pending) {
                 try {
                     when {
@@ -248,15 +271,67 @@ class SyncManager(
                         }
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Fallo al sincronizar fila ${row.id}; se reintentará", e)
+                    if (isConnectivityError(e)) {
+                        // Sin red no tiene caso seguir: se corta el drenado sin
+                        // castigar a la fila (attempts intacto) y se reintenta
+                        // todo en el siguiente disparo (onAvailable/observe).
+                        Log.w(TAG, "Error de conectividad al drenar el outbox; se corta y reintenta al volver la red", e)
+                        break
+                    }
+                    val attemptsNow = row.attempts + 1
                     syncQueueDao.incrementAttempts(row.id)
-                    break
+                    if (attemptsNow >= MAX_ATTEMPTS) {
+                        Log.w(
+                            TAG,
+                            "Fila ${row.id} (${row.entityType}/${row.entityId}) marcada como fallida " +
+                                "definitiva tras $attemptsNow intentos; deja de bloquear la cola " +
+                                "(el dato local NO se borra)",
+                            e
+                        )
+                    } else {
+                        Log.w(
+                            TAG,
+                            "Fallo por-fila al sincronizar ${row.entityType}/${row.entityId} " +
+                                "(intento $attemptsNow/$MAX_ATTEMPTS); se continúa con la siguiente",
+                            e
+                        )
+                    }
+                    // Continúa con la siguiente fila: un error por-fila no congela la cola.
                 }
             }
         }
     }
 
+    /**
+     * ¿El fallo huele a conectividad (transitorio, no culpa de la fila)?
+     * Recorre la cadena de causas buscando [IOException] (DNS, socket, timeout
+     * de red) o un [FirebaseFirestoreException] con código UNAVAILABLE /
+     * DEADLINE_EXCEEDED (backend inalcanzable). Como red de seguridad, si la
+     * red se cayó a mitad del drenado (`!isOnline()`), cualquier error se
+     * trata como de conectividad para no dead-letterear filas sanas.
+     */
+    private fun isConnectivityError(e: Throwable): Boolean {
+        var cause: Throwable? = e
+        while (cause != null) {
+            if (cause is IOException) return true
+            if (cause is FirebaseFirestoreException &&
+                (cause.code == FirebaseFirestoreException.Code.UNAVAILABLE ||
+                    cause.code == FirebaseFirestoreException.Code.DEADLINE_EXCEEDED)
+            ) {
+                return true
+            }
+            cause = cause.cause
+        }
+        return !isOnline()
+    }
+
     companion object {
         private const val TAG = "SyncManager"
+
+        /**
+         * Umbral dead-letter: nº de fallos por-fila tras el cual una fila del
+         * outbox se considera fallida definitiva y `getPending` la excluye.
+         */
+        private const val MAX_ATTEMPTS = 8
     }
 }
