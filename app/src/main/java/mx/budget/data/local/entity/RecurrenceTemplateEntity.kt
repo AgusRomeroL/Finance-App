@@ -17,15 +17,22 @@ import androidx.room.PrimaryKey
  * crece monotónicamente con cada confirmación sin conflicto (EMA α=0.2),
  * se resetea al detectar cambio de atribución.
  *
- * **Decisión de sync — tabla LOCAL-ONLY (deliberado):** las plantillas NO se
- * sincronizan a Firestore (no encolan en `sync_queue` ni tienen repo remoto
- * ni listener de pull). El aprendizaje de recurrencia es por dispositivo: los
- * scores/cadencias se recalibran con el uso local y replicarlos generaría
- * conflictos sin valor. Los gastos PLANNED **materializados** desde una
- * plantilla SÍ syncan (son filas normales de `expense`). Consecuencia
- * conocida y aceptada: un segundo dispositivo no ve las plantillas del
- * primero — verá los gastos planificados que estas produzcan, y su propio
- * motor puede volver a inferir plantillas equivalentes de ese historial.
+ * **Contrato de sync — tabla SINCRONIZADA (paquete ANDROID-TEMPLATES, jul-2026;
+ * antes era local-only):** el CRUD de plantillas vive también en la web, así
+ * que la tabla entra al contrato bidireccional estándar:
+ *
+ * - **Push:** cada escritura de [mx.budget.data.repository.impl.RecurrenceRepositoryImpl]
+ *   estampa [updatedAt] y encola `RECURRENCE|UPSERT` (o `DELETE`) en
+ *   `sync_queue`; el `SyncManager` la drena hacia
+ *   [mx.budget.data.remote.RecurrenceRepositoryFirestore], subcolección
+ *   `households/{hid}/recurrence_template` (campos camelCase, doc id = [id]).
+ * - **Pull:** `RemotePullSync` escucha esa subcolección y aplica vía DAO
+ *   directo (anti-eco) con gate LWW por [updatedAt]; los borrados llegan como
+ *   REMOVED o como lápida (`deletedAt`), igual que savings/loan.
+ * - **Seed:** `scripts/admin/purge_and_reseed.py` NO siembra esta colección
+ *   (decisión vigente): los dispositivos convergen por sync — los ids son
+ *   uuid5 deterministas del ETL, así que la misma plantilla creada en dos
+ *   dispositivos colisiona en el mismo doc en vez de duplicarse.
  */
 @Entity(
     tableName = "recurrence_template",
@@ -135,5 +142,12 @@ data class RecurrenceTemplateEntity(
      * NONE | PENDING_REIMBURSEMENT. Se propaga a `expense.settlement_status`.
      */
     @ColumnInfo(name = "default_settlement_status", defaultValue = "'NONE'")
-    val defaultSettlementStatus: String = "NONE"
+    val defaultSettlementStatus: String = "NONE",
+
+    /**
+     * Última modificación local (epoch ms) — LWW del sync bidireccional
+     * (v18→v19). `0` = fila legada/sembrada que nunca pisa una edición local.
+     */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0L
 )

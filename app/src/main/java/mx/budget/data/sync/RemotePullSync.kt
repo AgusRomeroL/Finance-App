@@ -77,6 +77,7 @@ class RemotePullSync(
     private val savingsGoalDao = db.savingsGoalDao()
     private val loanDao = db.loanDao()
     private val installmentPlanDao = db.installmentPlanDao()
+    private val recurrenceTemplateDao = db.recurrenceTemplateDao()
     private val pendingCaptureDao = db.pendingCaptureDao()
 
     private val listeners = mutableListOf<ListenerRegistration>()
@@ -210,6 +211,21 @@ class RemotePullSync(
             },
             onRemoved = { installmentPlanDao.deleteById(it) },
             localUpdatedAt = { installmentPlanDao.getById(it)?.updatedAt },
+        )
+
+        // recurrence_template (v19 — ANDROID-TEMPLATES): el CRUD de plantillas
+        // vive también en la web, así que dejó de ser local-only. LWW por
+        // updated_at + removal remoto (duro o por lápida), como savings/loan.
+        listeners += register(
+            "recurrence_template",
+            { it.toRecurrenceTemplateEntity() },
+            apply = { recurrenceTemplateDao.upsert(it) },
+            shouldApply = { remote ->
+                val local = recurrenceTemplateDao.getById(remote.id)
+                local == null || remote.updatedAt > local.updatedAt
+            },
+            onRemoved = { recurrenceTemplateDao.deleteById(it) },
+            localUpdatedAt = { recurrenceTemplateDao.getById(it)?.updatedAt },
         )
 
         // proposals (Fase B): gastos que un COLABORADOR propone desde la web o su

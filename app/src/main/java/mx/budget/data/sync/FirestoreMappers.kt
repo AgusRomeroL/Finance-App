@@ -10,6 +10,7 @@ import mx.budget.data.local.entity.LoanEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.QuincenaEntity
+import mx.budget.data.local.entity.RecurrenceTemplateEntity
 import mx.budget.data.local.entity.SavingsGoalEntity
 import mx.budget.data.local.entity.WalletTransferEntity
 
@@ -235,6 +236,30 @@ fun DocumentSnapshot.toInstallmentPlanEntity(): InstallmentPlanEntity? {
         currentInstallment = int("currentInstallment", "current_installment") ?: 0,
         status = str("status", "status") ?: "ACTIVE",
         categoryId = str("categoryId", "category_id"),
+        updatedAt = lng("updatedAt", "updated_at") ?: 0L,
+    )
+}
+
+fun DocumentSnapshot.toRecurrenceTemplateEntity(): RecurrenceTemplateEntity? {
+    return RecurrenceTemplateEntity(
+        id = id.ifBlank { str("id", "id") ?: return null },
+        householdId = str("householdId", "household_id") ?: return null,
+        concept = str("concept", "concept") ?: return null,
+        categoryId = str("categoryId", "category_id") ?: return null,
+        defaultAmountMxn = dbl("defaultAmountMxn", "default_amount_mxn") ?: return null,
+        defaultPaymentMethodId = str("defaultPaymentMethodId", "default_payment_method_id"),
+        cadence = str("cadence", "cadence") ?: return null,
+        cadenceDetail = str("cadenceDetail", "cadence_detail") ?: "{}",
+        nextExpectedDate = str("nextExpectedDate", "next_expected_date"),
+        defaultBeneficiaryIds = str("defaultBeneficiaryIds", "default_beneficiary_ids") ?: "[]",
+        defaultPayerSplit = str("defaultPayerSplit", "default_payer_split") ?: "{}",
+        isActive = bool("isActive", "is_active") ?: true,
+        confidenceScore = dbl("confidenceScore", "confidence_score") ?: 0.0,
+        learnedFromExpenseIds = str("learnedFromExpenseIds", "learned_from_expense_ids") ?: "[]",
+        defaultExternalPayerMemberId =
+            str("defaultExternalPayerMemberId", "default_external_payer_member_id"),
+        defaultSettlementStatus =
+            str("defaultSettlementStatus", "default_settlement_status") ?: "NONE",
         updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }

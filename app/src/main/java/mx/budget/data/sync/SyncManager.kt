@@ -21,10 +21,12 @@ import mx.budget.data.local.dao.IncomeSourceDao
 import mx.budget.data.local.dao.InstallmentPlanDao
 import mx.budget.data.local.dao.LoanDao
 import mx.budget.data.local.dao.PaymentMethodDao
+import mx.budget.data.local.dao.RecurrenceTemplateDao
 import mx.budget.data.local.dao.SavingsGoalDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.dao.WalletTransferDao
 import mx.budget.data.remote.LoanRepositoryFirestore
+import mx.budget.data.remote.RecurrenceRepositoryFirestore
 import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.MemberRepository
@@ -87,6 +89,10 @@ class SyncManager(
     // v14 — miembros con escritura local (wizard de onboarding, CRUD de maestros).
     private val memberDao: MemberDao? = null,
     private val remoteMemberRepository: MemberRepository? = null,
+    // v19 — plantillas recurrentes sincronizadas (CRUD también en la web).
+    private val recurrenceTemplateDao: RecurrenceTemplateDao? = null,
+    /** Concreto (no interfaz): expone `deleteById` para drenar `RECURRENCE|DELETE`. */
+    private val remoteRecurrenceRepository: RecurrenceRepositoryFirestore? = null,
 ) {
 
     private val mutex = Mutex()
@@ -274,6 +280,23 @@ class SyncManager(
                                 remoteMemberRepository.insert(member)
                                 syncQueueDao.delete(row.id)
                             }
+                        }
+
+                        row.entityType == "RECURRENCE" && row.operation == "UPSERT" -> {
+                            val template = recurrenceTemplateDao?.getById(row.entityId)
+                            if (template == null || remoteRecurrenceRepository == null) {
+                                // La plantilla ya no existe localmente (o el remoto no
+                                // está cableado): nada que empujar, se descarta la fila.
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteRecurrenceRepository.insert(template)
+                                syncQueueDao.delete(row.id)
+                            }
+                        }
+
+                        row.entityType == "RECURRENCE" && row.operation == "DELETE" -> {
+                            remoteRecurrenceRepository?.deleteById(row.entityId)
+                            syncQueueDao.delete(row.id)
                         }
 
                         row.entityType == "INSTALLMENT" && row.operation == "UPSERT" -> {

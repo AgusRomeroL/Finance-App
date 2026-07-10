@@ -75,7 +75,7 @@ import mx.budget.data.local.entity.WalletTransferEntity
         StatementImportEntity::class,
         StatementLineEntity::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -498,6 +498,22 @@ abstract class BudgetDatabase : RoomDatabase() {
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_statement_line_wallet_id_line_fingerprint` ON `statement_line` (`wallet_id`, `line_fingerprint`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_line_matched_expense_id` ON `statement_line` (`matched_expense_id`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_line_import_id` ON `statement_line` (`import_id`)")
+            }
+        }
+
+        /**
+         * v18 → v19: **sync bidireccional de plantillas recurrentes** (paquete
+         * ANDROID-TEMPLATES). `recurrence_template` deja de ser local-only (el
+         * CRUD de plantillas vive también en la web) y entra al contrato LWW
+         * estándar: se añade `updated_at` (`NOT NULL DEFAULT 0`, coincidente con
+         * el `@ColumnInfo(defaultValue = "0")` de la entidad para que el
+         * identityHash de `app/schemas/19.json` valide — mismo patrón que
+         * v10→v11/v11→v12). `addColumnIfMissing` por consistencia con
+         * v16→v17/v17→v18 (DBs de ramas divergentes).
+         */
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.addColumnIfMissing("recurrence_template", "updated_at", "INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

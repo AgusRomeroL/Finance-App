@@ -88,8 +88,13 @@ def seed(db, hid: str) -> None:
     push("savings_goal", "savings_goal", where_household=False)
     push("loan", "loan", where_household=False)
     push("installment_plan", "installment_plan", where_household=False)
-    # recurrence_template NO se siembra: es local-only por decisión documentada
-    # (ver RecurrenceTemplateEntity).
+    # recurrence_template NO se siembra (decisión vigente aunque desde v19 la
+    # tabla SÍ se sincroniza — CRUD también en la web): los dispositivos
+    # convergen por sync y los ids del ETL son uuid5 deterministas, así que la
+    # misma plantilla acaba en el mismo doc sin necesidad de seed admin.
+    # Tampoco se purga (no está en DATA_COLLECTIONS): las plantillas remotas
+    # son ediciones reales de los dispositivos, no basura de seeds viejos —
+    # purgarlas propagaría el borrado a todos los clientes vía pull.
 
     # expenses + attributions (subcolección)
     expenses = cur.execute("SELECT * FROM expense WHERE household_id = ?", (hid,)).fetchall()

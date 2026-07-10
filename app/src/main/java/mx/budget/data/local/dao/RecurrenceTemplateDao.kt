@@ -78,4 +78,11 @@ interface RecurrenceTemplateDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(template: RecurrenceTemplateEntity)
+
+    /**
+     * Borrado por id reservado para el pull (REMOVED remoto o lápida); NO encola
+     * en `sync_queue` (anti-eco). Borrar una fila inexistente es no-op.
+     */
+    @Query("DELETE FROM recurrence_template WHERE id = :id")
+    suspend fun deleteById(id: String)
 }

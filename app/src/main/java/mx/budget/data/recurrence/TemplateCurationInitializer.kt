@@ -4,6 +4,7 @@ import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.RecurrenceTemplateDao
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.repository.RecurrenceRepository
 import mx.budget.data.settings.SettingsRepository
 import java.time.Instant
 import java.time.ZoneId
@@ -16,10 +17,15 @@ import java.time.ZoneId
  * 1. **Pausar las plantillas de consumo variable** sembradas por el ETL — conceptos
  *    "Walmart", "Comida Gatas", "Benji" y "Normita, David y Agus". Son gasto
  *    variable (super, comida, mesada), no obligaciones de fecha fija: no deben
- *    materializar PLANNED. Se marca `is_active = 0` (el usuario puede reactivarlas
- *    desde la pantalla de Plantillas) y se borran sus gastos aún PLANNED vía el
- *    repo PÚBLICO (encola el DELETE y tombstonea remoto). La golden DB no se toca:
- *    la corrección es en runtime; el ETL ya no las siembra en futuros reseeds.
+ *    materializar PLANNED. La pausa (`is_active = 0`; el usuario puede
+ *    reactivarlas desde la pantalla de Plantillas) va por el repo PÚBLICO
+ *    [RecurrenceRepository]: desde v19 las plantillas se sincronizan, así que
+ *    la pausa debe estampar `updated_at` y encolar el UPSERT para propagar a
+ *    los demás dispositivos/web (una pausa por DAO directo ni pushea ni gana
+ *    el LWW del pull y sería revertida por el remoto). Los gastos aún PLANNED
+ *    se borran vía el repo público de gastos (encola el DELETE y tombstonea
+ *    remoto). La golden DB no se toca: la corrección es en runtime; el ETL ya
+ *    no las siembra en futuros reseeds.
  *
  * 2. **Deduplicar los PLANNED de plantilla**: la materialización histórica usaba
  *    `UUID.randomUUID()`, así que cada dispositivo del hogar creó SU copia del
@@ -43,6 +49,7 @@ class TemplateCurationInitializer(
     private val settings: SettingsRepository,
     private val householdId: String,
     private val recurrenceDao: RecurrenceTemplateDao,
+    private val recurrenceRepository: RecurrenceRepository,
     private val expenseDao: ExpenseDao,
     private val expenseRepository: ExpenseRepository,
     private val zone: ZoneId = ZoneId.of("America/Mexico_City"),
@@ -59,7 +66,9 @@ class TemplateCurationInitializer(
         val variableIds = variableTemplates.map { it.id }.toHashSet()
         if (firstRun) {
             for (template in variableTemplates) {
-                runCatching { recurrenceDao.setActive(template.id, false) }
+                // Repo público (NO DAO directo): estampa updated_at y encola el
+                // UPSERT — la pausa de curación debe propagar por el sync (v19).
+                runCatching { recurrenceRepository.pause(template.id) }
             }
         }
 
