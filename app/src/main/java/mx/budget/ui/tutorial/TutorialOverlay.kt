@@ -116,6 +116,7 @@ fun TutorialOverlay(
     var timedOut by remember(step.key) { mutableStateOf(false) }
     LaunchedEffect(step.key) {
         timedOut = false
+        // Caso "ya registrado": trae el target a la vista antes de resaltar.
         controller.scrollHookFor(step.key)?.invoke()
         val resolved = withTimeoutOrNull(RESOLVE_TIMEOUT_MS) {
             snapshotFlow { controller.windowRectFor(step.key) }.filterNotNull().first()
@@ -123,6 +124,12 @@ fun TutorialOverlay(
         if (resolved == null) {
             timedOut = true
             controller.markUnresolved(step.key)
+        } else {
+            // Caso "registrado TARDE" (composición tras navegar a la pantalla): el
+            // hook de arriba fue null en su momento y nadie re-scrolleaba — el rect
+            // resolvía FUERA de pantalla y el spotlight quedaba invisible (paso 21,
+            // Perfil). Re-invocar aquí es no-op si el target ya está visible.
+            controller.scrollHookFor(step.key)?.invoke()
         }
     }
 
