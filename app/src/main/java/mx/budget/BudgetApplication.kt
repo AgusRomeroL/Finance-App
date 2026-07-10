@@ -805,6 +805,18 @@ class BudgetApplication : Application() {
      */
     private fun materializeRecurringForActiveQuincena() {
         appScope.launch {
+            // Curación one-shot (jul-2026) ANTES de materializar: pausa las plantillas
+            // de consumo variable, borra sus PLANNED y deduplica los PLANNED de
+            // plantilla multiplicados por la materialización con ids aleatorios.
+            runCatching {
+                mx.budget.data.recurrence.TemplateCurationInitializer(
+                    settings = settingsRepository,
+                    householdId = householdId,
+                    recurrenceDao = database.recurrenceTemplateDao(),
+                    expenseDao = database.expenseDao(),
+                    expenseRepository = expenseRepository,
+                ).curateOnce()
+            }
             val active = runCatching {
                 mx.budget.data.quincena.QuincenaRollover(
                     dao = database.quincenaDao(),

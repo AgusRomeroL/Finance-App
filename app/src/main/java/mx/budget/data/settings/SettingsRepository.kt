@@ -32,6 +32,7 @@ class SettingsRepository(private val context: Context) {
     private val retroLabelingDoneKey = booleanPreferencesKey("retro_labeling_done")
     private val statementSeedDoneKey = booleanPreferencesKey("statement_seed_done")
     private val statementSeedV2DoneKey = booleanPreferencesKey("statement_seed_v2_done")
+    private val templateCuration202607DoneKey = booleanPreferencesKey("template_curation_2026_07_done")
     private val bankCaptureEnabledKey = booleanPreferencesKey("bank_capture_enabled")
     private val reminderLeadDaysKey = intPreferencesKey("reminder_lead_days")
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
@@ -86,6 +87,20 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setStatementSeedV2Done(done: Boolean) {
         context.dataStore.edit { prefs -> prefs[statementSeedV2DoneKey] = done }
+    }
+
+    /**
+     * Curación one-shot de plantillas recurrentes (jul-2026): pausa las 4 plantillas
+     * de consumo variable sembradas por el ETL (no deben materializar PLANNED),
+     * borra sus PLANNED huérfanos y deduplica los PLANNED de plantilla multiplicados
+     * por la materialización con ids aleatorios (ver
+     * [mx.budget.data.recurrence.TemplateCurationInitializer]). Una vez por instalación.
+     */
+    suspend fun isTemplateCuration202607Done(): Boolean =
+        context.dataStore.data.first()[templateCuration202607DoneKey] ?: false
+
+    suspend fun setTemplateCuration202607Done(done: Boolean) {
+        context.dataStore.edit { prefs -> prefs[templateCuration202607DoneKey] = done }
     }
 
     /**

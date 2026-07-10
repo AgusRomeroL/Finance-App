@@ -37,6 +37,17 @@ interface RecurrenceTemplateDao {
     @Query("SELECT * FROM recurrence_template WHERE id = :id")
     suspend fun getById(id: String): RecurrenceTemplateEntity?
 
+    /**
+     * Plantillas (activas o pausadas) cuyo `concept` está en [concepts] — match
+     * exacto y case-sensitive (comparación TEXT default de SQLite). Usado por la
+     * curación one-shot [mx.budget.data.recurrence.TemplateCurationInitializer].
+     */
+    @Query(
+        "SELECT * FROM recurrence_template WHERE household_id = :householdId " +
+            "AND concept IN (:concepts)"
+    )
+    suspend fun getByConcepts(householdId: String, concepts: List<String>): List<RecurrenceTemplateEntity>
+
     /** Snapshot suspend de las plantillas activas (Fase 1: materialización). */
     @Query("SELECT * FROM recurrence_template WHERE household_id = :householdId AND is_active = 1")
     suspend fun getActive(householdId: String): List<RecurrenceTemplateEntity>

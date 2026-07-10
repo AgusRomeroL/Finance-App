@@ -1435,10 +1435,11 @@ def split_amount_mxn(total: float, count: int) -> list[float]:
 # diversión). Los conceptos se identifican por su forma CANÓNICA ya persistida
 # en `expense.concept` (ver CANONICAL_CONCEPT_RULES / SPLIT_RULES).
 #
-# NOTA sobre "Normita, David y Agus": la lista de Agustín menciona "Normita" y
-# "David y Agus (seguro)" por separado, pero en el Excel/semilla es UN solo
-# concepto de seguro de los tres hijos mayores ("Normita, David y Agus"), así
-# que produce UNA plantilla (36 en total, no 37).
+# Criterio (curación jul-2026): SOLO obligaciones de fecha fija producen plantilla;
+# el consumo variable no materializa PLANNED. Por eso se quitaron "Walmart",
+# "Comida Gatas", "Benji" y "Normita, David y Agus" (super/comida/mesada de monto
+# y frecuencia variables) — en instalaciones ya sembradas las pausa el one-shot
+# TemplateCurationInitializer de la app.
 RECURRENCE_TEMPLATE_CONCEPTS: tuple[str, ...] = (
     "Hipoteca", "Internet", "Agua", "Electricidad",
     "Netflix", "Prime", "HBO", "Spotify", "YouTube",
@@ -1446,10 +1447,9 @@ RECURRENCE_TEMPLATE_CONCEPTS: tuple[str, ...] = (
     "Suscripción Nivel 6",
     "Teléfono Norma", "Teléfono Normita", "Teléfono David",
     "Teléfono Santi", "Teléfono Benji",
-    "Walmart", "Banamex Clásica", "Liverpool", "Sears", "Coppel",
+    "Banamex Clásica", "Liverpool", "Sears", "Coppel",
     "Mercado Pago", "DiDi", "Klar",
-    "Comida Gatas", "Psicóloga", "Préstamo Omar",
-    "Benji", "Normita, David y Agus",
+    "Psicóloga", "Préstamo Omar",
     "Escuela David", "Escuela Santiago", "Escuela Normita",
 )
 

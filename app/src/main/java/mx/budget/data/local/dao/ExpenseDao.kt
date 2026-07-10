@@ -342,6 +342,19 @@ interface ExpenseDao {
     suspend fun getRecentPosted(householdId: String, sinceEpochMs: Long): List<ExpenseEntity>
 
     /**
+     * Gastos `PLANNED` del hogar que provienen de una plantilla recurrente
+     * (`recurrence_template_id` no nulo). Alimenta la curación one-shot
+     * [mx.budget.data.recurrence.TemplateCurationInitializer]: borrar los PLANNED
+     * de plantillas pausadas y deduplicar copias multiplicadas por el sync.
+     * Añadir un método @Dao no cambia el esquema.
+     */
+    @Query(
+        "SELECT * FROM expense WHERE household_id = :householdId AND status = 'PLANNED' " +
+            "AND recurrence_template_id IS NOT NULL"
+    )
+    suspend fun getPlannedFromTemplates(householdId: String): List<ExpenseEntity>
+
+    /**
      * Próximos gastos PLANNED del hogar con vencimiento en/ tras `nowMs`, ordenados
      * por fecha ascendente — alimenta el snapshot del reloj (tile "Próximos pagos").
      * Añadir un método @Dao no cambia el esquema.

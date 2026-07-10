@@ -27,6 +27,15 @@ import java.util.UUID
  * POSTED) en esa quincena (`ExpenseDao.countForTemplateInQuincena`). Así puede
  * correr en cada arranque / activación de quincena sin duplicar.
  *
+ * **Invariante — ids DETERMINISTAS (convergencia multi-dispositivo):** el gasto
+ * materializado y sus atribuciones usan `UUID.nameUUIDFromBytes` sobre una clave
+ * estable (`recur:{templateId}:{quincenaId}:{fecha}`), igual que sus gemelos
+ * [mx.budget.data.installments.InstallmentMaterializer] y
+ * [mx.budget.data.statements.StatementSeedInitializer]. Con ids aleatorios, cada
+ * dispositivo del hogar materializaba SU copia del mismo PLANNED y el sync las
+ * multiplicaba (×N duplicados); con ids deterministas todos producen el mismo id
+ * y el upsert (REPLACE) converge a una sola fila.
+ *
  * La proyección cadencia→quincena (§G.2.3) es nativa: `RecurrenceCadence` ya se
  * expresa en términos de quincena. `CUSTOM_CRON` queda diferido (devuelve null).
  */
@@ -90,7 +99,15 @@ class RecurrenceMaterializer(
 
         val occurredAt = date.atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
         val now = nowProvider()
-        val expenseId = UUID.randomUUID().toString()
+        // Id determinista (ver KDoc de la clase). Incluye la fecha de la ocurrencia
+        // para soportar más de una ocurrencia por quincena de una misma plantilla.
+        val expenseId = det("recur:${template.id}:${quincena.id}:$date")
+
+        // Cinturón extra al guard countForTemplateInQuincena: si el mismo PLANNED ya
+        // llegó por pull de otro dispositivo (mismo id determinista) entre el check y
+        // este punto, no lo pisamos — insert es REPLACE y re-escribirlo degradaría un
+        // gasto ya confirmado/editado remotamente además de re-encolar push.
+        if (expenseDao.getById(expenseId) != null) return false
 
         val expense = ExpenseEntity(
             id = expenseId,
@@ -225,7 +242,9 @@ class RecurrenceMaterializer(
         amount: Double,
     ): List<ExpenseAttributionEntity> = bps.map { (memberId, share) ->
         ExpenseAttributionEntity(
-            id = UUID.randomUUID().toString(),
+            // Determinista por (gasto, rol, miembro): mismo invariante que el id del
+            // gasto — todos los dispositivos generan la misma fila y el sync converge.
+            id = det("recurattr:$expenseId:$role:$memberId"),
             expenseId = expenseId,
             memberId = memberId,
             role = role,
@@ -233,4 +252,12 @@ class RecurrenceMaterializer(
             shareAmountMxn = amount * share / 10_000.0,
         )
     }
+
+    /**
+     * UUID determinista (v3, name-based) desde una clave estable. Garantiza que la
+     * materialización de la misma plantilla/quincena/fecha produzca el MISMO id en
+     * cualquier dispositivo (ver KDoc de la clase). Mismo helper que
+     * `InstallmentMaterializer.det` y `StatementSeedInitializer.det`.
+     */
+    private fun det(s: String): String = UUID.nameUUIDFromBytes(s.toByteArray()).toString()
 }
