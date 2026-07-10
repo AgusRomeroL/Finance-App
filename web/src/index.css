@@ -63,6 +63,24 @@ body {
   @apply bg-surface font-sans text-on-surface antialiased;
 }
 
+/* ---------------------------------------------------------------------------
+ * Safe areas iOS (PWA standalone + viewport-fit=cover en index.html).
+ * No invasivo: laterales/inferior en body; el notch superior se compensa en
+ * el header sticky del layout (selector por elemento, no toca las clases).
+ * ------------------------------------------------------------------------- */
+@supports (padding: env(safe-area-inset-top)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Header sticky (AppLayout): que el contenido no quede bajo el notch. */
+  header.sticky {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
 @layer utilities {
   /* Cifras tabulares para todo número financiero. */
   .tnum {

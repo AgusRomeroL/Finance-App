@@ -1,6 +1,12 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from 'firebase/firestore'
 
 /**
  * Config web de Firebase del proyecto `finance-app-abdf9` (el mismo que la app
@@ -28,5 +34,26 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
-export const db = getFirestore(app)
+
+/**
+ * Firestore con persistencia offline (IndexedDB), coherente con el
+ * offline-first de la app Android: las lecturas se sirven desde el cache local
+ * sin red y las escrituras se encolan y suben solas al reconectar.
+ * `persistentMultipleTabManager` coordina el cache entre pestañas abiertas.
+ * Si el navegador no soporta IndexedDB (o la inicialización falla), se cae al
+ * cache en memoria por defecto de `getFirestore` — la app sigue funcionando
+ * online, solo sin persistencia entre sesiones.
+ */
+function createFirestore(): Firestore {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    })
+  } catch (err) {
+    console.warn('Firestore: sin persistencia offline, usando cache en memoria', err)
+    return getFirestore(app)
+  }
+}
+
+export const db = createFirestore()
 export const googleProvider = new GoogleAuthProvider()

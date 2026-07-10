@@ -2,16 +2,36 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useHousehold } from '../context/HouseholdContext'
 
-const NAV = [
+interface NavItem {
+  to: string
+  label: string
+  end: boolean
+}
+
+/** Nav del titular: administra el presupuesto real desde la web. */
+const NAV_OWNER: NavItem[] = [
+  { to: '/panel', label: 'Panel', end: false },
+  { to: '/capturar', label: 'Capturar', end: false },
+  { to: '/calendario', label: 'Calendario', end: false },
+  { to: '/', label: 'Grupos', end: true },
+]
+
+/** Nav del colaborador (sin cambios respecto al circuito original). */
+const NAV_COLLABORATOR: NavItem[] = [
   { to: '/', label: 'Grupos', end: true },
   { to: '/dashboard', label: 'Resumen', end: false },
   { to: '/proponer', label: 'Proponer', end: false },
   { to: '/mis-propuestas', label: 'Mis propuestas', end: false },
 ]
 
+/** Mientras el rol carga (o no hay hogar activo) solo se ofrece Grupos. */
+const NAV_MINIMAL: NavItem[] = [{ to: '/', label: 'Grupos', end: true }]
+
 export default function AppLayout() {
   const { user, signOut } = useAuth()
-  const { active } = useHousehold()
+  const { active, myRole } = useHousehold()
+
+  const nav = myRole === 'OWNER' ? NAV_OWNER : myRole === 'COLLABORATOR' ? NAV_COLLABORATOR : NAV_MINIMAL
 
   return (
     <div className="flex min-h-full flex-col">
@@ -47,7 +67,7 @@ export default function AppLayout() {
           className="no-scrollbar mx-auto flex max-w-3xl gap-2 overflow-x-auto px-4 py-2"
           aria-label="Navegación principal"
         >
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
