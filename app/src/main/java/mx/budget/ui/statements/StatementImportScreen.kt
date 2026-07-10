@@ -107,7 +107,7 @@ fun StatementImportScreen(
             Spacer(Modifier.width(14.dp))
             Column {
                 Text(
-                    "FASE C",
+                    "ESTADOS DE CUENTA",
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     letterSpacing = 1.6.sp

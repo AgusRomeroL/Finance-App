@@ -1770,7 +1770,7 @@ private fun MemberDistributionSection(
         Eyebrow("Gasto por miembro", maxLines = 2)
         Spacer(Modifier.height(4.dp))
         Text(
-            "${data.sumOf { it.totalMxn }.toMxn()} · ${data.size} miembros",
+            "${data.sumOf { it.totalMxn }.toMxn()} · ${data.size} ${if (data.size == 1) "miembro" else "miembros"}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1, overflow = TextOverflow.Ellipsis
