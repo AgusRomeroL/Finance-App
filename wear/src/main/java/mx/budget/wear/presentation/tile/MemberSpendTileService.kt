@@ -62,6 +62,9 @@ class MemberSpendTileService : SuspendingTileService() {
         return TileBuilders.Tile.Builder()
             .setResourcesVersion(RES_VERSION)
             .setTileTimeline(TimelineBuilders.Timeline.fromLayoutElement(layout))
+            // Refresco periódico: sin esto la tile solo se re-renderiza con el push
+            // del teléfono y se queda congelada si el snapshot deja de llegar.
+            .setFreshnessIntervalMillis(FRESHNESS_MS)
             .build()
     }
 
@@ -126,6 +129,7 @@ class MemberSpendTileService : SuspendingTileService() {
 
     companion object {
         private const val RES_VERSION = "1"
+        private const val FRESHNESS_MS = 30L * 60 * 1000 // 30 min
         private const val MAX_ROWS = 4
         private const val BAR_MAX_DP = 120.0
         private const val COLOR_PRIMARY = 0xFF016E3E.toInt()

@@ -61,6 +61,10 @@ class UpcomingPaymentsTileService : SuspendingTileService() {
         return TileBuilders.Tile.Builder()
             .setResourcesVersion(RES_VERSION)
             .setTileTimeline(TimelineBuilders.Timeline.fromLayoutElement(layout))
+            // Refresco cada 15 min (más agresivo que los demás tiles): las etiquetas
+            // relativas "hoy/mañana/en 3d" se calculan al renderizar y se congelan
+            // si la tile no se re-renderiza.
+            .setFreshnessIntervalMillis(FRESHNESS_MS)
             .build()
     }
 
@@ -106,6 +110,7 @@ class UpcomingPaymentsTileService : SuspendingTileService() {
 
     companion object {
         private const val RES_VERSION = "1"
+        private const val FRESHNESS_MS = 15L * 60 * 1000 // 15 min (etiquetas relativas)
         private const val MAX_ROWS = 3
         private const val DAY_MS = 24L * 60 * 60 * 1000
         private const val COLOR_ON_SURFACE = 0xFFFFFFFF.toInt()

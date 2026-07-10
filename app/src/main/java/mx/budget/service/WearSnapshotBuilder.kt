@@ -34,6 +34,7 @@ object WearSnapshotBuilder {
     private const val MAX_MOVEMENTS = 8
     private const val MAX_PENDING = 8
     private const val MAX_UPCOMING = 5
+    private const val MAX_MEMBER_SPEND = 6
     // Ventana móvil para el snapshot: 90 días de gastos POSTED bastan para las
     // sugerencias (medianas/frecuencia) y los últimos movimientos, sin cargar el
     // historial completo (~800 filas) en cada push.
@@ -117,7 +118,8 @@ object WearSnapshotBuilder {
                 val rows = app.database.expenseAttributionDao()
                     .observeSpendByMember(quincena.id, "BENEFICIARY").first()
                 JSONArray().apply {
-                    rows.forEach { r ->
+                    // Cap consistente con las otras colecciones (acota el DataItem).
+                    rows.take(MAX_MEMBER_SPEND).forEach { r ->
                         put(
                             JSONObject()
                                 .put("name", r.memberName)

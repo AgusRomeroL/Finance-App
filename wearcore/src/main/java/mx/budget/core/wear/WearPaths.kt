@@ -34,6 +34,12 @@ object WearPaths {
     // ---- DataMap / Message Keys ----
     const val KEY_BALANCE_DISPONIBLE = "key_balance_disponible"
     const val KEY_QUINCENA_LABEL = "key_quincena_label"
+
+    /**
+     * Solo cache-busting del DataItem (el Data Layer deduplica payloads idénticos;
+     * este timestamp garantiza que cada push sea "distinto"). El reloj NO la lee —
+     * para reaccionar a un push usa [KEY_CACHE_VERSION].
+     */
     const val KEY_TIMESTAMP = "key_timestamp"
 
     /** Denominador del arco "Disponible": ingreso proyectado de la quincena activa. */
@@ -46,10 +52,6 @@ object WearPaths {
      * ~8 claves → 1 sola recomposición reaccionando solo a esta clave).
      */
     const val KEY_CACHE_VERSION = "cache_version"
-
-    const val KEY_EXPENSE_CONCEPT = "key_expense_concept"
-    const val KEY_EXPENSE_AMOUNT = "key_expense_amount"
-    const val KEY_NL_TEXT = "key_nl_text"
 
     // ---- Payloads JSON empujados teléfono → reloj (parseados con org.json) ----
     /** Recomendados: JSON array de `{concept, amount, reason, canonicalKey}`. */

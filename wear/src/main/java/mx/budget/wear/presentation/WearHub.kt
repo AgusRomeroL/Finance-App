@@ -246,9 +246,40 @@ private fun PendientesScreen() {
     val pending = remember(version) {
         mutableStateListOf<WearCache.Pending>().apply { addAll(WearCache.pending(context)) }
     }
+    // Error del último envío (el remove optimista se revierte si el mensaje no
+    // llegó al teléfono). Se limpia con cada push nuevo (`version`) o al reintentar.
+    var sendError by remember(version) { mutableStateOf(false) }
+
+    /** Remove optimista + envío; si falla, reinserta el ítem donde estaba y avisa. */
+    fun act(p: WearCache.Pending, send: suspend (String) -> Result<Unit>) {
+        val index = pending.indexOf(p)
+        pending.remove(p)
+        scope.launch {
+            val res = send(p.id)
+            if (res.isFailure) {
+                if (pending.none { it.id == p.id }) {
+                    pending.add(index.coerceIn(0, pending.size), p)
+                }
+                sendError = true
+            } else {
+                sendError = false
+            }
+        }
+    }
 
     ScalingLazyColumn(state = rememberScalingLazyListState(), modifier = Modifier.fillMaxWidth()) {
         item { Text("Pendientes", style = MaterialTheme.typography.title3, textAlign = TextAlign.Center) }
+        if (sendError) {
+            item {
+                Text(
+                    "Sin conexión con el teléfono — reintenta",
+                    style = MaterialTheme.typography.caption2,
+                    color = MaterialTheme.colors.error,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                )
+            }
+        }
         if (pending.isEmpty()) {
             item {
                 Text(
@@ -272,19 +303,13 @@ private fun PendientesScreen() {
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         CompactChip(
-                            onClick = {
-                                scope.launch { sender.confirmPending(p.id) }
-                                pending.remove(p)
-                            },
+                            onClick = { act(p, sender::confirmPending) },
                             label = { Text("Confirmar", maxLines = 1) },
                             colors = ChipDefaults.primaryChipColors(),
                             modifier = Modifier.weight(1f),
                         )
                         CompactChip(
-                            onClick = {
-                                scope.launch { sender.discardPending(p.id) }
-                                pending.remove(p)
-                            },
+                            onClick = { act(p, sender::discardPending) },
                             label = { Text("Descartar", maxLines = 1) },
                             colors = ChipDefaults.secondaryChipColors(),
                             modifier = Modifier.weight(1f),

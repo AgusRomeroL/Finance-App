@@ -1,5 +1,6 @@
 package mx.budget.service
 
+import android.util.Log
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import mx.budget.BudgetApplication
@@ -27,11 +28,16 @@ class BudgetWearListenerService : WearableListenerService() {
                 // Payload "amount|concept" (preset del reloj). Lo rearmamos como una
                 // frase NL ("concepto monto") que el parser determinista resuelve,
                 // así reusamos un solo camino (sin tocar BankCaptureManager).
-                val parts = String(messageEvent.data).split("|")
-                if (parts.size == 2) {
-                    val amount = parts[0].toDoubleOrNull() ?: return
-                    val concept = parts[1].trim()
+                // `limit = 2`: el monto va primero y no puede contener '|'; el resto
+                // ES el concepto (un concepto dictado con '|' no debe descartarse).
+                val raw = String(messageEvent.data)
+                val parts = raw.split("|", limit = 2)
+                val amount = parts.getOrNull(0)?.toDoubleOrNull()
+                val concept = parts.getOrNull(1)?.trim()
+                if (amount != null && !concept.isNullOrEmpty()) {
                     app.captureNaturalLanguage("$concept $amount", "WATCH")
+                } else {
+                    Log.w(TAG, "Payload de gasto del reloj no parsea (\"$raw\"); se ignora")
                 }
             }
             WearPaths.PATH_NEW_NL -> {
@@ -40,11 +46,16 @@ class BudgetWearListenerService : WearableListenerService() {
             }
             WearPaths.PATH_NEW_INCOME -> {
                 // Payload "amount|label". El ingreso NO va a la bandeja (es de gasto);
-                // se inserta directo como PLANNED en la quincena activa.
-                val parts = String(messageEvent.data).split("|")
-                if (parts.size == 2) {
-                    val amount = parts[0].toDoubleOrNull() ?: return
-                    app.captureWatchIncome(amount, parts[1].trim())
+                // se inserta directo como PLANNED en la quincena activa. Mismo criterio
+                // que el gasto: `limit = 2` para no descartar etiquetas con '|'.
+                val raw = String(messageEvent.data)
+                val parts = raw.split("|", limit = 2)
+                val amount = parts.getOrNull(0)?.toDoubleOrNull()
+                val label = parts.getOrNull(1)?.trim()
+                if (amount != null && !label.isNullOrEmpty()) {
+                    app.captureWatchIncome(amount, label)
+                } else {
+                    Log.w(TAG, "Payload de ingreso del reloj no parsea (\"$raw\"); se ignora")
                 }
             }
             WearPaths.PATH_CONFIRM_PENDING -> {
@@ -63,5 +74,9 @@ class BudgetWearListenerService : WearableListenerService() {
             }
             else -> super.onMessageReceived(messageEvent)
         }
+    }
+
+    private companion object {
+        const val TAG = "BudgetWearListener"
     }
 }

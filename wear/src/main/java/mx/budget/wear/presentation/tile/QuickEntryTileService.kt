@@ -56,6 +56,9 @@ class QuickEntryTileService : SuspendingTileService() {
         return TileBuilders.Tile.Builder()
             .setResourcesVersion(RES_VERSION)
             .setTileTimeline(TimelineBuilders.Timeline.fromLayoutElement(layout))
+            // Refresco periódico (contenido estático, pero mantiene el contrato de
+            // frescura consistente entre los 6 tiles).
+            .setFreshnessIntervalMillis(FRESHNESS_MS)
             .build()
     }
 
@@ -99,6 +102,7 @@ class QuickEntryTileService : SuspendingTileService() {
 
     companion object {
         private const val RES_VERSION = "1"
+        private const val FRESHNESS_MS = 30L * 60 * 1000 // 30 min
         private const val COLOR_PRIMARY = 0xFF016E3E.toInt()
         private const val COLOR_ON_PRIMARY = 0xFFFFFFFF.toInt()
         private const val COLOR_SURFACE = 0xFF1C1C1E.toInt()
