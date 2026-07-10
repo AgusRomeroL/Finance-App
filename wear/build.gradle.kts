@@ -50,10 +50,13 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 
-    // Wear Compose (Material + Foundation) + navegación del hub
-    implementation("androidx.wear.compose:compose-material:1.4.0")
-    implementation("androidx.wear.compose:compose-foundation:1.4.0")
-    implementation("androidx.wear.compose:compose-navigation:1.4.0")
+    // Wear Compose (Material + Foundation) + navegación del hub.
+    // ≥1.5: captura la SecurityException de leer `reduce_motion` con
+    // targetSdk 36 en Wear OS API ≤ 34 — con 1.4.0 el hub crasheaba al abrir
+    // en Pixel Watch 3 / Wear OS 4 (P0 de auditoría runtime 2026-07).
+    implementation("androidx.wear.compose:compose-material:1.6.2")
+    implementation("androidx.wear.compose:compose-foundation:1.6.2")
+    implementation("androidx.wear.compose:compose-navigation:1.6.2")
 
     // Horologist — AppScaffold/ScreenScaffold + ScalingLazyColumn responsivo
     implementation("com.google.android.horologist:horologist-compose-layout:0.6.17")

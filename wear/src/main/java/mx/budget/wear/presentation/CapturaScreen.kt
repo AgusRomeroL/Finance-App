@@ -92,7 +92,9 @@ fun CapturaScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp, vertical = 24.dp),
+                // top holgado: en pantalla redonda el TimeText del arco superior
+                // se encimaba con el chip de concepto al hacer scroll.
+                .padding(start = 8.dp, end = 8.dp, top = 36.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
