@@ -33,6 +33,11 @@ import java.time.ZoneId
  *
  * A futuro, [RecurrenceMaterializer] ya genera ids deterministas, por lo que este
  * escenario no se reproduce.
+ *
+ * El PASO 2 corre en CADA arranque (no solo la primera vez): es idempotente y
+ * barato, y cubre a los rezagados que llegan tarde por el pull — p.ej. el
+ * dedupe local corrió antes de que el pull entregara la copia que la limpieza
+ * remota conservó, dejando un par vivo hasta el siguiente arranque.
  */
 class TemplateCurationInitializer(
     private val settings: SettingsRepository,
@@ -44,27 +49,34 @@ class TemplateCurationInitializer(
 ) {
 
     suspend fun curateOnce() {
-        if (settings.isTemplateCuration202607Done()) return
+        val firstRun = !settings.isTemplateCuration202607Done()
 
         // (1) Pausar plantillas variables (match por concept exacto, case-sensitive).
+        // Solo la primera vez: si el usuario reactiva una plantilla desde la
+        // pantalla de Plantillas, no se la volvemos a pausar en cada arranque.
         val variableTemplates =
             recurrenceDao.getByConcepts(householdId, VARIABLE_CONCEPTS.toList())
         val variableIds = variableTemplates.map { it.id }.toHashSet()
-        for (template in variableTemplates) {
-            runCatching { recurrenceDao.setActive(template.id, false) }
+        if (firstRun) {
+            for (template in variableTemplates) {
+                runCatching { recurrenceDao.setActive(template.id, false) }
+            }
         }
 
         val planned = expenseDao.getPlannedFromTemplates(householdId)
 
         // Borrar los PLANNED de esas plantillas (repo público → tombstone remoto).
         // deleteAndRevertBalance no toca saldo en PLANNED (solo revierte POSTED).
-        for (expense in planned) {
-            if (expense.recurrenceTemplateId in variableIds) {
-                runCatching { expenseRepository.deleteAndRevertBalance(expense.id) }
+        if (firstRun) {
+            for (expense in planned) {
+                if (expense.recurrenceTemplateId in variableIds) {
+                    runCatching { expenseRepository.deleteAndRevertBalance(expense.id) }
+                }
             }
         }
 
-        // (2) Dedupe por (plantilla, día). MSI y curados arriba quedan fuera.
+        // (2) Dedupe por (plantilla, día) — CADA arranque (idempotente; ver KDoc).
+        // MSI y curados arriba quedan fuera.
         val candidates = planned.filter {
             it.recurrenceTemplateId !in variableIds && it.installmentPlanId == null
         }
@@ -85,7 +97,7 @@ class TemplateCurationInitializer(
             }
         }
 
-        settings.setTemplateCuration202607Done(true)
+        if (firstRun) settings.setTemplateCuration202607Done(true)
     }
 
     companion object {
