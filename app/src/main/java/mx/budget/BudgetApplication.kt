@@ -233,6 +233,16 @@ class BudgetApplication : Application() {
         private set
 
     /**
+     * Marca el tutorial como visto TAMBIÉN en el snapshot de proceso: en una
+     * recreación de la Activity, `collectAsState(initial = ...)` usa este valor
+     * antes de que el Flow de DataStore emita — sin esto el tour se
+     * re-auto-arrancaba con proceso caliente (bug de QA 2026-07-10).
+     */
+    fun markTutorialSeenInProcess() {
+        initialHasSeenTutorial = true
+    }
+
+    /**
      * `true` si la instalación está vacía (sin hogar/miembros/gastos) y hay que
      * mostrar el **wizard de onboarding** (paquete B2). Resuelto síncrono en
      * [onCreate] (mismo patrón que [householdId]); lo lee [MainActivity] para

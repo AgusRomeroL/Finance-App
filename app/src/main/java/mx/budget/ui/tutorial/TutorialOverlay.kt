@@ -50,7 +50,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 private val SpotSpring = spring<Rect>(dampingRatio = 0.8f, stiffness = 380f)
 
 /** Tiempo máximo de espera a que un target registre sus bounds antes de degradar a globo centrado. */
-private const val RESOLVE_TIMEOUT_MS = 800L
+// 2500ms: la navegación + composición fría de una pantalla (Perfil con
+    // DataStore, listas) puede exceder 800ms en gama media — el timeout corto
+    // degradaba a globo centrado targets perfectamente válidos.
+    private const val RESOLVE_TIMEOUT_MS = 2500L
 
 /**
  * Overlay del tutorial guiado: oscurece la pantalla, recorta un "hueco" (spotlight) sobre el
@@ -78,11 +81,20 @@ fun TutorialOverlay(
 ) {
     // ── Orquestación (solo la instancia principal): navegar + abrir/cerrar la hoja ──
     if (orchestrate) {
+        // Detecta la TRANSICIÓN corriendo→terminado (no el estado inicial en falso):
+        // el tour acaba en el Libro Mayor y sin esto un BACK salía de la app.
+        var wasRunning by remember { mutableStateOf(false) }
         LaunchedEffect(controller.index, controller.isRunning) {
             if (!controller.isRunning) {
                 onRequestCloseCapture()
+                if (wasRunning) {
+                    wasRunning = false
+                    val home = TutorialSpec.steps.firstOrNull()?.route
+                    if (home != null && home != currentRoute) onNavigate(home)
+                }
                 return@LaunchedEffect
             }
+            wasRunning = true
             val step = controller.currentStep ?: return@LaunchedEffect
             if (step.requiresCaptureSheet) {
                 onRequestOpenCapture()

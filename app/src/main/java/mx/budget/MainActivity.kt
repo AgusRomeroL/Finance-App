@@ -451,7 +451,11 @@ class MainActivity : ComponentActivity() {
                     nvidiaApiKey = nvidiaApiKey,
                     onNvidiaApiKeyChange = { key -> scope.launch { settings.setNvidiaApiKey(key) } },
                     startTutorial = !hasSeenTutorial,
-                    onTutorialSeen = { scope.launch { settings.setHasSeenTutorial(true) } },
+                    onTutorialSeen = {
+                        // Snapshot de proceso + persistencia: ver markTutorialSeenInProcess.
+                        app.markTutorialSeenInProcess()
+                        scope.launch { settings.setHasSeenTutorial(true) }
+                    },
                 )
                 }
             }
