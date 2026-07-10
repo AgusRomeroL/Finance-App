@@ -46,10 +46,12 @@ enum class TutorialKey {
     ANA_KPI_ROW,
     ANA_WIDGETS,
     ANA_ASK_FAB,
+    /** IconButton del header de Analíticas que abre el Libro Mayor (transición al bloque LED_*). */
+    ANA_LEDGER_ENTRY,
 
     // ── Perfil ──
-    /** Entrada "Importar estado de cuenta" (conciliación Fase 5). Sin tag aún:
-     *  el paso degrada a globo centrado sobre Perfil (comportamiento previsto). */
+    /** Entrada "Importar estado de cuenta" (conciliación Fase 5). Taggeada en la
+     *  SettingRow de ProfileScreen; el auto-scroll del tag baja hasta la fila. */
     PROFILE_STATEMENTS,
 
     // ── Libro Mayor ──

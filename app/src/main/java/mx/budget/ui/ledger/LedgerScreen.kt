@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -163,18 +164,21 @@ fun LedgerScreen(
                 modifier = Modifier.padding(24.dp),
             )
         } else {
-            // TUTORIAL: LED_ROWS — ver TUTORIAL.md
             LazyColumn(
-                modifier = Modifier.tutorialTarget(TutorialKey.LED_ROWS, tutorialController),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(rows, key = { it.expenseId }) { row ->
+                itemsIndexed(rows, key = { _, it -> it.expenseId }) { index, row ->
+                    // TUTORIAL: LED_ROWS — ver TUTORIAL.md (ancla = la PRIMERA fila, no la
+                    // lista completa: el spotlight de todo el LazyColumn quedaba sobredimensionado).
                     LedgerRow(
                         row = row,
                         money = money,
                         dateFmt = dateFmt,
                         onClick = { onOpenDetail(row) },
+                        modifier = if (index == 0)
+                            Modifier.tutorialTarget(TutorialKey.LED_ROWS, tutorialController)
+                        else Modifier,
                     )
                 }
             }
@@ -189,11 +193,12 @@ private fun LedgerRow(
     money: NumberFormat,
     dateFmt: SimpleDateFormat,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {

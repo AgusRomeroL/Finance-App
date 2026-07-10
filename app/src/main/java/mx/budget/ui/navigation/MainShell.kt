@@ -69,6 +69,8 @@ fun MainShell(
                     currentRoute = currentRoute,
                     onNavigate = onNavigate,
                     onCapture = onCapture,
+                    // El rail taggea su "+" con DASH_ACTION_BAR (paridad con el pill compacto).
+                    tutorialController = tutorialController,
                 )
             }
             Box(modifier = Modifier.weight(1f).fillMaxSize()) {
@@ -93,6 +95,8 @@ fun MainShell(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .tutorialTarget(TutorialKey.DASH_NAV, tutorialController),
+                // El pill taggea su "+" con DASH_ACTION_BAR (paso "Registrar un gasto").
+                tutorialController = tutorialController,
             )
         }
     }

@@ -50,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import mx.budget.ui.tutorial.tutorialTarget
 
 /**
  * Pantalla de Perfil / Ajustes.
@@ -83,6 +84,7 @@ fun ProfileScreen(
     onNvidiaApiKeyChange: (String) -> Unit = {},
     onImportStatement: (() -> Unit)? = null,
     onShowTutorial: (() -> Unit)? = null,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
 ) {
     var showLeadDialog by remember { mutableStateOf(false) }
     var showLocationDialog by remember { mutableStateOf(false) }
@@ -468,12 +470,18 @@ fun ProfileScreen(
                     modifier = Modifier.padding(start = 4.dp, top = 4.dp)
                 )
                 Spacer(Modifier.height(12.dp))
+                // TUTORIAL: PROFILE_STATEMENTS — ver TUTORIAL.md (el tag trae la fila a la
+                // vista con auto-scroll; no-op si controller es null)
                 SettingRow(
                     icon = Icons.Filled.UploadFile,
                     title = "Importar estado de cuenta",
                     subtitle = "Sube un PDF o imagen: reconcilia corte, límite y MSI, y reescribe los movimientos de la tarjeta",
                     trailingBadge = null,
-                    onClick = onImportStatement
+                    onClick = onImportStatement,
+                    modifier = Modifier.tutorialTarget(
+                        mx.budget.ui.tutorial.TutorialKey.PROFILE_STATEMENTS,
+                        tutorialController,
+                    ),
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -723,10 +731,11 @@ private fun SettingRow(
     title: String,
     subtitle: String,
     trailingBadge: String?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)

@@ -549,9 +549,11 @@ private fun WalletList(
         if (rest.isEmpty()) matched else matched + ("Otras cuentas" to rest)
     }
 
-    // TUTORIAL: WAL_LIST — ver TUTORIAL.md
+    // TUTORIAL: WAL_LIST — ver TUTORIAL.md (ancla = la PRIMERA tarjeta de cuenta, no
+    // el LazyColumn completo: el spotlight de la lista entera tapaba el título).
+    val firstWalletId = grouped.firstOrNull()?.second?.firstOrNull()?.paymentMethodId
     LazyColumn(
-        modifier = modifier.tutorialTarget(TutorialKey.WAL_LIST, tutorialController),
+        modifier = modifier,
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -587,7 +589,13 @@ private fun WalletList(
                     selected = w.paymentMethodId == selectedId,
                     onClick = { onSelect(w.paymentMethodId) },
                     onLongClick = { onEdit(w.paymentMethodId) },
-                    modifier = Modifier.animateItem(
+                    modifier = Modifier
+                        .then(
+                            if (w.paymentMethodId == firstWalletId)
+                                Modifier.tutorialTarget(TutorialKey.WAL_LIST, tutorialController)
+                            else Modifier
+                        )
+                        .animateItem(
                         fadeInSpec = spring(stiffness = 380f),
                         fadeOutSpec = spring(stiffness = 380f),
                         placementSpec = spring(dampingRatio = 0.8f, stiffness = 380f),

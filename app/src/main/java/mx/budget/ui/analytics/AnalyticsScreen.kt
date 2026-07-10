@@ -139,7 +139,13 @@ fun AnalyticsScreen(
                         }
                     }
                     onOpenLedger?.let {
-                        IconButton(onClick = it) {
+                        // TUTORIAL: ANA_LEDGER_ENTRY — ver TUTORIAL.md
+                        IconButton(
+                            onClick = it,
+                            modifier = Modifier.tutorialTarget(
+                                TutorialKey.ANA_LEDGER_ENTRY, tutorialController
+                            ),
+                        ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ReceiptLong,
                                 contentDescription = "Libro Mayor",

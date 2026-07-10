@@ -145,6 +145,9 @@ object TutorialSpec {
             title = "Tus cuentas y saldos",
             body = "Efectivo, tarjetas, metas de ahorro, préstamos por cobrar y compras a meses " +
                 "(MSI) viven aquí. Toca una cuenta para ver su detalle.",
+            // El target es la primera tarjeta (arriba de la lista): el globo va DEBAJO
+            // para no tapar el título de la pantalla.
+            calloutAnchor = CalloutAnchor.Below,
         ),
         TutorialStep(
             key = TutorialKey.WAL_FAB,
@@ -195,12 +198,23 @@ object TutorialSpec {
             key = TutorialKey.PROFILE_STATEMENTS,
             route = BudgetDestinations.PROFILE,
             title = "Concilia tu estado de cuenta",
-            body = "Desde Perfil puedes importar el PDF de tu tarjeta: cada movimiento se " +
-                "compara con tus gastos ya registrados para vincularlos sin duplicar; lo " +
-                "nuevo llega a la bandeja para que lo confirmes.",
+            body = "Desde aquí importas el PDF de tu tarjeta: cada movimiento se compara con " +
+                "tus gastos ya registrados para vincularlos sin duplicar. La lectura del PDF " +
+                "usa una API gratuita de NVIDIA (modelo diffusiongemma vía NVIDIA NIM) que se " +
+                "configura en esta misma sección de Perfil; si prefieres, puedes usar una API " +
+                "de paga. Es totalmente opcional: sin API key la app funciona igual, solo no " +
+                "podrás importar estados de cuenta.",
         ),
 
         // ── Libro Mayor ──────────────────────────────────────────────────────────
+        // Transición: antes de saltar al Libro Mayor, se enseña DESDE DÓNDE se abre
+        // (el icono del header de Analíticas) para que el brinco de ruta tenga contexto.
+        TutorialStep(
+            key = TutorialKey.ANA_LEDGER_ENTRY,
+            route = BudgetDestinations.ANALYTICS,
+            title = "El Libro Mayor",
+            body = "Desde aquí abres el historial completo de movimientos por quincena.",
+        ),
         TutorialStep(
             key = TutorialKey.LED_FILTERS,
             route = BudgetDestinations.LEDGER,

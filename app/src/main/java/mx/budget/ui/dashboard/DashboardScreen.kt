@@ -275,7 +275,9 @@ fun DashboardScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
 
     // Tutorial guiado: abre la hoja de captura (que vive hoisted en BudgetNavGraph)
-    // cuando el tour lo pide (ver TUTORIAL.md). La hoja ya no se hospeda aquí.
+    // cuando el tour lo pide (ver TUTORIAL.md). La hoja ya no se hospeda aquí. El
+    // CIERRE al salir de la sección de captura NO pasa por aquí: lo hace el propio
+    // BudgetNavGraph (onRequestCloseCapture → captureMode = null, gated a isRunning).
     androidx.compose.runtime.LaunchedEffect(tutorialCaptureOpen) {
         if (tutorialCaptureOpen) onOpenCapture(CaptureSheetMode.New)
     }
@@ -783,7 +785,8 @@ private fun CompactDashboard(
 internal fun NavigationRailCustom(
     currentRoute: String,
     onNavigate: ((String) -> Unit)?,
-    onCapture: () -> Unit = {}
+    onCapture: () -> Unit = {},
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
 ) {
     Column(
         modifier = Modifier
@@ -811,12 +814,14 @@ internal fun NavigationRailCustom(
         Spacer(Modifier.height(18.dp))
 
         // FAB de captura (equivalente al "+" del pill flotante en compacto).
+        // TUTORIAL: DASH_ACTION_BAR — ver TUTORIAL.md (no-op si controller es null)
         Box(
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primaryContainer)
-                .clickable(onClick = onCapture),
+                .clickable(onClick = onCapture)
+                .tutorialTarget(TutorialKey.DASH_ACTION_BAR, tutorialController),
             contentAlignment = Alignment.Center
         ) {
             Icon(

@@ -50,7 +50,10 @@ raíz, así que cada uno queda alineado dentro de su ventana.
   de primera vez (latch cuando `currentRoute == DASHBOARD`, `start(firstRun = true)`), señal
   `tutorialCaptureOpen` hacia el Dashboard, `onShowTutorial = { controller.start(firstRun = false) }`
   a `ProfileScreen`, y los dos `AlertDialog` (aviso/invitación, ver abajo).
-- `ui/dashboard/DashboardScreen.kt` — `LaunchedEffect(tutorialCaptureOpen)` abre/cierra `captureMode`.
+- `ui/dashboard/DashboardScreen.kt` — `LaunchedEffect(tutorialCaptureOpen)` **abre** la hoja
+  (`onOpenCapture`); el **cierre** lo hace `BudgetNavGraph` en `onRequestCloseCapture`
+  (`captureMode = null`, gated a `tutorialController.isRunning` para no descartar una hoja
+  abierta a mano fuera del tour).
 
 ### Datos de demostración (modo demo — solo en pantalla, cero DB)
 Mientras el tour corre (`controller.demoActive == true`), las pantallas sustituyen su estado real
@@ -108,8 +111,8 @@ Los tags llevan el comentario `// TUTORIAL: <KEY> — ver TUTORIAL.md` en el có
 | `DASH_HERO_KPI` | dashboard | `CollapsedHealthCard` (compacto) / `HeroKpi` (expandido) | `ui/dashboard/DashboardScreen.kt` |
 | `DASH_MEMBER_BARS` | dashboard | `MemberDistributionSection` (solo expandido) | `ui/dashboard/DashboardScreen.kt` |
 | `DASH_SUGGESTIONS` | dashboard | `SuggestionsSection` | `ui/dashboard/DashboardScreen.kt` |
-| `DASH_ACTION_BAR` | dashboard | `BottomActionBar` | `ui/dashboard/DashboardScreen.kt` |
-| `DASH_NAV` | dashboard | `NavigationRailCustom` / `BottomNavCustom` | `ui/navigation/MainShell.kt` |
+| `DASH_ACTION_BAR` | dashboard | botón "+" (`CircleActionButton` del `FloatingNavBar` en compacto / FAB del `NavigationRailCustom` en expandido) | `ui/navigation/FloatingNavBar.kt` + `ui/dashboard/DashboardScreen.kt` |
+| `DASH_NAV` | dashboard | `NavigationRailCustom` / `FloatingNavBar` | `ui/navigation/MainShell.kt` |
 | `CAP_KIND_TOGGLE` | dashboard (hoja) | `CaptureHeader` (toggle Gasto/Ingreso) | `ui/capture/CaptureBottomSheet.kt` |
 | `CAP_AMOUNT_KEYPAD` | dashboard (hoja) | `AmountCard` | `ui/capture/CaptureBottomSheet.kt` |
 | `CAP_CATEGORY` | dashboard (hoja) | `CategoryCard` | `ui/capture/CaptureBottomSheet.kt` |
@@ -118,15 +121,16 @@ Los tags llevan el comentario `// TUTORIAL: <KEY> — ver TUTORIAL.md` en el có
 | `CAL_PLANNED` | calendar | `PlannedCard` / sección de planeados | `ui/calendar/CalendarScreen.kt` |
 | `CAL_FAB` | calendar | FAB "Nuevo pago planeado" | `ui/calendar/CalendarScreen.kt` |
 | `WAL_HEADER` | wallets | botones de ingresos/transferencias | `ui/wallets/WalletsScreen.kt` |
-| `WAL_LIST` | wallets | lista de cuentas/saldos | `ui/wallets/WalletsScreen.kt` |
+| `WAL_LIST` | wallets | **primera** `WalletCard` de la lista (globo forzado `Below` para no tapar el título) | `ui/wallets/WalletsScreen.kt` |
 | `WAL_FAB` | wallets | FAB "Nueva cuenta" | `ui/wallets/WalletsScreen.kt` |
 | `ANA_SUMMARY` | analytics | `SmartSummaryCard` | `ui/analytics/AnalyticsScreen.kt` |
 | `ANA_KPI_ROW` | analytics | fila de KPIs (Ahorro/Por cobrar/MSI) | `ui/analytics/AnalyticsScreen.kt` |
 | `ANA_WIDGETS` | analytics | primer `WidgetCard` (gráficas) | `ui/analytics/AnalyticsScreen.kt` |
 | `ANA_ASK_FAB` | analytics | FAB "Preguntar" — lo usan DOS pasos: asistente y "Atajos que aprenden" (pills dinámicos) | `ui/analytics/AnalyticsScreen.kt` |
-| `PROFILE_STATEMENTS` | profile | entrada "Importar estado de cuenta" (conciliación Fase 5). SIN tag: degrada a globo centrado sobre Perfil (previsto) | `ui/profile/ProfileScreen.kt` |
+| `PROFILE_STATEMENTS` | profile | `SettingRow` "Importar estado de cuenta" (con tag; el auto-scroll del target baja hasta la fila) | `ui/profile/ProfileScreen.kt` |
+| `ANA_LEDGER_ENTRY` | analytics | `IconButton` "Libro Mayor" del header — paso de transición: va DESPUÉS de Perfil y ANTES del bloque LED_* (orden del guion) | `ui/analytics/AnalyticsScreen.kt` |
 | `LED_FILTERS` | ledger | fila de FilterChips | `ui/ledger/LedgerScreen.kt` |
-| `LED_ROWS` | ledger | lista / primer `LedgerRow` | `ui/ledger/LedgerScreen.kt` |
+| `LED_ROWS` | ledger | **primera** `LedgerRow` de la lista (patrón `index == 0`) | `ui/ledger/LedgerScreen.kt` |
 
 > Nota: `DASH_MEMBER_BARS` solo existe en el layout expandido (Fold interno). En compacto degrada
 > a globo centrado (comportamiento intencional).

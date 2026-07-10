@@ -40,6 +40,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mx.budget.ui.capture.VoiceCaptureActivity
 import mx.budget.ui.dashboard.navItems
+import mx.budget.ui.tutorial.TutorialController
+import mx.budget.ui.tutorial.TutorialKey
+import mx.budget.ui.tutorial.tutorialTarget
 
 /**
  * Barra inferior flotante estilo Google Photos / Pixel Screenshots: un **pill**
@@ -60,6 +63,7 @@ fun FloatingNavBar(
     onNavigate: (String) -> Unit,
     onCapture: () -> Unit,
     modifier: Modifier = Modifier,
+    tutorialController: TutorialController? = null,
 ) {
     val context = LocalContext.current
     Row(
@@ -113,12 +117,14 @@ fun FloatingNavBar(
             },
         )
         // "+": captura de gasto.
+        // TUTORIAL: DASH_ACTION_BAR — ver TUTORIAL.md (el tag es no-op si controller es null)
         CircleActionButton(
             container = MaterialTheme.colorScheme.primary,
             content = MaterialTheme.colorScheme.onPrimary,
             contentDescription = "Capturar gasto",
             icon = Icons.Filled.Add,
             onClick = onCapture,
+            modifier = Modifier.tutorialTarget(TutorialKey.DASH_ACTION_BAR, tutorialController),
         )
     }
 }
@@ -191,12 +197,13 @@ private fun CircleActionButton(
     contentDescription: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         shape = CircleShape,
         color = container,
         shadowElevation = 6.dp,
-        modifier = Modifier.size(52.dp).clip(CircleShape).clickable(onClick = onClick),
+        modifier = modifier.size(52.dp).clip(CircleShape).clickable(onClick = onClick),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(

@@ -424,6 +424,7 @@ fun BudgetNavGraph(
                     }
                 } else null,
                 onShowTutorial = { tutorialController.start(firstRun = false) },
+                tutorialController = tutorialController,
             )
         }
 
@@ -550,7 +551,13 @@ fun BudgetNavGraph(
         groupFilter = { !it.requiresCaptureSheet },
         orchestrate = true,
         onRequestOpenCapture = { tutorialCaptureOpen = true },
-        onRequestCloseCapture = { tutorialCaptureOpen = false },
+        onRequestCloseCapture = {
+            tutorialCaptureOpen = false
+            // El sheet real vive hoisted aquí (captureMode); bajar la señal no basta
+            // para cerrarlo. Se cierra SOLO si el tour sigue corriendo — fuera del
+            // tutorial no debemos descartar una hoja que el usuario abrió a mano.
+            if (tutorialController.isRunning) captureMode = null
+        },
     )
 
     // Aviso previo al relanzar desde Perfil: los datos del tour son de demostración.
