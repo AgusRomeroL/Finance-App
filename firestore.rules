@@ -40,6 +40,11 @@ service cloud.firestore {
     function isOwner(hid) {
       return isMember(hid) && roleIn(hid) == 'OWNER';
     }
+    // Roles v2: PAYER ("Administrador") tiene los mismos privilegios de
+    // escritura del ledger que el dueño; MEMBER/COLLABORATOR solo lee+propone.
+    function isOwnerOrPayer(hid) {
+      return isMember(hid) && roleIn(hid) in ['OWNER', 'PAYER'];
+    }
 
     // ── users/{uid}/** — solo el propio uid ────────────────────────────────
     match /users/{uid} {
@@ -82,9 +87,20 @@ service cloud.firestore {
             get(/databases/$(database)/documents/households/$(hid)).data.createdBy == request.auth.uid) ||
           (request.resource.data.role != 'OWNER' &&
             exists(/databases/$(database)/documents/households/$(hid)/invites/$(request.resource.data.inviteCode)) &&
-            get(/databases/$(database)/documents/households/$(hid)/invites/$(request.resource.data.inviteCode)).data.role == request.resource.data.role)
+            get(/databases/$(database)/documents/households/$(hid)/invites/$(request.resource.data.inviteCode)).data.role == request.resource.data.role &&
+            // Roles v2: la nominación del invite es inmutable — quien canjea
+            // queda vinculado al member que el dueño eligió, no a uno arbitrario.
+            // .get(k, null) en ambos lados: invites legacy y clientes v1 no traen
+            // la clave, y leer una clave ausente rompería la regla completa.
+            request.resource.data.get('linkedMemberId', null) ==
+              get(/databases/$(database)/documents/households/$(hid)/invites/$(request.resource.data.inviteCode)).data.get('linkedMemberId', null))
         );
-        allow update, delete: if isOwner(hid);
+        // Anti-degradación en servidor (bug del auto-canje): NADIE puede cambiar
+        // su PROPIO role — ni siquiera el dueño (administra los ajenos).
+        allow update: if isOwner(hid) &&
+          (memberUid != request.auth.uid ||
+            request.resource.data.role == resource.data.role);
+        allow delete: if isOwner(hid);
       }
 
       // invites/{code}: cualquier autenticado puede LEER un invite por su código
@@ -103,7 +119,7 @@ service cloud.firestore {
       match /proposals/{id} {
         allow read: if isMember(hid);
         allow create: if isMember(hid);
-        allow update, delete: if isOwner(hid);
+        allow update, delete: if isOwnerOrPayer(hid);
       }
 
       // Datos del hogar (expenses, categories, members, wallets, quincenas,
@@ -113,11 +129,11 @@ service cloud.firestore {
       // propuestas).
       match /{collection}/{docId}/{sub=**} {
         allow read: if isMember(hid);
-        allow write: if isOwner(hid);
+        allow write: if isOwnerOrPayer(hid);
       }
       match /{collection}/{docId} {
         allow read: if isMember(hid);
-        allow write: if isOwner(hid);
+        allow write: if isOwnerOrPayer(hid);
       }
     }
 
