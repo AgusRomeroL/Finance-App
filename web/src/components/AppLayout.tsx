@@ -16,10 +16,14 @@ const NAV_OWNER: NavItem[] = [
   { to: '/', label: 'Grupos', end: true },
 ]
 
-/** Nav del colaborador (sin cambios respecto al circuito original). */
+/**
+ * Nav del colaborador. SIN "Resumen" (/dashboard): el colaborador no debe ver
+ * el estado financiero del hogar desde la web — solo propone gastos y consulta
+ * sus propias propuestas. App.tsx además redirige /dashboard → /proponer si un
+ * COLLABORATOR navega ahí a mano.
+ */
 const NAV_COLLABORATOR: NavItem[] = [
   { to: '/', label: 'Grupos', end: true },
-  { to: '/dashboard', label: 'Resumen', end: false },
   { to: '/proponer', label: 'Proponer', end: false },
   { to: '/mis-propuestas', label: 'Mis propuestas', end: false },
 ]

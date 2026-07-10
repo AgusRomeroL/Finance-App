@@ -74,6 +74,22 @@ export interface Invite {
   createdBy: string
 }
 
+/**
+ * invite_codes/{code} — índice GLOBAL de códigos de invitación OPACOS.
+ * Mapea el código de 8 chars (el id del doc) al household, para poder canjear
+ * sin conocer (ni exponer al compartir) el household id. Lo escribe el OWNER
+ * al generar el invite; el canje solo puede incrementar `uses` (reglas).
+ */
+export interface InviteCodeDoc {
+  householdId: string
+  role: Role
+  expiresAt: number // epoch ms
+  maxUses: number
+  uses: number
+  createdBy: string
+  updatedAt: number
+}
+
 // households/{hid}/members/{id}
 export interface Member {
   displayName: string

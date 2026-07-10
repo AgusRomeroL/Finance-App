@@ -39,6 +39,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -229,6 +230,16 @@ fun HouseholdScreen(
         if (state.isLinked) {
             SectionCard(label = "CREAR GRUPO") {
                 var name by rememberSaveable { mutableStateOf("") }
+                // Limpia el campo SOLO cuando el VM reporta éxito (el contador
+                // avanza). Antes se borraba incondicionalmente al pulsar, y un
+                // fallo dejaba al usuario sin el nombre que había escrito.
+                var seenCreateSuccess by rememberSaveable { mutableStateOf(state.createSuccessCount) }
+                LaunchedEffect(state.createSuccessCount) {
+                    if (state.createSuccessCount != seenCreateSuccess) {
+                        seenCreateSuccess = state.createSuccessCount
+                        name = ""
+                    }
+                }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -239,7 +250,7 @@ fun HouseholdScreen(
                 )
                 Spacer(Modifier.height(12.dp))
                 Button(
-                    onClick = { viewModel.createHousehold(name); name = "" },
+                    onClick = { viewModel.createHousehold(name) },
                     enabled = !state.busy && name.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -254,17 +265,26 @@ fun HouseholdScreen(
             // ── Unirse por código ───────────────────────────────────────────
             SectionCard(label = "UNIRSE A UN GRUPO") {
                 var code by rememberSaveable { mutableStateOf("") }
+                // Mismo criterio que "Crear grupo": el código solo se limpia
+                // cuando la unión tuvo éxito, no al pulsar el botón.
+                var seenJoinSuccess by rememberSaveable { mutableStateOf(state.joinSuccessCount) }
+                LaunchedEffect(state.joinSuccessCount) {
+                    if (state.joinSuccessCount != seenJoinSuccess) {
+                        seenJoinSuccess = state.joinSuccessCount
+                        code = ""
+                    }
+                }
                 OutlinedTextField(
                     value = code,
                     onValueChange = { code = it },
                     label = { Text("Código de invitación") },
-                    placeholder = { Text("hogar.XXXXXXXX") },
+                    placeholder = { Text("ej. 7QX4K2AB") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
-                    onClick = { viewModel.joinByCode(code); code = "" },
+                    onClick = { viewModel.joinByCode(code) },
                     enabled = !state.busy && code.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -277,7 +297,7 @@ fun HouseholdScreen(
             // ── Invitar (generar y compartir código) ─────────────────────────
             SectionCard(label = "INVITAR A OTRO DISPOSITIVO") {
                 Text(
-                    "Genera un código y compártelo. Quien lo canjee (app o web) entra como colaborador y puede proponer gastos que confirmas tú.",
+                    "Genera un código de 8 caracteres y compártelo. Quien lo canjee (app o web) entra como colaborador y puede proponer gastos que confirmas tú.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

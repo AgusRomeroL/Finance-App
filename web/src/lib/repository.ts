@@ -23,6 +23,7 @@ import type {
   HouseholdRole,
   HouseholdWithId,
   Invite,
+  InviteCodeDoc,
   MemberWithId,
   Proposal,
   ProposalKind,
@@ -71,11 +72,17 @@ function round2(x: number): number {
 /* ---------------------------------------------------------------------------
  * Formato del código de invitación
  * ---------------------------------------------------------------------------
- * El dueño comparte un solo string: `{hid}.{code}`
- *   - {hid}  = id del documento del household (autogenerado por Firestore)
- *   - {code} = el secreto de 8 chars A-Z0-9 (el id del doc invite; ES el secreto)
+ * Formato ACTUAL (opaco): el dueño comparte SOLO el código de 8 chars A-Z0-9
+ * (ej. `7QX4K2AB`), sin el household id — el hogar se resuelve leyendo la
+ * colección global `invite_codes/{code}` (así lo compartido no filtra el id
+ * del hogar, p. ej. `default_household`).
+ *
+ * Formato LEGACY (aún aceptado al canjear): `{hid}.{code}`
+ *   - {hid}  = id del documento del household
+ *   - {code} = el secreto de 8 chars A-Z0-9 (el id del doc invite)
  * separados por un punto ".". La web parte por el ÚLTIMO punto para tolerar
- * hids que (teóricamente) contengan puntos.
+ * hids que (teóricamente) contengan puntos. [parseInviteCode] solo aplica a
+ * este formato legacy.
  * ------------------------------------------------------------------------- */
 export function parseInviteCode(raw: string): { hid: string; code: string } | null {
   const trimmed = raw.trim()
@@ -191,7 +198,9 @@ export interface JoinResult {
 }
 
 /**
- * Une al usuario a un household usando un código `{hid}.{code}`.
+ * Une al usuario a un household usando un código de invitación.
+ * Acepta el formato OPACO actual (8 chars sin punto → el hogar se resuelve en
+ * `invite_codes/{code}`) y el LEGACY `{hid}.{code}` (contiene un punto).
  * Valida expiresAt/maxUses del lado cliente (las reglas lo refuerzan server-side).
  */
 export async function joinByCode(
@@ -199,11 +208,38 @@ export async function joinByCode(
   rawCode: string,
   displayName: string,
 ): Promise<JoinResult> {
-  const parsed = parseInviteCode(rawCode)
-  if (!parsed) {
-    throw new Error('Código inválido. Formato esperado: IDGRUPO.CODIGO8')
+  const trimmed = rawCode.trim()
+  let hid: string
+  let code: string
+  // Doc del índice global (solo en el camino opaco): su contador de usos
+  // también se incrementa al final, junto con el del invite de la subcolección.
+  let globalCodeRef: ReturnType<typeof doc> | null = null
+
+  if (trimmed.includes('.')) {
+    // Camino LEGACY {hid}.{code}.
+    const parsed = parseInviteCode(trimmed)
+    if (!parsed) {
+      throw new Error('Código inválido.')
+    }
+    hid = parsed.hid
+    code = parsed.code
+  } else {
+    // Camino OPACO: resolver el hogar en invite_codes/{code}.
+    code = trimmed.toUpperCase()
+    if (!/^[A-Z0-9]{8}$/.test(code)) {
+      throw new Error('Código inválido. Debe tener 8 letras o números.')
+    }
+    globalCodeRef = doc(db, 'invite_codes', code)
+    const globalSnap = await getDoc(globalCodeRef)
+    if (!globalSnap.exists()) {
+      throw new Error('El código no existe o ya fue eliminado.')
+    }
+    const globalData = globalSnap.data() as InviteCodeDoc
+    if (!globalData.householdId) {
+      throw new Error('El código está dañado (sin grupo asociado).')
+    }
+    hid = globalData.householdId
   }
-  const { hid, code } = parsed
 
   const inviteRef = doc(db, 'households', hid, 'invites', code)
   const inviteSnap = await getDoc(inviteRef)
@@ -231,8 +267,12 @@ export async function joinByCode(
   const mirror: UserHouseholdRef = { role, joinedAt: Date.now() }
   await setDoc(doc(db, 'users', user.uid, 'households', hid), mirror)
 
-  // Incrementa el contador de usos (atómico).
+  // Incrementa el contador de usos (atómico) — en AMBOS docs si el código se
+  // resolvió por el índice global.
   await updateDoc(inviteRef, { uses: increment(1) })
+  if (globalCodeRef) {
+    await updateDoc(globalCodeRef, { uses: increment(1) })
+  }
 
   return { hid, role }
 }

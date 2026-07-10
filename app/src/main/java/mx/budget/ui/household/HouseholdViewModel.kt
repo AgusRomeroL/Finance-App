@@ -40,6 +40,13 @@ class HouseholdViewModel(
         val inviteCode: String? = null,
         val busy: Boolean = false,
         val message: String? = null,
+        /**
+         * Contadores de éxito de crear/unirse. La pantalla los observa para
+         * limpiar los campos de texto SOLO cuando la operación tuvo éxito
+         * (antes se borraban incondicionalmente al pulsar el botón).
+         */
+        val createSuccessCount: Int = 0,
+        val joinSuccessCount: Int = 0,
     )
 
     private val _extra = MutableStateFlow(
@@ -69,6 +76,13 @@ class HouseholdViewModel(
         }
         viewModelScope.launch {
             householdsFlow.collect { recompute() }
+        }
+        // CRÍTICO: toda escritura a `_extra` (mensajes de error, busy, invite)
+        // debe reflejarse en el uiState combinado. Sin este colector, los
+        // caminos que escribían `_extra` sin llamar recompute() (p. ej. el
+        // onFailure de createHousehold) dejaban el error INVISIBLE para la UI.
+        viewModelScope.launch {
+            _extra.collect { recompute() }
         }
     }
 
@@ -108,10 +122,16 @@ class HouseholdViewModel(
             runCatching { membershipRepository.createHousehold(name.trim(), user.uid, displayName) }
                 .onSuccess { hid ->
                     membershipRepository.setActiveHousehold(user.uid, hid)
-                    _extra.value = _extra.value.copy(busy = false, message = "Grupo \"$name\" creado")
+                    _extra.value = _extra.value.copy(
+                        busy = false,
+                        message = "Grupo \"$name\" creado",
+                        createSuccessCount = _extra.value.createSuccessCount + 1,
+                    )
                     switchTo(hid)
                 }
                 .onFailure {
+                    // El colector de `_extra` del init propaga este mensaje al
+                    // uiState — antes se perdía por no llamar recompute().
                     _extra.value = _extra.value.copy(busy = false, message = "No se pudo crear el grupo")
                 }
         }
@@ -129,9 +149,14 @@ class HouseholdViewModel(
             val hid = membershipRepository.joinByCode(fullCode.trim(), user.uid, displayName)
             if (hid != null) {
                 membershipRepository.setActiveHousehold(user.uid, hid)
-                _extra.value = _extra.value.copy(busy = false, message = "Te uniste al grupo")
+                _extra.value = _extra.value.copy(
+                    busy = false,
+                    message = "Te uniste al grupo",
+                    joinSuccessCount = _extra.value.joinSuccessCount + 1,
+                )
                 switchTo(hid)
             } else {
+                // Visible gracias al colector de `_extra` (mismo fix que crear).
                 _extra.value = _extra.value.copy(busy = false, message = "Código inválido o expirado")
             }
         }

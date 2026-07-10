@@ -95,14 +95,13 @@ function JoinGroup({ onJoined }: { onJoined: () => Promise<void> }) {
     <Card>
       <h3 className="mb-1 font-semibold text-on-surface">Unirse con código</h3>
       <p className="mb-3 text-xs text-on-surface-variant">
-        Pide al titular su código de invitación (formato{' '}
-        <code className="rounded bg-surface-2 px-1.5 py-0.5">IDGRUPO.CODIGO</code>).
+        Pide al titular su código de invitación (8 letras o números).
       </p>
       <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row">
         <input
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          placeholder="ej. AbC123xy.7QK9M2ZP"
+          placeholder="Código de invitación (ej. 7QK9M2ZP)"
           className={inputCls}
           autoComplete="off"
           spellCheck={false}

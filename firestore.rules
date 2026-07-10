@@ -121,6 +121,26 @@ service cloud.firestore {
       }
     }
 
+    // ── invite_codes/{code} — índice global de códigos OPACOS ──────────────
+    // Permite canjear una invitación con SOLO el código de 8 chars, sin exponer
+    // el household id en lo que se comparte (antes el código era `{hid}.{code}`
+    // y filtraba el id del hogar, p. ej. `default_household`). El doc mapea
+    // code → { householdId, role, expiresAt, maxUses, uses, createdBy, updatedAt }.
+    //   - get: cualquier autenticado (el código ES el secreto; no hay `list`,
+    //     así que no se pueden enumerar códigos ajenos).
+    //   - create: solo el OWNER del hogar apuntado por el doc NUEVO.
+    //   - delete: solo el OWNER del hogar apuntado por el doc EXISTENTE
+    //     (resource.data, no request.resource.data: en un delete no hay doc nuevo).
+    //   - update: el canje solo puede tocar `uses` (incrementar el contador);
+    //     rol/vigencia/hogar quedan inmutables para quien canjea.
+    match /invite_codes/{code} {
+      allow get: if signedIn();
+      allow create: if signedIn() && isOwner(request.resource.data.householdId);
+      allow delete: if signedIn() && isOwner(resource.data.householdId);
+      allow update: if signedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uses']);
+    }
+
     // Todo lo demás: cerrado.
     match /{document=**} {
       allow read, write: if false;

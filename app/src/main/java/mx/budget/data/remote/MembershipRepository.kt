@@ -27,12 +27,17 @@ import kotlin.random.Random
  * - `households/{hid}/roles/{uid}` = { role: OWNER|COLLABORATOR, linkedMemberId?, displayName }
  * - `users/{uid}/households/{hid}` = { role, joinedAt }  (espejo para listar mis hogares)
  * - `households/{hid}/invites/{code}` = { role, expiresAt(epochMs), maxUses, uses, createdBy }
+ * - `invite_codes/{code}` = { householdId, role, expiresAt, maxUses, uses, createdBy, updatedAt }
+ *   (índice GLOBAL que resuelve un código opaco → household id)
  *
  * ── Código de invitación ─────────────────────────────────────────────────────
- * El dueño comparte con el colaborador un código con formato **`{hid}.{code}`**
- * (ej. `default_household.7QX4K2AB`). La parte antes del punto es el household id;
- * la parte después (8 chars A-Z0-9) es el secreto que indexa el doc del invite.
- * La web usa el MISMO formato. [parseInviteCode] lo separa.
+ * El dueño comparte con el colaborador un código OPACO de 8 chars A-Z0-9
+ * (ej. `7QX4K2AB`), sin el household id — así lo compartido no filtra el id del
+ * hogar (p. ej. `default_household`). El canje resuelve el hogar leyendo la
+ * colección global `invite_codes/{code}` y sigue con el invite de la
+ * subcolección. Por compatibilidad, los códigos LEGACY con formato
+ * **`{hid}.{code}`** (contienen un punto) se siguen aceptando al canjear;
+ * [parseInviteCode] los separa. La web acepta ambos formatos igual.
  */
 class MembershipRepository(
     private val firestore: FirebaseFirestore,
@@ -60,6 +65,7 @@ class MembershipRepository(
 
     private fun users() = firestore.collection("users")
     private fun households() = firestore.collection("households")
+    private fun inviteCodes() = firestore.collection("invite_codes")
 
     /**
      * Observa los hogares del usuario leyendo su espejo `users/{uid}/households`.
@@ -212,8 +218,13 @@ class MembershipRepository(
     // ── Invitaciones ───────────────────────────────────────────────────────────
 
     /**
-     * Genera un código de invitación al hogar con el rol dado. Devuelve el
-     * código completo con formato **`{hid}.{code}`** para compartir.
+     * Genera un código de invitación al hogar con el rol dado. Devuelve SOLO
+     * el código OPACO de 8 chars (ej. `7QX4K2AB`) para compartir — ya no el
+     * formato legacy `{hid}.{code}`, que exponía el household id.
+     *
+     * Escribe DOS docs: el invite en la subcolección del hogar (fuente de
+     * verdad de la validación) y el índice global `invite_codes/{code}` que
+     * permite al canjeador resolver el hogar sin conocer su id.
      *
      * @param role rol que recibirá quien lo canjee (default COLLABORATOR).
      * @param maxUses usos permitidos (default 5).
@@ -227,29 +238,80 @@ class MembershipRepository(
         ttlMillis: Long = 7L * 24 * 60 * 60 * 1000,
     ): String {
         val code = randomCode()
+        val now = System.currentTimeMillis()
+        val expiresAt = now + ttlMillis
         households().document(householdId).collection("invites").document(code).set(
             mapOf(
                 "role" to role,
-                "expiresAt" to (System.currentTimeMillis() + ttlMillis),
+                "expiresAt" to expiresAt,
                 "maxUses" to maxUses,
                 "uses" to 0,
                 "createdBy" to createdBy,
             )
         ).await()
-        return "$householdId.$code"
+        // Índice global opaco: code → householdId (las reglas solo dejan
+        // crearlo al OWNER del hogar apuntado).
+        inviteCodes().document(code).set(
+            mapOf(
+                "householdId" to householdId,
+                "role" to role,
+                "expiresAt" to expiresAt,
+                "maxUses" to maxUses,
+                "uses" to 0,
+                "createdBy" to createdBy,
+                "updatedAt" to now,
+            )
+        ).await()
+        return code
     }
 
     /**
-     * Canjea un código `{hid}.{code}`: valida vigencia/usos en cliente, crea
+     * Canjea un código de invitación: valida vigencia/usos en cliente, crea
      * `roles/{uid}` con el rol del invite + el espejo del usuario, e incrementa
      * `uses`. Devuelve el household id al que se unió, o null si es inválido.
+     *
+     * Acepta DOS formatos:
+     *  - OPACO (actual): 8 chars sin punto (`7QX4K2AB`) — el hogar se resuelve
+     *    leyendo el índice global `invite_codes/{code}` y `uses` se incrementa
+     *    en AMBOS docs (subcolección + índice global).
+     *  - LEGACY: `{hid}.{code}` (contiene un punto) — se parsea directo y solo
+     *    se incrementa el doc de la subcolección (el índice global no existe
+     *    para códigos viejos).
      */
     suspend fun joinByCode(fullCode: String, uid: String, displayName: String): String? {
-        val (hid, code) = parseInviteCode(fullCode) ?: run {
-            Log.w(TAG, "Código de invitación mal formado: $fullCode")
-            return null
-        }
+        val trimmed = fullCode.trim()
         return try {
+            val hid: String
+            val code: String
+            // Referencia al doc del índice global (solo en el camino opaco),
+            // para incrementar su contador de usos junto con el del invite.
+            var globalCodeRef: com.google.firebase.firestore.DocumentReference? = null
+            if (trimmed.contains('.')) {
+                // Camino LEGACY {hid}.{code}.
+                val parsed = parseInviteCode(trimmed) ?: run {
+                    Log.w(TAG, "Código de invitación mal formado: $trimmed")
+                    return null
+                }
+                hid = parsed.first
+                code = parsed.second
+            } else {
+                // Camino OPACO: resolver el hogar en invite_codes/{code}.
+                code = trimmed.uppercase()
+                if (code.length != CODE_LENGTH) {
+                    Log.w(TAG, "Código de invitación mal formado: $trimmed")
+                    return null
+                }
+                val ref = inviteCodes().document(code)
+                val snap = ref.get().await()
+                val resolved = snap.getString("householdId")
+                if (resolved.isNullOrBlank()) {
+                    Log.w(TAG, "Código opaco inexistente o sin hogar: $code")
+                    return null
+                }
+                hid = resolved
+                globalCodeRef = ref
+            }
+
             val inviteRef = households().document(hid).collection("invites").document(code)
             val invite = inviteRef.get().await()
             if (!invite.exists()) {
@@ -285,6 +347,9 @@ class MembershipRepository(
                 mapOf("role" to role, "joinedAt" to now, "displayName" to hid)
             ).await()
             inviteRef.update("uses", FieldValue.increment(1)).await()
+            // Camino opaco: el contador también avanza en el índice global,
+            // para que ambos docs reflejen los usos consumidos.
+            globalCodeRef?.update("uses", FieldValue.increment(1))?.await()
 
             hid
         } catch (e: Exception) {

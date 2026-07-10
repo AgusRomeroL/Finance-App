@@ -15,7 +15,8 @@ import CalendarPage from './pages/CalendarPage'
 
 /**
  * Guard de las rutas del TITULAR: mientras el rol carga muestra loading; un
- * COLLABORATOR es redirigido a su Resumen; sin hogar activo se pide elegir uno.
+ * COLLABORATOR es redirigido a Proponer (ya no tiene Resumen); sin hogar
+ * activo se pide elegir uno.
  */
 function RequireOwner({ children }: { children: ReactNode }) {
   const { active, myRole, loading } = useHousehold()
@@ -28,16 +29,33 @@ function RequireOwner({ children }: { children: ReactNode }) {
       />
     )
   }
-  if (myRole === 'COLLABORATOR') return <Navigate to="/dashboard" replace />
+  if (myRole === 'COLLABORATOR') return <Navigate to="/proponer" replace />
   if (myRole !== 'OWNER') return <LoadingState label="Verificando tu rol…" />
   return <>{children}</>
 }
 
 /**
+ * Guard de /dashboard (Resumen): el COLLABORATOR ya no debe ver el resumen
+ * financiero del hogar — se le redirige a Proponer. El OWNER conserva el
+ * acceso (navegación manual), igual que antes.
+ *
+ * TODO(rules-collaborator): esto solo oculta la UI. Falta endurecer las
+ * reglas de Firestore para que el COLLABORATOR tampoco pueda LEER
+ * expenses/wallets/quincenas por API directa (hoy `isMember` le concede
+ * lectura de todos los datos del hogar en firestore.rules).
+ */
+function DashboardRoute() {
+  const { myRole, loading } = useHousehold()
+  if (loading) return <LoadingState />
+  if (myRole === 'COLLABORATOR') return <Navigate to="/proponer" replace />
+  return <DashboardPage />
+}
+
+/**
  * Redirección post-login: una sola vez por sesión, si el usuario entró en "/"
  * y su rol en el hogar activo resulta OWNER, se le lleva a /panel. Un
- * COLLABORATOR se queda en "/" (Grupos) / navega a /dashboard como hoy, y la
- * navegación manual posterior a Grupos nunca se secuestra.
+ * COLLABORATOR se queda en "/" (Grupos) y navega a Proponer / Mis propuestas,
+ * y la navegación manual posterior a Grupos nunca se secuestra.
  */
 function PostLoginRedirect() {
   const { myRole, loading } = useHousehold()
@@ -89,7 +107,7 @@ function AuthedApp() {
             }
           />
           {/* Rutas del colaborador */}
-          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="dashboard" element={<DashboardRoute />} />
           <Route path="proponer" element={<ProposePage />} />
           <Route path="mis-propuestas" element={<MyProposalsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
