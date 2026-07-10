@@ -98,19 +98,70 @@ class NaturalLanguageCaptureParser {
             .map { it.trim('.', ',', ';', ':', '$', '"', '(', ')') }
             .filter { it.isNotBlank() }
 
-        // 1) Quita ruido de cabecera (verbos, preposiciones, artículos, moneda, fecha).
+        // 1) Quita ruido de cabecera (verbos, preposiciones, artículos, moneda,
+        //    fecha). Los nexos "de"/"que" tras un verbo también son cabecera:
+        //    cubren perífrasis como "acabo de gastar" o "terminé de pagar".
         var start = 0
-        while (start < tokens.size && tokens[start].lowercase() in LEADING_NOISE) start++
-        // 2) Quita moneda/fecha en cualquier posición (preserva "de"/"con" internos).
-        var body = tokens.subList(start, tokens.size)
+        while (start < tokens.size) {
+            val t = tokens[start].lowercase()
+            val esNexoDePerifrasis = (t == "de" || t == "que") &&
+                start > 0 && tokens[start - 1].lowercase() in VERBS
+            if (t in LEADING_NOISE || esNexoDePerifrasis) start++ else break
+        }
+
+        // 2) Heurística prioritaria: si queda una preposición de objeto (en|de|por)
+        //    FUERA de la cabecera, el concepto es lo que sigue a la ÚLTIMA de
+        //    ellas ("gasté 10 en comprando papas fritas" → "papas fritas").
+        val lastPrep = (start until tokens.size - 1)
+            .lastOrNull { tokens[it].lowercase() in OBJECT_PREPS }
+        if (lastPrep != null) {
+            val fragment = cleanFragment(tokens.subList(lastPrep + 1, tokens.size))
+            if (fragment.isNotBlank()) return truncateAtWord(fragment)
+        }
+
+        // 3) Heurística de cabecera (camino histórico): quita moneda/fecha en
+        //    cualquier posición (preserva "de"/"con" internos) y recorta
+        //    preposiciones/artículos colgando al final.
+        val concept = cleanFragment(tokens.subList(start, tokens.size))
+        return truncateAtWord(concept).ifBlank { "Gasto" }
+    }
+
+    /**
+     * Limpia un fragmento candidato a concepto: quita verbos/gerundios líderes
+     * ("comprando papas fritas" → "papas fritas"), moneda/fecha en cualquier
+     * posición y preposiciones/artículos colgando al final.
+     */
+    private fun cleanFragment(fragment: List<String>): String {
+        var lead = 0
+        while (lead < fragment.size) {
+            val t = fragment[lead].lowercase()
+            val esNexoDePerifrasis = (t == "de" || t == "que") &&
+                lead > 0 && fragment[lead - 1].lowercase() in VERBS
+            if (t in VERBS || esNexoDePerifrasis) lead++ else break
+        }
+        var body = fragment.subList(lead, fragment.size)
             .filterNot { it.lowercase() in STRONG_NOISE }
-        // 3) Recorta preposiciones/artículos colgando al final.
         while (body.isNotEmpty() && body.last().lowercase() in TRAILING_NOISE) {
             body = body.dropLast(1)
         }
+        return body.joinToString(" ").trim()
+    }
 
-        val concept = body.joinToString(" ").trim()
-        return concept.take(40).ifBlank { "Gasto" }
+    /**
+     * Trunca a [MAX_CONCEPT_LEN] chars SIN partir palabras: si el corte cae a
+     * media palabra retrocede al último espacio ("papas frit" → "papas"), y
+     * quita preposiciones/artículos que queden colgando tras el corte.
+     */
+    private fun truncateAtWord(s: String): String {
+        if (s.length <= MAX_CONCEPT_LEN) return s
+        val cut = s.take(MAX_CONCEPT_LEN)
+        val lastSpace = cut.lastIndexOf(' ')
+        val whole = (if (lastSpace > 0) cut.substring(0, lastSpace) else cut).trimEnd()
+        var words = whole.split(' ')
+        while (words.size > 1 && words.last().lowercase() in TRAILING_NOISE) {
+            words = words.dropLast(1)
+        }
+        return words.joinToString(" ")
     }
 
     /** Primer número MXN plausible. Tolerante a `$`, comas y puntos. */
@@ -136,11 +187,25 @@ class NaturalLanguageCaptureParser {
         private val AMOUNT = Regex("""\$?\s*(\d[\d.,]*\d|\d)""")
         private val WHITESPACE = Regex("\\s+")
 
+        /** Máximo de caracteres del concepto propuesto (se trunca por palabra). */
+        private const val MAX_CONCEPT_LEN = 40
+
         private val VERBS = setOf(
+            // Pretéritos/presentes (con y sin acento).
             "gasté", "gaste", "gasto", "pagué", "pague", "pago", "compré", "compre",
-            "costó", "costo", "fue", "fueron", "me", "gastamos", "pagamos", "cuesta",
+            "costó", "costo", "fue", "fueron", "me", "gastamos", "pagamos", "compramos",
+            "cuesta",
+            // Perífrasis "acabo de…"/"terminé de…" (con y sin acento).
+            "acabo", "acabé", "acabe", "acabamos", "terminé", "termine", "terminamos",
+            // Infinitivos ("acabo de gastar").
+            "gastar", "pagar", "comprar",
+            // Gerundios ("en comprando papas fritas").
+            "gastando", "pagando", "comprando",
         )
         private val PREPS = setOf("en", "de", "del", "para", "por", "con", "a", "al")
+
+        /** Preposiciones que introducen el objeto del gasto ("en gasolina", "por la luz"). */
+        private val OBJECT_PREPS = setOf("en", "de", "por")
         private val ARTICLES = setOf("el", "la", "los", "las", "un", "una", "unos", "unas", "mi", "mis")
         private val CURRENCY = setOf("pesos", "peso", "mxn", "varos", "varas", "lana", "$")
         private val DATE = setOf("hoy", "ayer", "antier", "anteayer")

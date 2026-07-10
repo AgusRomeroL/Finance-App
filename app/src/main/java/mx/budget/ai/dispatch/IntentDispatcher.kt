@@ -17,8 +17,10 @@ import mx.budget.data.repository.InstallmentRepository
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.WalletRepository
+import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 
 /**
  * Recibe el JSON validado de la IA e invoca la parte de la app que hace el
@@ -48,6 +50,13 @@ class IntentDispatcher(
 
     /** Zona horaria canónica del hogar (spec). */
     private val zone = ZoneId.of("America/Mexico_City")
+
+    /**
+     * Formato de moneda MXN es-MX para las ramas que devuelven texto
+     * pre-renderizado (mismo patrón que el chat usa en `formatResult`):
+     * "$4,000.00" en lugar del crudo "4000.00".
+     */
+    private val money: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "MX"))
 
     /**
      * Despacha la salida CRUDA del LLM. Tres niveles de tolerancia:
@@ -202,8 +211,9 @@ class IntentDispatcher(
                     val delta = currentExpenses - avg
                     val dir = if (delta >= 0) "por ENCIMA" else "por DEBAJO"
                     DispatchResult.QuincenaComparison(
-                        "Gasto actual %.2f vs promedio %.2f de las últimas ${history.size} cerradas: %.2f $dir del baseline."
-                            .format(currentExpenses, avg, kotlin.math.abs(delta)),
+                        "Gasto actual ${money.format(currentExpenses)} vs promedio ${money.format(avg)} " +
+                            "de las últimas ${history.size} cerradas: " +
+                            "${money.format(kotlin.math.abs(delta))} $dir del baseline.",
                         n,
                     )
                 }
@@ -232,11 +242,16 @@ class IntentDispatcher(
                     householdId, sinceDate = "2000-01-01", nQuincenas = 6,
                 ).firstOrNull { it.categoryId == cat.id }?.actual ?: 0.0
                 val explanation = when {
-                    baseline <= 0.0 -> "Sin histórico suficiente para ${cat.displayName}; gasto actual %.2f.".format(current)
-                    current > baseline -> "${cat.displayName} va %.2f, un %.0f %% ARRIBA de su promedio histórico (%.2f)."
-                        .format(current, 100 * (current - baseline) / baseline, baseline)
-                    else -> "${cat.displayName} va %.2f, un %.0f %% ABAJO de su promedio histórico (%.2f)."
-                        .format(current, 100 * (baseline - current) / baseline, baseline)
+                    baseline <= 0.0 ->
+                        "Sin histórico suficiente para ${cat.displayName}; gasto actual ${money.format(current)}."
+                    current > baseline ->
+                        ("${cat.displayName} va ${money.format(current)}, un %.0f %% ARRIBA " +
+                            "de su promedio histórico (${money.format(baseline)}).")
+                            .format(100 * (current - baseline) / baseline)
+                    else ->
+                        ("${cat.displayName} va ${money.format(current)}, un %.0f %% ABAJO " +
+                            "de su promedio histórico (${money.format(baseline)}).")
+                            .format(100 * (baseline - current) / baseline)
                 }
                 DispatchResult.VarianceExplanation(cat, explanation)
             }

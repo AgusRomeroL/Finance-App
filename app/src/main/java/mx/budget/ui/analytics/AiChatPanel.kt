@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -109,6 +110,9 @@ fun AiChatSheet(
         Column(
             Modifier
                 .fillMaxWidth()
+                // imePadding: sin esto el teclado tapa el campo de pregunta (el
+                // ModalBottomSheet no reajusta por IME por sí solo).
+                .imePadding()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp),
         ) {
@@ -456,5 +460,24 @@ private fun formatResult(result: DispatchResult, money: NumberFormat): String = 
     is DispatchResult.ParseError ->
         "No estoy seguro de haber entendido eso. Intenta reformular la pregunta."
 
-    is DispatchResult.MissingArg -> "Me faltó un dato (${result.argumentName}). Especifica a qué te refieres."
+    is DispatchResult.MissingArg -> {
+        // Nunca mostrar el nombre crudo del slot ("category_code"): se traduce a
+        // una etiqueta humana; los slots no mapeados caen al mensaje genérico.
+        val etiqueta = SLOT_LABELS[result.argumentName]
+        if (etiqueta != null) "No entendí $etiqueta. ¿A cuál te refieres?"
+        else "No entendí a qué te refieres. ¿Puedes decirlo de otra forma?"
+    }
 }
+
+/**
+ * Etiquetas humanas para los slots que [mx.budget.ai.dispatch.IntentDispatcher]
+ * puede reportar como faltantes en [DispatchResult.MissingArg]. Mantener en
+ * sincronía con los `MissingArg(...)` del dispatcher.
+ */
+private val SLOT_LABELS = mapOf(
+    "category_code" to "la categoría",
+    "member_alias" to "el miembro",
+    "wallet_name" to "la cuenta",
+    "hypothetical_cut_category" to "la categoría a recortar",
+    "plan_name" to "el plan",
+)
