@@ -176,14 +176,41 @@ fun BudgetNavGraph(
     val tutorialController = remember { TutorialController(TutorialSpec.steps, onMarkSeen = onTutorialSeen) }
     // Señal para abrir el CaptureBottomSheet (estado local del Dashboard) durante el tour.
     var tutorialCaptureOpen by remember { mutableStateOf(false) }
-    // Auto-arranque la primera vez: solo cuando ya estamos en el Dashboard (una instalación
-    // fresca ve el tour tras salir del onboarding de datos). Latch para no re-arrancar.
+    // Primer arranque: en vez de lanzar el tour directo, se ofrece una BIENVENIDA
+    // con dos caminos (explorar el presupuesto propio vs. unirse a otro grupo).
+    // Latch para no re-mostrar.
     var tutorialStarted by remember { mutableStateOf(false) }
+    var showWelcome by remember { mutableStateOf(false) }
     LaunchedEffect(startTutorial, currentRoute) {
         if (startTutorial && !tutorialStarted && currentRoute == BudgetDestinations.DASHBOARD) {
             tutorialStarted = true
-            tutorialController.start(firstRun = true)
+            showWelcome = true
         }
+    }
+    if (showWelcome) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Te damos la bienvenida") },
+            text = {
+                Text(
+                    "¿Quieres conocer tu presupuesto con un recorrido guiado, o vienes a " +
+                        "unirte al grupo de alguien más con un código de invitación?"
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    showWelcome = false
+                    tutorialController.start(firstRun = true)
+                }) { Text("Ver recorrido") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    showWelcome = false
+                    onTutorialSeen()
+                    onNavigate(BudgetDestinations.HOUSEHOLD)
+                }) { Text("Unirme a un grupo") }
+            },
+        )
     }
 
     // Fade-through (M3) para destinos top-level no relacionados: el saliente se desvanece
