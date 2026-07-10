@@ -12,7 +12,7 @@ import {
   listWallets,
   updateExpense,
 } from '../lib/repository'
-import { dateInputToEpochMs, epochMsToDateInput, formatDate, formatMxn } from '../lib/format'
+import { dateInputToEpochMs, epochMsToDateInput, formatDate, formatMxn, youLabel } from '../lib/format'
 import type {
   Attribution,
   CategoryWithId,
@@ -54,7 +54,7 @@ interface EditDraft {
 }
 
 export default function LedgerPage() {
-  const { active, loading: hhLoading } = useHousehold()
+  const { active, linkedMemberId, loading: hhLoading } = useHousehold()
   const hid = active?.id ?? null
 
   const [catalog, setCatalog] = useState<CatalogData | null>(null)
@@ -326,7 +326,7 @@ export default function LedgerPage() {
             <option value="">Todos</option>
             {members.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.displayName}
+                {youLabel(m.displayName, m.id, linkedMemberId)}
               </option>
             ))}
           </select>

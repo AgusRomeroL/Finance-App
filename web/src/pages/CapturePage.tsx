@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useHousehold } from '../context/HouseholdContext'
 import { Button, Chip, EmptyState, ErrorState, Eyebrow, LoadingState } from '../components/ui'
 import { createExpense, createIncome, listCategories, listMembers, listWallets } from '../lib/repository'
-import { dateInputToEpochMs, epochMsToDateInput, formatMxn } from '../lib/format'
+import { dateInputToEpochMs, epochMsToDateInput, formatMxn, youLabel } from '../lib/format'
 import type {
   AttributionInput,
   CategoryWithId,
@@ -555,7 +555,7 @@ export default function CapturePage() {
           <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1">
             {members.map((m) => (
               <Chip key={m.id} selected={incomeMemberId === m.id} onClick={() => setIncomeMemberId(m.id)}>
-                {m.displayName}
+                {youLabel(m.displayName, m.id, linkedMemberId)}
               </Chip>
             ))}
           </div>
@@ -590,7 +590,7 @@ export default function CapturePage() {
             return (
               <li key={m.id} className="flex items-center justify-between gap-3">
                 <p className={`min-w-0 truncate text-sm ${pct > 0 ? 'font-medium text-on-surface' : 'text-on-surface-variant'}`}>
-                  {m.displayName}
+                  {youLabel(m.displayName, m.id, linkedMemberId)}
                 </p>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <StepperButton label={`Quitar 5% a ${m.displayName}`} onClick={() => setShare(m.id, -5)} disabled={pct <= 0}>
@@ -622,7 +622,7 @@ export default function CapturePage() {
         >
           <Eyebrow>Pagó</Eyebrow>
           <span className="text-sm font-medium text-on-surface">
-            {payer?.displayName ?? '—'} · 100%
+            {payer ? youLabel(payer.displayName, payer.id, linkedMemberId) : '—'} · 100%
             <span className="ml-2 text-xs text-on-surface-variant">{payerOpen ? '▲' : '▼'}</span>
           </span>
         </button>
@@ -630,7 +630,7 @@ export default function CapturePage() {
           <div className="no-scrollbar -mx-1 mt-3 flex gap-2 overflow-x-auto px-1">
             {members.map((m) => (
               <Chip key={m.id} selected={payerId === m.id} onClick={() => setPayerId(m.id)}>
-                {m.displayName}
+                {youLabel(m.displayName, m.id, linkedMemberId)}
               </Chip>
             ))}
           </div>

@@ -8,7 +8,7 @@ import {
   listPendingReimbursements,
   markExpenseReimbursed,
 } from '../lib/repository'
-import { formatDate, formatMxn } from '../lib/format'
+import { formatDate, formatMxn, youLabel } from '../lib/format'
 import type { ExpenseWithId, LoanWithId } from '../lib/types'
 
 /* ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@ interface LoanDeposit {
 }
 
 export default function DebtsPage() {
-  const { active, loading: hhLoading } = useHousehold()
+  const { active, linkedMemberId, loading: hhLoading } = useHousehold()
   const hid = active?.id ?? null
 
   const [data, setData] = useState<PageData | null>(null)
@@ -113,7 +113,9 @@ export default function DebtsPage() {
         )
         return {
           memberId: id,
-          name: data.memberNames.get(id) ?? 'Miembro',
+          // Identidad de sesión: si el deudor/acreedor eres tú, "Nombre (Tú)"
+          // (también hereda al modal de abono vía debtorName).
+          name: youLabel(data.memberNames.get(id) ?? 'Miembro', id, linkedMemberId),
           payableTotal: payables.reduce((s, e) => s + e.amountMxn, 0),
           payables,
           receivableTotal: receivables.reduce((s, l) => s + l.remainingBalanceMxn, 0),
@@ -121,7 +123,7 @@ export default function DebtsPage() {
         }
       })
       .sort((a, b) => Math.max(b.payableTotal, b.receivableTotal) - Math.max(a.payableTotal, a.receivableTotal))
-  }, [data])
+  }, [data, linkedMemberId])
 
   function reload() {
     setDeposit(null)

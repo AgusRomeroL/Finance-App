@@ -17,7 +17,7 @@ import {
   upsertLoan,
   upsertSavingsGoal,
 } from '../lib/repository'
-import { formatMxn } from '../lib/format'
+import { formatMxn, youLabel } from '../lib/format'
 import type {
   InstallmentPlanWithId,
   LoanWithId,
@@ -137,7 +137,7 @@ function todayInput(): string {
 }
 
 export default function AccountsPage() {
-  const { active, loading: hhLoading } = useHousehold()
+  const { active, linkedMemberId, loading: hhLoading } = useHousehold()
   const hid = active?.id ?? null
 
   const [data, setData] = useState<PageData | null>(null)
@@ -172,9 +172,11 @@ export default function AccountsPage() {
     }
   }, [hid, reloadKey])
 
+  // Identidad de sesión: el map ya lleva "(Tú)" — titular del wallet, deudor
+  // del préstamo y título del modal de abono lo heredan.
   const memberMap = useMemo(
-    () => new Map((data?.members ?? []).map((m) => [m.id, m.displayName])),
-    [data],
+    () => new Map((data?.members ?? []).map((m) => [m.id, youLabel(m.displayName, m.id, linkedMemberId)])),
+    [data, linkedMemberId],
   )
   const walletMap = useMemo(
     () => new Map((data?.wallets ?? []).map((w) => [w.id, w.displayName])),
@@ -673,7 +675,7 @@ export default function AccountsPage() {
                 <option value="">Del hogar</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.displayName}
+                    {youLabel(m.displayName, m.id, linkedMemberId)}
                   </option>
                 ))}
               </select>
@@ -941,7 +943,7 @@ export default function AccountsPage() {
                 <option value="">Selecciona al deudor…</option>
                 {data.members.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.displayName}
+                    {youLabel(m.displayName, m.id, linkedMemberId)}
                   </option>
                 ))}
               </select>

@@ -63,6 +63,8 @@ import mx.budget.data.local.entity.LoanEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.SavingsGoalEntity
+import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.youLabel
 import mx.budget.ui.theme.financeColors
 import java.text.NumberFormat
 import java.util.Locale
@@ -919,7 +921,10 @@ private fun MemberPicker(
     onSelect: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selectedName = members.firstOrNull { it.id == selectedId }?.displayName ?: ""
+    // Identidad de sesión: tu member se pinta "(Tú)" también en este selector.
+    val sessionId = LocalSessionMemberId.current
+    val selectedName = members.firstOrNull { it.id == selectedId }
+        ?.let { youLabel(it.displayName, it.id, sessionId) } ?: ""
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
         OutlinedTextField(
             value = selectedName,
@@ -932,7 +937,7 @@ private fun MemberPicker(
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             members.forEach { m ->
                 DropdownMenuItem(
-                    text = { Text(m.displayName) },
+                    text = { Text(youLabel(m.displayName, m.id, sessionId)) },
                     onClick = { onSelect(m.id); expanded = false },
                 )
             }

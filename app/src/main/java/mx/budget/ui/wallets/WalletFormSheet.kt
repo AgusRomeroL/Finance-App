@@ -40,6 +40,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.youLabel
 import java.util.UUID
 
 // Tipos de wallet con etiqueta en español, en orden de presentación.
@@ -173,8 +175,10 @@ fun WalletFormSheet(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         KindChip(label = "Sin dueño", selected = ownerId == null, onClick = { ownerId = null })
+                        // Identidad de sesión: tu member se pinta "(Tú)".
+                        val sessionId = LocalSessionMemberId.current
                         members.forEach { m ->
-                            KindChip(label = m.displayName, selected = m.id == ownerId, onClick = { ownerId = m.id })
+                            KindChip(label = youLabel(m.displayName, m.id, sessionId), selected = m.id == ownerId, onClick = { ownerId = m.id })
                         }
                     }
                 }

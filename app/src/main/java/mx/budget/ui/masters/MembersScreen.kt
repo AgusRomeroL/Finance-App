@@ -47,6 +47,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.data.local.entity.MemberEntity
+import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.youLabel
 
 private val ROLE_LABELS = listOf(
     "PAYER_ADULT" to "Adulto (paga)",
@@ -75,9 +77,11 @@ fun MembersScreen(viewModel: MembersMasterViewModel, onBack: () -> Unit) {
         if (members.isEmpty()) {
             EmptyHint("Aún no hay miembros. Agrega al menos un adulto que paga.")
         }
+        // Identidad de sesión: el member vinculado a esta sesión se ve "(Tú)".
+        val sessionId = LocalSessionMemberId.current
         members.forEach { m ->
             MasterRow(
-                title = m.displayName + if (!m.isActive) " · inactivo" else "",
+                title = youLabel(m.displayName, m.id, sessionId) + if (!m.isActive) " · inactivo" else "",
                 subtitle = roleLabel(m.role),
                 onClick = { editing = m },
             )

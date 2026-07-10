@@ -112,7 +112,9 @@ import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.capture.toReviewMode
 import mx.budget.ui.common.AppTopBar
+import mx.budget.ui.common.LocalSessionMemberId
 import mx.budget.ui.common.SearchPill
+import mx.budget.ui.common.youLabel
 import mx.budget.ui.capture.CaptureBottomSheet
 import mx.budget.ui.capture.CaptureField
 import mx.budget.ui.capture.CapturePrefill
@@ -1719,11 +1721,15 @@ private fun ReimbursementSection(ui: ReimbursementUi) {
                 )
             }
         }
-        // Resumen por tercero: "David $500 · Jaudiel $120".
+        // Resumen por tercero: "David $500 · Jaudiel $120". Identidad de sesión:
+        // si el tercero que adelantó es el member de tu sesión, se ve "(Tú)".
+        val sessionId = LocalSessionMemberId.current
         val summaries = ui.totals
             .filter { it.totalMxn > 0 }
             .map { t ->
-                val name = t.externalPayerMemberId?.let { ui.memberNames[it] } ?: "Tercero"
+                val name = t.externalPayerMemberId
+                    ?.let { id -> ui.memberNames[id]?.let { youLabel(it, id, sessionId) } }
+                    ?: "Tercero"
                 "$name ${t.totalMxn.toMxn()}"
             }
         if (summaries.isNotEmpty()) {
@@ -1884,7 +1890,8 @@ private fun MemberBarRow(member: SpendByMember, fraction: Float, color: Color) {
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1.1f)) {
             Text(
-                member.memberName,
+                // Identidad de sesión: tu propia barra se etiqueta "(Tú)".
+                youLabel(member.memberName, member.memberId, LocalSessionMemberId.current),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1, overflow = TextOverflow.Ellipsis

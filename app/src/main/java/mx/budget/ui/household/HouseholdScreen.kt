@@ -58,6 +58,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.data.remote.MembershipRepository
+import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.youLabel
 
 /**
  * Pantalla "Cuenta y grupos" (Fase B). Reúne, en una sola pantalla con scroll,
@@ -328,10 +330,15 @@ fun HouseholdScreen(
                 // DERIVA de ese member (PAYER_* → Administrador, resto →
                 // Colaborador). Sin selección, el botón Generar se deshabilita.
                 var inviteMemberId by rememberSaveable { mutableStateOf<String?>(null) }
-                val selectedMember = state.eligibleMembers.firstOrNull { it.id == inviteMemberId }
+                // Cinturón de identidad: el VM ya excluye al member de la sesión,
+                // pero pudo construirse ANTES de que linkedMemberId se resolviera
+                // online — se filtra otra vez con el CompositionLocal fresco.
+                val sessionId = LocalSessionMemberId.current
+                val eligibleMembers = state.eligibleMembers.filter { it.id != sessionId }
+                val selectedMember = eligibleMembers.firstOrNull { it.id == inviteMemberId }
                 if (canInvite) {
                     AnimatedVisibility(
-                        visible = state.eligibleMembers.isNotEmpty(),
+                        visible = eligibleMembers.isNotEmpty(),
                         enter = fadeIn(spring()),
                         exit = fadeOut(spring()),
                     ) {
@@ -347,14 +354,16 @@ fun HouseholdScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                state.eligibleMembers.forEach { member ->
+                                eligibleMembers.forEach { member ->
                                     FilterChip(
                                         selected = member.id == inviteMemberId,
                                         onClick = {
                                             inviteMemberId =
                                                 if (inviteMemberId == member.id) null else member.id
                                         },
-                                        label = { Text(member.displayName) },
+                                        // youLabel: aunque el propio member ya no aparece
+                                        // aquí, el helper mantiene el criterio uniforme.
+                                        label = { Text(youLabel(member.displayName, member.id, sessionId)) },
                                     )
                                 }
                             }

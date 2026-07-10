@@ -32,6 +32,20 @@ export function dateInputToEpochMs(value: string): number {
   return new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0).getTime()
 }
 
+/**
+ * Identidad de sesión "(Tú)": etiqueta el nombre de un member cuando coincide
+ * con el member VINCULADO a la sesión (HouseholdContext.linkedMemberId).
+ * Úsalo en toda lista visible de miembros del hogar (chips de captura, filtros,
+ * deudas, titulares de cuenta…): `youLabel(m.displayName, m.id, linkedMemberId)`.
+ */
+export function youLabel(
+  name: string,
+  memberId: string | null | undefined,
+  linkedMemberId: string | null | undefined,
+): string {
+  return memberId != null && memberId === linkedMemberId ? `${name} (Tú)` : name
+}
+
 /** epoch millis -> YYYY-MM-DD para prellenar <input type="date">. */
 export function epochMsToDateInput(epochMs: number): string {
   const dt = new Date(epochMs)

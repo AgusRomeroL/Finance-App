@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.ui.common.ColorPickerDialog
+import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.youLabel
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -114,7 +116,13 @@ fun IncomeSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
             OptionPicker("Cuenta de depósito", wallets.map { it.id to it.displayName }, walletId) { walletId = it }
-            OptionPicker("Miembro (quién lo recibe)", members.map { it.id to it.displayName }, memberId) { memberId = it }
+            // Identidad de sesión: tu member se pinta "(Tú)" en el selector.
+            val sessionId = LocalSessionMemberId.current
+            OptionPicker(
+                "Miembro (quién lo recibe)",
+                members.map { it.id to youLabel(it.displayName, it.id, sessionId) },
+                memberId,
+            ) { memberId = it }
             OutlinedTextField(
                 value = label,
                 onValueChange = { label = it },

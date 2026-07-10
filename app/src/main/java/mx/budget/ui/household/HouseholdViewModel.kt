@@ -31,6 +31,13 @@ class HouseholdViewModel(
     private val activeHouseholdId: String,
     /** Repo local de members: alimenta el selector de invitación nominada cuando el hogar activo es el local. */
     private val memberRepository: MemberRepository,
+    /**
+     * Member vinculado a ESTA sesión (roles v2, `BudgetApplication.linkedMemberId`):
+     * se excluye de [UiState.eligibleMembers] — uno no se invita a sí mismo.
+     * `null` = identidad aún sin resolver (la pantalla aplica un segundo filtro
+     * con `LocalSessionMemberId` como cinturón).
+     */
+    private val sessionMemberId: String? = null,
     private val onSignInWithGoogle: suspend () -> Boolean,
     private val onSwitchHousehold: (String) -> Unit,
 ) : ViewModel() {
@@ -90,7 +97,9 @@ class HouseholdViewModel(
      *   que es la fuente de verdad de esta instalación.
      * - Hogar activo remoto (recién creado/unido, aún sin pull local) → get
      *   puntual de la subcolección Firestore `households/{hid}/members`.
-     * Excluye inactivos y los espejo EXTERNAL_* (no son personas invitables).
+     * Excluye inactivos, los espejo EXTERNAL_* (no son personas invitables) y el
+     * member vinculado a la propia sesión ([sessionMemberId]) — tanto en la
+     * lista local (Room) como en la remota (Firestore).
      */
     private fun loadEligibleMembers() {
         val hid = _extra.value.activeHouseholdId
@@ -114,7 +123,7 @@ class HouseholdViewModel(
                 }
             }.getOrDefault(emptyList())
             eligibleMembersFlow.value = list
-                .filter { it.isActive && !it.role.startsWith("EXTERNAL_") }
+                .filter { it.isActive && !it.role.startsWith("EXTERNAL_") && it.id != sessionMemberId }
         }
     }
 

@@ -53,6 +53,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.data.local.entity.LoanEntity
+import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.youLabel
 import mx.budget.ui.theme.financeColors
 import java.text.NumberFormat
 import java.time.Instant
@@ -175,6 +177,9 @@ private fun MemberCard(
     onLoanPayment: (String, Double) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Identidad de sesión: el deudor/acreedor que es "uno mismo" se ve "(Tú)"
+    // tanto en el título de la tarjeta como en los encabezados de sección.
+    val labeledName = youLabel(row.name, row.memberId, LocalSessionMemberId.current)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -183,7 +188,7 @@ private fun MemberCard(
             .padding(16.dp),
     ) {
         Text(
-            row.name,
+            labeledName,
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
@@ -215,7 +220,7 @@ private fun MemberCard(
         if (row.hasPayable) {
             Spacer(Modifier.height(14.dp))
             PayableSection(
-                name = row.name,
+                name = labeledName,
                 payables = row.payables,
                 onMarkReimbursed = onMarkReimbursed,
             )
@@ -223,7 +228,7 @@ private fun MemberCard(
         if (row.hasReceivable) {
             Spacer(Modifier.height(14.dp))
             ReceivableSection(
-                name = row.name,
+                name = labeledName,
                 loans = row.receivables,
                 onLoanPayment = onLoanPayment,
             )

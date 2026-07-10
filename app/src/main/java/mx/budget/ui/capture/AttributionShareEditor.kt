@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.data.local.entity.MemberEntity
+import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.youLabel
 import mx.budget.ui.theme.financeColors
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,6 +67,9 @@ internal fun AttributionDimension(
 ) {
     val sum = shares.values.sum()
     val allSelected = members.isNotEmpty() && shares.size == members.size
+    // Identidad de sesión: el member vinculado a esta sesión se pinta "Nombre (Tú)"
+    // en TODOS los usos del editor (captura, pago planeado, edición, revisión).
+    val sessionId = LocalSessionMemberId.current
 
     // Encabezado + estado de la suma (redundancia: color + texto)
     Row(
@@ -101,11 +106,12 @@ internal fun AttributionDimension(
         }
         members.forEach { m ->
             val pct = shares[m.id]
+            val label = youLabel(m.displayName, m.id, sessionId)
             if (pct == null) {
-                UnselectedMemberChip(m.displayName) { onToggle(m.id) }
+                UnselectedMemberChip(label) { onToggle(m.id) }
             } else {
                 SelectedShareChip(
-                    name = m.displayName,
+                    name = label,
                     pct = pct,
                     onRemove = { onToggle(m.id) },
                     onMinus = { onDelta(m.id, -5) },

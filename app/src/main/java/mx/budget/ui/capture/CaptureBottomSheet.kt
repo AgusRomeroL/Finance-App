@@ -93,6 +93,8 @@ import kotlinx.coroutines.launch
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.youLabel
 import mx.budget.ui.theme.FinancialTone
 import mx.budget.ui.theme.amountSemantic
 import mx.budget.ui.theme.financeColors
@@ -1164,9 +1166,11 @@ private fun IncomeMemberCard(
         if (members.isEmpty()) {
             Text("Sin miembros.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
+            // Identidad de sesión: quien captura ve su propio member como "(Tú)".
+            val sessionId = LocalSessionMemberId.current
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 members.forEach { m ->
-                    CategoryChip(m.displayName, m.id == selectedMemberId) { onSelect(m.id) }
+                    CategoryChip(youLabel(m.displayName, m.id, sessionId), m.id == selectedMemberId) { onSelect(m.id) }
                 }
             }
         }
@@ -1284,7 +1288,10 @@ private fun MoreSection(
     // el dueño del wallet (ver CaptureViewModel.onWalletSelected). Los dependientes y
     // externos que adelantan van en "Pagó un tercero", no aquí.
     val payerMembers = remember(members) { members.filter { it.role == "PAYER_ADULT" } }
-    val payerNames = members.filter { it.id in payerShares.keys }.joinToString(", ") { it.displayName }
+    // Identidad de sesión: el resumen colapsado también etiqueta "(Tú)".
+    val sessionId = LocalSessionMemberId.current
+    val payerNames = members.filter { it.id in payerShares.keys }
+        .joinToString(", ") { youLabel(it.displayName, it.id, sessionId) }
     val formatter = remember { DateTimeFormatter.ofPattern("d MMM yyyy", Locale("es", "MX")) }
     val dateSummary = selectedDate?.format(formatter)
         ?: "Hoy, ${LocalDate.now().format(formatter)}"
@@ -1445,11 +1452,13 @@ private fun ThirdPartyPayerSection(
 
         Spacer(Modifier.height(10.dp))
 
-        // Chips de terceros + "Nadie" (pago normal).
+        // Chips de terceros + "Nadie" (pago normal). Identidad de sesión: si el
+        // member de la sesión es dependiente, se ve a sí mismo como "(Tú)".
+        val sessionId = LocalSessionMemberId.current
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             CategoryChip("Nadie / cuenta del hogar", selectedPayerId == null) { onSelected(null) }
             matches.take(8).forEach { m ->
-                CategoryChip(m.displayName, m.id == selectedPayerId) { onSelected(m.id) }
+                CategoryChip(youLabel(m.displayName, m.id, sessionId), m.id == selectedPayerId) { onSelected(m.id) }
             }
         }
 
@@ -1534,8 +1543,11 @@ private fun CaptureFooter(
 ) {
     val formatter = remember { DateTimeFormatter.ofPattern("d MMM", Locale("es", "MX")) }
     val hasAmount = displayAmount != "0.00" && displayAmount != "0"
+    // Identidad de sesión: los nombres del resumen vivo también llevan "(Tú)".
+    val sessionId = LocalSessionMemberId.current
     val summary = if (kind == CaptureKind.INCOME) {
-        val memberName = members.firstOrNull { it.id == incomeMemberId }?.displayName
+        val memberName = members.firstOrNull { it.id == incomeMemberId }
+            ?.let { youLabel(it.displayName, it.id, sessionId) }
         val walletName = wallets.firstOrNull { it.id == selectedWalletId }?.displayName
         buildString {
             append("Ingreso")
@@ -1546,7 +1558,8 @@ private fun CaptureFooter(
         }
     } else {
         val catName = categories.firstOrNull { it.id == selectedCategoryId }?.displayName
-        val beneficiaries = members.filter { it.id in beneficiaryShares.keys }.joinToString(", ") { it.displayName }
+        val beneficiaries = members.filter { it.id in beneficiaryShares.keys }
+            .joinToString(", ") { youLabel(it.displayName, it.id, sessionId) }
         buildString {
             append(catName ?: "Elige categoría")
             if (hasAmount) append(" · $").append(displayAmount)
@@ -1612,7 +1625,10 @@ private fun AttributionSuggestionChip(
     members: List<MemberEntity>,
     onApply: () -> Unit,
 ) {
-    fun nameOf(id: String): String = members.firstOrNull { it.id == id }?.displayName ?: "—"
+    // Identidad de sesión: la sugerencia inferida también etiqueta "(Tú)".
+    val sessionId = LocalSessionMemberId.current
+    fun nameOf(id: String): String =
+        members.firstOrNull { it.id == id }?.let { youLabel(it.displayName, it.id, sessionId) } ?: "—"
 
     // "Santi" si un solo miembro al 100%; "Santi 60% · Norma 40%" si es repartido.
     fun describe(distribution: Map<String, Int>): String {

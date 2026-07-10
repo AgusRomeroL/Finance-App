@@ -12,6 +12,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,6 +39,7 @@ import mx.budget.ui.calendar.CalendarViewModel
 import mx.budget.ui.calendar.NewPlannedViewModel
 import mx.budget.ui.calendar.RecurrenceViewModel
 import mx.budget.ui.capture.CaptureViewModel
+import mx.budget.ui.common.LocalSessionMemberId
 import mx.budget.ui.dashboard.DashboardViewModel
 import mx.budget.ui.navigation.BudgetNavGraph
 import mx.budget.ui.review.AttributionReviewViewModel
@@ -203,6 +205,9 @@ class MainActivity : ComponentActivity() {
             membershipRepository = app.membershipRepository,
             activeHouseholdId = app.householdId,
             memberRepository = app.memberRepository,
+            // Identidad de sesión (roles v2): el propio member se EXCLUYE del
+            // selector de invitación nominada (no tiene sentido invitarse a uno mismo).
+            sessionMemberId = app.linkedMemberId,
             onSignInWithGoogle = { app.linkGoogleAccount(this@MainActivity) },
             onSwitchHousehold = { hid ->
                 // Re-ancla el sync en caliente y recrea la Activity para que todos
@@ -362,6 +367,10 @@ class MainActivity : ComponentActivity() {
             val hasSeenTutorial by settings.hasSeenTutorial.collectAsState(initial = app.initialHasSeenTutorial)
             val scope = rememberCoroutineScope()
             BudgetAppTheme(dynamicColor = dynamicColor) {
+                // Identidad de sesión "(Tú)" transversal: app.linkedMemberId es
+                // mutableStateOf, así que cuando la resolución online llega tarde
+                // el Provider recompone y las listas de miembros se etiquetan solas.
+                CompositionLocalProvider(LocalSessionMemberId provides app.linkedMemberId) {
                 // Surface raíz: pinta colorScheme.background bajo TODO el NavHost.
                 // Sin él, las pantallas que no traen Scaffold/Surface propio
                 // (Analíticas, Libro Mayor) dibujan texto del tema sobre la
@@ -463,6 +472,7 @@ class MainActivity : ComponentActivity() {
                     },
                 )
                 }
+                }
             }
         }
     }
@@ -504,6 +514,8 @@ class HouseholdViewModelFactory(
     private val activeHouseholdId: String,
     /** Members locales (Room) para el selector de invitación nominada (roles v2). */
     private val memberRepository: MemberRepository,
+    /** Member vinculado a la sesión: se excluye del selector de invitación. */
+    private val sessionMemberId: String?,
     private val onSignInWithGoogle: suspend () -> Boolean,
     private val onSwitchHousehold: (String) -> Unit,
 ) : ViewModelProvider.Factory {
@@ -514,6 +526,7 @@ class HouseholdViewModelFactory(
             membershipRepository = membershipRepository,
             activeHouseholdId = activeHouseholdId,
             memberRepository = memberRepository,
+            sessionMemberId = sessionMemberId,
             onSignInWithGoogle = onSignInWithGoogle,
             onSwitchHousehold = onSwitchHousehold,
         ) as T

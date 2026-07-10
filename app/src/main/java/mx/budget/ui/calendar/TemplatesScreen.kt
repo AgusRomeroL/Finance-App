@@ -63,6 +63,8 @@ import androidx.compose.ui.unit.sp
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
 import mx.budget.data.recurrence.RecurrenceSuggestion
 import mx.budget.ui.capture.AttributionDimension
+import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.youLabel
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -367,10 +369,13 @@ private fun TemplateEditorSheet(viewModel: RecurrenceViewModel) {
                 )
             }
             if (externalPayerEnabled) {
+                // Identidad de sesión: tu member se pinta "(Tú)" en el selector.
+                val sessionId = LocalSessionMemberId.current
                 DropdownField(
                     "Quién pagó",
-                    members.firstOrNull { it.id == externalPayerMemberId }?.displayName ?: "Selecciona",
-                    members.map { it.id to it.displayName },
+                    members.firstOrNull { it.id == externalPayerMemberId }
+                        ?.let { youLabel(it.displayName, it.id, sessionId) } ?: "Selecciona",
+                    members.map { it.id to youLabel(it.displayName, it.id, sessionId) },
                     viewModel::onExternalPayerMember,
                 )
             }

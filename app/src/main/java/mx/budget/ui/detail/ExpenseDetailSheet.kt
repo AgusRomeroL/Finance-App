@@ -64,6 +64,8 @@ import androidx.compose.runtime.collectAsState
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.ui.capture.AttributionDimension
 import mx.budget.ui.common.ColorPickerDialog
+import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.youLabel
 import mx.budget.ui.theme.financeColors
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -235,8 +237,10 @@ private fun ViewModeContent(
         )
 
         // Reparto actual por rol (solo lectura; se edita en modo edición).
-        val benefSummary = attributionSummary(detail, members, "BENEFICIARY")
-        val payerSummary = attributionSummary(detail, members, "PAYER")
+        // Identidad de sesión: los nombres del reparto llevan "(Tú)".
+        val sessionId = LocalSessionMemberId.current
+        val benefSummary = attributionSummary(detail, members, "BENEFICIARY", sessionId)
+        val payerSummary = attributionSummary(detail, members, "PAYER", sessionId)
         if (benefSummary != null || payerSummary != null) {
             Spacer(Modifier.height(8.dp))
             benefSummary?.let {
@@ -389,7 +393,9 @@ private fun ViewModeContent(
             Spacer(Modifier.height(12.dp))
             SettlementSection(
                 settlement = settlement,
-                payerName = members.firstOrNull { it.id == detail.entity?.externalPayerMemberId }?.displayName,
+                // Identidad de sesión: si el tercero que adelantó eres tú, "(Tú)".
+                payerName = members.firstOrNull { it.id == detail.entity?.externalPayerMemberId }
+                    ?.let { youLabel(it.displayName, it.id, LocalSessionMemberId.current) },
                 wallets = wallets.filter { it.kind != "EXTERNAL" },
                 saving = detail.saving,
                 onReimburse = viewModel::reimburseFrom,
@@ -516,16 +522,22 @@ private fun SettlementSection(
     }
 }
 
-/** "Norma 50 % · Santi 50 %" para un rol, o null si no hay atribuciones. */
+/**
+ * "Norma 50 % · Santi 50 %" para un rol, o null si no hay atribuciones.
+ * [sessionId] = member vinculado a la sesión ([LocalSessionMemberId]): su nombre
+ * se etiqueta "(Tú)".
+ */
 private fun attributionSummary(
     detail: ExpenseDetailState,
     members: List<MemberEntity>,
     role: String,
+    sessionId: String?,
 ): String? {
     val rows = detail.attributions.filter { it.role == role }
     if (rows.isEmpty()) return null
     return rows.joinToString(" · ") { row ->
-        val name = members.firstOrNull { it.id == row.memberId }?.displayName ?: "¿?"
+        val name = members.firstOrNull { it.id == row.memberId }
+            ?.let { youLabel(it.displayName, it.id, sessionId) } ?: "¿?"
         "$name ${row.shareBps / 100} %"
     }
 }

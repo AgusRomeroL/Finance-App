@@ -5,10 +5,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import mx.budget.BudgetApplication
 import mx.budget.CaptureViewModelFactory
+import mx.budget.ui.common.LocalSessionMemberId
 import mx.budget.ui.theme.BudgetAppTheme
 
 /**
@@ -50,6 +52,11 @@ class QuickCaptureActivity : ComponentActivity() {
         // Define Theme.Transparent in Manifest to map purely the overlay
         setContent {
             BudgetAppTheme {
+                // Identidad de sesión "(Tú)" también en la captura rápida (paridad
+                // con el Provider de MainActivity).
+                CompositionLocalProvider(
+                    LocalSessionMemberId provides (application as BudgetApplication).linkedMemberId
+                ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = androidx.compose.ui.graphics.Color.Transparent
@@ -61,6 +68,7 @@ class QuickCaptureActivity : ComponentActivity() {
                             finish()
                         }
                     )
+                }
                 }
             }
         }

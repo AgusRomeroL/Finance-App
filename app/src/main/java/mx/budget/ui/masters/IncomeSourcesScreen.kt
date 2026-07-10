@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import mx.budget.data.local.entity.IncomeSourceEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.ui.common.ColorPickerDialog
+import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.youLabel
 
 private val CADENCE_LABELS = listOf(
     "QUINCENAL" to "Quincenal",
@@ -76,8 +78,11 @@ fun IncomeSourcesScreen(viewModel: IncomeSourcesMasterViewModel, onBack: () -> U
         } else if (sources.isEmpty()) {
             EmptyHint("Aún no hay ingresos en esta quincena. Agrega el primero con el botón +.")
         }
+        // Identidad de sesión: el member vinculado a esta sesión se ve "(Tú)".
+        val sessionId = LocalSessionMemberId.current
         sources.forEach { s ->
-            val memberName = members.firstOrNull { it.id == s.memberId }?.displayName ?: "—"
+            val memberName = members.firstOrNull { it.id == s.memberId }
+                ?.let { youLabel(it.displayName, it.id, sessionId) } ?: "—"
             MasterRow(
                 title = "${s.label} · $${s.amountMxn.toLong()}",
                 subtitle = "$memberName · ${cadenceLabel(s.cadence)} · ${if (s.status == "POSTED") "Recibido" else "Planeado"}",
@@ -152,9 +157,11 @@ private fun IncomeDialog(
                 Spacer(Modifier.height(12.dp))
                 Text("Miembro", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
+                // Identidad de sesión: tu member se pinta "(Tú)" también aquí.
+                val sessionId = LocalSessionMemberId.current
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     members.forEach { m ->
-                        SelectChip(label = m.displayName, selected = m.id == memberId, onClick = { memberId = m.id })
+                        SelectChip(label = youLabel(m.displayName, m.id, sessionId), selected = m.id == memberId, onClick = { memberId = m.id })
                     }
                 }
                 Spacer(Modifier.height(12.dp))
