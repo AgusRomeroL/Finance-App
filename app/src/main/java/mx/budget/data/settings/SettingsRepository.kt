@@ -30,16 +30,22 @@ class SettingsRepository(private val context: Context) {
 
     private val dynamicColorKey = booleanPreferencesKey("dynamic_color")
     private val retroLabelingDoneKey = booleanPreferencesKey("retro_labeling_done")
+    private val statementSeedDoneKey = booleanPreferencesKey("statement_seed_done")
+    private val statementSeedV2DoneKey = booleanPreferencesKey("statement_seed_v2_done")
     private val bankCaptureEnabledKey = booleanPreferencesKey("bank_capture_enabled")
     private val reminderLeadDaysKey = intPreferencesKey("reminder_lead_days")
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
     private val dismissedTemplateSuggestionsKey = stringSetPreferencesKey("dismissed_template_suggestions")
+    private val statementCycleNotifiedKey = stringSetPreferencesKey("statement_cycle_notified")
+    private val paymentDueNotifiedKey = stringSetPreferencesKey("payment_due_notified")
     private val calendarMirrorEnabledKey = booleanPreferencesKey("calendar_mirror_enabled")
     private val calendarMirrorIdKey = longPreferencesKey("calendar_mirror_id")
     private val calendarEventMapKey = stringPreferencesKey("calendar_event_map_json")
     private val locationCaptureLevelKey = stringPreferencesKey("location_capture_level")
     private val activeHouseholdIdKey = stringPreferencesKey("active_household_id")
     private val nvidiaApiKeyKey = stringPreferencesKey("nvidia_api_key")
+    private val suggestedChipHistoryKey = stringPreferencesKey("suggested_chip_history_json")
+    private val hasSeenTutorialKey = booleanPreferencesKey("has_seen_tutorial")
 
     /** Flujo del toggle de color dinámico. Default `true` (Material You). */
     val dynamicColor: Flow<Boolean> = context.dataStore.data
@@ -62,6 +68,27 @@ class SettingsRepository(private val context: Context) {
     }
 
     /**
+     * Sembrado único de "estados de cuenta ya importados" (Tarea 4): marca en el
+     * primer arranque las tarjetas de Norma cuyos estados reales ya procesamos
+     * (corte + saldo + fila `statement_import`), para que el checklist arranque en
+     * verde. Idempotente vía este flag.
+     */
+    suspend fun isStatementSeedDone(): Boolean =
+        context.dataStore.data.first()[statementSeedDoneKey] ?: false
+
+    suspend fun setStatementSeedDone(done: Boolean) {
+        context.dataStore.edit { prefs -> prefs[statementSeedDoneKey] = done }
+    }
+
+    /** Sembrado histórico v2 (compras clasificadas + intereses + planes + transferencias). */
+    suspend fun isStatementSeedV2Done(): Boolean =
+        context.dataStore.data.first()[statementSeedV2DoneKey] ?: false
+
+    suspend fun setStatementSeedV2Done(done: Boolean) {
+        context.dataStore.edit { prefs -> prefs[statementSeedV2DoneKey] = done }
+    }
+
+    /**
      * Opt-in de la **captura desde notificaciones bancarias** (Feature D, §F.6).
      * Default `false`: aunque el SO conceda acceso a notificaciones, el listener no
      * procesa nada hasta que el usuario activa esto explícitamente en Perfil.
@@ -71,6 +98,20 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setBankCaptureEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs -> prefs[bankCaptureEnabledKey] = enabled }
+    }
+
+    /**
+     * `true` cuando el usuario ya vio (o saltó) el **tutorial guiado** de uso de la app
+     * (coach-marks / spotlight — ver `ui/tutorial/` y `TUTORIAL.md`). Independiente del
+     * onboarding de alta de datos (`needsOnboarding`): el tour arranca la primera vez
+     * incluso en instalaciones sembradas y se marca al terminar o saltar. Se puede
+     * relanzar desde Perfil sin resetear este flag.
+     */
+    val hasSeenTutorial: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[hasSeenTutorialKey] ?: false }
+
+    suspend fun setHasSeenTutorial(seen: Boolean) {
+        context.dataStore.edit { prefs -> prefs[hasSeenTutorialKey] = seen }
     }
 
     // ── Recordatorios de gastos PLANNED (Apéndice G.2, Fase 3) ──────────────────
@@ -124,6 +165,26 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[dismissedTemplateSuggestionsKey] = (prefs[dismissedTemplateSuggestionsKey] ?: emptySet()) + canonicalKey
         }
+    }
+
+    // ── Dedupe del recordatorio de estados de cuenta (Tarea 4) ──────────────────
+    // Claves "walletId:corteISO" ya notificadas este ciclo, para no repetir el aviso
+    // mensual. Se reemplaza el set completo en cada corrida (poda al ciclo vigente).
+
+    suspend fun getStatementCycleNotified(): Set<String> =
+        context.dataStore.data.first()[statementCycleNotifiedKey] ?: emptySet()
+
+    suspend fun setStatementCycleNotified(keys: Set<String>) {
+        context.dataStore.edit { prefs -> prefs[statementCycleNotifiedKey] = keys }
+    }
+
+    // Dedupe del recordatorio de fecha límite de pago de tarjeta (estados v2 Fase 5).
+    // Claves "walletId:fechaLimiteISO:tramo" ya notificadas.
+    suspend fun getPaymentDueNotified(): Set<String> =
+        context.dataStore.data.first()[paymentDueNotifiedKey] ?: emptySet()
+
+    suspend fun setPaymentDueNotified(keys: Set<String>) {
+        context.dataStore.edit { prefs -> prefs[paymentDueNotifiedKey] = keys }
     }
 
     // ── Espejo Google Calendar (Apéndice G.2, Fase 6) ───────────────────────────
@@ -215,6 +276,18 @@ class SettingsRepository(private val context: Context) {
     private fun decodeLongMap(raw: String?): Map<String, Long> {
         if (raw.isNullOrBlank()) return emptyMap()
         return runCatching { Json.decodeFromString<Map<String, Long>>(raw) }.getOrDefault(emptyMap())
+    }
+
+    /**
+     * Historial de pills sugeridos del chat de Analíticas: `chipId → epoch millis
+     * de la última vez mostrado`. Alimenta la rotación por frescura del
+     * [mx.budget.ai.suggest.SuggestedQuestionEngine] (pool estable rota <24 h).
+     */
+    suspend fun getSuggestedChipHistory(): Map<String, Long> =
+        decodeState(context.dataStore.data.first()[suggestedChipHistoryKey])
+
+    suspend fun setSuggestedChipHistory(history: Map<String, Long>) {
+        context.dataStore.edit { prefs -> prefs[suggestedChipHistoryKey] = encodeState(history) }
     }
 
     private fun decodeState(raw: String?): Map<String, Long> {

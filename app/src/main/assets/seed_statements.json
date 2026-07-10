@@ -1,0 +1,3021 @@
+{
+  "version": 2,
+  "miembros": {
+    "benjamin": "Benjamín",
+    "norma": "Norma",
+    "normita": "Normita",
+    "david": "David",
+    "agustin": "Agustín",
+    "santiago": "Santiago"
+  },
+  "categoriasNuevas": [
+    {
+      "code": "CUSTOM.INTERESES",
+      "displayName": "Intereses y comisiones",
+      "kind": "EXPENSE_FIXED"
+    },
+    {
+      "code": "CUSTOM.COMPRAS_ONLINE",
+      "displayName": "Compras en línea",
+      "kind": "EXPENSE_VARIABLE"
+    },
+    {
+      "code": "CUSTOM.SOFTWARE",
+      "displayName": "Software y suscripciones",
+      "kind": "EXPENSE_VARIABLE"
+    },
+    {
+      "code": "CUSTOM.ROPA",
+      "displayName": "Ropa",
+      "kind": "EXPENSE_VARIABLE"
+    },
+    {
+      "code": "CUSTOM.ESTACIONAMIENTO",
+      "displayName": "Estacionamiento y peaje",
+      "kind": "EXPENSE_VARIABLE"
+    },
+    {
+      "code": "CUSTOM.EXAMENES",
+      "displayName": "Exámenes y certificaciones",
+      "kind": "EXPENSE_VARIABLE"
+    }
+  ],
+  "walletsNuevas": [
+    {
+      "key": "didi_card",
+      "displayName": "DiDi Card",
+      "kind": "CREDIT_CARD",
+      "issuer": "DiDi (Regigold)",
+      "last4": "4657",
+      "cutoffDay": 17,
+      "dueDay": 2,
+      "creditLimitMxn": 20000,
+      "interestApr": null,
+      "openingBalanceMxn": 0,
+      "owner": "norma"
+    }
+  ],
+  "planesMsi": [
+    {
+      "planKey": "walmart-amazon-6m",
+      "wallet": "Walmart",
+      "displayName": "Amazon a Meses",
+      "categoria": "CUSTOM.COMPRAS_ONLINE",
+      "montoCuotaMxn": 433.17,
+      "plazo": 6,
+      "cuotasPagadas": 3,
+      "aprPct": 0.0,
+      "primeraCuota": "2026-04-04",
+      "status": "ACTIVE"
+    },
+    {
+      "planKey": "walmart-comision-admin-3m",
+      "wallet": "Walmart",
+      "displayName": "Comisión Administración de Tarjeta",
+      "categoria": "CUSTOM.INTERESES",
+      "montoCuotaMxn": 250.0,
+      "plazo": 3,
+      "cuotasPagadas": 2,
+      "aprPct": 0.0,
+      "primeraCuota": "2026-05-15",
+      "status": "ACTIVE"
+    },
+    {
+      "planKey": "klar-amazon-8477-?",
+      "wallet": "Klar",
+      "displayName": "Amazon a Meses (cuota $84.77)",
+      "categoria": "CUSTOM.COMPRAS_ONLINE",
+      "montoCuotaMxn": 84.77,
+      "plazo": 6,
+      "cuotasPagadas": 1,
+      "aprPct": 0.0,
+      "primeraCuota": "2026-04-05",
+      "status": "ACTIVE"
+    },
+    {
+      "planKey": "klar-amazon-15599-?",
+      "wallet": "Klar",
+      "displayName": "Amazon a Meses (cuota $155.99)",
+      "categoria": "CUSTOM.COMPRAS_ONLINE",
+      "montoCuotaMxn": 155.99,
+      "plazo": 6,
+      "cuotasPagadas": 1,
+      "aprPct": 0.0,
+      "primeraCuota": "2026-04-05",
+      "status": "ACTIVE"
+    },
+    {
+      "planKey": "klar-amazon-6699-?",
+      "wallet": "Klar",
+      "displayName": "Amazon a Meses (cuota $66.99)",
+      "categoria": "CUSTOM.COMPRAS_ONLINE",
+      "montoCuotaMxn": 66.99,
+      "plazo": 6,
+      "cuotasPagadas": 1,
+      "aprPct": 0.0,
+      "primeraCuota": "2026-04-05",
+      "status": "ACTIVE"
+    },
+    {
+      "planKey": "klar-amazon-9274-?",
+      "wallet": "Klar",
+      "displayName": "Amazon a Meses (cuota $92.74)",
+      "categoria": "CUSTOM.COMPRAS_ONLINE",
+      "montoCuotaMxn": 92.74,
+      "plazo": 6,
+      "cuotasPagadas": 1,
+      "aprPct": 0.0,
+      "primeraCuota": "2026-04-05",
+      "status": "ACTIVE"
+    },
+    {
+      "planKey": "sears-pp16359-6m",
+      "wallet": "Sears",
+      "displayName": "Sears 6 MENS 0% INT (PP16359)",
+      "categoria": "LOANS.SEARS",
+      "montoCuotaMxn": 407.0,
+      "plazo": 6,
+      "cuotasPagadas": 6,
+      "aprPct": 0.0,
+      "primeraCuota": null,
+      "status": "PAID_OFF"
+    },
+    {
+      "planKey": "sears-pp16360-6m",
+      "wallet": "Sears",
+      "displayName": "Sears 6 MENS 0% INT (PP16360)",
+      "categoria": "LOANS.SEARS",
+      "montoCuotaMxn": 430.0,
+      "plazo": 6,
+      "cuotasPagadas": 6,
+      "aprPct": 0.0,
+      "primeraCuota": null,
+      "status": "PAID_OFF"
+    },
+    {
+      "planKey": "liverpool-comunicacion-13m",
+      "wallet": "Liverpool",
+      "displayName": "Comunicación (electrónica)",
+      "categoria": "OTHER",
+      "montoCuotaMxn": 307.63,
+      "plazo": 13,
+      "cuotasPagadas": 1,
+      "aprPct": 0.0,
+      "primeraCuota": "2026-04-26",
+      "status": "ACTIVE"
+    },
+    {
+      "planKey": "liverpool-bolsas-3m",
+      "wallet": "Liverpool",
+      "displayName": "Bolsas (3 MSI)",
+      "categoria": "CUSTOM.ROPA",
+      "montoCuotaMxn": 149.67,
+      "plazo": 3,
+      "cuotasPagadas": 1,
+      "aprPct": 0.0,
+      "primeraCuota": "2026-04-26",
+      "status": "ACTIVE"
+    },
+    {
+      "planKey": "liverpool-bolsas-6m",
+      "wallet": "Liverpool",
+      "displayName": "Bolsas (6 MSI)",
+      "categoria": "CUSTOM.ROPA",
+      "montoCuotaMxn": 212.38,
+      "plazo": 6,
+      "cuotasPagadas": 1,
+      "aprPct": 0.0,
+      "primeraCuota": "2026-04-26",
+      "status": "ACTIVE"
+    },
+    {
+      "planKey": "liverpool-mujeractual-9m",
+      "wallet": "Liverpool",
+      "displayName": "Mujer Actual (ropa)",
+      "categoria": "CUSTOM.ROPA",
+      "montoCuotaMxn": 174.28,
+      "plazo": 9,
+      "cuotasPagadas": 1,
+      "aprPct": 0.0,
+      "primeraCuota": "2026-05-27",
+      "status": "ACTIVE"
+    },
+    {
+      "planKey": "liverpool-bolsas-9m",
+      "wallet": "Liverpool",
+      "displayName": "Bolsas (9 MSI)",
+      "categoria": "CUSTOM.ROPA",
+      "montoCuotaMxn": 224.92,
+      "plazo": 9,
+      "cuotasPagadas": 1,
+      "aprPct": 0.0,
+      "primeraCuota": "2026-06-07",
+      "status": "ACTIVE"
+    }
+  ],
+  "statements": [
+    {
+      "key": "banamex-clasica-2026-05",
+      "wallet": "Banamex Clásica",
+      "emisor": "Banco Nacional de México, S.A., Integrante del Grupo Financiero Banamex",
+      "last4": "5426",
+      "periodo": {
+        "inicio": "2026-04-24",
+        "fin": "2026-05-22"
+      },
+      "fechaCorte": "2026-05-22",
+      "fechaLimitePago": "2026-06-12",
+      "saldoTotal": 15671.4,
+      "pagoMinimo": 1020.0,
+      "pagoNoIntereses": 15671.4,
+      "tasaAnual": 54.14,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-05-08",
+          "montoTotal": 1500.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Banamex Clásica",
+            "quincena": "8d63ed81-411b-5445-9c4e-4890a4e7ba47",
+            "monto": 1500.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-04-26",
+          "concepto": "NETFLIX NME 110513PI3MX",
+          "monto": 329.0,
+          "tipo": "COMPRA",
+          "resolucion": "MATCHED_SEED",
+          "categoria": "ENTERTAINMENT.NETFLIX",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": {
+            "concepto": "Netflix",
+            "quincena": "4e3e303a-b360-5cc7-b860-f03731d33ea0",
+            "monto": 329.0
+          }
+        },
+        {
+          "fecha": "2026-05-09",
+          "concepto": "TELEFONICAPGOFACTPACMU PPC 980624U16",
+          "monto": 850.95,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER.TELEFONO",
+          "beneficiarios": [
+            "norma",
+            "david",
+            "normita",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-14",
+          "concepto": "GOOGLE CR EME 1409305E4MX",
+          "monto": 59.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER.GOOGLE_ONE",
+          "beneficiarios": [
+            "agustin"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-22",
+          "concepto": "INTERES EXENTO",
+          "monto": 22.59,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-22",
+          "concepto": "INTERES GRAVABLE",
+          "monto": 662.41,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-22",
+          "concepto": "IVA POR INTERESES Y/O COMISIONES",
+          "monto": 105.99,
+          "tipo": "IVA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "didi-2026-04",
+      "wallet": "DiDi Card",
+      "emisor": "Regigold, S.A. de C.V.",
+      "last4": "4657",
+      "periodo": {
+        "inicio": "2026-03-18",
+        "fin": "2026-04-17"
+      },
+      "fechaCorte": "2026-04-17",
+      "fechaLimitePago": "2026-05-04",
+      "saldoTotal": 21411.81,
+      "pagoMinimo": 6449.76,
+      "pagoNoIntereses": 21411.81,
+      "tasaAnual": null,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-04-05",
+          "montoTotal": 6500.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "DiDi",
+            "quincena": "4e3e303a-b360-5cc7-b860-f03731d33ea0",
+            "monto": 6500.0
+          }
+        },
+        {
+          "fecha": "2026-04-09",
+          "montoTotal": 1028.4,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "DiDi",
+            "quincena": "4e3e303a-b360-5cc7-b860-f03731d33ea0",
+            "monto": 1028.4
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-04-13",
+          "concepto": "MERPAGO*WIM (1877)",
+          "monto": 249.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-12",
+          "concepto": "OPENPAY*KIGO PARKIMOVI (4657)",
+          "monto": 38.4,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ESTACIONAMIENTO",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-06",
+          "concepto": "PAYPAL *CIRCULODERM (1877)",
+          "monto": 1730.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER.SALUD",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-04",
+          "concepto": "OPENPAY*KIGO PARKIMOVI (4657)",
+          "monto": 27.5,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ESTACIONAMIENTO",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-04",
+          "concepto": "WAL MART ANGELOPOLIS (4657)",
+          "monto": 2053.43,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "FOOD.DESPENSA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-04",
+          "concepto": "MERCADOPAGO *MERCADOL (1877)",
+          "monto": 1076.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-03",
+          "concepto": "OPENPAY*KIGO PARKIMOVI (4657)",
+          "monto": 21.9,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ESTACIONAMIENTO",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-17",
+          "concepto": "Intereses ordinarios",
+          "monto": 1131.31,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-17",
+          "concepto": "IVA",
+          "monto": 181.0,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-17",
+          "concepto": "Diferimientos especiales - Capital (resumen, no itemizado)",
+          "monto": 4561.27,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-17",
+          "concepto": "Diferimientos especiales - Intereses ordinarios",
+          "monto": 300.28,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-17",
+          "concepto": "Diferimientos especiales - IVA",
+          "monto": 48.05,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "didi-2026-05",
+      "wallet": "DiDi Card",
+      "emisor": "Regigold, S.A. de C.V.",
+      "last4": "4657",
+      "periodo": {
+        "inicio": "2026-04-18",
+        "fin": "2026-05-17"
+      },
+      "fechaCorte": "2026-05-17",
+      "fechaLimitePago": "2026-06-02",
+      "saldoTotal": 21465.43,
+      "pagoMinimo": 1978.03,
+      "pagoNoIntereses": 21465.43,
+      "tasaAnual": null,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-05-06",
+          "montoTotal": 6450.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "DiDi",
+            "quincena": "8d63ed81-411b-5445-9c4e-4890a4e7ba47",
+            "monto": 6450.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-05-13",
+          "concepto": "MERPAGO*WIM (1877)",
+          "monto": 249.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-12",
+          "concepto": "D LOCAL*REST DIDIFOOD (1877)",
+          "monto": 171.59,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "FOOD.COMIDA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-07",
+          "concepto": "OPENPAY*KIGO PARKIMOVI (4657)",
+          "monto": 22.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ESTACIONAMIENTO",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-07",
+          "concepto": "OPENPAY*KIGO PARKIMOVI (4657)",
+          "monto": 21.9,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ESTACIONAMIENTO",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-07",
+          "concepto": "STARBUCKS PERIF PUE II (4657)",
+          "monto": 171.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "FOOD.COMIDA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-07",
+          "concepto": "PAYCLIP*SERV AGUSTIN R (4657)",
+          "monto": 949.46,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "SERVICIOS_EXTERNOS",
+          "beneficiarios": [
+            "agustin"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-06",
+          "concepto": "MU CENEVAL (1877)",
+          "monto": 3245.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.EXAMENES",
+          "beneficiarios": [
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-05",
+          "concepto": "D LOCAL*REST DIDIFOOD (1877)",
+          "monto": 242.4,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "FOOD.COMIDA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-17",
+          "concepto": "Intereses ordinarios",
+          "monto": 1449.38,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-17",
+          "concepto": "IVA",
+          "monto": 231.89,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "didi-2026-06",
+      "wallet": "DiDi Card",
+      "emisor": "Regigold, S.A. de C.V.",
+      "last4": "4657",
+      "periodo": {
+        "inicio": "2026-05-18",
+        "fin": "2026-06-17"
+      },
+      "fechaCorte": "2026-06-17",
+      "fechaLimitePago": "2026-07-02",
+      "saldoTotal": 21482.59,
+      "pagoMinimo": 1891.82,
+      "pagoNoIntereses": 21482.59,
+      "tasaAnual": null,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-06-06",
+          "montoTotal": 6500.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "DiDi",
+            "quincena": "8a17a8d2-2684-59a3-9db8-fd09a7a34d2e",
+            "monto": 6500.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-06-15",
+          "concepto": "SUPER DIDI (1877)",
+          "monto": 44.2,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "FOOD.DESPENSA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-13",
+          "concepto": "OPENPAY*KIGO PARKIMOVI (4657)",
+          "monto": 23.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ESTACIONAMIENTO",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-13",
+          "concepto": "OPENPAY*KIGO PARKIMOVI (4657)",
+          "monto": 39.5,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ESTACIONAMIENTO",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-05",
+          "concepto": "GAS PARADOR COVADONGA (4657)",
+          "monto": 994.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "TRANSPORTATION.GASOLINA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-03",
+          "concepto": "Amazon Mexico (1877)",
+          "monto": 458.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-02",
+          "concepto": "Amazon Mexico (1877)",
+          "monto": 864.98,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-17",
+          "concepto": "Intereses ordinarios",
+          "monto": 1373.69,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-17",
+          "concepto": "IVA",
+          "monto": 219.79,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "klar-2026-03",
+      "wallet": "Klar",
+      "emisor": "Klar Technologies, S.A. de C.V., S.F.P.",
+      "last4": null,
+      "periodo": {
+        "inicio": "2026-02-27",
+        "fin": "2026-03-30"
+      },
+      "fechaCorte": "2026-03-30",
+      "fechaLimitePago": "2026-04-09",
+      "saldoTotal": 11245.88,
+      "pagoMinimo": 1612.69,
+      "pagoNoIntereses": 3214.98,
+      "tasaAnual": 99.79,
+      "pagosAgregados": [],
+      "movimientos": [
+        {
+          "fecha": "2026-03-08",
+          "concepto": "Netflix XXXXXXXXXXXX1185",
+          "monto": 329.0,
+          "tipo": "COMPRA",
+          "resolucion": "MATCHED_SEED",
+          "categoria": "ENTERTAINMENT.NETFLIX",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": {
+            "concepto": "Netflix",
+            "quincena": "bc11349b-b007-5170-a2c8-4956062503a5",
+            "monto": 329.0
+          }
+        },
+        {
+          "fecha": "2026-03-08",
+          "concepto": "Merpagorentamovistar M XXXXXXXXXXXX1185",
+          "monto": 825.95,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER.TELEFONO",
+          "beneficiarios": [
+            "norma",
+            "david",
+            "normita",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-12",
+          "concepto": "Starbucks XXXXXXXXXXXX7485",
+          "monto": 209.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "FOOD.COMIDA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-13",
+          "concepto": "Paypal Helpcourser 5I4 XXXXXXXXXXXX7485",
+          "monto": 288.0,
+          "tipo": "COMPRA",
+          "resolucion": "MATCHED_SEED",
+          "categoria": "OTHER.COURSERA",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": {
+            "concepto": "Coursera",
+            "quincena": "bc11349b-b007-5170-a2c8-4956062503a5",
+            "monto": 288.0
+          }
+        },
+        {
+          "fecha": "2026-03-16",
+          "concepto": "Adobe XXXXXXXXXXXX7485",
+          "monto": 40.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.SOFTWARE",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-20",
+          "concepto": "Paypal Ubrpagosmex   C XXXXXXXXXXXX7485",
+          "monto": 0.01,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "TRANSPORTATION",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-20",
+          "concepto": "Paypal Ubrpagosmex   C XXXXXXXXXXXX7485",
+          "monto": 48.17,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "TRANSPORTATION",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-20",
+          "concepto": "Paypal Ubrpagosmex   C XXXXXXXXXXXX7485",
+          "monto": 56.63,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "TRANSPORTATION",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-30",
+          "concepto": "Intereses ordinarios del periodo",
+          "monto": 866.26,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-30",
+          "concepto": "IVA por intereses del periodo",
+          "monto": 138.6,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "klar-2026-04",
+      "wallet": "Klar",
+      "emisor": "Klar Technologies, S.A. de C.V., S.F.P.",
+      "last4": null,
+      "periodo": {
+        "inicio": "2026-03-30",
+        "fin": "2026-05-01"
+      },
+      "fechaCorte": "2026-05-01",
+      "fechaLimitePago": "2026-05-11",
+      "saldoTotal": 11857.47,
+      "pagoMinimo": 1074.52,
+      "pagoNoIntereses": 1892.35,
+      "tasaAnual": 60.02,
+      "pagosAgregados": [],
+      "movimientos": [
+        {
+          "fecha": "2026-03-31",
+          "concepto": "Stripe Cinemex Com   C XXXXXXXXXXXX7485",
+          "monto": 246.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "ENTERTAINMENT.DIVERSION",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-04",
+          "concepto": "Paypal Google Google C XXXXXXXXXXXX7485",
+          "monto": 39.0,
+          "tipo": "COMPRA",
+          "resolucion": "MATCHED_SEED",
+          "categoria": "OTHER.GOOGLE_ONE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": {
+            "concepto": "Google",
+            "quincena": "4e3e303a-b360-5cc7-b860-f03731d33ea0",
+            "monto": 39.0
+          }
+        },
+        {
+          "fecha": "2026-04-05",
+          "concepto": "Amazon A Meses, MSI",
+          "monto": 84.77,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 1,
+            "planKey": "klar-amazon-8477-?"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-05",
+          "concepto": "Amazon A Meses, MSI",
+          "monto": 155.99,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 1,
+            "planKey": "klar-amazon-15599-?"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-05",
+          "concepto": "Amazon A Meses, MSI",
+          "monto": 66.99,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 1,
+            "planKey": "klar-amazon-6699-?"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-05",
+          "concepto": "Amazon A Meses, MSI",
+          "monto": 92.74,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 1,
+            "planKey": "klar-amazon-9274-?"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-05",
+          "concepto": "Amazon XXXXXXXXXXXX1185",
+          "monto": 143.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-16",
+          "concepto": "Ppgoogle Adobe Inc   4 XXXXXXXXXXXX7485",
+          "monto": 40.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.SOFTWARE",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-01",
+          "concepto": "Intereses ordinarios del periodo",
+          "monto": 823.86,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-01",
+          "concepto": "IVA por intereses del periodo",
+          "monto": 131.82,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "klar-2026-05",
+      "wallet": "Klar",
+      "emisor": "Klar Technologies, S.A. de C.V., S.F.P.",
+      "last4": null,
+      "periodo": {
+        "inicio": "2026-05-01",
+        "fin": "2026-05-30"
+      },
+      "fechaCorte": "2026-05-30",
+      "fechaLimitePago": "2026-06-09",
+      "saldoTotal": 11226.12,
+      "pagoMinimo": 1063.95,
+      "pagoNoIntereses": 1851.38,
+      "tasaAnual": 90.76,
+      "pagosAgregados": [],
+      "movimientos": [
+        {
+          "fecha": "2026-05-04",
+          "concepto": "Ppgoogle Google One  4 XXXXXXXXXXXX7485",
+          "monto": 39.0,
+          "tipo": "COMPRA",
+          "resolucion": "MATCHED_SEED",
+          "categoria": "OTHER.GOOGLE_ONE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": {
+            "concepto": "Google",
+            "quincena": "8d63ed81-411b-5445-9c4e-4890a4e7ba47",
+            "monto": 39.0
+          }
+        },
+        {
+          "fecha": "2026-05-05",
+          "concepto": "Amazon A Meses, MSI",
+          "monto": 84.77,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 2,
+            "planKey": "klar-amazon-8477-?"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-05",
+          "concepto": "Amazon A Meses, MSI",
+          "monto": 155.99,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 2,
+            "planKey": "klar-amazon-15599-?"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-05",
+          "concepto": "Amazon A Meses, MSI",
+          "monto": 66.99,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 2,
+            "planKey": "klar-amazon-6699-?"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-05",
+          "concepto": "Amazon A Meses, MSI",
+          "monto": 92.74,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 2,
+            "planKey": "klar-amazon-9274-?"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-16",
+          "concepto": "Adobe XXXXXXXXXXXX7485",
+          "monto": 40.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.SOFTWARE",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-27",
+          "concepto": "Uber XXXXXXXXXXXX7485",
+          "monto": 354.9,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "TRANSPORTATION",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-30",
+          "concepto": "Intereses ordinarios del periodo",
+          "monto": 805.82,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-30",
+          "concepto": "IVA por intereses del periodo",
+          "monto": 128.93,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "liverpool-2026-04",
+      "wallet": "Liverpool",
+      "emisor": "Distribuidora Liverpool, S.A. de C.V.",
+      "last4": null,
+      "periodo": {
+        "inicio": "2026-03-10",
+        "fin": "2026-04-09"
+      },
+      "fechaCorte": "2026-04-09",
+      "fechaLimitePago": "2026-05-09",
+      "saldoTotal": 5272.78,
+      "pagoMinimo": 637.55,
+      "pagoNoIntereses": 5272.78,
+      "tasaAnual": null,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-04-23",
+          "montoTotal": 2000.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Liverpool",
+            "quincena": "4c76e541-f1a5-528c-becb-6804fd2e1f68",
+            "monto": 2000.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-04-03",
+          "concepto": "CARGO TRASPASO PLAN (09 MENS S/INTERESES)",
+          "monto": 0.14,
+          "tipo": "COMISION",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-03",
+          "concepto": "CARGO TRASPASO PLAN (48 MENS PAGUE EN AGO)",
+          "monto": 0.44,
+          "tipo": "COMISION",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-09",
+          "concepto": "IVA SOBRE INTERESES",
+          "monto": 54.28,
+          "tipo": "COMISION",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-09",
+          "concepto": "INTERESES FINANCIEROS (plan PRESUPUESTO)",
+          "monto": 339.25,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "liverpool-2026-05",
+      "wallet": "Liverpool",
+      "emisor": "Distribuidora Liverpool, S.A. de C.V.",
+      "last4": null,
+      "periodo": {
+        "inicio": "2026-04-10",
+        "fin": "2026-05-09"
+      },
+      "fechaCorte": "2026-05-09",
+      "fechaLimitePago": "2026-06-09",
+      "saldoTotal": 8601.21,
+      "pagoMinimo": 444.95,
+      "pagoNoIntereses": 3548.42,
+      "tasaAnual": null,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-05-24",
+          "montoTotal": 2000.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Liverpool",
+            "quincena": "004e768f-9424-504f-a136-4dade8975c9c",
+            "monto": 2000.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-04-26",
+          "concepto": "COMUNICACION",
+          "monto": 3999.2,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 13,
+            "numero": 1,
+            "planKey": "liverpool-comunicacion-13m"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-26",
+          "concepto": "BOLSAS",
+          "monto": 449.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ROPA",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": {
+            "plazo": 3,
+            "numero": 1,
+            "planKey": "liverpool-bolsas-3m"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-26",
+          "concepto": "BOLSAS",
+          "monto": 1274.25,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ROPA",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 1,
+            "planKey": "liverpool-bolsas-6m"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-09",
+          "concepto": "IVA SOBRE INTERESES",
+          "monto": 33.93,
+          "tipo": "COMISION",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-09",
+          "concepto": "INTERESES FINANCIEROS (plan PRESUPUESTO)",
+          "monto": 212.05,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "liverpool-2026-06",
+      "wallet": "Liverpool",
+      "emisor": "Distribuidora Liverpool, S.A. de C.V.",
+      "last4": null,
+      "periodo": {
+        "inicio": "2026-05-10",
+        "fin": "2026-06-09"
+      },
+      "fechaCorte": "2026-06-09",
+      "fechaLimitePago": "2026-07-09",
+      "saldoTotal": 11330.77,
+      "pagoMinimo": 418.7,
+      "pagoNoIntereses": 3754.08,
+      "tasaAnual": null,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-06-21",
+          "montoTotal": 2000.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Liverpool",
+            "quincena": "100f91d1-4013-587f-8ea2-743c3c26ad99",
+            "monto": 2000.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-05-27",
+          "concepto": "MUJER ACTUAL",
+          "monto": 1568.5,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ROPA",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": {
+            "plazo": 9,
+            "numero": 1,
+            "planKey": "liverpool-mujeractual-9m"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-07",
+          "concepto": "BOLSAS",
+          "monto": 2024.25,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ROPA",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": {
+            "plazo": 9,
+            "numero": 1,
+            "planKey": "liverpool-bolsas-9m"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-09",
+          "concepto": "IVA SOBRE INTERESES",
+          "monto": 25.77,
+          "tipo": "COMISION",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-09",
+          "concepto": "INTERESES FINANCIEROS (plan PRESUPUESTO)",
+          "monto": 161.04,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "mercadopago-2026-04",
+      "wallet": "Mercado Pago",
+      "emisor": "MP Agregador, S. de R.L. de C.V.",
+      "last4": null,
+      "periodo": {
+        "inicio": "2026-04-01",
+        "fin": "2026-04-30"
+      },
+      "fechaCorte": null,
+      "fechaLimitePago": null,
+      "saldoTotal": 63.51,
+      "pagoMinimo": null,
+      "pagoNoIntereses": null,
+      "tasaAnual": null,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-04-08",
+          "montoTotal": 4317.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Mercado Pago",
+            "quincena": "4e3e303a-b360-5cc7-b860-f03731d33ea0",
+            "monto": 4317.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-04-18",
+          "concepto": "Pago de suscripción Meli+",
+          "monto": 99.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "ENTERTAINMENT.MELI_PLUS",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-29",
+          "concepto": "Pago",
+          "monto": 148.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "mercadopago-2026-05",
+      "wallet": "Mercado Pago",
+      "emisor": "MP Agregador, S. de R.L. de C.V.",
+      "last4": null,
+      "periodo": {
+        "inicio": "2026-05-01",
+        "fin": "2026-05-31"
+      },
+      "fechaCorte": null,
+      "fechaLimitePago": null,
+      "saldoTotal": 2560.79,
+      "pagoMinimo": null,
+      "pagoNoIntereses": null,
+      "tasaAnual": null,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-05-09",
+          "montoTotal": 580.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Mercado Pago",
+            "quincena": "8d63ed81-411b-5445-9c4e-4890a4e7ba47",
+            "monto": 580.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-05-06",
+          "concepto": "Pago PASE SERVICIOS ELECTRONICOS SA DE CV",
+          "monto": 800.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ESTACIONAMIENTO",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-06",
+          "concepto": "Transferencia enviada NORMA LYDIA LOPEZ RIVERA",
+          "monto": 1300.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "TRANSFERENCIAS_FAMILIARES.NORMA",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-07",
+          "concepto": "Compra Mercado Libre",
+          "monto": 128.76,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "OTHER",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-11",
+          "concepto": "Pago de suscripción Max",
+          "monto": 167.3,
+          "tipo": "COMPRA",
+          "resolucion": "MATCHED_SEED",
+          "categoria": "ENTERTAINMENT.HBO",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": {
+            "concepto": "HBO",
+            "monto": 167.3,
+            "fecha": "2026-05-18",
+            "categoria": "ENTERTAINMENT.HBO"
+          }
+        },
+        {
+          "fecha": "2026-05-12",
+          "concepto": "Transferencia enviada Benjamin Albo",
+          "monto": 4000.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "TRANSFERENCIAS_FAMILIARES",
+          "beneficiarios": [
+            "benjamin"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-18",
+          "concepto": "Pago de suscripción Meli+",
+          "monto": 99.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "ENTERTAINMENT.MELI_PLUS",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-31",
+          "concepto": "Pago Pago mi telmex",
+          "monto": 899.0,
+          "tipo": "COMPRA",
+          "resolucion": "MATCHED_SEED",
+          "categoria": "HOUSING.INTERNET",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": {
+            "concepto": "Internet",
+            "monto": 899.0,
+            "fecha": "2026-05-17",
+            "categoria": "HOUSING.INTERNET"
+          }
+        }
+      ]
+    },
+    {
+      "key": "sears-2026-03",
+      "wallet": "Sears",
+      "emisor": "GS Tiendas Departamentales, S.A. de C.V.",
+      "last4": "1066",
+      "periodo": {
+        "inicio": "2026-02-22",
+        "fin": "2026-03-21"
+      },
+      "fechaCorte": "2026-03-21",
+      "fechaLimitePago": "2026-04-15",
+      "saldoTotal": 5922.35,
+      "pagoMinimo": 794.06,
+      "pagoNoIntereses": 5922.28,
+      "tasaAnual": 58.86,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-03-08",
+          "montoTotal": 1368.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Sears",
+            "quincena": "bc11349b-b007-5170-a2c8-4956062503a5",
+            "monto": 1368.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-03-07",
+          "concepto": "ROPA UNIVERSITARIOS (ref 001110004803758)",
+          "monto": 1599.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ROPA",
+          "beneficiarios": [
+            "david"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-07",
+          "concepto": "ROPA UNIVERSITARIOS (ref 001110004803761)",
+          "monto": 899.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ROPA",
+          "beneficiarios": [
+            "david"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-07",
+          "concepto": "MP CABALLERO SPORT Y UNIVERSITARIOS (ref 001110005000412)",
+          "monto": 611.15,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.ROPA",
+          "beneficiarios": [
+            "david"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-21",
+          "concepto": "IVA SOBRE CARGO FINANCIERO",
+          "monto": 29.8,
+          "tipo": "IVA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-21",
+          "concepto": "*CARGOS FINANCIEROS*",
+          "monto": 186.26,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "sears-2026-04",
+      "wallet": "Sears",
+      "emisor": "GS Tiendas Departamentales, S.A. de C.V.",
+      "last4": "1066",
+      "periodo": {
+        "inicio": "2026-03-22",
+        "fin": "2026-04-21"
+      },
+      "fechaCorte": "2026-04-21",
+      "fechaLimitePago": "2026-05-16",
+      "saldoTotal": 5211.41,
+      "pagoMinimo": 159.13,
+      "pagoNoIntereses": 5211.41,
+      "tasaAnual": 58.86,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-04-07",
+          "montoTotal": 1000.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Sears",
+            "quincena": "4e3e303a-b360-5cc7-b860-f03731d33ea0",
+            "monto": 1000.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-04-21",
+          "concepto": "IVA SOBRE CARGO FINANCIERO",
+          "monto": 39.87,
+          "tipo": "IVA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-21",
+          "concepto": "*CARGOS FINANCIEROS*",
+          "monto": 249.19,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "sears-2026-05",
+      "wallet": "Sears",
+      "emisor": "GS Tiendas Departamentales, S.A. de C.V.",
+      "last4": "1066",
+      "periodo": {
+        "inicio": "2026-04-22",
+        "fin": "2026-05-21"
+      },
+      "fechaCorte": "2026-05-21",
+      "fechaLimitePago": "2026-06-15",
+      "saldoTotal": 7132.06,
+      "pagoMinimo": 669.13,
+      "pagoNoIntereses": 7132.06,
+      "tasaAnual": 58.86,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-05-08",
+          "montoTotal": 1000.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Sears",
+            "quincena": "8d63ed81-411b-5445-9c4e-4890a4e7ba47",
+            "monto": 1000.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-05-02",
+          "concepto": "RESTAURANTE (ref 891727202500667)",
+          "monto": 1170.36,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "FOOD.COMIDA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-21",
+          "concepto": "IVA SOBRE CARGO FINANCIERO",
+          "monto": 44.45,
+          "tipo": "IVA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-21",
+          "concepto": "*CARGOS FINANCIEROS*",
+          "monto": 277.8,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-21",
+          "concepto": "IVA SOBRE CARGO FINANCIERO (sobre gastos de cobranza)",
+          "monto": 59.04,
+          "tipo": "IVA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-21",
+          "concepto": "GASTOS DE COBRANZA",
+          "monto": 369.0,
+          "tipo": "COMISION",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "walmart-2026-04",
+      "wallet": "Walmart",
+      "emisor": "SOFOM INBURSA S.A. DE C.V. SOFOM, E.R., Grupo Financiero Inbursa",
+      "last4": "1240",
+      "periodo": {
+        "inicio": "2026-03-16",
+        "fin": "2026-04-15"
+      },
+      "fechaCorte": "2026-04-15",
+      "fechaLimitePago": "2026-05-05",
+      "saldoTotal": 84200.06,
+      "pagoMinimo": 6821.0,
+      "pagoNoIntereses": 82034.21,
+      "tasaAnual": 73.0,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-04-08",
+          "montoTotal": 7500.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Walmart",
+            "quincena": "4e3e303a-b360-5cc7-b860-f03731d33ea0",
+            "monto": 7500.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-03-13",
+          "concepto": "D LOCAL*REST DIDIFOOD - DMM 171208LT4 - Consumo contado",
+          "monto": 159.73,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "FOOD.COMIDA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-21",
+          "concepto": "D LOCAL*TDA TEMU - BAL 240412TY8 - Consumo contado",
+          "monto": 1.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-21",
+          "concepto": "D LOCAL*TDA TEMU - BAL 240412TY8 - Consumo contado",
+          "monto": 1760.11,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-25",
+          "concepto": "STR*AMAZON - ANE 140618P37 - Consumo contado",
+          "monto": 927.87,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-03-30",
+          "concepto": "STR*AMAZONPRIMESUBS - ANE 140618P37 - Consumo contado",
+          "monto": 99.0,
+          "tipo": "COMPRA",
+          "resolucion": "MATCHED_SEED",
+          "categoria": "ENTERTAINMENT.PRIME",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": {
+            "concepto": "Prime",
+            "quincena": "4e3e303a-b360-5cc7-b860-f03731d33ea0",
+            "monto": 99.0
+          }
+        },
+        {
+          "fecha": "2026-03-31",
+          "concepto": "D LOCAL*REST DIDIFOOD - DMM 171208LT4 - Consumo contado",
+          "monto": 160.8,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "FOOD.COMIDA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-04",
+          "concepto": "AMAZON A MESES - ANE 140618P37 - Consumo en 6 Cuotas (1/6)",
+          "monto": 433.17,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 1,
+            "planKey": "walmart-amazon-6m"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-09",
+          "concepto": "PAYPAL *MICROSOFT - OPM 150323DI1 - Consumo contado",
+          "monto": 224.99,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.SOFTWARE",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-13",
+          "concepto": "D LOCAL*REST DIDIFOOD - DMM 171208LT4 - Consumo contado",
+          "monto": 194.13,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "FOOD.COMIDA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-15",
+          "concepto": "I.V.A. del 16% de Intereses ordinarios",
+          "monto": 685.2,
+          "tipo": "IVA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-15",
+          "concepto": "Intereses ordinarios",
+          "monto": 4282.5,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-15",
+          "concepto": "Intereses ordinarios no base de I.V.A.",
+          "monto": 707.52,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "walmart-2026-05",
+      "wallet": "Walmart",
+      "emisor": "SOFOM INBURSA S.A. DE C.V. SOFOM, E.R., Grupo Financiero Inbursa",
+      "last4": "1240",
+      "periodo": {
+        "inicio": "2026-04-16",
+        "fin": "2026-05-15"
+      },
+      "fechaCorte": "2026-05-15",
+      "fechaLimitePago": "2026-06-05",
+      "saldoTotal": 83824.86,
+      "pagoMinimo": 6732.0,
+      "pagoNoIntereses": 81512.18,
+      "tasaAnual": 73.0,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-05-09",
+          "montoTotal": 7500.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Walmart",
+            "quincena": "8d63ed81-411b-5445-9c4e-4890a4e7ba47",
+            "monto": 7500.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-04-04",
+          "concepto": "AMAZON A MESES - ANE 140618P37 - Consumo en 6 Cuotas (2/6)",
+          "monto": 433.17,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 2,
+            "planKey": "walmart-amazon-6m"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-14",
+          "concepto": "AMAZON - ANE 140618P37 - Consumo contado",
+          "monto": 142.0,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-04-15",
+          "concepto": "D LOCAL*REST DIDIFOOD - DMM 171208LT4 - Consumo contado",
+          "monto": 112.5,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "FOOD.COMIDA",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-08",
+          "concepto": "PAYPAL *MICROSOFT - OPM 150323DI1 - Consumo contado",
+          "monto": 224.99,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.SOFTWARE",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-15",
+          "concepto": "Comisión por Administración de Tarjeta del Titular - (1/3)",
+          "monto": 250.0,
+          "tipo": "COMISION",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 3,
+            "numero": 1,
+            "planKey": "walmart-comision-admin-3m"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-15",
+          "concepto": "I.V.A. del 16% de Comisión por Administración de Tarjeta del Titular - (1/3)",
+          "monto": 40.0,
+          "tipo": "IVA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-15",
+          "concepto": "Intereses ordinarios",
+          "monto": 4675.32,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-15",
+          "concepto": "I.V.A. del 16% de Intereses ordinarios",
+          "monto": 748.05,
+          "tipo": "IVA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-15",
+          "concepto": "Intereses ordinarios no base de I.V.A.",
+          "monto": 170.08,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    },
+    {
+      "key": "walmart-2026-06",
+      "wallet": "Walmart",
+      "emisor": "SOFOM INBURSA S.A. DE C.V. SOFOM, E.R., Grupo Financiero Inbursa",
+      "last4": "1240",
+      "periodo": {
+        "inicio": "2026-05-16",
+        "fin": "2026-06-15"
+      },
+      "fechaCorte": "2026-06-15",
+      "fechaLimitePago": "2026-07-05",
+      "saldoTotal": 82151.93,
+      "pagoMinimo": 6908.0,
+      "pagoNoIntereses": 80562.42,
+      "tasaAnual": 73.0,
+      "pagosAgregados": [
+        {
+          "fecha": "2026-06-08",
+          "montoTotal": 7500.0,
+          "origenWallet": "BBVA",
+          "seedMatch": {
+            "concepto": "Walmart",
+            "quincena": "8a17a8d2-2684-59a3-9db8-fd09a7a34d2e",
+            "monto": 7500.0
+          }
+        }
+      ],
+      "movimientos": [
+        {
+          "fecha": "2026-04-04",
+          "concepto": "AMAZON A MESES - ANE 140618P37 - Consumo en 6 Cuotas (3/6)",
+          "monto": 433.17,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.COMPRAS_ONLINE",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 6,
+            "numero": 3,
+            "planKey": "walmart-amazon-6m"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-15",
+          "concepto": "Comisión por Administración de Tarjeta del Titular - (2/3)",
+          "monto": 250.0,
+          "tipo": "COMISION",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": {
+            "plazo": 3,
+            "numero": 2,
+            "planKey": "walmart-comision-admin-3m"
+          },
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-05-15",
+          "concepto": "I.V.A. del 16% de Comisión por Administración de Tarjeta del Titular - (2/3)",
+          "monto": 40.0,
+          "tipo": "IVA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-08",
+          "concepto": "PAYPAL *MICROSOFT - OPM 150323DI1 - Consumo contado",
+          "monto": 224.99,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.SOFTWARE",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-09",
+          "concepto": "PAYPAL *GITHUB INC - Consumo contado",
+          "monto": 184.07,
+          "tipo": "COMPRA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.SOFTWARE",
+          "beneficiarios": [
+            "norma"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-15",
+          "concepto": "Intereses ordinarios",
+          "monto": 4988.39,
+          "tipo": "INTERES",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        },
+        {
+          "fecha": "2026-06-15",
+          "concepto": "I.V.A. del 16% de Intereses ordinarios",
+          "monto": 798.14,
+          "tipo": "IVA",
+          "resolucion": "NEW",
+          "categoria": "CUSTOM.INTERESES",
+          "beneficiarios": [
+            "benjamin",
+            "norma",
+            "normita",
+            "david",
+            "agustin",
+            "santiago"
+          ],
+          "msi": null,
+          "seedMatch": null
+        }
+      ]
+    }
+  ],
+  "reconcileFinal": [
+    {
+      "wallet": "Walmart",
+      "emisor": "SOFOM INBURSA S.A. DE C.V. SOFOM, E.R., Grupo Financiero Inbursa",
+      "last4": "1240",
+      "cutoffDay": 15,
+      "dueDay": 5,
+      "limiteMxn": null,
+      "saldo": 82151.93,
+      "tasa": 73.0
+    },
+    {
+      "wallet": "Banamex Clásica",
+      "emisor": "Banco Nacional de México, S.A., Integrante del Grupo Financiero Banamex",
+      "last4": "5426",
+      "cutoffDay": 22,
+      "dueDay": 12,
+      "limiteMxn": null,
+      "saldo": 15671.4,
+      "tasa": 54.14
+    },
+    {
+      "wallet": "Klar",
+      "emisor": "Klar Technologies, S.A. de C.V., S.F.P.",
+      "last4": null,
+      "cutoffDay": 30,
+      "dueDay": 9,
+      "limiteMxn": null,
+      "saldo": 11226.12,
+      "tasa": 90.76
+    },
+    {
+      "wallet": "Sears",
+      "emisor": "GS Tiendas Departamentales, S.A. de C.V.",
+      "last4": "1066",
+      "cutoffDay": 21,
+      "dueDay": 15,
+      "limiteMxn": null,
+      "saldo": 7132.06,
+      "tasa": 58.86
+    },
+    {
+      "wallet": "Liverpool",
+      "emisor": "Distribuidora Liverpool, S.A. de C.V.",
+      "last4": null,
+      "cutoffDay": 9,
+      "dueDay": 9,
+      "limiteMxn": null,
+      "saldo": 11330.77,
+      "tasa": null
+    },
+    {
+      "wallet": "DiDi Card",
+      "emisor": "Regigold, S.A. de C.V.",
+      "last4": "4657",
+      "cutoffDay": 17,
+      "dueDay": 2,
+      "limiteMxn": 20000,
+      "saldo": 21482.59,
+      "tasa": null
+    },
+    {
+      "wallet": "Mercado Pago",
+      "emisor": "MP Agregador, S. de R.L. de C.V.",
+      "last4": null,
+      "cutoffDay": null,
+      "dueDay": null,
+      "limiteMxn": null,
+      "saldo": 2560.79,
+      "tasa": null
+    }
+  ]
+}

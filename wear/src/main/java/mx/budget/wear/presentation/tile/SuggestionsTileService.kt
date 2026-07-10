@@ -39,12 +39,22 @@ class SuggestionsTileService : SuspendingTileService() {
         val clickedId = requestParams.currentState.lastClickableId
 
         // Confirmación: se pulsó "Confirmar" → enviar el primer recomendado.
+        // El envío por MessageClient NO tiene cola offline: si falla, se dice
+        // claramente (nada de "Enviado ✓" falso) y se ofrece reintentar.
         if (clickedId == CLICK_ACCEPT) {
             val top = WearCache.suggestions(this).firstOrNull()
-            if (top != null && top.amount > 0.0) {
+                ?: return tile(messageLayout(deviceParams, "Sin sugerencias", "Nada por registrar ahora"))
+            val sent = if (top.amount > 0.0) {
                 runCatching { ExpenseSender(this).acceptSuggestion(top.amount, top.concept) }
+                    .getOrElse { Result.failure(it) }
+            } else {
+                Result.failure(Exception("Sugerencia sin monto"))
             }
-            return tile(messageLayout(deviceParams, "Enviado ✓", "Confírmalo en el teléfono"))
+            return if (sent.isSuccess) {
+                tile(messageLayout(deviceParams, "Enviado ✓", "Confírmalo en el teléfono"))
+            } else {
+                tile(errorLayout(deviceParams))
+            }
         }
 
         val top = WearCache.suggestions(this).firstOrNull()
@@ -105,6 +115,36 @@ class SuggestionsTileService : SuspendingTileService() {
             .build()
     }
 
+    /** Estado de error de envío: mensaje claro + chip "Reintentar" (mismo LoadAction). */
+    private fun errorLayout(deviceParams: DeviceParameters): LayoutElement {
+        val content = LayoutElementBuilders.Column.Builder()
+            .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
+            .addContent(
+                Text.Builder(this, "No se envió")
+                    .setTypography(Typography.TYPOGRAPHY_TITLE3)
+                    .setColor(argb(COLOR_ERROR))
+                    .build()
+            )
+            .addContent(
+                Text.Builder(this, "Sin conexión con el teléfono — reintenta")
+                    .setTypography(Typography.TYPOGRAPHY_CAPTION2)
+                    .setColor(argb(COLOR_MUTED))
+                    .setMaxLines(3)
+                    .build()
+            )
+            .build()
+
+        val retryChip = Chip.Builder(this, clickable(CLICK_ACCEPT), deviceParams)
+            .setChipColors(ChipColors.primaryChipColors(materialColors()))
+            .setPrimaryLabelContent("Reintentar")
+            .build()
+
+        return PrimaryLayout.Builder(deviceParams)
+            .setContent(content)
+            .setPrimaryChipContent(retryChip)
+            .build()
+    }
+
     private fun messageLayout(
         deviceParams: DeviceParameters,
         title: String,
@@ -135,6 +175,9 @@ class SuggestionsTileService : SuspendingTileService() {
         TileBuilders.Tile.Builder()
             .setResourcesVersion(RES_VERSION)
             .setTileTimeline(TimelineBuilders.Timeline.fromLayoutElement(layout))
+            // Refresco periódico: sin esto la tile solo se re-renderiza con el push
+            // del teléfono y se queda congelada si el snapshot deja de llegar.
+            .setFreshnessIntervalMillis(FRESHNESS_MS)
             .build()
 
     private fun clickable(id: String): ModifiersBuilders.Clickable =
@@ -151,11 +194,13 @@ class SuggestionsTileService : SuspendingTileService() {
     companion object {
         private const val RES_VERSION = "1"
         private const val CLICK_ACCEPT = "accept"
+        private const val FRESHNESS_MS = 30L * 60 * 1000 // 30 min
 
         private const val COLOR_PRIMARY = 0xFF016E3E.toInt()     // verde sembrado
         private const val COLOR_ON_PRIMARY = 0xFFFFFFFF.toInt()
         private const val COLOR_SURFACE = 0xFF000000.toInt()
         private const val COLOR_ON_SURFACE = 0xFFFFFFFF.toInt()
         private const val COLOR_MUTED = 0xFFAAAAAA.toInt()
+        private const val COLOR_ERROR = 0xFFCF6679.toInt()       // alerta (fallo de envío)
     }
 }

@@ -30,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -132,10 +133,10 @@ private fun CategoryDialog(
     onArchive: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
-    var name by remember { mutableStateOf(initial?.displayName ?: "") }
-    var colorHex by remember { mutableStateOf(initial?.colorHex) }
-    var budget by remember { mutableStateOf(initial?.budgetDefaultMxn?.toLong()?.toString() ?: "") }
-    var showColor by remember { mutableStateOf(false) }
+    var name by rememberSaveable { mutableStateOf(initial?.displayName ?: "") }
+    var colorHex by rememberSaveable { mutableStateOf(initial?.colorHex) }
+    var budget by rememberSaveable { mutableStateOf(initial?.budgetDefaultMxn?.toLong()?.toString() ?: "") }
+    var showColor by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,

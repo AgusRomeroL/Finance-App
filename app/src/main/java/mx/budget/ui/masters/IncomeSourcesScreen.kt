@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -116,12 +117,12 @@ private fun IncomeDialog(
     onSave: (memberId: String, label: String, amount: Double, cadence: String, colorHex: String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var label by remember { mutableStateOf(initial?.label ?: "") }
-    var amount by remember { mutableStateOf(initial?.amountMxn?.toLong()?.toString() ?: "") }
-    var memberId by remember { mutableStateOf(initial?.memberId ?: members.firstOrNull()?.id) }
-    var cadence by remember { mutableStateOf(initial?.cadence ?: "QUINCENAL") }
-    var colorHex by remember { mutableStateOf(initial?.colorHex) }
-    var showColor by remember { mutableStateOf(false) }
+    var label by rememberSaveable { mutableStateOf(initial?.label ?: "") }
+    var amount by rememberSaveable { mutableStateOf(initial?.amountMxn?.toLong()?.toString() ?: "") }
+    var memberId by rememberSaveable { mutableStateOf(initial?.memberId ?: members.firstOrNull()?.id) }
+    var cadence by rememberSaveable { mutableStateOf(initial?.cadence ?: "QUINCENAL") }
+    var colorHex by rememberSaveable { mutableStateOf(initial?.colorHex) }
+    var showColor by rememberSaveable { mutableStateOf(false) }
 
     val amountVal = amount.filter { it.isDigit() || it == '.' }.toDoubleOrNull()
     val canSave = memberId != null && (amountVal ?: 0.0) > 0.0

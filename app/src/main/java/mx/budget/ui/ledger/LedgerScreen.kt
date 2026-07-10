@@ -2,17 +2,20 @@ package mx.budget.ui.ledger
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -34,6 +37,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.ui.theme.financeColors
+import mx.budget.ui.tutorial.TutorialKey
+import mx.budget.ui.tutorial.tutorialTarget
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -48,6 +53,7 @@ fun LedgerScreen(
     viewModel: LedgerViewModel,
     onBack: () -> Unit,
     onOpenDetail: (ExpenseWithDetails) -> Unit,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
 ) {
     val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
     val dateFmt = remember { SimpleDateFormat("EEE d MMM", Locale("es", "MX")) }
@@ -58,10 +64,16 @@ fun LedgerScreen(
     val wallets by viewModel.wallets.collectAsState()
     val categoryFilter by viewModel.categoryFilter.collectAsState()
     val walletFilter by viewModel.walletFilter.collectAsState()
-    val rows by viewModel.rows.collectAsState()
+    val rawRows by viewModel.rows.collectAsState()
+    // Tutorial: durante el tour muestra 4 movimientos DEMO (nunca tocan Room). Ver TUTORIAL.md.
+    val rows = if (tutorialController?.demoActive == true)
+        mx.budget.ui.tutorial.TutorialDemoData.ledgerRows else rawRows
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
         // Header: back + título + navegación de quincena (patrón del Dashboard).
+        // statusBarsPadding es imprescindible: sin él, con la app edge-to-edge los
+        // chevrones de quincena caían DENTRO del área tappable del status bar y el
+        // sistema se comía los taps (navegación inusable) — P1 de auditoría runtime.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -99,16 +111,19 @@ fun LedgerScreen(
         }
 
         // Chips de filtro: categorías con gasto + wallets.
+        // TUTORIAL: LED_FILTERS — ver TUTORIAL.md
+        val visibleCategories = remember(rows, categories, categoryFilter) {
+            val usedCategoryIds = rows.map { it.categoryId }.toSet()
+            categories.filter {
+                it.id in usedCategoryIds || it.id == categoryFilter
+            }
+        }
         LazyRow(
+            modifier = Modifier.tutorialTarget(TutorialKey.LED_FILTERS, tutorialController),
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            val usedCategoryIds = rows.map { it.categoryId }.toSet()
-            val visibleCategories = categories.filter {
-                it.id in usedCategoryIds || it.id == categoryFilter
-            }
-            items(visibleCategories.size) { i ->
-                val c = visibleCategories[i]
+            items(visibleCategories, key = { "cat_${it.id}" }) { c ->
                 FilterChip(
                     selected = categoryFilter == c.id,
                     onClick = {
@@ -117,8 +132,7 @@ fun LedgerScreen(
                     label = { Text(c.displayName, maxLines = 1) },
                 )
             }
-            items(wallets.size) { i ->
-                val w = wallets[i]
+            items(wallets, key = { "wal_${it.id}" }) { w ->
                 FilterChip(
                     selected = walletFilter == w.displayName,
                     onClick = {
@@ -132,7 +146,7 @@ fun LedgerScreen(
         Spacer(Modifier.height(8.dp))
 
         // Total visible (con filtros aplicados) — solo POSTED.
-        val totalVisible = rows.filter { it.status == "POSTED" }.sumOf { it.amountMxn }
+        val totalVisible = remember(rows) { rows.filter { it.status == "POSTED" }.sumOf { it.amountMxn } }
         Text(
             "${rows.size} movimientos · ${money.format(totalVisible)}",
             style = MaterialTheme.typography.bodyMedium,
@@ -149,12 +163,13 @@ fun LedgerScreen(
                 modifier = Modifier.padding(24.dp),
             )
         } else {
+            // TUTORIAL: LED_ROWS — ver TUTORIAL.md
             LazyColumn(
+                modifier = Modifier.tutorialTarget(TutorialKey.LED_ROWS, tutorialController),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(rows.size) { i ->
-                    val row = rows[i]
+                items(rows, key = { it.expenseId }) { row ->
                     LedgerRow(
                         row = row,
                         money = money,

@@ -36,12 +36,22 @@ import mx.budget.data.local.entity.ExpenseAttributionEntity
  * campo (seed, legados) deserializan `updatedAt = 0` y nunca pisan una
  * edición local. member/quincena no tienen `updated_at` (solo pull): REPLACE.
  *
- * ── DELETES REMOTOS (Fase 2e) ───────────────────────────────────────────
- * Un `DocumentChange.Type.REMOVED` borra la fila local por id vía DAO
- * directo. NO ajusta saldos: el saldo del wallet viaja como estado en su
- * propio documento, que llega por su propio listener. Limitación conocida
- * (documentada, sin tombstones): un dispositivo offline muy prolongado
- * podría "resucitar" un doc si su cache ya no contiene el removal.
+ * ── DELETES REMOTOS (Fase 2e + LÁPIDAS) ─────────────────────────────────
+ * Dos vías, ambas borran la fila local por id vía DAO directo:
+ *
+ * 1. `DocumentChange.Type.REMOVED` (deletes duros históricos, compatibilidad).
+ *    Limitación conocida: un dispositivo offline muy prolongado cuyo cache ya
+ *    no contiene el removal recibiría el doc como ADDED y lo re-insertaría.
+ * 2. **Lápida (tombstone)**: un doc con `deleted_at > 0` (soft-delete que el
+ *    push escribe en vez de borrar el doc). Como el doc SIGUE existiendo,
+ *    incluso un dispositivo offline prolongado lo recibe (como ADDED) y borra
+ *    localmente — cierra la "resurrección" de la vía 1. Gate LWW: la lápida
+ *    solo se aplica si max(deleted_at, updated_at) remoto >= updated_at local
+ *    (un doc editado localmente DESPUÉS del borrado remoto sobrevive y su
+ *    re-push limpia la lápida — ver ExpenseRepositoryFirestore).
+ *
+ * Ninguna vía ajusta saldos: el saldo del wallet viaja como estado en su
+ * propio documento, que llega por su propio listener.
  *
  * ── NOMBRES DE CAMPO (Fase 2d) ──────────────────────────────────────────
  * La deserialización usa los mappers manuales de [FirestoreMappers] con
@@ -138,7 +148,7 @@ class RemotePullSync(
             },
         )
 
-        // wallet_transfer (RF-41): LWW + removal remoto.
+        // wallet_transfer (RF-41): LWW + removal remoto (duro o por lápida).
         listeners += register(
             "wallet_transfer",
             { it.toWalletTransferEntity() },
@@ -148,9 +158,10 @@ class RemotePullSync(
                 local == null || remote.updatedAt > local.updatedAt
             },
             onRemoved = { walletTransferDao.deleteById(it) },
+            localUpdatedAt = { walletTransferDao.getById(it)?.updatedAt },
         )
 
-        // income_source: LWW + removal remoto.
+        // income_source: LWW + removal remoto (duro o por lápida).
         listeners += register(
             "income_source",
             { it.toIncomeSourceEntity() },
@@ -160,10 +171,11 @@ class RemotePullSync(
                 local == null || remote.updatedAt > local.updatedAt
             },
             onRemoved = { incomeSourceDao.deleteById(it) },
+            localUpdatedAt = { incomeSourceDao.getById(it)?.updatedAt },
         )
 
         // Hoja de balance (MVP Fase 3.5): savings_goal / loan / installment_plan,
-        // todas con LWW + removal remoto.
+        // todas con LWW + removal remoto (duro o por lápida).
         listeners += register(
             "savings_goal",
             { it.toSavingsGoalEntity() },
@@ -173,6 +185,7 @@ class RemotePullSync(
                 local == null || remote.updatedAt > local.updatedAt
             },
             onRemoved = { savingsGoalDao.deleteById(it) },
+            localUpdatedAt = { savingsGoalDao.getById(it)?.updatedAt },
         )
 
         listeners += register(
@@ -184,6 +197,7 @@ class RemotePullSync(
                 local == null || remote.updatedAt > local.updatedAt
             },
             onRemoved = { loanDao.deleteById(it) },
+            localUpdatedAt = { loanDao.getById(it)?.updatedAt },
         )
 
         listeners += register(
@@ -195,6 +209,7 @@ class RemotePullSync(
                 local == null || remote.updatedAt > local.updatedAt
             },
             onRemoved = { installmentPlanDao.deleteById(it) },
+            localUpdatedAt = { installmentPlanDao.getById(it)?.updatedAt },
         )
 
         // proposals (Fase B): gastos que un COLABORADOR propone desde la web o su
@@ -225,6 +240,14 @@ class RemotePullSync(
      * Listener genérico de una subcolección "plana": aplica ADDED/MODIFIED con
      * el [mapper] (fallo de mapeo = doc ignorado + log, nunca crash), gateado
      * por [shouldApply] (LWW), y borra por id en REMOVED si hay [onRemoved].
+     *
+     * LÁPIDAS: un doc entrante con `deleted_at > 0` NUNCA se upserta. Si la
+     * colección tiene [onRemoved], se borra la fila local (gate LWW contra
+     * [localUpdatedAt] si se proporcionó — borrar una fila inexistente es
+     * no-op, así que sin timestamp local se borra directo). Si la colección NO
+     * tiene flujo de borrado (members, quincenas, categories, wallets: hoy
+     * nadie escribe lápidas ahí), el doc lápida simplemente se ignora — jamás
+     * debe pisar la fila local con el doc mínimo de la lápida.
      */
     private fun <T : Any> register(
         label: String,
@@ -232,6 +255,7 @@ class RemotePullSync(
         apply: suspend (T) -> Unit,
         shouldApply: (suspend (T) -> Boolean)? = null,
         onRemoved: (suspend (String) -> Unit)? = null,
+        localUpdatedAt: (suspend (String) -> Long?)? = null,
     ): ListenerRegistration =
         household().collection(label).addSnapshotListener { snapshot, error ->
             if (error != null) {
@@ -244,6 +268,20 @@ class RemotePullSync(
                     try {
                         when (change.type) {
                             DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> {
+                                // Lápida ANTES de mapear: el doc mínimo de una
+                                // lápida no es mapeable (campos limpiados).
+                                val deletedAt = change.document.tombstoneDeletedAt()
+                                if (deletedAt > 0L) {
+                                    if (onRemoved != null) {
+                                        val tombstoneTs =
+                                            maxOf(deletedAt, change.document.remoteUpdatedAt())
+                                        val localTs = localUpdatedAt?.invoke(change.document.id)
+                                        if (localTs == null || tombstoneTs >= localTs) {
+                                            onRemoved(change.document.id)
+                                        }
+                                    }
+                                    continue
+                                }
                                 val entity = mapper(change.document)
                                 if (entity == null) {
                                     Log.w(TAG, "Doc '$label/${change.document.id}' no mapeable; ignorado")
@@ -270,10 +308,20 @@ class RemotePullSync(
      *
      * REMOVED: borra el gasto por id (las atribuciones caen por FK CASCADE).
      *
-     * TODO(remote-attributions): si en el futuro se decide EMBEBER las
-     *  atribuciones dentro del documento del gasto (campo `attributions`),
-     *  léelas de ahí en vez de hacer el `get()` por subcolección. Por ahora,
-     *  si la subcolección no existe o falla, se deja la lista vacía.
+     * LÁPIDA (tombstone): un doc con `deleted_at > 0` también se trata como
+     * borrado — se chequea ANTES de mapear porque el doc lápida viene con los
+     * campos limpiados (no mapeable). Gate LWW: solo se aplica si
+     * max(deleted_at, updated_at) remoto >= updated_at local; así una edición
+     * local POSTERIOR al borrado remoto sobrevive y su re-push (que limpia la
+     * lápida en Firestore) resucita el gasto legítimamente en los demás
+     * dispositivos.
+     *
+     * CONTRATO con los escritores remotos (push Android y web del titular): el
+     * gasto y su subcolección `attributions` se escriben en UN batch atómico,
+     * así el `get()` posterior las ve completas. Aun así, para un gasto NUEVO
+     * cuya lectura de atribuciones llegue vacía (carrera de propagación o fallo
+     * transitorio de red) se reintenta una vez con backoff corto antes de
+     * aplicarlo sin atribuciones.
      */
     private suspend fun applyExpenseChange(change: DocumentChange) {
         try {
@@ -283,6 +331,21 @@ class RemotePullSync(
             }
 
             val doc = change.document
+
+            // Lápida: borrado soft multi-dispositivo (anti-resurrección). Va
+            // ANTES del mapeo (el doc lápida no es mapeable a ExpenseEntity).
+            val deletedAt = doc.tombstoneDeletedAt()
+            if (deletedAt > 0L) {
+                val localForTombstone = expenseDao.getById(doc.id)
+                val tombstoneTs = maxOf(deletedAt, doc.remoteUpdatedAt())
+                if (localForTombstone == null || tombstoneTs >= localForTombstone.updatedAt) {
+                    // Las atribuciones locales caen por FK CASCADE. NO ajusta
+                    // saldos (el wallet llega por su propio listener).
+                    expenseDao.deleteById(doc.id)
+                }
+                return
+            }
+
             val expense = doc.toExpenseEntity()
             if (expense == null) {
                 Log.w(TAG, "Doc 'expenses/${doc.id}' no mapeable; ignorado")
@@ -295,7 +358,7 @@ class RemotePullSync(
             val local = expenseDao.getById(expense.id)
             if (local != null && expense.updatedAt <= local.updatedAt) return
 
-            val attribs: List<ExpenseAttributionEntity> = try {
+            suspend fun readAttribs(): List<ExpenseAttributionEntity> = try {
                 doc.reference.collection("attributions").get().await()
                     .documents.mapNotNull { it.toExpenseAttributionEntity(expense.id) }
             } catch (e: Exception) {
@@ -303,7 +366,16 @@ class RemotePullSync(
                 emptyList()
             }
 
-            db.withTransaction {
+            var attribs = readAttribs()
+            if (attribs.isEmpty() && local == null) {
+                // Gasto nuevo sin atribuciones visibles: probable carrera de
+                // propagación del batch remoto. Un reintento corto evita dejarlo
+                // sin atribución hasta el próximo updated_at.
+                kotlinx.coroutines.delay(1_500)
+                attribs = readAttribs()
+            }
+
+            suspend fun applyToRoom() = db.withTransaction {
                 // PRESERVAR concept_canonical local (Apéndice F.3): es una columna
                 // calculada SOLO localmente por el pipeline retro. Los docs remotos
                 // que no la traen deserializan a null; un REPLACE ciego la borraría
@@ -321,6 +393,17 @@ class RemotePullSync(
                     attributionDao.deleteByExpenseId(expense.id)
                     attributionDao.insertAll(attribs)
                 }
+            }
+
+            try {
+                applyToRoom()
+            } catch (e: android.database.sqlite.SQLiteConstraintException) {
+                // Carrera de ORDEN entre listeners: una cuota MSI remota puede
+                // llegar antes que su installment_plan (o un gasto antes que su
+                // quincena aprovisionada por el peer). El doc no se re-emite solo,
+                // así que sin reintento quedaría saltado para siempre.
+                kotlinx.coroutines.delay(2_500)
+                applyToRoom()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Fallo al aplicar gasto remoto ${change.document.id} a Room", e)
@@ -348,6 +431,18 @@ class RemotePullSync(
                 ?: System.currentTimeMillis()
             val note = doc.getString("note")
 
+            // Fase 6 (colaboradores): el proposer pagó con SU dinero. Se resuelve su
+            // miembro vinculado (roles/{uid}.linkedMemberId) y se sugiere como PAYER
+            // al 100% — el Review lo preactiva como tercero + reembolsable, y al
+            // aceptar el gasto cae en "Por reembolsar" a favor del colaborador.
+            val proposerUid = doc.getString("proposedByUid")
+            val payerJson = proposerUid?.let { uid ->
+                runCatching {
+                    household().collection("roles").document(uid).get().await()
+                        .getString("linkedMemberId")
+                }.getOrNull()
+            }?.let { memberId -> """{"$memberId":10000}""" }
+
             val localId = "proposal:${doc.id}"
             // Idempotencia: si ya existe (y no está PENDING, o ya está), no re-crea
             // trabajo del usuario. Un REPLACE sobre una fila ya confirmada la
@@ -366,6 +461,7 @@ class RemotePullSync(
                     enrichStatus = "READY",
                     createdAt = System.currentTimeMillis(),
                     notes = note,
+                    suggestedPayerJson = payerJson,
                 )
             )
         } catch (e: Exception) {

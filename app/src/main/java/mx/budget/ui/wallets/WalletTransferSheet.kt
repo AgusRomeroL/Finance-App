@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -99,6 +100,9 @@ fun WalletTransferSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
+                // imePadding: sin esto el teclado tapa el campo enfocado (el
+                // ModalBottomSheet no reajusta por IME por sí solo).
+                .imePadding()
                 .padding(horizontal = 24.dp)
                 .padding(top = 8.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),

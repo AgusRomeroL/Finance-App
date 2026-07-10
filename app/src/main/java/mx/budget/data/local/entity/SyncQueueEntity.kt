@@ -34,6 +34,11 @@ data class SyncQueueEntity(
     @ColumnInfo(name = "created_at")
     val createdAt: Long,
 
-    /** Reintentos acumulados; sirve para backoff/diagnóstico. */
+    /**
+     * Reintentos acumulados. Además de diagnóstico, es el criterio dead-letter:
+     * al alcanzar el máximo (ver `SyncManager.MAX_ATTEMPTS`) la fila se
+     * considera fallida definitiva y [mx.budget.data.local.dao.SyncQueueDao.getPending]
+     * deja de devolverla — así una fila venenosa no bloquea el push del resto.
+     */
     val attempts: Int = 0
 )

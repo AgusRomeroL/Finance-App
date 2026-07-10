@@ -1,5 +1,6 @@
 package mx.budget.ui.theme
 
+import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -9,9 +10,12 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 // ── Esquema de color claro ────────────────────────────────────────────────────
 // Modo default: light — los prototipos de referencia usan class="light"
@@ -151,7 +155,26 @@ fun BudgetAppTheme(
         baseFinance
     }
 
+    // Blend edge-to-edge: la ventana ya es transparente (MainActivity llama
+    // enableEdgeToEdge); aquí solo sincronizamos la APARIENCIA de los íconos de
+    // status/nav bar con el tema Compose. Sin esto los íconos quedan oscuros
+    // sobre superficie oscura en dark mode (framework Theme.Material.Light).
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        val window = (view.context as Activity).window
+        SideEffect {
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = !darkTheme
+            controller.isAppearanceLightNavigationBars = !darkTheme
+        }
+    }
+
     CompositionLocalProvider(LocalFinanceColors provides financeColors) {
+        // Nota de motion (M3 1.4): los componentes M3 ya animan con física de
+        // resortes por default. El MotionScheme público (expressive()) sigue
+        // experimental en material3 1.5-alpha; cuando gradúe, se pasa aquí.
+        // Mientras, el sello expresivo se aplica con springs en los componentes
+        // custom (specs dampingRatio≈0.8, stiffness≈380).
         MaterialTheme(
             colorScheme = colorScheme,
             typography = BudgetTypography,

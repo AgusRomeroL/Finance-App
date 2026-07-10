@@ -5,6 +5,12 @@ import android.content.Intent
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,6 +59,9 @@ fun CapturaScreen(
     var amountText by remember { mutableStateOf("") }
     var concept by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
+    // Mensaje de error visible cuando el envío al teléfono falla (sin cola offline
+    // en MessageClient): el usuario conserva lo tecleado y puede reintentar con ✓.
+    var sendError by remember { mutableStateOf(false) }
 
     val amount = amountText.toDoubleOrNull() ?: 0.0
 
@@ -69,11 +78,12 @@ fun CapturaScreen(
         if (amount <= 0.0 || sending) return
         scope.launch {
             sending = true
+            sendError = false
             val label = concept.trim().ifBlank { if (type == TYPE_INCOME) "Ingreso" else "Gasto" }
             val res = if (type == TYPE_INCOME) sender.sendIncome(amount, label)
             else sender.sendQuickExpense(amount, label)
             sending = false
-            if (res.isSuccess) onSent()
+            if (res.isSuccess) onSent() else sendError = true
         }
     }
 
@@ -82,7 +92,9 @@ fun CapturaScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp, vertical = 24.dp),
+                // top holgado: en pantalla redonda el TimeText del arco superior
+                // se encimaba con el chip de concepto al hacer scroll.
+                .padding(start = 8.dp, end = 8.dp, top = 36.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -121,6 +133,25 @@ fun CapturaScreen(
                     text = concept.ifBlank { "🎤 Concepto" },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            // Error de envío (aparece con resorte M3; lo tecleado se conserva)
+            AnimatedVisibility(
+                visible = sendError,
+                enter = fadeIn() + expandVertically(
+                    animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                ),
+                exit = fadeOut() + shrinkVertically(
+                    animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                ),
+            ) {
+                Text(
+                    text = "Sin conexión con el teléfono — reintenta con ✓",
+                    style = MaterialTheme.typography.caption2,
+                    color = MaterialTheme.colors.error,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
 

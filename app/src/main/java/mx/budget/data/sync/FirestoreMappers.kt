@@ -44,6 +44,22 @@ private fun DocumentSnapshot.int(camel: String, snake: String): Int? =
 private fun DocumentSnapshot.bool(camel: String, snake: String): Boolean? =
     (get(camel) ?: get(snake)) as? Boolean
 
+/**
+ * Lápida (tombstone) de borrado remoto: epoch ms en que el doc fue
+ * soft-deleteado, o 0 si el doc está vivo. Con fallback dual camel/snake como
+ * el resto de los campos. IMPORTANTE: se lee ANTES de mapear a entidad —
+ * un doc lápida viene con el resto de campos limpiados, así que el mapper
+ * normal devolvería null (faltan campos obligatorios) y el borrado se
+ * perdería si se mapeara primero.
+ */
+fun DocumentSnapshot.tombstoneDeletedAt(): Long = lng("deletedAt", "deleted_at") ?: 0L
+
+/**
+ * `updated_at` remoto leído sin mapear la entidad completa (para el gate LWW
+ * de las lápidas, cuyo doc mínimo no es mapeable).
+ */
+fun DocumentSnapshot.remoteUpdatedAt(): Long = lng("updatedAt", "updated_at") ?: 0L
+
 fun DocumentSnapshot.toExpenseEntity(): ExpenseEntity? {
     return ExpenseEntity(
         id = id.ifBlank { str("id", "id") ?: return null },
@@ -195,6 +211,10 @@ fun DocumentSnapshot.toLoanEntity(): LoanEntity? {
         dueAt = str("dueAt", "due_at"),
         paymentScheduleId = str("paymentScheduleId", "payment_schedule_id"),
         notes = str("notes", "notes"),
+        paymentCount = int("paymentCount", "payment_count"),
+        paymentFrequency = str("paymentFrequency", "payment_frequency"),
+        paymentAmountMxn = dbl("paymentAmountMxn", "payment_amount_mxn"),
+        scheduleStartDate = str("scheduleStartDate", "schedule_start_date"),
         updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }
@@ -206,6 +226,7 @@ fun DocumentSnapshot.toInstallmentPlanEntity(): InstallmentPlanEntity? {
         displayName = str("displayName", "display_name") ?: return null,
         creditorMemberId = str("creditorMemberId", "creditor_member_id"),
         paymentMethodId = str("paymentMethodId", "payment_method_id"),
+        fundingPaymentMethodId = str("fundingPaymentMethodId", "funding_payment_method_id"),
         principalMxn = dbl("principalMxn", "principal_mxn") ?: return null,
         totalInstallments = int("totalInstallments", "total_installments") ?: return null,
         installmentAmountMxn = dbl("installmentAmountMxn", "installment_amount_mxn") ?: return null,

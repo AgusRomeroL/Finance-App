@@ -144,6 +144,11 @@ class RecurrenceViewModel(
     val beneficiaryShares: StateFlow<Map<String, Int>> = _beneficiaryShares.asStateFlow()
     private val _payerShares = MutableStateFlow<Map<String, Int>>(emptyMap())
     val payerShares: StateFlow<Map<String, Int>> = _payerShares.asStateFlow()
+    /** Reembolso recurrente: un tercero paga por adelantado (reembolsable). */
+    private val _externalPayerEnabled = MutableStateFlow(false)
+    val externalPayerEnabled: StateFlow<Boolean> = _externalPayerEnabled.asStateFlow()
+    private val _externalPayerMemberId = MutableStateFlow<String?>(null)
+    val externalPayerMemberId: StateFlow<String?> = _externalPayerMemberId.asStateFlow()
     private val _saveState = MutableStateFlow<TemplateSaveState>(TemplateSaveState.Idle)
     val saveState: StateFlow<TemplateSaveState> = _saveState.asStateFlow()
 
@@ -162,6 +167,8 @@ class RecurrenceViewModel(
         _leadQuincenaStart.value = false
         _beneficiaryShares.value = emptyMap()
         _payerShares.value = emptyMap()
+        _externalPayerEnabled.value = false
+        _externalPayerMemberId.value = null
         _saveState.value = TemplateSaveState.Idle
         _editorVisible.value = true
         viewModelScope.launch { applyDefaultSplits() }
@@ -188,6 +195,8 @@ class RecurrenceViewModel(
         }
         _beneficiaryShares.value = parseSharesToPercent(t.defaultBeneficiaryIds)
         _payerShares.value = parseSharesToPercent(t.defaultPayerSplit)
+        _externalPayerEnabled.value = t.defaultExternalPayerMemberId != null
+        _externalPayerMemberId.value = t.defaultExternalPayerMemberId
         _saveState.value = TemplateSaveState.Idle
         _editorVisible.value = true
     }
@@ -228,6 +237,20 @@ class RecurrenceViewModel(
     fun onPayerAll() { _payerShares.value = equalSplit(activeMemberIds()) }
     fun onPayerClear() { _payerShares.value = emptyMap() }
 
+    fun onExternalPayerToggle(enabled: Boolean) {
+        _externalPayerEnabled.value = enabled
+        if (enabled) {
+            // Preselecciona algún miembro para que el estado sea consistente.
+            if (_externalPayerMemberId.value == null) {
+                _externalPayerMemberId.value = members.value
+                    .firstOrNull { !it.role.startsWith("EXTERNAL_") }?.id
+            }
+        } else {
+            _externalPayerMemberId.value = null
+        }
+    }
+    fun onExternalPayerMember(id: String) { _externalPayerMemberId.value = id }
+
     // ── Acciones de lista ─────────────────────────────────────────────────────────
     fun pause(id: String) { viewModelScope.launch { recurrenceRepository.pause(id) } }
     fun resume(id: String) { viewModelScope.launch { recurrenceRepository.resume(id) } }
@@ -266,6 +289,8 @@ class RecurrenceViewModel(
             _leadQuincenaStart.value = false
             _beneficiaryShares.value = bpsToPercent(benefBps)
             _payerShares.value = bpsToPercent(payerBps)
+            _externalPayerEnabled.value = false
+            _externalPayerMemberId.value = null
             _saveState.value = TemplateSaveState.Idle
             _editorVisible.value = true
         }
@@ -329,6 +354,10 @@ class RecurrenceViewModel(
                     put("day_of_month", _dayText.value.toIntOrNull()?.coerceIn(1, 31) ?: 1)
                     put("reminder_lead_days", if (_leadQuincenaStart.value) "QUINCENA_START" else _leadDays.value)
                 }
+                val externalPayerId = _externalPayerMemberId.value.takeIf { _externalPayerEnabled.value }
+                if (_externalPayerEnabled.value && externalPayerId == null) {
+                    throw IllegalArgumentException("Elige quién pagó (tercero reembolsable).")
+                }
                 val template = RecurrenceTemplateEntity(
                     id = editingId ?: UUID.randomUUID().toString(),
                     householdId = householdId,
@@ -343,6 +372,8 @@ class RecurrenceViewModel(
                     isActive = true,
                     confidenceScore = editingConfidence,
                     learnedFromExpenseIds = editingLearned,
+                    defaultExternalPayerMemberId = externalPayerId,
+                    defaultSettlementStatus = if (externalPayerId != null) "PENDING_REIMBURSEMENT" else "NONE",
                 )
                 if (editingId == null) recurrenceRepository.insert(template)
                 else recurrenceRepository.update(template)

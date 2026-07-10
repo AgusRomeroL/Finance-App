@@ -178,9 +178,11 @@ class NewPlannedViewModel(
                 }
 
                 val date = _date.value
-                val quincena = quincenaDao.getForDate(householdId, date.toString())
-                    ?: quincenaRepository.getActive(householdId)
-                    ?: throw IllegalStateException("No hay una quincena para esa fecha.")
+                // La quincena REAL de la fecha; si cae en un hueco se aprovisiona la
+                // determinista (nunca la ACTIVE: asignar un pago del 20-jul a la
+                // quincena 1-15 jul contaminaba sus agregados).
+                val quincena = mx.budget.data.quincena.QuincenaRollover(quincenaDao, householdId)
+                    .ensureForDate(date)
 
                 val occurredAt = date.atTime(9, 0).atZone(ZONE).toInstant().toEpochMilli()
                 val now = System.currentTimeMillis()

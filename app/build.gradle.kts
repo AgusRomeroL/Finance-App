@@ -3,18 +3,18 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.2.20"
     id("com.google.gms.google-services")
 }
 
 android {
     namespace = "mx.budget"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "mx.budget"
         minSdk = 31
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
     }
@@ -27,11 +27,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-        // ML Kit GenAI (genai-prompt beta) viene compilado con Kotlin 2.2 metadata;
-        // el proyecto está en 2.0.21. Permite consumir su API sin subir el toolchain.
-        freeCompilerArgs += "-Xskip-metadata-version-check"
+}
+
+// Con el toolchain en Kotlin 2.2 la metadata de ML Kit GenAI/LiteRT-LM ya es
+// nativa: se quitó -Xskip-metadata-version-check (y se reactivó el incremental
+// en gradle.properties).
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
@@ -43,7 +46,7 @@ dependencies {
     // Constantes compartidas del Data Layer telefono-reloj (MVP Fase 5).
     implementation(project(":wearcore"))
 
-    val room_version = "2.6.1"
+    val room_version = "2.7.2"
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
     ksp("androidx.room:room-compiler:$room_version")
@@ -52,7 +55,7 @@ dependencies {
     // (Apéndice F.3.4). Exento de las restricciones de background de Android 14.
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
-    val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
+    val composeBom = platform("androidx.compose:compose-bom:2025.12.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     
@@ -65,8 +68,8 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
     
     // Hilt just in case
-    implementation("com.google.dagger:hilt-android:2.51")
-    ksp("com.google.dagger:hilt-compiler:2.51")
+    implementation("com.google.dagger:hilt-android:2.57")
+    ksp("com.google.dagger:hilt-compiler:2.57")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     // Wear OS Data Layer
@@ -108,9 +111,9 @@ dependencies {
     // Material 3 Adaptive — NavigationSuiteScaffold vive aquí (graduado en material3 1.3)
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite")
     // SupportingPaneScaffold + PaneExpansionState (divisor de paneles arrastrable)
-    implementation("androidx.compose.material3.adaptive:adaptive:1.0.0")
-    implementation("androidx.compose.material3.adaptive:adaptive-layout:1.0.0")
-    implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.0.0")
+    implementation("androidx.compose.material3.adaptive:adaptive:1.1.0")
+    implementation("androidx.compose.material3.adaptive:adaptive-layout:1.1.0")
+    implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.1.0")
     // WindowSizeClass para clasificar el ancho de ventana (foldable)
     implementation("androidx.compose.material3:material3-window-size-class")
     implementation("androidx.compose.ui:ui-graphics")

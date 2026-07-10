@@ -89,6 +89,8 @@ class ExpenseDetailViewModel(
     private val walletRepository: WalletRepository,
     private val memberRepository: MemberRepository,
     private val householdId: String,
+    /** Fase 6: refleja el reembolso en la propuesta remota del colaborador. */
+    private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ExpenseDetailState?>(null)
@@ -286,6 +288,13 @@ class ExpenseDetailViewModel(
         viewModelScope.launch {
             try {
                 expenseRepository.reimburseFrom(current.row.expenseId, walletId)
+                // Fase 6: si el gasto nació de una propuesta de colaborador,
+                // estampa reimbursedAt en Firestore (la web lo saca de "me deben").
+                runCatching {
+                    membershipRepository?.markProposalReimbursedByExpense(
+                        householdId, current.row.expenseId
+                    )
+                }
                 _state.value = null
             } catch (e: Exception) {
                 _state.update { it?.copy(saving = false, editError = e.message ?: "No se pudo reembolsar") }

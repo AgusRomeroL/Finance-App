@@ -18,11 +18,14 @@ object WearCache {
     const val PREFS = "wear_budget_prefs"
 
     const val K_BALANCE = "latest_balance"        // Float
+    const val K_BUDGET_TOTAL = "budget_total"     // Float (denominador del arco)
     const val K_LABEL = "latest_label"            // String
     const val K_SUGGESTIONS = "suggestions_json"  // JSON array
     const val K_MOVEMENTS = "movements_json"      // JSON array
     const val K_PENDING = "pending_json"          // JSON array
     const val K_MEMBER_SPEND = "member_spend_json" // JSON array
+    const val K_UPCOMING = "upcoming_json"        // JSON array
+    const val K_CACHE_VERSION = "cache_version"   // Long
 
     // ── Modelos planos que consume la UI del reloj ──────────────────────────────
 
@@ -45,12 +48,18 @@ object WearCache {
 
     data class MemberSpend(val name: String, val total: Double)
 
+    data class Upcoming(val concept: String, val amount: Double, val dueDate: Long)
+
     // ── Lectura ─────────────────────────────────────────────────────────────────
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun balance(context: Context): Double = prefs(context).getFloat(K_BALANCE, 0f).toDouble()
+
+    fun budgetTotal(context: Context): Double = prefs(context).getFloat(K_BUDGET_TOTAL, 0f).toDouble()
+
+    fun cacheVersion(context: Context): Long = prefs(context).getLong(K_CACHE_VERSION, 0L)
 
     fun label(context: Context): String =
         prefs(context).getString(K_LABEL, "Sin sincronizar") ?: "Sin sincronizar"
@@ -88,6 +97,15 @@ object WearCache {
     fun memberSpend(context: Context): List<MemberSpend> =
         parseArray(prefs(context).getString(K_MEMBER_SPEND, null)) { o ->
             MemberSpend(name = o.optString("name"), total = o.optDouble("total", 0.0))
+        }
+
+    fun upcoming(context: Context): List<Upcoming> =
+        parseArray(prefs(context).getString(K_UPCOMING, null)) { o ->
+            Upcoming(
+                concept = o.optString("concept"),
+                amount = o.optDouble("amount", 0.0),
+                dueDate = o.optLong("dueDate", 0L),
+            )
         }
 
     private fun <T> parseArray(json: String?, map: (org.json.JSONObject) -> T): List<T> {

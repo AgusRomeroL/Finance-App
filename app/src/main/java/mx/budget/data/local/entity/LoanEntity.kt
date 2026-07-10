@@ -75,6 +75,28 @@ data class LoanEntity(
 
     val notes: String? = null,
 
+    /**
+     * Esquema de pago configurable (v15→v16). Todos NULLABLE: los préstamos
+     * sembrados no lo declaran. Describen cómo el deudor liquidará la deuda:
+     * número de pagos, frecuencia, monto por pago y fecha de inicio.
+     */
+
+    /** Número de pagos pactados (ej. 6 quincenales). Null = sin esquema. */
+    @ColumnInfo(name = "payment_count")
+    val paymentCount: Int? = null,
+
+    /** Frecuencia del pago: WEEKLY | BIWEEKLY | MONTHLY | LUMP_SUM. */
+    @ColumnInfo(name = "payment_frequency")
+    val paymentFrequency: String? = null,
+
+    /** Monto de cada pago (default sugerido = principal / paymentCount). */
+    @ColumnInfo(name = "payment_amount_mxn")
+    val paymentAmountMxn: Double? = null,
+
+    /** Fecha del primer pago del esquema (ISO YYYY-MM-DD). */
+    @ColumnInfo(name = "schedule_start_date")
+    val scheduleStartDate: String? = null,
+
     /** Última modificación local (epoch millis), para LWW del sync (v11→v12). */
     @ColumnInfo(name = "updated_at", defaultValue = "0")
     val updatedAt: Long = 0

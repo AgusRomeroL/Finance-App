@@ -7,6 +7,7 @@ import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.result.AttributionRow
+import mx.budget.data.local.result.NettingAttributionRow
 import mx.budget.data.local.result.SpendByMember
 
 /**
@@ -60,6 +61,40 @@ interface ExpenseAttributionDao {
     fun observeSpendByMember(quincenaId: String, role: String): Flow<List<SpendByMember>>
 
     /**
+     * Igual que [observeSpendByMember] pero agregando por RANGO de fechas del
+     * hogar (no por quincena): suma `share_amount_mxn` por miembro sobre gastos
+     * POSTED cuyo `occurred_at` cae en `[startMs, endMs]` (epoch millis). Alimenta
+     * la dona "Distribución por miembro" con periodo seleccionable (histórico/
+     * anual/mensual/quincenal). Para "histórico" llamar con `startMs=0` y un
+     * `endMs` muy grande (Long.MAX_VALUE). @Query NUEVO de solo lectura — NO altera
+     * el esquema.
+     */
+    @Query(
+        """
+        SELECT
+            a.member_id                          AS memberId,
+            m.display_name                       AS memberName,
+            COALESCE(SUM(a.share_amount_mxn), 0.0) AS totalMxn,
+            COUNT(DISTINCT a.expense_id)         AS expenseCount
+        FROM expense_attribution a
+        INNER JOIN expense e ON e.id = a.expense_id
+        INNER JOIN member  m ON m.id = a.member_id
+        WHERE e.household_id = :householdId
+          AND a.role = :role
+          AND e.status = 'POSTED'
+          AND e.occurred_at BETWEEN :startMs AND :endMs
+        GROUP BY a.member_id, m.display_name
+        ORDER BY totalMxn DESC
+        """
+    )
+    fun observeSpendByMemberRange(
+        householdId: String,
+        role: String,
+        startMs: Long,
+        endMs: Long
+    ): Flow<List<SpendByMember>>
+
+    /**
      * Atribuciones históricas de un [role] para todos los gastos que comparten
      * el [canonicalKey] dado, restringido a gastos cuya atribución de ese rol es
      * **válida** (suma exactamente 10,000 bps). Alimenta la inferencia del
@@ -84,6 +119,34 @@ interface ExpenseAttributionDao {
         """
     )
     suspend fun findHistoricalByCanonical(canonicalKey: String, role: String): List<AttributionRow>
+
+    /**
+     * Filas de atribución (ambos roles) de todos los gastos POSTED del hogar que
+     * aún NO se han liquidado por netting (`settlement_status = 'NONE'`). Cada fila
+     * trae el monto del gasto para poder repartir la deuda B→P proporcionalmente.
+     *
+     * El filtro `= 'NONE'` cumple doble función: excluye los ya liquidados
+     * (`'NETTED'`) y NO toca el flujo "alguien más pagó" (PENDING_REIMBURSEMENT /
+     * REIMBURSED / ABSORBED), que tiene su propia liquidación. Alimenta el cómputo
+     * determinista de "Cuentas entre miembros". @Query NUEVO de solo lectura — NO
+     * altera el esquema.
+     */
+    @Query(
+        """
+        SELECT
+            a.expense_id       AS expenseId,
+            e.amount_mxn       AS amountMxn,
+            a.role             AS role,
+            a.member_id        AS memberId,
+            a.share_amount_mxn AS shareAmountMxn
+        FROM expense_attribution a
+        INNER JOIN expense e ON e.id = a.expense_id
+        WHERE e.household_id = :householdId
+          AND e.status = 'POSTED'
+          AND e.settlement_status = 'NONE'
+        """
+    )
+    fun observeNettingRows(householdId: String): Flow<List<NettingAttributionRow>>
 
     /**
      * IDs de gastos cuya atribución para [role] es válida (suma 10,000 bps).

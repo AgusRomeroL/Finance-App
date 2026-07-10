@@ -225,6 +225,14 @@ class BudgetApplication : Application() {
         private set
 
     /**
+     * Valor inicial de `has_seen_tutorial`, leído una vez al arrancar para decidir sin parpadeo
+     * si el **tutorial guiado** debe auto-arrancar la primera vez (ver `ui/tutorial/` y
+     * `TUTORIAL.md`). Independiente de [needsOnboarding].
+     */
+    var initialHasSeenTutorial: Boolean = false
+        private set
+
+    /**
      * `true` si la instalación está vacía (sin hogar/miembros/gastos) y hay que
      * mostrar el **wizard de onboarding** (paquete B2). Resuelto síncrono en
      * [onCreate] (mismo patrón que [householdId]); lo lee [MainActivity] para
@@ -263,7 +271,10 @@ class BudgetApplication : Application() {
                 BudgetDatabase.MIGRATION_11_12,
                 BudgetDatabase.MIGRATION_12_13,
                 BudgetDatabase.MIGRATION_13_14,
-                BudgetDatabase.MIGRATION_14_15
+                BudgetDatabase.MIGRATION_14_15,
+                BudgetDatabase.MIGRATION_15_16,
+                BudgetDatabase.MIGRATION_16_17,
+                BudgetDatabase.MIGRATION_17_18
             )
             .build()
 
@@ -271,6 +282,7 @@ class BudgetApplication : Application() {
         // de cualquier Activity) para que el tema arranque sin parpadeo.
         settingsRepository = SettingsRepository(this)
         initialDynamicColor = runBlocking { settingsRepository.dynamicColor.first() }
+        initialHasSeenTutorial = runBlocking { settingsRepository.hasSeenTutorial.first() }
 
         // Resolución del household activo (Fase B — multi-tenant):
         // 1) si el usuario eligió un hogar activo (DataStore), se usa ese;
@@ -336,9 +348,11 @@ class BudgetApplication : Application() {
             db = database
         )
 
-        // Fase C (paquete C1): importar estados de cuenta con LLM cloud. Extractor
-        // local (PDFBox/ML Kit) + cliente NVIDIA NIM (la key se lee del DataStore
-        // en cada llamada, nunca hardcodeada) + reconciliación contra wallet/MSI.
+        // Fase C (paquete C1 + reescritura): importar estados de cuenta con LLM
+        // cloud. Extractor local (PDFBox/ML Kit) + cliente NVIDIA NIM (la key se
+        // lee del DataStore en cada llamada, nunca hardcodeada) + reconciliación
+        // contra wallet/MSI + reescritura confirmada de movimientos (gastos
+        // itemizados por los repos públicos y pago agregado → transferencia RF-41).
         statementImportManager = mx.budget.data.statements.StatementImportManager(
             extractor = mx.budget.data.statements.StatementTextExtractor(this),
             nimClient = mx.budget.data.statements.NvidiaNimClient(
@@ -347,6 +361,16 @@ class BudgetApplication : Application() {
             walletRepository = walletRepository,
             installmentRepository = installmentRepository,
             statementImportDao = database.statementImportDao(),
+            statementLineDao = database.statementLineDao(),
+            expenseRepository = expenseRepository,
+            transferRepository = transferRepository,
+            expenseDao = database.expenseDao(),
+            categoryDao = database.categoryDao(),
+            memberDao = database.memberDao(),
+            quincenaDao = database.quincenaDao(),
+            attributionReviewDao = database.attributionReviewDao(),
+            pendingCaptureDao = database.pendingCaptureDao(),
+            db = database,
             householdId = householdId,
         )
 
@@ -367,7 +391,8 @@ class BudgetApplication : Application() {
         // directo (caso Norma). runBlocking: 3 consultas instantáneas, una sola vez.
         needsOnboarding = runBlocking {
             val hasHousehold = database.householdDao().count() > 0
-            val hasExpenses = expenseDao.getAll(householdId).isNotEmpty()
+            // EXISTS en vez de materializar los ~800 gastos en el hilo principal.
+            val hasExpenses = expenseDao.hasAny(householdId)
             !hasHousehold && activeMembers.isEmpty() && !hasExpenses
         }
 
@@ -412,6 +437,12 @@ class BudgetApplication : Application() {
         )
 
         BankCaptureManager.ensureChannel(this)
+        // Fase 6: MembershipRepository se construye ANTES que el BankCaptureManager
+        // para poder reflejar en Firestore el rechazo de propuestas de colaborador.
+        membershipRepository = mx.budget.data.remote.MembershipRepository(
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        )
+
         bankCaptureManager = BankCaptureManager(
             context = this,
             pendingDao = database.pendingCaptureDao(),
@@ -425,6 +456,7 @@ class BudgetApplication : Application() {
             householdId = householdId,
             nlCaptureExtractor = nlCaptureExtractor,
             locationProvider = locationProvider,
+            membershipRepository = membershipRepository,
         )
 
         // Materializador de recurrentes → gastos PLANNED (Apéndice G.2, Fase 1).
@@ -441,7 +473,6 @@ class BudgetApplication : Application() {
         val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
         this.firestore = firestore
         authManager = mx.budget.data.remote.AuthManager(this)
-        membershipRepository = mx.budget.data.remote.MembershipRepository(firestore)
         remoteExpenseRepository = mx.budget.data.remote.ExpenseRepositoryFirestore(firestore, householdId)
         val remoteWalletRepository = mx.budget.data.remote.WalletRepositoryFirestore(firestore)
         val remoteTransferRepository = mx.budget.data.remote.TransferRepositoryFirestore(firestore)
@@ -497,6 +528,25 @@ class BudgetApplication : Application() {
         // push. Firestore cachea offline, así que es seguro aunque no haya red.
         appScope.launch {
             authManager.signInAnonymously()
+            // Sembrado histórico de estados (v2) ANTES de arrancar el pull, para que
+            // el pull no escriba por DAO directo a mitad del seed; el drain empuja
+            // todo lo sembrado de una vez. No-op sin el asset o si ya corrió.
+            runCatching {
+                mx.budget.data.statements.StatementSeedInitializer(
+                    context = this@BudgetApplication,
+                    settings = settingsRepository,
+                    householdId = householdId,
+                    categoryRepository = categoryRepository,
+                    walletRepository = walletRepository,
+                    installmentRepository = installmentRepository,
+                    expenseRepository = expenseRepository,
+                    transferRepository = transferRepository,
+                    expenseDao = database.expenseDao(),
+                    memberDao = database.memberDao(),
+                    quincenaDao = database.quincenaDao(),
+                    statementImportDao = database.statementImportDao(),
+                ).seedOnce()
+            }
             remotePullSync.start()
             syncManager.drain()
         }
@@ -511,9 +561,39 @@ class BudgetApplication : Application() {
         // engancha cuando exista el rollover automático.
         materializeRecurringForActiveQuincena()
 
+        // Proyección de cuotas MSI restantes como PLANNED en la quincena activa
+        // (estados v2 Fase 4). Idempotente; corre tras el sembrado/recurrencias.
+        appScope.launch {
+            runCatching {
+                mx.budget.data.installments.InstallmentMaterializer(
+                    householdId = householdId,
+                    installmentRepository = installmentRepository,
+                    walletRepository = walletRepository,
+                    quincenaDao = database.quincenaDao(),
+                    expenseDao = database.expenseDao(),
+                    expenseRepository = expenseRepository,
+                    memberDao = database.memberDao(),
+                ).materialize()
+            }
+        }
+
         // Recordatorios de gastos PLANNED (§G.2 Fase 3). Canal + trabajo periódico.
         ReminderNotifier.ensureChannel(this)
         scheduleReminders()
+
+        // Recordatorio mensual de estados de cuenta por importar (Tarea 4).
+        mx.budget.data.statements.StatementReminderNotifier.ensureChannel(this)
+        scheduleStatementReminders()
+
+        // Recordatorio de fecha límite de pago por tarjeta (estados v2 Fase 5).
+        mx.budget.data.statements.PaymentDueNotifier.ensureChannel(this)
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            mx.budget.data.statements.PaymentDueReminderWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<mx.budget.data.statements.PaymentDueReminderWorker>(
+                24, TimeUnit.HOURS,
+            ).build(),
+        )
 
         // Espejo Google Calendar (§G.2 Fase 6). Best-effort: si está activado y hay
         // permiso, reconcilia los PLANNED al arrancar; si no, no hace nada.
@@ -539,6 +619,17 @@ class BudgetApplication : Application() {
      */
     fun captureNaturalLanguage(rawText: String, source: String) {
         appScope.launch { bankCaptureManager.ingestText(rawText, source) }
+    }
+
+    /**
+     * Empuja un snapshot fresco al reloj (saldo + quincena + colecciones) desde el
+     * [appScope], que sobrevive al [mx.budget.service.BudgetWearListenerService]
+     * efímero que lo dispara. Es la respuesta al "pull-on-open" del reloj
+     * ([mx.budget.core.wear.WearPaths.PATH_REQUEST_SYNC], §G.3.3): el espejo en vivo
+     * teléfono→reloj deja de depender de que el dashboard del teléfono esté abierto.
+     */
+    fun pushWearSnapshot() {
+        appScope.launch { mx.budget.service.WearSnapshotBuilder.push(this@BudgetApplication) }
     }
 
     // ── Fase B: multi-tenant (Google Sign-In + re-anclaje de sync) ──────────────
@@ -689,6 +780,18 @@ class BudgetApplication : Application() {
         val request = PeriodicWorkRequestBuilder<ReminderWorker>(15, TimeUnit.MINUTES).build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             ReminderWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
+    }
+
+    /** Agenda el recordatorio mensual de estados de cuenta (Tarea 4), cada 24h. */
+    private fun scheduleStatementReminders() {
+        val request = PeriodicWorkRequestBuilder<mx.budget.data.statements.StatementReminderWorker>(
+            24, TimeUnit.HOURS,
+        ).build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            mx.budget.data.statements.StatementReminderWorker.UNIQUE_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
             request,
         )

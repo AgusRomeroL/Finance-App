@@ -40,9 +40,14 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <!-- Pantalla principal -->
+        <!-- configChanges: al plegar/desplegar el Fold cambian screenSize/
+             smallestScreenSize/screenLayout; sin esto la Activity se RECREA y
+             todo `remember` no-saveable (captura a medias, mes del calendario,
+             formularios) se pierde. Compose re-mide solo con onConfigurationChanged. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden|density"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

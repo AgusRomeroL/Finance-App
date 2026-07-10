@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -107,10 +107,11 @@ fun TemplatesScreen(
         },
     ) { inner ->
         Column(
+            // Edge-to-edge: el Scaffold ya aporta el inset real de las barras vía
+            // [inner]; sin statusBarsPadding extra (duplicaría el inset superior).
             modifier = Modifier
                 .fillMaxSize()
-                .padding(inner)
-                .statusBarsPadding(),
+                .padding(inner),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 10.dp),
@@ -289,6 +290,8 @@ private fun TemplateEditorSheet(viewModel: RecurrenceViewModel) {
     val leadQuincenaStart by viewModel.leadQuincenaStart.collectAsState()
     val beneficiaryShares by viewModel.beneficiaryShares.collectAsState()
     val payerShares by viewModel.payerShares.collectAsState()
+    val externalPayerEnabled by viewModel.externalPayerEnabled.collectAsState()
+    val externalPayerMemberId by viewModel.externalPayerMemberId.collectAsState()
     val saveState by viewModel.saveState.collectAsState()
 
     val members = remember(membersAll) { membersAll.filter { !it.role.startsWith("EXTERNAL_") } }
@@ -339,6 +342,38 @@ private fun TemplateEditorSheet(viewModel: RecurrenceViewModel) {
                 onToggle = viewModel::onPayerToggle, onDelta = viewModel::onPayerDelta,
                 onSelectAll = viewModel::onPayerAll, onClearAll = viewModel::onPayerClear,
             )
+
+            // Reembolso recurrente: un tercero paga por adelantado y se le debe reembolsar.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        "Pagado por un tercero (reembolsable)",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        "No toca tus cuentas; queda como cuenta por cobrar entre miembros.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = externalPayerEnabled,
+                    onCheckedChange = viewModel::onExternalPayerToggle,
+                )
+            }
+            if (externalPayerEnabled) {
+                DropdownField(
+                    "Quién pagó",
+                    members.firstOrNull { it.id == externalPayerMemberId }?.displayName ?: "Selecciona",
+                    members.map { it.id to it.displayName },
+                    viewModel::onExternalPayerMember,
+                )
+            }
 
             (saveState as? TemplateSaveState.Error)?.let { Text(it.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
 

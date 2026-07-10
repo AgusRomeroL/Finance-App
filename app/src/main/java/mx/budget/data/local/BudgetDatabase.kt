@@ -22,6 +22,7 @@ import mx.budget.data.local.dao.PendingCaptureDao
 import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.local.dao.RecurrenceTemplateDao
 import mx.budget.data.local.dao.StatementImportDao
+import mx.budget.data.local.dao.StatementLineDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.dao.WalletTransferDao
 import mx.budget.data.local.entity.AttributionReviewEntity
@@ -39,6 +40,7 @@ import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
 import mx.budget.data.local.entity.SavingsGoalEntity
 import mx.budget.data.local.entity.StatementImportEntity
+import mx.budget.data.local.entity.StatementLineEntity
 import mx.budget.data.local.entity.SyncQueueEntity
 import mx.budget.data.local.entity.WalletTransferEntity
 
@@ -70,9 +72,10 @@ import mx.budget.data.local.entity.WalletTransferEntity
         AttributionReviewEntity::class,
         PendingCaptureEntity::class,
         WalletTransferEntity::class,
-        StatementImportEntity::class
+        StatementImportEntity::class,
+        StatementLineEntity::class
     ],
-    version = 15,
+    version = 18,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -117,7 +120,36 @@ abstract class BudgetDatabase : RoomDatabase() {
     // Fase C (paquete C1): auditoría de estados de cuenta importados.
     abstract fun statementImportDao(): StatementImportDao
 
+    // Fase 5: líneas conciliadas de estados de cuenta (pre-match sin duplicar).
+    abstract fun statementLineDao(): StatementLineDao
+
     companion object {
+        /**
+         * `ALTER TABLE ADD COLUMN` idempotente. Necesario porque hubo builds de la
+         * línea `feat/expressive-ux` cuya v17 ya incluía las columnas que aquí
+         * entran en v17/v18 (la numeración divergió entre ramas antes de la
+         * integración 2026-07): en esos dispositivos la DB real es un superset de
+         * v17 y el ALTER a secas truena con "duplicate column name" dejando la app
+         * en crash-loop al abrir. Room valida el esquema FINAL por nombre/tipo, no
+         * el camino, así que saltarse el ALTER cuando la columna ya existe produce
+         * exactamente el mismo identityHash.
+         */
+        private fun SupportSQLiteDatabase.addColumnIfMissing(
+            table: String,
+            column: String,
+            ddl: String,
+        ) {
+            val exists = query("PRAGMA table_info(`$table`)").use { c ->
+                val nameIdx = c.getColumnIndexOrThrow("name")
+                var found = false
+                while (c.moveToNext()) {
+                    if (c.getString(nameIdx) == column) { found = true; break }
+                }
+                found
+            }
+            if (!exists) execSQL("ALTER TABLE `$table` ADD COLUMN `$column` $ddl")
+        }
+
         /**
          * v1 → v2: añade la tabla `sync_queue` (outbox de sincronización).
          *
@@ -387,6 +419,85 @@ abstract class BudgetDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `statement_import` (`id` TEXT NOT NULL, `household_id` TEXT NOT NULL, `wallet_id` TEXT, `emisor` TEXT, `last4` TEXT, `periodo_inicio` TEXT, `periodo_fin` TEXT, `fecha_corte` TEXT, `fecha_limite_pago` TEXT, `saldo_total` REAL, `pago_minimo` REAL, `pago_no_intereses` REAL, `tasa_anual` REAL, `payload_json` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `applied_at` INTEGER, PRIMARY KEY(`id`))")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_import_household_id` ON `statement_import` (`household_id`)")
+            }
+        }
+
+        /**
+         * v15 → v16: **Fase 5 — pre-match de estados de cuenta sin duplicar**.
+         * Crea la tabla LOCAL-ONLY `statement_line` (una fila por movimiento del
+         * estado importado, con su resultado de conciliación contra `expense`) +
+         * índice UNIQUE `(wallet_id, line_fingerprint)` que hace idempotente el
+         * re-import del mismo PDF, índice del FK a expense (SET_NULL) e índice
+         * por import. El CREATE TABLE y los índices se copiaron LITERAL del
+         * `createSql` que KSP genera en `app/schemas/16.json`; cualquier
+         * divergencia rompe el identityHash. El asset se queda en v1.
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `statement_line` (`id` TEXT NOT NULL, `household_id` TEXT NOT NULL, `wallet_id` TEXT NOT NULL, `import_id` TEXT NOT NULL, `line_fingerprint` TEXT NOT NULL, `post_date` TEXT, `description` TEXT NOT NULL, `description_canonical` TEXT, `amount_mxn` REAL NOT NULL, `direction` TEXT NOT NULL DEFAULT 'CHARGE', `match_status` TEXT NOT NULL DEFAULT 'PENDING', `matched_expense_id` TEXT, `match_confidence` REAL, `match_source` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`matched_expense_id`) REFERENCES `expense`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_statement_line_wallet_id_line_fingerprint` ON `statement_line` (`wallet_id`, `line_fingerprint`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_line_matched_expense_id` ON `statement_line` (`matched_expense_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_line_import_id` ON `statement_line` (`import_id`)")
+            }
+        }
+
+        /**
+         * v16 → v17: **esquema de pago configurable del préstamo por cobrar**.
+         * Añade a `loan` cuatro columnas NULLABLE que describen cómo el deudor
+         * liquidará la deuda (nº de pagos, frecuencia, monto por pago, fecha de
+         * inicio). Los préstamos sembrados quedan en null (sin esquema).
+         *
+         * Columnas nuevas por `ALTER TABLE ADD COLUMN` (no aparecen como CREATE en
+         * `app/schemas/17.json`; Room valida columnas por nombre/tipo, no por orden),
+         * todas nullable, coincidentes con `LoanEntity`. Sin índice.
+         */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Idempotente: builds de la línea expressive-ux pudieron dejar la DB
+                // con estas columnas ya presentes bajo otra numeración (ver
+                // addColumnIfMissing).
+                db.addColumnIfMissing("loan", "payment_count", "INTEGER")
+                db.addColumnIfMissing("loan", "payment_frequency", "TEXT")
+                db.addColumnIfMissing("loan", "payment_amount_mxn", "REAL")
+                db.addColumnIfMissing("loan", "schedule_start_date", "TEXT")
+            }
+        }
+
+        /**
+         * v17 → v18: **funding del plan MSI + reembolso recurrente**.
+         *
+         * - `installment_plan.funding_payment_method_id` (nullable): wallet desde
+         *   la que se liquida el cargo mensual del MSI (distinto de la tarjeta con
+         *   la que se hizo la compra, `payment_method_id`). Sin FK para no
+         *   complicar el borrado de wallets (mismo criterio que otras columnas
+         *   opcionales).
+         * - `recurrence_template.default_external_payer_member_id` (nullable):
+         *   tercero que paga por adelantado un gasto recurrente reembolsable.
+         * - `recurrence_template.default_settlement_status`
+         *   (`NOT NULL DEFAULT 'NONE'`): estado de liquidación por defecto de las
+         *   instancias materializadas (NONE | PENDING_REIMBURSEMENT).
+         *
+         * Columnas nuevas por `ALTER TABLE ADD COLUMN`, coincidentes con los
+         * `@ColumnInfo(defaultValue = ...)` de sus entidades para que el
+         * identityHash de `app/schemas/18.json` valide (mismo patrón que v13→v14).
+         */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Idempotente: la v17 de la línea expressive-ux ya traía estas tres
+                // columnas; el upgrade a la numeración integrada tronaba con
+                // "duplicate column name" (crash-loop al abrir la app).
+                db.addColumnIfMissing("installment_plan", "funding_payment_method_id", "TEXT")
+                db.addColumnIfMissing("recurrence_template", "default_external_payer_member_id", "TEXT")
+                db.addColumnIfMissing("recurrence_template", "default_settlement_status", "TEXT NOT NULL DEFAULT 'NONE'")
+                // Reparación para DBs de la línea expressive-ux pre-pre-match: su v17
+                // NO incluía `statement_line` (aquí nace en v15→v16, que ya no corre
+                // para una DB ≥16) y Room fallaba la validación de esquema tras
+                // migrar. Mismo SQL literal de MIGRATION_15_16 (createSql de KSP);
+                // IF NOT EXISTS lo hace no-op en la cadena limpia.
+                db.execSQL("CREATE TABLE IF NOT EXISTS `statement_line` (`id` TEXT NOT NULL, `household_id` TEXT NOT NULL, `wallet_id` TEXT NOT NULL, `import_id` TEXT NOT NULL, `line_fingerprint` TEXT NOT NULL, `post_date` TEXT, `description` TEXT NOT NULL, `description_canonical` TEXT, `amount_mxn` REAL NOT NULL, `direction` TEXT NOT NULL DEFAULT 'CHARGE', `match_status` TEXT NOT NULL DEFAULT 'PENDING', `matched_expense_id` TEXT, `match_confidence` REAL, `match_source` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`matched_expense_id`) REFERENCES `expense`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_statement_line_wallet_id_line_fingerprint` ON `statement_line` (`wallet_id`, `line_fingerprint`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_line_matched_expense_id` ON `statement_line` (`matched_expense_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_line_import_id` ON `statement_line` (`import_id`)")
             }
         }
     }

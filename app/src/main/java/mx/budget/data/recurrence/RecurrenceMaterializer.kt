@@ -74,8 +74,18 @@ class RecurrenceMaterializer(
         wallets: List<mx.budget.data.local.entity.PaymentMethodEntity>,
         members: List<mx.budget.data.local.entity.MemberEntity>,
     ): Boolean {
-        // El gasto exige payment_method (NOT NULL): usa el de la plantilla o el primero activo.
-        val walletId = template.defaultPaymentMethodId ?: wallets.firstOrNull()?.id ?: return false
+        // Reembolso recurrente: si un tercero paga por adelantado, el gasto NO toca
+        // un wallet real — se ancla al wallet externo (saldo neutro) y el pago se
+        // atribuye 100% al tercero, con settlement_status pendiente.
+        val externalPayerId = template.defaultExternalPayerMemberId
+
+        // El gasto exige payment_method (NOT NULL): wallet externo si es reembolso,
+        // el de la plantilla o el primero activo en caso normal.
+        val walletId = if (externalPayerId != null) {
+            expenseRepository.ensureExternalWallet(householdId).id
+        } else {
+            template.defaultPaymentMethodId ?: wallets.firstOrNull()?.id ?: return false
+        }
         val wallet = wallets.firstOrNull { it.id == walletId }
 
         val occurredAt = date.atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
@@ -94,6 +104,8 @@ class RecurrenceMaterializer(
             recurrenceTemplateId = template.id,
             status = "PLANNED",
             createdAt = now,
+            externalPayerMemberId = externalPayerId,
+            settlementStatus = if (externalPayerId != null) template.defaultSettlementStatus else "NONE",
         )
 
         // Atribución desde los defaults de la plantilla; fallback conservador.
@@ -102,8 +114,13 @@ class RecurrenceMaterializer(
             ?: members.firstOrNull()?.id
         val beneficiaryBps = parseBeneficiaries(template.defaultBeneficiaryIds)
             .ifEmpty { equalSplit(members.map { it.id }) }
-        val payerBps = parsePayerSplit(template.defaultPayerSplit)
-            .ifEmpty { ownerId?.let { mapOf(it to 10_000) } ?: emptyMap() }
+        // Reembolso: pago 100% al tercero. Normal: split de la plantilla o dueño del wallet.
+        val payerBps = if (externalPayerId != null) {
+            mapOf(externalPayerId to 10_000)
+        } else {
+            parsePayerSplit(template.defaultPayerSplit)
+                .ifEmpty { ownerId?.let { mapOf(it to 10_000) } ?: emptyMap() }
+        }
         if (beneficiaryBps.isEmpty() || payerBps.isEmpty()) return false
 
         val attributions =

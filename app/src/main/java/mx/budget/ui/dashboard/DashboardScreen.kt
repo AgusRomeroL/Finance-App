@@ -1,5 +1,7 @@
 package mx.budget.ui.dashboard
 
+import mx.budget.ui.tutorial.TutorialKey
+import mx.budget.ui.tutorial.tutorialTarget
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,11 +15,18 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +43,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -67,14 +77,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -86,6 +100,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -96,6 +111,8 @@ import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.capture.toReviewMode
+import mx.budget.ui.common.AppTopBar
+import mx.budget.ui.common.SearchPill
 import mx.budget.ui.capture.CaptureBottomSheet
 import mx.budget.ui.capture.CaptureField
 import mx.budget.ui.capture.CapturePrefill
@@ -226,31 +243,41 @@ fun DashboardScreen(
     onNavigate: ((String) -> Unit)? = null,
     onOpenReview: () -> Unit = {},
     onOpenSearch: () -> Unit = {},
-    onOpenSuggestions: () -> Unit = {}
+    onOpenSuggestions: () -> Unit = {},
+    // La captura de gasto se abre desde AQUÍ pero el sheet vive hoisted en el
+    // BudgetNavGraph (para que el "+" del pill flotante del shell también lo abra).
+    onOpenCapture: (CaptureSheetMode) -> Unit = {},
+    onOpenProfile: () -> Unit = {},
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
+    tutorialCaptureOpen: Boolean = false,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val rawUiState by viewModel.uiState.collectAsState()
     val pendingReviewCount by viewModel.pendingReviewCount.collectAsState()
-    val proactiveSuggestions by viewModel.proactiveSuggestions.collectAsState()
-    val bankCaptures by viewModel.pendingBankCaptures.collectAsState()
+    val rawProactiveSuggestions by viewModel.proactiveSuggestions.collectAsState()
+    val rawBankCaptures by viewModel.pendingBankCaptures.collectAsState()
     val groups by viewModel.groups.collectAsState()
     val selectedGroups by viewModel.selectedGroupIds.collectAsState()
     // Fase B/B3: "Por reembolsar" + dashboard single-member.
     val pendingReimbursements by viewModel.pendingReimbursements.collectAsState()
     val reimbursementTotals by viewModel.pendingReimbursementTotals.collectAsState()
-    val members by viewModel.members.collectAsState()
-    val singleMember by viewModel.singleMember.collectAsState()
+    val rawMembers by viewModel.members.collectAsState()
+    val rawSingleMember by viewModel.singleMember.collectAsState()
+
+    // Tutorial: mientras el tour corre, se muestran datos DEMO (nunca tocan Room). Ver TUTORIAL.md.
+    val demo = tutorialController?.demoActive == true
+    val uiState = if (demo) mx.budget.ui.tutorial.TutorialDemoData.dashboardState else rawUiState
+    val proactiveSuggestions = if (demo) mx.budget.ui.tutorial.TutorialDemoData.proactiveSuggestions else rawProactiveSuggestions
+    val bankCaptures = if (demo) mx.budget.ui.tutorial.TutorialDemoData.bankCaptures else rawBankCaptures
+    val members = if (demo) mx.budget.ui.tutorial.TutorialDemoData.members else rawMembers
+    val singleMember = if (demo) false else rawSingleMember
+
     val isExpanded = windowWidthDp >= 600.dp
-    // Un único punto de apertura del CaptureBottomSheet con su modo (SP-A1): "+" abre
-    // New; las sugerencias/capturas abren Review pre-llenado. null = cerrado.
-    var captureMode by remember { mutableStateOf<CaptureSheetMode?>(null) }
     var showFilterSheet by remember { mutableStateOf(false) }
 
-    captureMode?.let { mode ->
-        CaptureBottomSheet(
-            viewModel = captureViewModel,
-            onDismiss = { captureMode = null },
-            mode = mode
-        )
+    // Tutorial guiado: abre la hoja de captura (que vive hoisted en BudgetNavGraph)
+    // cuando el tour lo pide (ver TUTORIAL.md). La hoja ya no se hospeda aquí.
+    androidx.compose.runtime.LaunchedEffect(tutorialCaptureOpen) {
+        if (tutorialCaptureOpen) onOpenCapture(CaptureSheetMode.New)
     }
 
     // Hoja de detalle del gasto (§G.4): ubicación + hora. Se abre al tocar una fila.
@@ -287,18 +314,20 @@ fun DashboardScreen(
     // marca "Por decidir" lo que falta (monto, atribución, wallet) para que el usuario
     // lo complete. Patrón central del paquete A4.
     val onRegisterSuggestion: (ProactiveSuggestion) -> Unit = { suggestion ->
-        captureMode = CaptureSheetMode.Review(
-            prefill = CapturePrefill(
-                concept = suggestion.concept,
-                categoryId = suggestion.categoryId,
-            ),
-            // El motor proactivo no aporta monto/atribución/wallet: quedan por decidir.
-            missingFields = setOf(
-                CaptureField.AMOUNT,
-                CaptureField.WALLET,
-                CaptureField.BENEFICIARY,
-                CaptureField.PAYER,
-            ),
+        onOpenCapture(
+            CaptureSheetMode.Review(
+                prefill = CapturePrefill(
+                    concept = suggestion.concept,
+                    categoryId = suggestion.categoryId,
+                ),
+                // El motor proactivo no aporta monto/atribución/wallet: quedan por decidir.
+                missingFields = setOf(
+                    CaptureField.AMOUNT,
+                    CaptureField.WALLET,
+                    CaptureField.BENEFICIARY,
+                    CaptureField.PAYER,
+                ),
+            )
         )
     }
 
@@ -308,7 +337,7 @@ fun DashboardScreen(
     // registrar, el VM de captura marca la pending CONFIRMED (via pendingCaptureId).
     val onConfirmCapture: (String) -> Unit = { id ->
         bankCaptures.firstOrNull { it.id == id }?.let { cap ->
-            captureMode = cap.toReviewMode()
+            onOpenCapture(cap.toReviewMode())
         }
     }
 
@@ -327,8 +356,8 @@ fun DashboardScreen(
                 state = uiState,
                 currentRoute = currentRoute,
                 onNavigate = onNavigate,
-                onCapture = { captureMode = CaptureSheetMode.New },
                 onOpenSearch = onOpenSearch,
+                onOpenProfile = onOpenProfile,
                 pendingReviewCount = pendingReviewCount,
                 onOpenReview = onOpenReview,
                 quincenaNav = quincenaNav,
@@ -340,15 +369,16 @@ fun DashboardScreen(
                 bankCaptures = bankCaptures,
                 onConfirmCapture = onConfirmCapture,
                 onDismissCapture = viewModel::dismissBankCapture,
-                reimbursementUi = reimbursementUi
+                reimbursementUi = reimbursementUi,
+                tutorialController = tutorialController
             )
         } else {
             CompactDashboard(
                 state = uiState,
                 currentRoute = currentRoute,
                 onNavigate = onNavigate,
-                onCapture = { captureMode = CaptureSheetMode.New },
                 onOpenSearch = onOpenSearch,
+                onOpenProfile = onOpenProfile,
                 pendingReviewCount = pendingReviewCount,
                 onOpenReview = onOpenReview,
                 quincenaNav = quincenaNav,
@@ -360,7 +390,8 @@ fun DashboardScreen(
                 bankCaptures = bankCaptures,
                 onConfirmCapture = onConfirmCapture,
                 onDismissCapture = viewModel::dismissBankCapture,
-                reimbursementUi = reimbursementUi
+                reimbursementUi = reimbursementUi,
+                tutorialController = tutorialController
             )
         }
     }
@@ -398,8 +429,8 @@ private fun ExpandedDashboard(
     state: DashboardUiState,
     currentRoute: String,
     onNavigate: ((String) -> Unit)?,
-    onCapture: () -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenProfile: () -> Unit,
     pendingReviewCount: Int,
     onOpenReview: () -> Unit,
     quincenaNav: QuincenaNav,
@@ -411,27 +442,35 @@ private fun ExpandedDashboard(
     bankCaptures: List<PendingCaptureEntity>,
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit,
-    reimbursementUi: ReimbursementUi
+    reimbursementUi: ReimbursementUi,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null
 ) {
-    // El rail de 5 pestañas lo aporta ahora el MainShell (barra persistente). El
-    // statusBarsPadding se aplica aquí (el shell ya no lo pone sobre todo el Row, para no
-    // duplicarlo en las otras pantallas que traen el suyo). Aquí queda el contenido del
-    // Inicio + su BottomActionBar.
+    // El rail (con FAB de captura) lo aporta el MainShell. Aquí, la barra superior
+    // (búsqueda + avatar de Perfil) es la dueña del inset superior (edge-to-edge).
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .statusBarsPadding()
     ) {
         when (state) {
             is DashboardUiState.Loading -> LoadingContent()
             is DashboardUiState.Error -> ErrorContent(state.message)
             is DashboardUiState.Success -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = 30.dp, top = 22.dp, end = 32.dp, bottom = 24.dp)
-                ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    AppTopBar(onOpenProfile = onOpenProfile) {
+                        SearchPill(
+                            query = "",
+                            onQueryChange = {},
+                            readOnly = true,
+                            onActivate = onOpenSearch,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(start = 30.dp, top = 8.dp, end = 32.dp, bottom = 24.dp)
+                    ) {
                         DashboardHeader(
                             quincena = state.quincena,
                             expanded = true,
@@ -444,20 +483,33 @@ private fun ExpandedDashboard(
                         )
                         if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestions.isNotEmpty())) {
                             Spacer(Modifier.height(18.dp))
-                            SuggestionsSection(
-                                bankCaptures = bankCaptures,
-                                proactiveSuggestions = proactiveSuggestions,
-                                isExpanded = true,
-                                onSeeMore = onOpenSuggestions,
-                                onConfirmCapture = onConfirmCapture,
-                                onDismissCapture = onDismissCapture,
-                                onRegisterSuggestion = onRegisterSuggestion,
-                                onDismissSuggestion = onDismissSuggestion
-                            )
+                            // TUTORIAL: DASH_SUGGESTIONS — ver TUTORIAL.md
+                            Box(Modifier.tutorialTarget(TutorialKey.DASH_SUGGESTIONS, tutorialController)) {
+                                SuggestionsSection(
+                                    bankCaptures = bankCaptures,
+                                    proactiveSuggestions = proactiveSuggestions,
+                                    isExpanded = true,
+                                    onSeeMore = onOpenSuggestions,
+                                    onConfirmCapture = onConfirmCapture,
+                                    onDismissCapture = onDismissCapture,
+                                    onRegisterSuggestion = onRegisterSuggestion,
+                                    onDismissSuggestion = onDismissSuggestion
+                                )
+                            }
                         }
-                        if (reimbursementUi.rows.isNotEmpty()) {
-                            Spacer(Modifier.height(18.dp))
-                            ReimbursementSection(ui = reimbursementUi)
+                        // Motion expresivo: la sección aparece/desaparece con resorte
+                        // (entra al aceptar la primera propuesta, sale al saldar todo).
+                        AnimatedVisibility(
+                            visible = reimbursementUi.rows.isNotEmpty(),
+                            enter = fadeIn(spring(stiffness = 380f)) +
+                                expandVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+                            exit = fadeOut(spring(stiffness = 380f)) +
+                                shrinkVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+                        ) {
+                            Column {
+                                Spacer(Modifier.height(18.dp))
+                                ReimbursementSection(ui = reimbursementUi)
+                            }
                         }
                         if (state.viewingActive) {
                             Spacer(Modifier.height(18.dp))
@@ -469,26 +521,23 @@ private fun ExpandedDashboard(
                             )
                         }
                         Spacer(Modifier.height(22.dp))
+                        // weight(1f) y NO fillMaxSize: dentro de esta Column sin scroll,
+                        // fillMaxSize pedía TODA la altura y el Bento se recortaba bajo
+                        // el borde inferior en la pantalla casi cuadrada del Fold.
                         BentoPanes(
                             state = state,
                             singleMember = reimbursementUi.singleMember,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            tutorialController = tutorialController,
+                            onOpenBreakdown = onNavigate?.let { nav -> { nav("member_balances") } }
                         )
                     }
-                    // Barra inferior: búsqueda + mic + "+" (reemplaza el FAB).
-                    BottomActionBar(
-                        query = "",
-                        onQueryChange = {},
-                        onPlus = onCapture,
-                        readOnly = true,
-                        onActivate = onOpenSearch,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .navigationBarsPadding()
-                    )
                 }
             }
         }
+    }
 }
 
 /**
@@ -505,9 +554,12 @@ private fun ExpandedDashboard(
 private fun BentoPanes(
     state: DashboardUiState.Success,
     singleMember: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
+    onOpenBreakdown: (() -> Unit)? = null,
 ) {
     var fraction by rememberSaveable { mutableStateOf(0.55f) }
+    val settleScope = rememberCoroutineScope()
     BoxWithConstraints(modifier = modifier) {
         val totalPx = constraints.maxWidth.toFloat()
         val dragState = rememberDraggableState { delta ->
@@ -517,9 +569,26 @@ private fun BentoPanes(
             MainHealthPane(
                 state = state,
                 singleMember = singleMember,
-                modifier = Modifier.weight(fraction).fillMaxHeight()
+                modifier = Modifier.weight(fraction).fillMaxHeight(),
+                tutorialController = tutorialController,
+                onOpenBreakdown = onOpenBreakdown
             )
-            PaneDragHandle(dragState)
+            PaneDragHandle(
+                dragState = dragState,
+                onDragStopped = {
+                    // Settle expresivo: si se suelta cerca del ancla 55/45, el divisor
+                    // asienta ahí con resorte (imán suave); lejos del ancla se queda.
+                    if (kotlin.math.abs(fraction - 0.55f) < 0.04f) {
+                        settleScope.launch {
+                            animate(
+                                initialValue = fraction,
+                                targetValue = 0.55f,
+                                animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f)
+                            ) { value, _ -> fraction = value }
+                        }
+                    }
+                }
+            )
             TransactionsPane(
                 transactions = state.transactions,
                 modifier = Modifier.weight(1f - fraction).fillMaxHeight()
@@ -530,12 +599,16 @@ private fun BentoPanes(
 
 /** Divisor (gutter 24dp) con grabber visible; arrastrable en horizontal. */
 @Composable
-private fun PaneDragHandle(dragState: DraggableState) {
+private fun PaneDragHandle(dragState: DraggableState, onDragStopped: () -> Unit = {}) {
     Box(
         modifier = Modifier
             .fillMaxHeight()
             .width(24.dp)
-            .draggable(state = dragState, orientation = Orientation.Horizontal)
+            .draggable(
+                state = dragState,
+                orientation = Orientation.Horizontal,
+                onDragStopped = { onDragStopped() }
+            )
             .semantics { contentDescription = "Ajustar ancho de paneles" },
         contentAlignment = Alignment.Center
     ) {
@@ -558,8 +631,8 @@ private fun CompactDashboard(
     state: DashboardUiState,
     currentRoute: String,
     onNavigate: ((String) -> Unit)?,
-    onCapture: () -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenProfile: () -> Unit,
     pendingReviewCount: Int,
     onOpenReview: () -> Unit,
     quincenaNav: QuincenaNav,
@@ -571,22 +644,30 @@ private fun CompactDashboard(
     bankCaptures: List<PendingCaptureEntity>,
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit,
-    reimbursementUi: ReimbursementUi
+    reimbursementUi: ReimbursementUi,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null
 ) {
-    // La bottom nav de 5 pestañas la aporta el MainShell (barra persistente). El
-    // BottomActionBar (búsqueda + mic + "+") del Inicio NO reserva espacio propio:
-    // FLOTA sobre el contenido (align BottomCenter), superpuesto a la lista que
-    // scrollea detrás, y por encima de la bottom nav del shell.
+    // La navegación (pill flotante + "+") la aporta el MainShell. Aquí: barra superior
+    // fija (búsqueda + avatar de Perfil) + lista que scrollea por detrás del pill.
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
             when (state) {
                 is DashboardUiState.Loading -> LoadingContent()
                 is DashboardUiState.Error -> ErrorContent(state.message)
                 is DashboardUiState.Success -> {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                    AppTopBar(onOpenProfile = onOpenProfile) {
+                        SearchPill(
+                            query = "",
+                            onQueryChange = {},
+                            readOnly = true,
+                            onActivate = onOpenSearch,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        // bottom holgado: la última fila scrollea por encima del
-                        // BottomActionBar flotante sin quedar tapada.
-                        contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 96.dp),
+                        // bottom holgado: la última fila scrollea por encima del pill flotante.
+                        contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 120.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
                         item {
@@ -603,24 +684,55 @@ private fun CompactDashboard(
                         }
                         if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestions.isNotEmpty())) {
                             item {
-                                SuggestionsSection(
-                                    bankCaptures = bankCaptures,
-                                    proactiveSuggestions = proactiveSuggestions,
-                                    isExpanded = false,
-                                    onSeeMore = onOpenSuggestions,
-                                    onConfirmCapture = onConfirmCapture,
-                                    onDismissCapture = onDismissCapture,
-                                    onRegisterSuggestion = onRegisterSuggestion,
-                                    onDismissSuggestion = onDismissSuggestion
-                                )
+                                // TUTORIAL: DASH_SUGGESTIONS — ver TUTORIAL.md
+                                Box(Modifier.tutorialTarget(TutorialKey.DASH_SUGGESTIONS, tutorialController)) {
+                                    SuggestionsSection(
+                                        bankCaptures = bankCaptures,
+                                        proactiveSuggestions = proactiveSuggestions,
+                                        isExpanded = false,
+                                        onSeeMore = onOpenSuggestions,
+                                        onConfirmCapture = onConfirmCapture,
+                                        onDismissCapture = onDismissCapture,
+                                        onRegisterSuggestion = onRegisterSuggestion,
+                                        onDismissSuggestion = onDismissSuggestion
+                                    )
+                                }
                             }
                         }
                         if (reimbursementUi.rows.isNotEmpty()) {
                             item(key = "reimbursements") {
-                                ReimbursementSection(ui = reimbursementUi)
+                                // Motion expresivo: la sección entra con resorte.
+                                Box(Modifier.animateItem()) {
+                                    ReimbursementSection(ui = reimbursementUi)
+                                }
                             }
                         }
-                        item { CollapsedHealthCard(state = state) }
+                        // TUTORIAL: DASH_HERO_KPI — ver TUTORIAL.md
+                        item {
+                            Box(Modifier.tutorialTarget(TutorialKey.DASH_HERO_KPI, tutorialController)) {
+                                HeroRingSection(state = state)
+                            }
+                        }
+                        // Paridad con el Fold: barras Beneficiario/Pagador también en compacto
+                        // (antes solo existían en el layout expandido). TUTORIAL: DASH_MEMBER_BARS.
+                        if (!reimbursementUi.singleMember) {
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(28.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                                        .padding(22.dp)
+                                        .tutorialTarget(TutorialKey.DASH_MEMBER_BARS, tutorialController)
+                                ) {
+                                    MemberDistributionSection(
+                                        beneficiary = state.beneficiaryDistribution,
+                                        payer = state.payerDistribution,
+                                        onOpenBreakdown = onNavigate?.let { nav -> { nav("member_balances") } }
+                                    )
+                                }
+                            }
+                        }
                         if (state.viewingActive) {
                             item {
                                 FilterPillsRow(
@@ -648,22 +760,13 @@ private fun CompactDashboard(
                             }
                         }
                         items(state.transactions.take(8), key = { it.expenseId }) { tx ->
-                            TransactionRow(tx)
+                            // Motion expresivo: filas nuevas/reordenadas entran con resorte.
+                            Box(Modifier.animateItem()) { TransactionRow(tx) }
                         }
+                    }
                     }
                 }
             }
-            // BottomActionBar flotante: se sobrepone al contenido, no reserva espacio.
-            BottomActionBar(
-                query = "",
-                onQueryChange = {},
-                onPlus = onCapture,
-                readOnly = true,
-                onActivate = onOpenSearch,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp)
-            )
     }
 }
 
@@ -679,7 +782,8 @@ private fun CompactDashboard(
 @Composable
 internal fun NavigationRailCustom(
     currentRoute: String,
-    onNavigate: ((String) -> Unit)?
+    onNavigate: ((String) -> Unit)?,
+    onCapture: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -704,7 +808,25 @@ internal fun NavigationRailCustom(
                 modifier = Modifier.size(22.dp)
             )
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(18.dp))
+
+        // FAB de captura (equivalente al "+" del pill flotante en compacto).
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .clickable(onClick = onCapture),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Filled.Add,
+                contentDescription = "Capturar gasto",
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        Spacer(Modifier.height(20.dp))
 
         navItems.dropLast(1).forEach { item ->
             RailItem(
@@ -736,10 +858,11 @@ internal fun NavigationRailCustom(
                 .clickable { onNavigate?.invoke("profile") },
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                "AS",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                color = if (profileSelected) MaterialTheme.colorScheme.onPrimaryContainer
+            Icon(
+                Icons.Filled.Person,
+                contentDescription = "Perfil",
+                modifier = Modifier.size(22.dp),
+                tint = if (profileSelected) MaterialTheme.colorScheme.onPrimaryContainer
                 else MaterialTheme.colorScheme.onSurface
             )
         }
@@ -748,6 +871,19 @@ internal fun NavigationRailCustom(
 
 @Composable
 internal fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
+    // Motion expresivo: la pill activa y el tinte del icono cruzan con resorte,
+    // y la etiqueta entra/sale expandiéndose en vez de aparecer de golpe.
+    val pillColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "railPill"
+    )
+    val iconTint by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "railTint"
+    )
     Column(
         modifier = Modifier
             .clickable(onClick = onClick)
@@ -758,21 +894,23 @@ internal fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
             modifier = Modifier
                 .size(width = 56.dp, height = 32.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-                ),
+                .background(pillColor),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = item.icon,
                 contentDescription = item.label,
-                tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = iconTint,
                 modifier = Modifier.size(22.dp)
             )
         }
-        if (selected) {
-            Spacer(Modifier.height(6.dp))
+        AnimatedVisibility(
+            visible = selected,
+            enter = fadeIn(spring(stiffness = 380f)) +
+                expandVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+            exit = fadeOut(spring(stiffness = 380f)) +
+                shrinkVertically(spring(dampingRatio = 0.8f, stiffness = 380f))
+        ) {
             // Sin uppercase ni letter-spacing: a fontScale 1.3 + bold el texto
             // espaciado partía en dos líneas mid-word ("ANALÍTICA/S"). En caja
             // baja y compacto entra en una línea (ellipsis de seguridad).
@@ -782,59 +920,9 @@ internal fun RailItem(item: NavItem, selected: Boolean, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 6.dp)
             )
-        }
-    }
-}
-
-@Composable
-internal fun BottomNavCustom(currentRoute: String, onNavigate: ((String) -> Unit)?) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .navigationBarsPadding()
-            .padding(top = 10.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.SpaceAround,
-        verticalAlignment = Alignment.Top
-    ) {
-        navItems.forEach { item ->
-            val selected = currentRoute == item.route
-            Column(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable { onNavigate?.invoke(item.route) }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 56.dp, height = 30.dp)
-                        .clip(RoundedCornerShape(15.dp))
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        item.icon,
-                        contentDescription = item.label,
-                        tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    item.label,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
-                    ),
-                    color = if (selected) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
     }
 }
@@ -1016,7 +1104,9 @@ private fun Eyebrow(
 private fun MainHealthPane(
     state: DashboardUiState.Success,
     singleMember: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
+    onOpenBreakdown: (() -> Unit)? = null,
 ) {
     // Scroll vertical: en pantalla casi cuadrada del Fold + fontScale 1.3 + bold, el
     // KPI héroe + las barras por miembro exceden el alto del panel. Sin scroll el pie
@@ -1026,128 +1116,65 @@ private fun MainHealthPane(
             .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .verticalScroll(rememberScrollState())
-            .padding(36.dp)
+            // bottom holgado: el pill flotante de navegación se superpone al pie del
+            // panel; sin esta reserva el final del scroll ("Ver desglose" / última
+            // barra por miembro) queda tapado en el Fold.
+            .padding(start = 36.dp, top = 36.dp, end = 36.dp, bottom = 120.dp)
     ) {
-        HeroKpi(state = state)
+        // Paridad teléfono/Fold: el mismo hero de anillo + tiles del layout compacto.
+        // TUTORIAL: DASH_HERO_KPI — ver TUTORIAL.md
+        Column(Modifier.tutorialTarget(TutorialKey.DASH_HERO_KPI, tutorialController)) {
+            HeroRingContent(state = state)
+        }
         // Fase B/B3: en un hogar de una sola persona el desglose por miembro (toggle
         // Beneficiario/Pagador + barras) no aporta; se oculta.
         if (!singleMember) {
             Spacer(Modifier.height(24.dp))
             // Sin weight(1f): dentro de una Column scrollable el contenido fluye a su alto
             // natural (weight exigiría alto acotado y colapsaría la sección).
-            MemberDistributionSection(
-                beneficiary = state.beneficiaryDistribution,
-                payer = state.payerDistribution
-            )
+            // TUTORIAL: DASH_MEMBER_BARS — ver TUTORIAL.md
+            Box(Modifier.tutorialTarget(TutorialKey.DASH_MEMBER_BARS, tutorialController)) {
+                MemberDistributionSection(
+                    beneficiary = state.beneficiaryDistribution,
+                    payer = state.payerDistribution,
+                    onOpenBreakdown = onOpenBreakdown
+                )
+            }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * Cifra de monto con auto-escala: si el texto no cabe a lo ancho (fontScale 1.3 +
+ * panel angosto del Fold), baja el tamaño en pasos de 4sp hasta [minFontSp]. El
+ * contenido no se dibuja hasta converger para que no parpadee el reintento de medida.
+ * Nunca marquee ni elipsis: una cifra financiera cortada es un dato falso.
+ */
 @Composable
-private fun HeroKpi(state: DashboardUiState.Success) {
-    val q = state.quincena
-    // Ingreso = budget proyectado, elevado por el ingreso real recibido (en vivo)
-    // si lo supera. maxOf evita doble conteo del sueldo ya presupuestado.
-    val income = maxOf(q?.projectedIncomeMxn ?: 0.0, state.actualIncome)
-    val spent = state.postedTotal
-    val planned = state.plannedTotal
-    val hasPlanned = planned > 0.0
-    val gross = income - spent          // histórico: Ingresos − Gastos POSTED
-    val net = gross - planned           // budget-aware: además reserva lo PLANNED (G.2.4)
-    // Toggle de presentación. Default = neto, según el propósito quincenal (reservar lo previsto
-    // ANTES de pagarlo). Solo aplica si hay PLANNED; sin ellos el KPI se comporta como siempre.
-    var showNet by rememberSaveable { mutableStateOf(true) }
-    val shown = if (hasPlanned && showNet) net else gross
-    // Interpola la cifra al alternar el modo — movimiento expresivo (M3), nunca un salto.
-    val animatedShown by animateFloatAsState(
-        targetValue = shown.toFloat(),
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
-        label = "heroAmount",
-    )
-    val progress = remember(q?.id) { computeProgress(q) }
-
-    Column {
-        // El mes/quincena NO se repite aquí: ya está en el header superior, en el
-        // chip de navegación y en "Día N de M" abajo. Repetirlo colisionaba con
-        // este eyebrow a fontScale alto ("GASTAR" + "JUNIO" encimados).
-        Eyebrow("Disponible para gastar")
-        Spacer(Modifier.height(12.dp))
-        // Cifra héroe: $ + número grande + MXN
-        Row(verticalAlignment = Alignment.Top) {
-            Text(
-                "$",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp)
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                animatedShown.toDouble().toGrouped(),
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontWeight = FontWeight.Light,
-                    fontSize = 66.sp,
-                    letterSpacing = (-1).sp
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1, softWrap = false
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                "MXN",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1, softWrap = false,
-                modifier = Modifier.padding(top = 18.dp)
-            )
-        }
-        Spacer(Modifier.height(12.dp))
-        // Fórmula: Ingresos − Gastos. FlowRow para que "Gastos $X" baje como unidad
-        // (no "Gastos"/"$X" partido) cuando no cabe a fontScale alto + panel angosto.
-        FlowRow(verticalArrangement = Arrangement.Center) {
-            val incomeC = amountSemantic(FinancialTone.INCOME)
-            val expenseC = amountSemantic(FinancialTone.EXPENSE)
-            Text(
-                "Ingresos ${income.toMxn()}",
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = incomeC.color,
-                maxLines = 1, softWrap = false
-            )
-            Text("  −  ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                "Gastos ${spent.toMxn()}",
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = expenseC.color,
-                maxLines = 1, softWrap = false
-            )
-            // Término "Reservado" sólo en modo neto: lo PLANNED no es ingreso ni gasto ejecutado,
-            // por eso tono neutral (tertiary) y la etiqueta porta el significado, no el color.
-            AnimatedVisibility(visible = hasPlanned && showNet) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("  −  ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        "Reservado ${planned.toMxn()}",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.tertiary,
-                        maxLines = 1, softWrap = false
-                    )
-                }
+private fun AutoSizeAmountText(
+    text: String,
+    baseStyle: TextStyle,
+    maxFontSp: Float,
+    minFontSp: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    var fontSize by remember(text.length) { mutableFloatStateOf(maxFontSp) }
+    var ready by remember(text.length) { mutableStateOf(false) }
+    Text(
+        text,
+        style = baseStyle.copy(fontSize = fontSize.sp),
+        color = color,
+        maxLines = 1, softWrap = false,
+        modifier = modifier.drawWithContent { if (ready) drawContent() },
+        onTextLayout = { result ->
+            if (result.didOverflowWidth && fontSize > minFontSp) {
+                fontSize = (fontSize - 4f).coerceAtLeast(minFontSp)
+            } else {
+                ready = true
             }
         }
-        if (hasPlanned) {
-            Spacer(Modifier.height(14.dp))
-            ReserveToggle(showNet = showNet, onChange = { showNet = it })
-        }
-        Spacer(Modifier.height(20.dp))
-        QuincenaRhythm(progress = progress)
-        Spacer(Modifier.height(16.dp))
-        RitmoCard(
-            quincena = state.quincena,
-            postedTotal = state.postedTotal,
-            actualIncome = state.actualIncome,
-            viewingActive = state.viewingActive
-        )
-    }
+    )
 }
 
 /**
@@ -1170,64 +1197,31 @@ private fun ReserveToggle(showNet: Boolean, onChange: (Boolean) -> Unit) {
 
 @Composable
 private fun ReserveSegment(label: String, selected: Boolean, onClick: () -> Unit) {
-    val base = Modifier.clip(RoundedCornerShape(50))
-    val withBg = if (selected) base.background(MaterialTheme.colorScheme.primary) else base
+    // Motion expresivo: relleno y color del texto cruzan con resorte al alternar.
+    val bg by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "reserveBg"
+    )
+    val fg by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "reserveFg"
+    )
     Text(
         label,
         style = MaterialTheme.typography.labelLarge.copy(
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
         ),
-        color = if (selected) MaterialTheme.colorScheme.onPrimary
-        else MaterialTheme.colorScheme.onSurfaceVariant,
+        color = fg,
         maxLines = 1, softWrap = false,
-        modifier = withBg
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(bg)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 6.dp)
     )
-}
-
-@Composable
-private fun QuincenaRhythm(progress: QuincenaProgress) {
-    val pct = (progress.fraction * 100).toInt()
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Text(
-                "Día ${progress.dayIndex} de ${progress.totalDays} · $pct %",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1, softWrap = false,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "Quedan ${progress.daysRemaining} días",
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1, softWrap = false
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-        // Barra de progreso con marcador "hoy"
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(10.dp)
-                .clip(RoundedCornerShape(5.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress.fraction)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-        }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1304,17 +1298,23 @@ private fun SuggestionsSection(
             }
         }
         Spacer(Modifier.height(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        // LazyRow (antes Row+horizontalScroll) para que al descartar/añadir una
+        // tarjeta las demás se reacomoden con resorte (animateItem) en vez de saltar.
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            shown.forEach { item ->
-                Box(Modifier.width(cardW)) {
+            items(shown, key = { it.key }) { item ->
+                Box(Modifier.width(cardW).animateItem()) {
                     SmartSuggestionCard(item, onConfirmCapture, onDismissCapture, onRegisterSuggestion, onDismissSuggestion)
                 }
             }
             if (overflow) {
-                SeeMoreTile(remaining = items.size - shown.size, onClick = onSeeMore)
+                item(key = "see-more") {
+                    Box(Modifier.animateItem()) {
+                        SeeMoreTile(remaining = items.size - shown.size, onClick = onSeeMore)
+                    }
+                }
             }
         }
     }
@@ -1755,7 +1755,8 @@ private fun ReimbursementSection(ui: ReimbursementUi) {
 private fun MemberDistributionSection(
     beneficiary: List<SpendByMember>,
     payer: List<SpendByMember>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenBreakdown: (() -> Unit)? = null,
 ) {
     var showPayer by rememberSaveable { mutableStateOf(false) }
     val data = if (showPayer) payer else beneficiary
@@ -1769,7 +1770,7 @@ private fun MemberDistributionSection(
         Eyebrow("Gasto por miembro", maxLines = 2)
         Spacer(Modifier.height(4.dp))
         Text(
-            "${data.sumOf { it.totalMxn }.toMxn()} · ${data.size} miembros",
+            "${data.sumOf { it.totalMxn }.toMxn()} · ${data.size} ${if (data.size == 1) "miembro" else "miembros"}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -1794,11 +1795,17 @@ private fun MemberDistributionSection(
                 // "N miembros" y cortar a 5 ocultaba al de menor consumo (p. ej. Santiago)
                 // sin forma de verlo (las pantallas de desglose siguen siendo placeholder).
                 data.forEachIndexed { i, m ->
-                    MemberBarRow(
-                        member = m,
-                        fraction = (m.totalMxn / total).toFloat().coerceIn(0f, 1f),
-                        color = colors[i.coerceIn(0, colors.lastIndex)]
-                    )
+                    // key(memberId): al alternar Beneficiario/Pagador el estado de
+                    // animación sigue a CADA miembro y su barra se transforma con
+                    // resorte hacia su nueva fracción (en vez de heredar la del
+                    // miembro que ocupaba esa posición).
+                    key(m.memberId) {
+                        MemberBarRow(
+                            member = m,
+                            fraction = (m.totalMxn / total).toFloat().coerceIn(0f, 1f),
+                            color = colors[i.coerceIn(0, colors.lastIndex)]
+                        )
+                    }
                 }
             }
             // Antes Spacer(weight(1f)) empujaba el pie al fondo del panel fijo; en Column
@@ -1818,7 +1825,15 @@ private fun MemberDistributionSection(
                     modifier = Modifier.weight(1f),
                     maxLines = 2, overflow = TextOverflow.Ellipsis
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // CTA real (era un Row estático sin acción — P1 de auditoría): abre
+                // las cuentas entre miembros.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable(enabled = onOpenBreakdown != null) { onOpenBreakdown?.invoke() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
                     Text(
                         "Ver desglose",
                         style = MaterialTheme.typography.labelLarge,
@@ -1839,6 +1854,13 @@ private fun MemberDistributionSection(
 @Composable
 private fun MemberBarRow(member: SpendByMember, fraction: Float, color: Color) {
     val share = (fraction * 100).toInt()
+    // Motion expresivo: la barra crece/decrece con resorte (también al alternar
+    // Beneficiario/Pagador, donde cambia el dataset completo).
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction.coerceAtLeast(0.02f),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "memberBar"
+    )
     Row(verticalAlignment = Alignment.CenterVertically) {
         // Avatar + nombre (flexible)
         Box(
@@ -1880,7 +1902,7 @@ private fun MemberBarRow(member: SpendByMember, fraction: Float, color: Color) {
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(fraction.coerceAtLeast(0.02f))
+                    .fillMaxWidth(animatedFraction)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(7.dp))
                     .background(color)
@@ -1916,10 +1938,23 @@ private fun SegmentedToggle(options: List<String>, selectedIndex: Int, onSelect:
     ) {
         options.forEachIndexed { i, label ->
             val selected = i == selectedIndex
+            // Motion expresivo: el relleno del segmento activo cruza con resorte
+            // en vez de saltar de golpe.
+            val segColor by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                label = "segBg"
+            )
+            val segText by animateColorAsState(
+                targetValue = if (selected) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+                label = "segText"
+            )
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(18.dp))
-                    .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                    .background(segColor)
                     .clickable { onSelect(i) }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
@@ -1929,8 +1964,7 @@ private fun SegmentedToggle(options: List<String>, selectedIndex: Int, onSelect:
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
                     ),
-                    color = if (selected) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = segText,
                     maxLines = 1,
                     softWrap = false
                 )
@@ -1991,10 +2025,13 @@ private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: M
             LazyColumn(
                 state = rememberLazyListState(),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
-                contentPadding = PaddingValues(bottom = 88.dp) // espacio para que el FAB no tape la última fila
+                contentPadding = PaddingValues(bottom = 112.dp) // el pill flotante de navegación no debe tapar la última fila
             ) {
                 itemsIndexed(transactions, key = { _, it -> it.expenseId }) { index, tx ->
-                    TransactionRow(tx, alternate = index % 2 == 1)
+                    // Motion expresivo: filas nuevas/reordenadas entran con resorte.
+                    Box(Modifier.animateItem()) {
+                        TransactionRow(tx, alternate = index % 2 == 1)
+                    }
                 }
             }
         }
@@ -2002,7 +2039,13 @@ private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: M
 }
 
 @Composable
-internal fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) {
+internal fun TransactionRow(
+    tx: ExpenseWithDetails,
+    alternate: Boolean = false,
+    // Puente para pantallas fuera del provider de LocalExpenseRowClick (búsqueda):
+    // sin esto sus filas quedaban sin acción (P1 de auditoría runtime).
+    onClick: ((ExpenseWithDetails) -> Unit)? = null,
+) {
     val tone = if (tx.status == "PLANNED") FinancialTone.NEUTRAL else FinancialTone.EXPENSE
     val sem = amountSemantic(tone)
     val rowBg = if (alternate) MaterialTheme.colorScheme.surfaceContainerHighest
@@ -2011,7 +2054,7 @@ internal fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) 
         runCatching { tx.categoryColorHex?.let { Color(android.graphics.Color.parseColor(it)) } }
             .getOrNull()
     }
-    val onRowClick = LocalExpenseRowClick.current
+    val onRowClick = onClick ?: LocalExpenseRowClick.current
 
     Row(
         modifier = Modifier
@@ -2074,9 +2117,33 @@ internal fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) 
 // Tarjeta de salud colapsada (compacto)
 // ─────────────────────────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * Hero del dashboard (compacto) — anillo de progreso + tiles de colores, al estilo
+ * del dashboard "Today" de Fitbit/Health. El anillo muestra la fracción del ingreso
+ * ya gastada; el número "Disponible" y los tiles Ingreso/Gasto/Reservado quedan al
+ * costado. Reemplaza la tarjeta de número gigante anterior.
+ */
 @Composable
-private fun CollapsedHealthCard(state: DashboardUiState.Success) {
+private fun HeroRingSection(state: DashboardUiState.Success) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(22.dp)
+    ) {
+        HeroRingContent(state)
+    }
+}
+
+/**
+ * Contenido del hero de anillo SIN tarjeta propia, para reutilizarlo tanto en el
+ * layout compacto ([HeroRingSection], que le pone la tarjeta) como en el panel del
+ * Fold ([MainHealthPane], ya dentro de su tarjeta) — sin anidar tarjetas y con
+ * PARIDAD del hero entre teléfono y Fold.
+ */
+@Composable
+private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
     val q = state.quincena
     val income = maxOf(q?.projectedIncomeMxn ?: 0.0, state.actualIncome)
     val spent = state.postedTotal
@@ -2092,85 +2159,80 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
         label = "heroAmountCompact",
     )
     val progress = remember(q?.id) { computeProgress(q) }
-    val pct = (progress.fraction * 100).toInt()
-    val incomeC = amountSemantic(FinancialTone.INCOME)
+    val timePct = (progress.fraction * 100).toInt()
+    val spendFraction = if (income > 0.0) (spent / income).toFloat() else 0f
+    val overBudget = spent > income
     val expenseC = amountSemantic(FinancialTone.EXPENSE)
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(22.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            // weight(1f) en el eyebrow: el rango ya no puede empujarlo y encimarse
-            // a fontScale alto; si no caben, el eyebrow envuelve en su propio espacio.
-            Eyebrow("Disponible para gastar", modifier = Modifier.weight(1f))
-            Text(
-                quincenaRange(q),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1, softWrap = false
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.Top) {
-            Text(
-                "$",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Light),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(
-                animatedShown.toDouble().toGrouped(),
-                style = MaterialTheme.typography.displayMedium.copy(
-                    fontWeight = FontWeight.Light, fontSize = 52.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurface, maxLines = 1
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "MXN",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp)
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        FlowRow(verticalArrangement = Arrangement.Center) {
-            Text(
-                "${incomeC.sign} ${income.toMxn()}",
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = incomeC.color, maxLines = 1, softWrap = false
-            )
-            Text("   ", style = MaterialTheme.typography.bodySmall)
-            Text(
-                "${expenseC.sign} ${spent.toMxn()}",
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = expenseC.color, maxLines = 1, softWrap = false
-            )
-            AnimatedVisibility(visible = hasPlanned && showNet) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("   ", style = MaterialTheme.typography.bodySmall)
+            // Anillo: fracción del ingreso ya gastada (rojo si excede el ingreso).
+            BudgetRing(
+                fraction = spendFraction,
+                ringSize = 126.dp,
+                strokeWidth = 13.dp,
+                progressColor = if (overBudget) expenseC.color else MaterialTheme.colorScheme.primary,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "− ${planned.toMxn()} reservado",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.tertiary, maxLines = 1, softWrap = false
+                        "${(spendFraction * 100).roundToInt()}%",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
                     )
+                    Text(
+                        "gastado",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            // KPI "Disponible" + tiles de colores.
+            Column(modifier = Modifier.weight(1f)) {
+                Eyebrow("Disponible")
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.Top) {
+                    Text(
+                        "$",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
+                    Spacer(Modifier.width(3.dp))
+                    // Cifra financiera: NUNCA recortar (un monto cortado es un dato
+                    // falso). Auto-escala hasta caber a fontScale 1.3 + bold.
+                    AutoSizeAmountText(
+                        text = animatedShown.toDouble().toGrouped(),
+                        baseStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
+                        maxFontSp = 24f,
+                        minFontSp = 13f,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                StatTile(FinancialTone.INCOME, "Ingreso", income)
+                Spacer(Modifier.height(8.dp))
+                StatTile(FinancialTone.EXPENSE, "Gasto", spent)
+                if (hasPlanned) {
+                    Spacer(Modifier.height(8.dp))
+                    StatTile(FinancialTone.WARNING, "Reservado", planned)
                 }
             }
         }
         if (hasPlanned) {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
             ReserveToggle(showNet = showNet, onChange = { showNet = it })
         }
         Spacer(Modifier.height(16.dp))
+        // Motion expresivo: la barra de avance crece con resorte.
+        val animatedProgressFraction by animateFloatAsState(
+            targetValue = progress.fraction,
+            animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+            label = "collapsedQuincenaFraction"
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2180,7 +2242,7 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progress.fraction)
+                    .fillMaxWidth(animatedProgressFraction)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(4.dp))
                     .background(MaterialTheme.colorScheme.primary)
@@ -2189,17 +2251,22 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
         Spacer(Modifier.height(10.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Día ${progress.dayIndex} de ${progress.totalDays} · $pct %",
+                "Día ${progress.dayIndex} de ${progress.totalDays} · $timePct %",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+                maxLines = 1
             )
             Text(
                 "${progress.daysRemaining} días restantes",
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false
             )
         }
         Spacer(Modifier.height(14.dp))
@@ -2208,6 +2275,48 @@ private fun CollapsedHealthCard(state: DashboardUiState.Success) {
             postedTotal = state.postedTotal,
             actualIncome = state.actualIncome,
             viewingActive = state.viewingActive
+        )
+}
+
+/**
+ * Tile de estadística de color (Ingreso / Gasto / Reservado). Redundancia
+ * no-cromática obligatoria (CLAUDE.md): ícono + signo + etiqueta, nunca solo color
+ * — vía [amountSemantic].
+ */
+@Composable
+private fun StatTile(tone: FinancialTone, label: String, amount: Double) {
+    val s = amountSemantic(tone)
+    // Etiqueta + monto APILADOS (no lado a lado): a fontScale 1.3 + bold un monto
+    // ancho recortaba la etiqueta ("Ingreso"→"Ingre"). Apilado cada uno usa el ancho
+    // completo del tile. Estilo tile de Fitbit (rótulo pequeño + valor grande).
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(s.container)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            s.icon?.let {
+                Icon(it, contentDescription = s.description, tint = s.onContainer, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = s.onContainer,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "${s.sign}${amount.toMxn()}",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = s.onContainer,
+            maxLines = 1,
+            softWrap = false,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
         )
     }
 }

@@ -63,6 +63,8 @@ class BankCaptureManager(
     private val householdId: String,
     private val nlCaptureExtractor: NlCaptureExtractor,
     private val locationProvider: LocationProvider,
+    /** Fase 6: para reflejar en Firestore el rechazo de propuestas de colaborador. */
+    private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
 ) {
 
     // ── Ingreso de una propuesta (desde el listener) ────────────────────────────
@@ -396,6 +398,17 @@ class BankCaptureManager(
     suspend fun dismiss(captureId: String) {
         pendingDao.updateStatus(captureId, "DISMISSED")
         cancelNotification(captureId)
+        // Fase 6: descartar una propuesta de colaborador = RECHAZADA en Firestore
+        // (best-effort; la web del proposer lo refleja en "Mis propuestas").
+        if (captureId.startsWith("proposal:")) {
+            runCatching {
+                membershipRepository?.updateProposalStatus(
+                    householdId = householdId,
+                    proposalDocId = captureId.removePrefix("proposal:"),
+                    status = "REJECTED",
+                )
+            }
+        }
     }
 
     // ── Resolución ──────────────────────────────────────────────────────────────

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -81,6 +82,7 @@ fun ProfileScreen(
     nvidiaApiKey: String = "",
     onNvidiaApiKeyChange: (String) -> Unit = {},
     onImportStatement: (() -> Unit)? = null,
+    onShowTutorial: (() -> Unit)? = null,
 ) {
     var showLeadDialog by remember { mutableStateOf(false) }
     var showLocationDialog by remember { mutableStateOf(false) }
@@ -135,6 +137,33 @@ fun ProfileScreen(
         }
 
         Spacer(Modifier.height(28.dp))
+
+        // Card de ayuda: relanzar el tutorial guiado (coach-marks). Ver TUTORIAL.md.
+        if (onShowTutorial != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(22.dp)
+            ) {
+                Text(
+                    "AYUDA",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    letterSpacing = 1.6.sp
+                )
+                Spacer(Modifier.height(14.dp))
+                SettingRow(
+                    icon = Icons.Filled.School,
+                    title = "Ver tutorial",
+                    subtitle = "Recorre las secciones de la app paso a paso",
+                    trailingBadge = null,
+                    onClick = onShowTutorial
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+        }
 
         // Card de cuenta y grupos (Fase B — multi-tenant).
         if (onOpenHousehold != null) {
@@ -442,7 +471,7 @@ fun ProfileScreen(
                 SettingRow(
                     icon = Icons.Filled.UploadFile,
                     title = "Importar estado de cuenta",
-                    subtitle = "Sube un PDF o imagen y reconcilia corte, límite y planes a meses",
+                    subtitle = "Sube un PDF o imagen: reconcilia corte, límite y MSI, y reescribe los movimientos de la tarjeta",
                     trailingBadge = null,
                     onClick = onImportStatement
                 )

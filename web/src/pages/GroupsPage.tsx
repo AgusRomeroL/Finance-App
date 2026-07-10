@@ -11,7 +11,7 @@ export default function GroupsPage() {
   return (
     <div className="space-y-6">
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Mis grupos</h2>
+        <h2 className="mb-3 px-1 text-lg font-semibold text-on-surface">Mis grupos</h2>
         {loading ? (
           <LoadingState label="Cargando tus grupos…" />
         ) : error ? (
@@ -29,20 +29,20 @@ export default function GroupsPage() {
                 <li key={h.id}>
                   <button
                     onClick={() => void selectHousehold(h.id)}
-                    className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${
+                    className={`flex w-full items-center justify-between rounded-card-sm px-5 py-4 text-left transition-colors ${
                       isActive
-                        ? 'border-brand bg-brand/5'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? 'bg-primary-container text-on-primary-container'
+                        : 'bg-surface-1 hover:bg-surface-2'
                     }`}
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-gray-900">{h.name}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="truncate font-medium">{h.name}</p>
+                      <p className={`text-xs ${isActive ? 'opacity-75' : 'text-on-surface-variant'}`}>
                         {h.role === 'OWNER' ? 'Titular' : 'Colaborador'} · {h.currency}
                       </p>
                     </div>
                     {isActive && (
-                      <span className="shrink-0 rounded-full bg-brand px-2.5 py-0.5 text-xs font-medium text-white">
+                      <span className="shrink-0 rounded-full bg-primary px-3 py-1 text-xs font-medium text-on-primary">
                         Activo
                       </span>
                     )}
@@ -63,6 +63,9 @@ export default function GroupsPage() {
     </div>
   )
 }
+
+const inputCls =
+  'flex-1 rounded-full bg-surface-2 px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-2 focus:ring-primary/50'
 
 function JoinGroup({ onJoined }: { onJoined: () => Promise<void> }) {
   const { user } = useAuth()
@@ -90,16 +93,17 @@ function JoinGroup({ onJoined }: { onJoined: () => Promise<void> }) {
 
   return (
     <Card>
-      <h3 className="mb-1 font-semibold text-gray-900">Unirse con código</h3>
-      <p className="mb-3 text-xs text-gray-500">
-        Pide al titular su código de invitación (formato <code className="rounded bg-gray-100 px-1">IDGRUPO.CODIGO</code>).
+      <h3 className="mb-1 font-semibold text-on-surface">Unirse con código</h3>
+      <p className="mb-3 text-xs text-on-surface-variant">
+        Pide al titular su código de invitación (formato{' '}
+        <code className="rounded bg-surface-2 px-1.5 py-0.5">IDGRUPO.CODIGO</code>).
       </p>
       <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row">
         <input
           value={code}
           onChange={(e) => setCode(e.target.value)}
           placeholder="ej. AbC123xy.7QK9M2ZP"
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+          className={inputCls}
           autoComplete="off"
           spellCheck={false}
         />
@@ -107,16 +111,7 @@ function JoinGroup({ onJoined }: { onJoined: () => Promise<void> }) {
           Unirme
         </Button>
       </form>
-      {msg && (
-        <p
-          className={`mt-3 rounded-lg px-3 py-2 text-xs ${
-            msg.kind === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-          }`}
-          role="alert"
-        >
-          {msg.text}
-        </p>
-      )}
+      {msg && <Feedback msg={msg} />}
     </Card>
   )
 }
@@ -149,28 +144,34 @@ function CreateGroup({ uid, onCreated }: { uid: string; onCreated: () => Promise
 
   return (
     <Card>
-      <h3 className="mb-3 font-semibold text-gray-900">Crear un grupo nuevo</h3>
+      <h3 className="mb-3 font-semibold text-on-surface">Crear un grupo nuevo</h3>
       <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Nombre del hogar (ej. Casa Romero)"
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+          className={inputCls}
         />
         <Button type="submit" loading={busy} disabled={!name.trim()}>
           Crear
         </Button>
       </form>
-      {msg && (
-        <p
-          className={`mt-3 rounded-lg px-3 py-2 text-xs ${
-            msg.kind === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-          }`}
-          role="alert"
-        >
-          {msg.text}
-        </p>
-      )}
+      {msg && <Feedback msg={msg} />}
     </Card>
+  )
+}
+
+function Feedback({ msg }: { msg: { kind: 'ok' | 'err'; text: string } }) {
+  return (
+    <p
+      className={`mt-3 rounded-2xl px-4 py-2.5 text-xs ${
+        msg.kind === 'ok'
+          ? 'bg-primary-container/60 text-on-primary-container'
+          : 'bg-expense/10 text-expense'
+      }`}
+      role="alert"
+    >
+      {msg.text}
+    </p>
   )
 }

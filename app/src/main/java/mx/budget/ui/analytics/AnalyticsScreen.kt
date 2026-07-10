@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +16,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +57,8 @@ import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.QuincenaSnapshot
 import mx.budget.data.local.result.SpendByCategory
 import mx.budget.ui.theme.financeColors
+import mx.budget.ui.tutorial.TutorialKey
+import mx.budget.ui.tutorial.tutorialTarget
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.min
@@ -75,25 +82,41 @@ fun AnalyticsScreen(
     onBack: () -> Unit,
     onOpenLedger: (() -> Unit)? = null,
     aiViewModel: mx.budget.ai.AiAssistantViewModel? = null,
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
 ) {
     val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
     var chatOpen by remember { mutableStateOf(false) }
 
-    val quincena by viewModel.activeQuincena.collectAsState()
-    val byCategory by viewModel.spendByCategory.collectAsState()
-    val postedIncome by viewModel.postedIncome.collectAsState()
+    val rawQuincena by viewModel.activeQuincena.collectAsState()
+    val rawByCategory by viewModel.spendByCategory.collectAsState()
+    val byMember by viewModel.spendByMember.collectAsState()
+    val rawPostedIncome by viewModel.postedIncome.collectAsState()
     val trend by viewModel.trend.collectAsState()
-    val topConcepts by viewModel.topConcepts.collectAsState()
+    val rawTopConcepts by viewModel.topConcepts.collectAsState()
     val debt by viewModel.debtConcentration.collectAsState()
     val interest by viewModel.interestByWallet.collectAsState()
-    val totalSavings by viewModel.totalSavings.collectAsState()
-    val totalCommitment by viewModel.totalCommitment.collectAsState()
-    val totalReceivable by viewModel.totalReceivable.collectAsState()
+    val rawTotalSavings by viewModel.totalSavings.collectAsState()
+    val rawTotalCommitment by viewModel.totalCommitment.collectAsState()
+    val rawTotalReceivable by viewModel.totalReceivable.collectAsState()
 
-    Box(Modifier.fillMaxSize()) {
+    // Tutorial: durante el tour muestra analíticas DEMO (nunca tocan Room). Los flujos secundarios
+    // (trend/deuda/interés) se dejan reales y degradan a hints si están vacíos. Ver TUTORIAL.md.
+    val demo = tutorialController?.demoActive == true
+    val D = mx.budget.ui.tutorial.TutorialDemoData
+    val quincena = if (demo) D.quincena else rawQuincena
+    val byCategory = if (demo) D.spendByCategory else rawByCategory
+    val postedIncome = if (demo) D.postedIncome else rawPostedIncome
+    val topConcepts = if (demo) D.topConcepts else rawTopConcepts
+    val totalSavings = if (demo) D.totalSavings else rawTotalSavings
+    val totalCommitment = if (demo) D.totalCommitment else rawTotalCommitment
+    val totalReceivable = if (demo) D.totalReceivable else rawTotalReceivable
+
+    // Edge-to-edge: Analytics no está dentro de un Scaffold, así que aplica su propio
+    // inset superior (si no, el header quedaría bajo la barra de estado transparente).
+    Box(Modifier.fillMaxSize().statusBarsPadding()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 104.dp),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item {
@@ -129,18 +152,25 @@ fun AnalyticsScreen(
 
             // ── Widget: resumen inteligente ───────────────────────────────────
             item {
-                SmartSummaryCard(
-                    quincena = quincena,
-                    byCategory = byCategory,
-                    postedIncome = postedIncome,
-                    money = money,
-                    onAsk = if (aiViewModel != null) ({ chatOpen = true }) else null,
-                )
+                // TUTORIAL: ANA_SUMMARY — ver TUTORIAL.md
+                Box(Modifier.tutorialTarget(TutorialKey.ANA_SUMMARY, tutorialController)) {
+                    SmartSummaryCard(
+                        quincena = quincena,
+                        byCategory = byCategory,
+                        postedIncome = postedIncome,
+                        money = money,
+                        onAsk = if (aiViewModel != null) ({ chatOpen = true }) else null,
+                    )
+                }
             }
 
             // ── Widget: KPIs de hoja de balance ───────────────────────────────
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // TUTORIAL: ANA_KPI_ROW — ver TUTORIAL.md
+                Row(
+                    modifier = Modifier.tutorialTarget(TutorialKey.ANA_KPI_ROW, tutorialController),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     KpiCard("Ahorro", money.format(totalSavings), Modifier.weight(1f))
                     KpiCard("Por cobrar", money.format(totalReceivable), Modifier.weight(1f))
                     KpiCard("MSI pendiente", money.format(totalCommitment), Modifier.weight(1f))
@@ -152,22 +182,52 @@ fun AnalyticsScreen(
                 val totalProjected = byCategory.sumOf { it.projected }
                 val totalActual = byCategory.sumOf { it.actual }
                 if (totalProjected > 0) {
-                    WidgetCard(title = "Salud del presupuesto") {
-                        BudgetGauge(
-                            totalActual = totalActual,
-                            totalProjected = totalProjected,
-                            money = money,
-                        )
+                    // TUTORIAL: ANA_WIDGETS — ver TUTORIAL.md
+                    Box(Modifier.tutorialTarget(TutorialKey.ANA_WIDGETS, tutorialController)) {
+                        WidgetCard(title = "Salud del presupuesto") {
+                            BudgetGauge(
+                                totalActual = totalActual,
+                                totalProjected = totalProjected,
+                                money = money,
+                            )
+                        }
                     }
                 }
             }
 
-            // ── Widget: distribución del gasto (dona) ─────────────────────────
+            // ── Widget: distribución del gasto por categoría (dona) ───────────
             item {
                 WidgetCard(title = "Distribución del gasto") {
                     val spent = byCategory.filter { it.actual > 0 }.sortedByDescending { it.actual }
                     if (spent.isEmpty()) EmptyHint("Sin gastos en la quincena activa.")
-                    else SpendDonut(rows = spent, money = money)
+                    else SpendDonut(
+                        entries = spent.map { it.categoryName to it.actual },
+                        money = money,
+                    )
+                }
+            }
+
+            // ── Widget: distribución del gasto por miembro (dona) ─────────────
+            // Misma dona que la de categorías, pero por BENEFICIARY (quién consume).
+            // Con pills de periodo (histórico por default) y etiqueta con nombre para
+            // el remanente cuando colapsa un solo miembro.
+            item {
+                val memberPeriod by viewModel.memberPeriod.collectAsState()
+                WidgetCard(title = "Distribución por miembro") {
+                    MemberPeriodPills(
+                        selected = memberPeriod,
+                        onSelect = viewModel::onMemberPeriodSelected,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    val perMember = byMember
+                        .filter { it.totalMxn > 0 }
+                        .sortedByDescending { it.totalMxn }
+                    if (perMember.isEmpty()) EmptyHint("Sin gastos atribuidos en este periodo.")
+                    else SpendDonut(
+                        entries = perMember.map { it.memberName to it.totalMxn },
+                        money = money,
+                        smartRemainderLabel = true,
+                    )
                 }
             }
 
@@ -318,6 +378,7 @@ fun AnalyticsScreen(
 
         // FAB del asistente — chat determinista + LLM si hay.
         if (aiViewModel != null) {
+            // TUTORIAL: ANA_ASK_FAB — ver TUTORIAL.md
             androidx.compose.material3.ExtendedFloatingActionButton(
                 onClick = { chatOpen = true },
                 icon = { Icon(Icons.Filled.AutoAwesome, contentDescription = null) },
@@ -326,7 +387,10 @@ fun AnalyticsScreen(
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(24.dp),
+                    .navigationBarsPadding()
+                    // Se eleva por encima del pill de navegación flotante del shell.
+                    .padding(end = 24.dp, bottom = 84.dp)
+                    .tutorialTarget(TutorialKey.ANA_ASK_FAB, tutorialController),
             )
         }
     }
@@ -505,23 +569,44 @@ private fun buildSmartSummary(
 private const val DONUT_SLICES = 5
 
 /**
- * Dona de distribución del gasto por categoría (top 5 + "Otros"), en Compose
- * puro (Canvas, sin lib de charts). El barrido se anima con spring y cada
- * rebanada lleva leyenda con nombre + monto + % (redundancia no-cromática).
+ * Dona de distribución genérica (top 5 + "Otros"), en Compose puro (Canvas, sin
+ * lib de charts). Recibe una lista de rebanadas (etiqueta → monto) **ya ordenada
+ * descendente**; agrupa el sobrante en "Otros" con el mismo criterio para ambas
+ * donas (categoría y miembro), garantizando la misma paleta y comportamiento.
+ * El barrido se anima con spring y cada rebanada lleva leyenda con nombre + monto
+ * + % (redundancia no-cromática).
+ *
+ * [smartRemainderLabel]: cuando el sobrante colapsado ("Otros") tiene UN solo
+ * miembro/entrada, la rebanada toma su NOMBRE en vez de "Otros"; con varios usa
+ * "<nombre del mayor> y otros". Solo se activa en la dona por miembro (la de
+ * categorías conserva "Otros").
  */
 @Composable
-private fun SpendDonut(rows: List<SpendByCategory>, money: NumberFormat) {
-    val total = rows.sumOf { it.actual }
+private fun SpendDonut(
+    entries: List<Pair<String, Double>>,
+    money: NumberFormat,
+    smartRemainderLabel: Boolean = false,
+) {
+    val total = entries.sumOf { it.second }
     if (total <= 0) {
         EmptyHint("Sin gastos en la quincena activa.")
         return
     }
 
-    val top = rows.take(DONUT_SLICES)
-    val othersTotal = rows.drop(DONUT_SLICES).sumOf { it.actual }
+    val top = entries.take(DONUT_SLICES)
+    val dropped = entries.drop(DONUT_SLICES)
+    val othersTotal = dropped.sumOf { it.second }
+    // Etiqueta del remanente: "Otros" por default; con smartRemainderLabel toma el
+    // nombre del único colapsado, o "<mayor> y otros" si son varios (dropped ya
+    // viene ordenado desc, así que el primero es el de mayor monto).
+    val remainderLabel = when {
+        !smartRemainderLabel -> "Otros"
+        dropped.size == 1 -> dropped.first().first
+        else -> "${dropped.first().first} y otros"
+    }
     val slices = buildList {
-        top.forEach { add(it.categoryName to it.actual) }
-        if (othersTotal > 0) add("Otros" to othersTotal)
+        top.forEach { add(it.first to it.second) }
+        if (othersTotal > 0) add(remainderLabel to othersTotal)
     }
 
     val palette = listOf(
@@ -603,6 +688,33 @@ private fun SpendDonut(rows: List<SpendByCategory>, money: NumberFormat) {
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Pills de periodo para la dona por miembro (Histórico · Anual · Mensual ·
+ * Quincenal). Se usa `FlowRow` de `FilterChip` M3 para que reflowen a otra
+ * línea con fontScale alto + bold en vez de recortarse. El `FilterChip` ya anima
+ * su selección (M3); la dona se recompone sola con el flow del VM.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MemberPeriodPills(
+    selected: MemberPeriod,
+    onSelect: (MemberPeriod) -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        MemberPeriod.entries.forEach { period ->
+            FilterChip(
+                selected = period == selected,
+                onClick = { onSelect(period) },
+                label = { Text(period.label, maxLines = 1) },
+            )
         }
     }
 }
