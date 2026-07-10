@@ -18,6 +18,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1010,7 +1011,8 @@ private fun MainHealthPane(
             // ("Ver desglose" / última barra por miembro) queda tapado en el Fold.
             .padding(start = 36.dp, top = 36.dp, end = 36.dp, bottom = 120.dp)
     ) {
-        HeroKpi(state = state)
+        // Paridad teléfono/Fold: el mismo hero de anillo + tiles del layout compacto.
+        HeroRingContent(state = state)
         // Fase B/B3: en un hogar de una sola persona el desglose por miembro (toggle
         // Beneficiario/Pagador + barras) no aporta; se oculta.
         if (!singleMember) {
@@ -2064,6 +2066,25 @@ internal fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) 
  */
 @Composable
 private fun HeroRingSection(state: DashboardUiState.Success) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(22.dp)
+    ) {
+        HeroRingContent(state)
+    }
+}
+
+/**
+ * Contenido del hero de anillo SIN tarjeta propia, para reutilizarlo tanto en el
+ * layout compacto ([HeroRingSection], que le pone la tarjeta) como en el panel del
+ * Fold ([MainHealthPane], ya dentro de su tarjeta) — sin anidar tarjetas y con
+ * PARIDAD del hero entre teléfono y Fold.
+ */
+@Composable
+private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
     val q = state.quincena
     val income = maxOf(q?.projectedIncomeMxn ?: 0.0, state.actualIncome)
     val spent = state.postedTotal
@@ -2084,18 +2105,11 @@ private fun HeroRingSection(state: DashboardUiState.Success) {
     val overBudget = spent > income
     val expenseC = amountSemantic(FinancialTone.EXPENSE)
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(22.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
             // Anillo: fracción del ingreso ya gastada (rojo si excede el ingreso).
             BudgetRing(
                 fraction = spendFraction,
@@ -2153,17 +2167,22 @@ private fun HeroRingSection(state: DashboardUiState.Success) {
         Spacer(Modifier.height(14.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Día ${progress.dayIndex} de ${progress.totalDays} · $timePct % del tiempo",
+                "Día ${progress.dayIndex} de ${progress.totalDays} · $timePct %",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+                maxLines = 1
             )
             Text(
                 "${progress.daysRemaining} días restantes",
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false
             )
         }
         Spacer(Modifier.height(14.dp))
@@ -2173,7 +2192,6 @@ private fun HeroRingSection(state: DashboardUiState.Success) {
             actualIncome = state.actualIncome,
             viewingActive = state.viewingActive
         )
-    }
 }
 
 /**
@@ -2184,30 +2202,37 @@ private fun HeroRingSection(state: DashboardUiState.Success) {
 @Composable
 private fun StatTile(tone: FinancialTone, label: String, amount: Double) {
     val s = amountSemantic(tone)
-    Row(
+    // Etiqueta + monto APILADOS (no lado a lado): a fontScale 1.3 + bold un monto
+    // ancho recortaba la etiqueta ("Ingreso"→"Ingre"). Apilado cada uno usa el ancho
+    // completo del tile. Estilo tile de Fitbit (rótulo pequeño + valor grande).
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(s.container)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        s.icon?.let {
-            Icon(it, contentDescription = s.description, tint = s.onContainer, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            s.icon?.let {
+                Icon(it, contentDescription = s.description, tint = s.onContainer, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = s.onContainer,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
         }
-        Text(
-            label,
-            style = MaterialTheme.typography.labelLarge,
-            color = s.onContainer,
-            modifier = Modifier.weight(1f),
-            maxLines = 1
-        )
+        Spacer(Modifier.height(2.dp))
         Text(
             "${s.sign}${amount.toMxn()}",
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
             color = s.onContainer,
-            maxLines = 1
+            maxLines = 1,
+            softWrap = false,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
         )
     }
 }
