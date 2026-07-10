@@ -51,6 +51,7 @@ import mx.budget.ui.dashboard.TransactionRow
 fun SearchResultsScreen(
     searchViewModel: SearchViewModel,
     dashboardViewModel: DashboardViewModel,
+    detailViewModel: mx.budget.ui.detail.ExpenseDetailViewModel? = null,
     onBack: () -> Unit
 ) {
     val query by searchViewModel.query.collectAsState()
@@ -69,6 +70,11 @@ fun SearchResultsScreen(
             onSave = { dashboardViewModel.setSelectedGroups(it); showFilterSheet = false },
             onDismiss = { showFilterSheet = false }
         )
+    }
+
+    // Detalle del gasto (ver/editar/borrar) abierto desde una fila de resultados.
+    if (detailViewModel != null) {
+        mx.budget.ui.detail.ExpenseDetailSheet(viewModel = detailViewModel)
     }
 
     Column(
@@ -128,7 +134,9 @@ fun SearchResultsScreen(
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                items(results, key = { it.expenseId }) { tx -> TransactionRow(tx) }
+                items(results, key = { it.expenseId }) { tx ->
+                    TransactionRow(tx, onClick = { detailViewModel?.open(it) })
+                }
             }
         }
     }

@@ -54,6 +54,22 @@ class QuincenaRollover(
         return dao.getById(target.id)
     }
 
+    /**
+     * Garantiza que exista una quincena (cualquier status) que cubra [date];
+     * si falta la crea PROVISIONED con id determinista. NO toca la ACTIVE.
+     * La usa el pago manual one-off: un PLANNED con fecha fuera de las
+     * quincenas existentes se asignaba a la ACTIVE y contaminaba sus
+     * agregados (P1 de auditoría runtime).
+     */
+    suspend fun ensureForDate(date: LocalDate): QuincenaEntity {
+        val existing = dao.getForDate(householdId, date.toString())
+        if (existing != null) return existing
+        val q = buildQuincena(date)
+        dao.insert(q)
+        Log.i(TAG, "Quincena aprovisionada para $date: ${q.label} (${q.id})")
+        return q
+    }
+
     private fun buildQuincena(today: LocalDate): QuincenaEntity {
         val year = today.year
         val month = today.monthValue

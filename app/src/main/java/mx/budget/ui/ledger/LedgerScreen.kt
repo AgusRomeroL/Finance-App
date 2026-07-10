@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -68,8 +69,11 @@ fun LedgerScreen(
     val rows = if (tutorialController?.demoActive == true)
         mx.budget.ui.tutorial.TutorialDemoData.ledgerRows else rawRows
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
         // Header: back + título + navegación de quincena (patrón del Dashboard).
+        // statusBarsPadding es imprescindible: sin él, con la app edge-to-edge los
+        // chevrones de quincena caían DENTRO del área tappable del status bar y el
+        // sistema se comía los taps (navegación inusable) — P1 de auditoría runtime.
         Row(
             modifier = Modifier
                 .fillMaxWidth()

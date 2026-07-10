@@ -530,7 +530,8 @@ private fun ExpandedDashboard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
-                            tutorialController = tutorialController
+                            tutorialController = tutorialController,
+                            onOpenBreakdown = onNavigate?.let { nav -> { nav("member_balances") } }
                         )
                     }
                 }
@@ -554,7 +555,8 @@ private fun BentoPanes(
     state: DashboardUiState.Success,
     singleMember: Boolean = false,
     modifier: Modifier = Modifier,
-    tutorialController: mx.budget.ui.tutorial.TutorialController? = null
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
+    onOpenBreakdown: (() -> Unit)? = null,
 ) {
     var fraction by rememberSaveable { mutableStateOf(0.55f) }
     val settleScope = rememberCoroutineScope()
@@ -568,7 +570,8 @@ private fun BentoPanes(
                 state = state,
                 singleMember = singleMember,
                 modifier = Modifier.weight(fraction).fillMaxHeight(),
-                tutorialController = tutorialController
+                tutorialController = tutorialController,
+                onOpenBreakdown = onOpenBreakdown
             )
             PaneDragHandle(
                 dragState = dragState,
@@ -724,7 +727,8 @@ private fun CompactDashboard(
                                 ) {
                                     MemberDistributionSection(
                                         beneficiary = state.beneficiaryDistribution,
-                                        payer = state.payerDistribution
+                                        payer = state.payerDistribution,
+                                        onOpenBreakdown = onNavigate?.let { nav -> { nav("member_balances") } }
                                     )
                                 }
                             }
@@ -1101,7 +1105,8 @@ private fun MainHealthPane(
     state: DashboardUiState.Success,
     singleMember: Boolean = false,
     modifier: Modifier = Modifier,
-    tutorialController: mx.budget.ui.tutorial.TutorialController? = null
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
+    onOpenBreakdown: (() -> Unit)? = null,
 ) {
     // Scroll vertical: en pantalla casi cuadrada del Fold + fontScale 1.3 + bold, el
     // KPI héroe + las barras por miembro exceden el alto del panel. Sin scroll el pie
@@ -1131,7 +1136,8 @@ private fun MainHealthPane(
             Box(Modifier.tutorialTarget(TutorialKey.DASH_MEMBER_BARS, tutorialController)) {
                 MemberDistributionSection(
                     beneficiary = state.beneficiaryDistribution,
-                    payer = state.payerDistribution
+                    payer = state.payerDistribution,
+                    onOpenBreakdown = onOpenBreakdown
                 )
             }
         }
@@ -1749,7 +1755,8 @@ private fun ReimbursementSection(ui: ReimbursementUi) {
 private fun MemberDistributionSection(
     beneficiary: List<SpendByMember>,
     payer: List<SpendByMember>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenBreakdown: (() -> Unit)? = null,
 ) {
     var showPayer by rememberSaveable { mutableStateOf(false) }
     val data = if (showPayer) payer else beneficiary
@@ -1818,7 +1825,15 @@ private fun MemberDistributionSection(
                     modifier = Modifier.weight(1f),
                     maxLines = 2, overflow = TextOverflow.Ellipsis
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // CTA real (era un Row estático sin acción — P1 de auditoría): abre
+                // las cuentas entre miembros.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable(enabled = onOpenBreakdown != null) { onOpenBreakdown?.invoke() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
                     Text(
                         "Ver desglose",
                         style = MaterialTheme.typography.labelLarge,
@@ -2024,7 +2039,13 @@ private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: M
 }
 
 @Composable
-internal fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) {
+internal fun TransactionRow(
+    tx: ExpenseWithDetails,
+    alternate: Boolean = false,
+    // Puente para pantallas fuera del provider de LocalExpenseRowClick (búsqueda):
+    // sin esto sus filas quedaban sin acción (P1 de auditoría runtime).
+    onClick: ((ExpenseWithDetails) -> Unit)? = null,
+) {
     val tone = if (tx.status == "PLANNED") FinancialTone.NEUTRAL else FinancialTone.EXPENSE
     val sem = amountSemantic(tone)
     val rowBg = if (alternate) MaterialTheme.colorScheme.surfaceContainerHighest
@@ -2033,7 +2054,7 @@ internal fun TransactionRow(tx: ExpenseWithDetails, alternate: Boolean = false) 
         runCatching { tx.categoryColorHex?.let { Color(android.graphics.Color.parseColor(it)) } }
             .getOrNull()
     }
-    val onRowClick = LocalExpenseRowClick.current
+    val onRowClick = onClick ?: LocalExpenseRowClick.current
 
     Row(
         modifier = Modifier

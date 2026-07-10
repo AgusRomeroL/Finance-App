@@ -174,7 +174,9 @@ fun CalendarScreen(
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 120.dp),
+                // bottom: pill de navegación (~112dp) + FAB de pago manual encima
+                // (~72dp) — con 120dp el FAB tapaba el monto de la última tarjeta.
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 200.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item(key = "month") {

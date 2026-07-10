@@ -267,6 +267,7 @@ fun BudgetNavGraph(
             SearchResultsScreen(
                 searchViewModel = searchViewModel,
                 dashboardViewModel = dashboardViewModel,
+                detailViewModel = expenseDetailViewModel,
                 onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
             )
         }
@@ -599,8 +600,23 @@ fun BudgetNavGraph(
     captureMode?.let { mode ->
         CaptureBottomSheet(
             viewModel = captureViewModel,
-            onDismiss = { captureMode = null },
+            onDismiss = {
+                captureMode = null
+                // Válvula del tutorial: descartar la hoja a media sección de captura
+                // termina el tour limpio (sale del modo demo) en vez de dejar la app
+                // varada en "quincena de ejemplo" sin overlay.
+                if (tutorialController.isRunning &&
+                    tutorialController.currentStep?.requiresCaptureSheet == true
+                ) {
+                    tutorialController.skip()
+                }
+            },
             mode = mode,
+            // Sin el controller, el overlay interno del sheet nunca se compone y el
+            // tutorial moría mudo en el paso 6 (P1 de auditoría runtime): al
+            // hoistear la hoja desde DashboardScreen se perdió este cableado.
+            tutorialController = tutorialController,
+            tutorialCurrentRoute = currentRoute,
         )
     }
     } // Box
