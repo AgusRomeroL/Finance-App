@@ -11,14 +11,17 @@ interface NavItem {
 
 /**
  * Nav de ACCESO COMPLETO (OWNER "Dueño" | PAYER "Administrador"): administra
- * el presupuesto real desde la web. Cuentas/Analíticas llegan en la ola 2 —
- * no se listan enlaces muertos.
+ * el presupuesto real desde la web. Ola 2: Cuentas (hoja de balance), Deudas
+ * (entre miembros) y Analíticas (agregados deterministas).
  */
 const NAV_FULL: NavItem[] = [
   { to: '/panel', label: 'Panel', end: false },
   { to: '/capturar', label: 'Capturar', end: false },
   { to: '/calendario', label: 'Calendario', end: false },
   { to: '/ledger', label: 'Historial', end: false },
+  { to: '/cuentas', label: 'Cuentas', end: false },
+  { to: '/deudas', label: 'Deudas', end: false },
+  { to: '/analiticas', label: 'Analíticas', end: false },
   { to: '/', label: 'Grupos', end: true },
 ]
 

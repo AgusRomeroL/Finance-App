@@ -93,6 +93,55 @@ export function Eyebrow({ children, className = '' }: { children: ReactNode; cla
   return <p className={`eyebrow ${className}`}>{children}</p>
 }
 
+/**
+ * Modal genérico (mismo estilo que el modal de edición del Historial):
+ * sheet inferior en móvil, tarjeta centrada en sm+. Clic en el fondo cierra
+ * (salvo `busy`, para no interrumpir una escritura en curso).
+ */
+export function Modal({
+  title,
+  onClose,
+  busy,
+  children,
+}: {
+  title: string
+  onClose: () => void
+  busy?: boolean
+  children: ReactNode
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-20 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={() => (busy ? null : onClose())}
+    >
+      <div
+        className="max-h-full w-full overflow-y-auto rounded-t-card bg-surface p-5 sm:max-w-md sm:rounded-card"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-4 font-semibold text-on-surface">{title}</h3>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+/** Clase compartida de inputs/selects tonales (idéntica al Historial). */
+export const fieldCls =
+  'w-full rounded-2xl bg-surface-1 px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-2 focus:ring-primary/50'
+
+/** Campo etiquetado (eyebrow + control). */
+export function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="eyebrow mb-1.5 block px-1">{label}</span>
+      {children}
+    </label>
+  )
+}
+
 /** Chip/píldora seleccionable (categorías, filtros). */
 export function Chip({
   selected,

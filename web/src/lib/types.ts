@@ -156,6 +156,7 @@ export interface Wallet {
   issuer?: string
   last4?: string
   currentBalanceMxn: number
+  creditLimitMxn?: number
   ownerMemberId?: string
   isActive: boolean
   updatedAt: number
@@ -290,6 +291,157 @@ export interface IncomeInput {
   memberId: string
   /** Wallet donde se deposita (se acredita el saldo). */
   paymentMethodId: string
+}
+
+/* ── WEB-WAVE2: hoja de balance (Cuentas / Deudas / Analíticas) ──────────── */
+
+// households/{hid}/wallet_transfer/{id}
+// Contrato con FirestoreMappers.toWalletTransferEntity: householdId,
+// fromPaymentMethodId, toPaymentMethodId, amountMxn y occurredAt OBLIGATORIOS.
+export interface WalletTransfer {
+  householdId: string
+  fromPaymentMethodId: string
+  toPaymentMethodId: string
+  amountMxn: number
+  occurredAt: number // epoch ms
+  note?: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface WalletTransferWithId extends WalletTransfer {
+  id: string
+}
+
+// households/{hid}/savings_goal/{id}
+// Contrato con toSavingsGoalEntity: householdId, name y targetMxn OBLIGATORIOS.
+export interface SavingsGoal {
+  name: string
+  targetMxn: number
+  currentMxn: number
+  /** "YYYY-MM-DD" (Room la persiste como string). */
+  targetDate?: string | null
+  linkedPaymentMethodId?: string | null
+  updatedAt: number
+}
+
+export interface SavingsGoalWithId extends SavingsGoal {
+  id: string
+}
+
+// households/{hid}/loan/{id}
+// Contrato con toLoanEntity: householdId, debtorMemberId, principalMxn,
+// remainingBalanceMxn e issuedAt ("YYYY-MM-DD") OBLIGATORIOS.
+export interface Loan {
+  debtorMemberId: string
+  principalMxn: number
+  remainingBalanceMxn: number
+  agreedInterestMxn: number
+  /** "YYYY-MM-DD". */
+  issuedAt: string
+  dueAt?: string | null
+  notes?: string | null
+  /** Calendario de pagos opcional (mapper: campos nullable). */
+  paymentCount?: number | null
+  paymentFrequency?: string | null
+  paymentAmountMxn?: number | null
+  scheduleStartDate?: string | null
+  updatedAt: number
+}
+
+export interface LoanWithId extends Loan {
+  id: string
+}
+
+// households/{hid}/installment_plan/{id}
+// Contrato con toInstallmentPlanEntity: householdId, displayName, principalMxn,
+// totalInstallments, installmentAmountMxn y startDate OBLIGATORIOS.
+export interface InstallmentPlan {
+  displayName: string
+  principalMxn: number
+  totalInstallments: number
+  installmentAmountMxn: number
+  /** "YYYY-MM-DD". */
+  startDate: string
+  currentInstallment: number
+  status: string
+  paymentMethodId?: string | null
+  fundingPaymentMethodId?: string | null
+  creditorMemberId?: string | null
+  categoryId?: string | null
+  interestRateApr?: number | null
+  updatedAt: number
+}
+
+export interface InstallmentPlanWithId extends InstallmentPlan {
+  id: string
+}
+
+// households/{hid}/income_source/{id} (lectura para Analíticas)
+export interface IncomeSource {
+  quincenaId: string
+  memberId: string
+  label: string
+  amountMxn: number
+  status: string
+  /** "YYYY-MM-DD". */
+  expectedDate?: string
+  paymentMethodId?: string
+  updatedAt: number
+}
+
+export interface IncomeSourceWithId extends IncomeSource {
+  id: string
+}
+
+/** Entrada para crear/editar un wallet (payment_method) desde la web. */
+export interface WalletInput {
+  displayName: string
+  kind: string
+  ownerMemberId?: string
+  /** Solo aplica a kinds de crédito; undefined = sin límite / no aplica. */
+  creditLimitMxn?: number
+  isActive: boolean
+  /** Solo al CREAR: saldo inicial (current + opening). Ignorado al editar. */
+  initialBalanceMxn?: number
+}
+
+/** Entrada para crear/editar una meta de ahorro. */
+export interface SavingsGoalInput {
+  name: string
+  targetMxn: number
+  currentMxn: number
+  targetDate?: string
+  linkedPaymentMethodId?: string
+}
+
+/** Entrada para crear/editar un préstamo por cobrar. */
+export interface LoanInput {
+  debtorMemberId: string
+  principalMxn: number
+  remainingBalanceMxn: number
+  agreedInterestMxn: number
+  issuedAt: string
+  dueAt?: string
+  notes?: string
+  paymentCount?: number
+  paymentFrequency?: string
+  paymentAmountMxn?: number
+  scheduleStartDate?: string
+}
+
+/** Entrada para crear/editar un plan MSI. */
+export interface InstallmentPlanInput {
+  displayName: string
+  principalMxn: number
+  totalInstallments: number
+  installmentAmountMxn: number
+  startDate: string
+  currentInstallment: number
+  paymentMethodId?: string
+  fundingPaymentMethodId?: string
+  categoryId?: string
+  interestRateApr?: number
 }
 
 export type ProposalKind = 'EXPENSE' | 'FUTURE_PAYMENT'

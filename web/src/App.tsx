@@ -13,6 +13,9 @@ import OwnerDashboardPage from './pages/OwnerDashboardPage'
 import CapturePage from './pages/CapturePage'
 import CalendarPage from './pages/CalendarPage'
 import LedgerPage from './pages/LedgerPage'
+import AccountsPage from './pages/AccountsPage'
+import DebtsPage from './pages/DebtsPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 
 /**
  * Guard de las rutas de ACCESO COMPLETO (rol v2): pasan OWNER ("Dueño") y
@@ -112,6 +115,30 @@ function AuthedApp() {
             element={
               <RequireFullAccess>
                 <LedgerPage />
+              </RequireFullAccess>
+            }
+          />
+          <Route
+            path="cuentas"
+            element={
+              <RequireFullAccess>
+                <AccountsPage />
+              </RequireFullAccess>
+            }
+          />
+          <Route
+            path="deudas"
+            element={
+              <RequireFullAccess>
+                <DebtsPage />
+              </RequireFullAccess>
+            }
+          />
+          <Route
+            path="analiticas"
+            element={
+              <RequireFullAccess>
+                <AnalyticsPage />
               </RequireFullAccess>
             }
           />

@@ -24,16 +24,24 @@ import type {
   HouseholdRole,
   HouseholdWithId,
   IncomeInput,
+  IncomeSourceWithId,
+  InstallmentPlanInput,
+  InstallmentPlanWithId,
   Invite,
   InviteCodeDoc,
+  LoanInput,
+  LoanWithId,
   MemberWithId,
   Proposal,
   ProposalKind,
   ProposalWithId,
   QuincenaWithId,
   Role,
+  SavingsGoalInput,
+  SavingsGoalWithId,
   UserDoc,
   UserHouseholdRef,
+  WalletInput,
   WalletWithId,
 } from './types'
 import { normalizeRole } from './types'
@@ -366,6 +374,7 @@ function normWallet(id: string, data: FirestoreData): WalletWithId {
     issuer: pickStr(data, 'issuer', 'issuer'),
     last4: pickStr(data, 'last4', 'last4'),
     currentBalanceMxn: pickNum(data, 'currentBalanceMxn', 'current_balance_mxn') ?? 0,
+    creditLimitMxn: pickNum(data, 'creditLimitMxn', 'credit_limit_mxn'),
     ownerMemberId: pickStr(data, 'ownerMemberId', 'owner_member_id'),
     isActive: pick<boolean>(data, 'isActive', 'is_active') ?? true,
     updatedAt: pickNum(data, 'updatedAt', 'updated_at') ?? 0,
@@ -1007,4 +1016,529 @@ export async function resolveProposal(hid: string, proposalId: string, accept: b
     status: accept ? 'ACCEPTED' : 'REJECTED',
     resolvedAt: Date.now(),
   })
+}
+
+/* ===========================================================================
+ * WEB-WAVE2 — hoja de balance (Cuentas / Deudas / Analíticas)
+ * ===========================================================================
+ * Mismo contrato que createExpense/createIncome: toda escritura es un
+ * writeBatch atómico en camelCase con `updatedAt: Date.now()` (llave del LWW
+ * del pull de Android). Los campos de cada doc respetan los OBLIGATORIOS de
+ * FirestoreMappers.kt (toPaymentMethodEntity, toWalletTransferEntity,
+ * toSavingsGoalEntity, toLoanEntity, toInstallmentPlanEntity): el mapper
+ * descarta docs sin ellos.
+ * ------------------------------------------------------------------------- */
+
+function camelToSnake(key: string): string {
+  return key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)
+}
+
+/**
+ * Espejo snake_case en EDICIONES (patrón walletBalanceUpdate generalizado):
+ * por cada campo camelCase del update, si el doc existente traía la variante
+ * snake_case (docs seed), también se actualiza — para no dejar un valor viejo
+ * divergente en el mismo doc. `last4` es idéntico en ambas variantes.
+ */
+function mirrorSnake(existing: FirestoreData, update: FirestoreData): FirestoreData {
+  const out: FirestoreData = { ...update }
+  for (const [k, v] of Object.entries(update)) {
+    const snake = camelToSnake(k)
+    if (snake !== k && snake in existing) out[snake] = v
+  }
+  return out
+}
+
+/* ------------------------------ Wallets CRUD ------------------------------ */
+
+/**
+ * Crea un wallet (payment_method). Obligatorios del mapper: householdId,
+ * displayName, kind. El saldo inicial va a currentBalanceMxn Y
+ * openingBalanceMxn (mismo criterio que un alta local en la app).
+ */
+export async function createWallet(hid: string, input: WalletInput): Promise<string> {
+  const displayName = input.displayName.trim()
+  if (!displayName) throw new Error('El nombre de la cuenta no puede estar vacío.')
+  if (!input.kind) throw new Error('Selecciona el tipo de cuenta.')
+
+  const now = Date.now()
+  const ref = doc(collection(db, 'households', hid, 'wallets'))
+  const initial = Number.isFinite(input.initialBalanceMxn) ? round2(input.initialBalanceMxn as number) : 0
+
+  const data: FirestoreData = {
+    id: ref.id,
+    householdId: hid,
+    displayName,
+    kind: input.kind,
+    currentBalanceMxn: initial,
+    openingBalanceMxn: initial,
+    isActive: input.isActive,
+    updatedAt: now,
+  }
+  if (input.ownerMemberId) data.ownerMemberId = input.ownerMemberId
+  if (Number.isFinite(input.creditLimitMxn)) data.creditLimitMxn = input.creditLimitMxn
+
+  const batch = writeBatch(db)
+  batch.set(ref, data)
+  await batch.commit()
+  return ref.id
+}
+
+/**
+ * Edita un wallet existente (displayName, kind, ownerMemberId, creditLimitMxn,
+ * isActive). NO toca saldos — para eso está [reconcileWalletBalance]. Campos
+ * opcionales vaciados se escriben null (el mapper de Android los trata como
+ * ausentes).
+ */
+export async function updateWallet(hid: string, walletId: string, input: WalletInput): Promise<void> {
+  const displayName = input.displayName.trim()
+  if (!displayName) throw new Error('El nombre de la cuenta no puede estar vacío.')
+
+  const ref = doc(db, 'households', hid, 'wallets', walletId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('La cuenta ya no existe.')
+  const existing = snap.data() as FirestoreData
+
+  const update: FirestoreData = {
+    displayName,
+    kind: input.kind,
+    ownerMemberId: input.ownerMemberId ?? null,
+    creditLimitMxn: Number.isFinite(input.creditLimitMxn) ? input.creditLimitMxn : null,
+    isActive: input.isActive,
+    updatedAt: Date.now(),
+  }
+
+  const batch = writeBatch(db)
+  batch.update(ref, mirrorSnake(existing, update))
+  await batch.commit()
+}
+
+/**
+ * Reconciliar: fija el saldo ACTUAL de un wallet al valor observado (misma
+ * válvula de escape que "Reconciliar saldo" en la app). update con updatedAt.
+ */
+export async function reconcileWalletBalance(hid: string, walletId: string, newBalance: number): Promise<void> {
+  if (!Number.isFinite(newBalance)) throw new Error('El saldo debe ser un número válido.')
+  const ref = doc(db, 'households', hid, 'wallets', walletId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('La cuenta ya no existe.')
+  const existing = snap.data() as FirestoreData
+
+  const batch = writeBatch(db)
+  batch.update(ref, walletBalanceUpdate(existing, newBalance))
+  await batch.commit()
+}
+
+/* ------------------------------ Transferencias ---------------------------- */
+
+export interface TransferInput {
+  fromPaymentMethodId: string
+  toPaymentMethodId: string
+  amountMxn: number
+  /** Epoch ms; default ahora. */
+  occurredAt?: number
+  note?: string
+}
+
+/**
+ * Transferencia entre wallets (RF-41): doc en `wallet_transfer` (obligatorios
+ * del mapper: householdId, fromPaymentMethodId, toPaymentMethodId, amountMxn,
+ * occurredAt) + decremento del origen + incremento del destino, en UN batch.
+ * Mismo riesgo aceptado de read-before-batch que createExpense.
+ */
+export async function createWalletTransfer(hid: string, input: TransferInput): Promise<string> {
+  const amount = input.amountMxn
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error('El monto debe ser mayor que cero.')
+  if (!input.fromPaymentMethodId || !input.toPaymentMethodId) {
+    throw new Error('Selecciona la cuenta origen y la cuenta destino.')
+  }
+  if (input.fromPaymentMethodId === input.toPaymentMethodId) {
+    throw new Error('La cuenta origen y la destino deben ser distintas.')
+  }
+
+  const fromRef = doc(db, 'households', hid, 'wallets', input.fromPaymentMethodId)
+  const toRef = doc(db, 'households', hid, 'wallets', input.toPaymentMethodId)
+  const [fromSnap, toSnap] = await Promise.all([getDoc(fromRef), getDoc(toRef)])
+  if (!fromSnap.exists()) throw new Error('La cuenta origen ya no existe.')
+  if (!toSnap.exists()) throw new Error('La cuenta destino ya no existe.')
+  const fromData = fromSnap.data() as FirestoreData
+  const toData = toSnap.data() as FirestoreData
+  const fromBalance = pickNum(fromData, 'currentBalanceMxn', 'current_balance_mxn') ?? 0
+  const toBalance = pickNum(toData, 'currentBalanceMxn', 'current_balance_mxn') ?? 0
+
+  const now = Date.now()
+  const transferRef = doc(collection(db, 'households', hid, 'wallet_transfer'))
+
+  const batch = writeBatch(db)
+  batch.set(transferRef, {
+    id: transferRef.id,
+    householdId: hid,
+    fromPaymentMethodId: input.fromPaymentMethodId,
+    toPaymentMethodId: input.toPaymentMethodId,
+    amountMxn: round2(amount),
+    occurredAt: input.occurredAt ?? now,
+    note: input.note?.trim() || null,
+    createdAt: now,
+    updatedAt: now,
+  })
+  batch.update(fromRef, walletBalanceUpdate(fromData, fromBalance - amount))
+  batch.update(toRef, walletBalanceUpdate(toData, toBalance + amount))
+  await batch.commit()
+  return transferRef.id
+}
+
+/* ------------------------------ Metas de ahorro --------------------------- */
+
+function normSavingsGoal(id: string, data: FirestoreData): SavingsGoalWithId {
+  return {
+    id,
+    name: pickStr(data, 'name', 'name') ?? '(sin nombre)',
+    targetMxn: pickNum(data, 'targetMxn', 'target_mxn') ?? 0,
+    currentMxn: pickNum(data, 'currentMxn', 'current_mxn') ?? 0,
+    targetDate: pickStr(data, 'targetDate', 'target_date') ?? null,
+    linkedPaymentMethodId: pickStr(data, 'linkedPaymentMethodId', 'linked_payment_method_id') ?? null,
+    updatedAt: pickNum(data, 'updatedAt', 'updated_at') ?? 0,
+  }
+}
+
+export async function listSavingsGoals(hid: string): Promise<SavingsGoalWithId[]> {
+  const snap = await getDocs(collection(db, 'households', hid, 'savings_goal'))
+  const rows = snap.docs.map((d) => normSavingsGoal(d.id, d.data() as FirestoreData))
+  return rows.sort((a, b) => a.name.localeCompare(b.name, 'es'))
+}
+
+/**
+ * Crea o edita una meta de ahorro. Obligatorios del mapper: householdId, name,
+ * targetMxn. `goalId` null = crear.
+ */
+export async function upsertSavingsGoal(
+  hid: string,
+  goalId: string | null,
+  input: SavingsGoalInput,
+): Promise<string> {
+  const name = input.name.trim()
+  if (!name) throw new Error('El nombre de la meta no puede estar vacío.')
+  if (!Number.isFinite(input.targetMxn) || input.targetMxn <= 0) {
+    throw new Error('La meta debe ser mayor que cero.')
+  }
+
+  const now = Date.now()
+  const batch = writeBatch(db)
+
+  if (goalId === null) {
+    const ref = doc(collection(db, 'households', hid, 'savings_goal'))
+    batch.set(ref, {
+      id: ref.id,
+      householdId: hid,
+      name,
+      targetMxn: round2(input.targetMxn),
+      currentMxn: round2(input.currentMxn || 0),
+      targetDate: input.targetDate || null,
+      linkedPaymentMethodId: input.linkedPaymentMethodId || null,
+      updatedAt: now,
+    })
+    await batch.commit()
+    return ref.id
+  }
+
+  const ref = doc(db, 'households', hid, 'savings_goal', goalId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('La meta ya no existe.')
+  const existing = snap.data() as FirestoreData
+  batch.update(
+    ref,
+    mirrorSnake(existing, {
+      name,
+      targetMxn: round2(input.targetMxn),
+      currentMxn: round2(input.currentMxn || 0),
+      targetDate: input.targetDate || null,
+      linkedPaymentMethodId: input.linkedPaymentMethodId || null,
+      updatedAt: now,
+    }),
+  )
+  await batch.commit()
+  return goalId
+}
+
+/** Abono a una meta: currentMxn += monto (con updatedAt para el LWW). */
+export async function addToSavingsGoal(hid: string, goalId: string, amountMxn: number): Promise<void> {
+  if (!Number.isFinite(amountMxn) || amountMxn <= 0) throw new Error('El abono debe ser mayor que cero.')
+  const ref = doc(db, 'households', hid, 'savings_goal', goalId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('La meta ya no existe.')
+  const existing = snap.data() as FirestoreData
+  const current = pickNum(existing, 'currentMxn', 'current_mxn') ?? 0
+
+  const batch = writeBatch(db)
+  batch.update(ref, mirrorSnake(existing, { currentMxn: round2(current + amountMxn), updatedAt: Date.now() }))
+  await batch.commit()
+}
+
+/* --------------------------- Préstamos por cobrar ------------------------- */
+
+function normLoan(id: string, data: FirestoreData): LoanWithId {
+  return {
+    id,
+    debtorMemberId: pickStr(data, 'debtorMemberId', 'debtor_member_id') ?? '',
+    principalMxn: pickNum(data, 'principalMxn', 'principal_mxn') ?? 0,
+    remainingBalanceMxn: pickNum(data, 'remainingBalanceMxn', 'remaining_balance_mxn') ?? 0,
+    agreedInterestMxn: pickNum(data, 'agreedInterestMxn', 'agreed_interest_mxn') ?? 0,
+    issuedAt: pickStr(data, 'issuedAt', 'issued_at') ?? '',
+    dueAt: pickStr(data, 'dueAt', 'due_at') ?? null,
+    notes: pickStr(data, 'notes', 'notes') ?? null,
+    paymentCount: pickNum(data, 'paymentCount', 'payment_count') ?? null,
+    paymentFrequency: pickStr(data, 'paymentFrequency', 'payment_frequency') ?? null,
+    paymentAmountMxn: pickNum(data, 'paymentAmountMxn', 'payment_amount_mxn') ?? null,
+    scheduleStartDate: pickStr(data, 'scheduleStartDate', 'schedule_start_date') ?? null,
+    updatedAt: pickNum(data, 'updatedAt', 'updated_at') ?? 0,
+  }
+}
+
+export async function listLoans(hid: string): Promise<LoanWithId[]> {
+  const snap = await getDocs(collection(db, 'households', hid, 'loan'))
+  const rows = snap.docs.map((d) => normLoan(d.id, d.data() as FirestoreData))
+  // Con saldo vivo primero, luego por saldo desc.
+  return rows.sort(
+    (a, b) =>
+      Number(b.remainingBalanceMxn > 0) - Number(a.remainingBalanceMxn > 0) ||
+      b.remainingBalanceMxn - a.remainingBalanceMxn,
+  )
+}
+
+/**
+ * Crea o edita un préstamo por cobrar. Obligatorios del mapper: householdId,
+ * debtorMemberId, principalMxn, remainingBalanceMxn, issuedAt ("YYYY-MM-DD").
+ */
+export async function upsertLoan(hid: string, loanId: string | null, input: LoanInput): Promise<string> {
+  if (!input.debtorMemberId) throw new Error('Selecciona quién debe.')
+  if (!Number.isFinite(input.principalMxn) || input.principalMxn <= 0) {
+    throw new Error('El monto prestado debe ser mayor que cero.')
+  }
+  if (!Number.isFinite(input.remainingBalanceMxn) || input.remainingBalanceMxn < 0) {
+    throw new Error('El saldo pendiente no puede ser negativo.')
+  }
+  if (!input.issuedAt) throw new Error('Indica la fecha del préstamo.')
+
+  const body: FirestoreData = {
+    householdId: hid,
+    debtorMemberId: input.debtorMemberId,
+    principalMxn: round2(input.principalMxn),
+    remainingBalanceMxn: round2(input.remainingBalanceMxn),
+    agreedInterestMxn: round2(input.agreedInterestMxn || 0),
+    issuedAt: input.issuedAt,
+    dueAt: input.dueAt || null,
+    notes: input.notes?.trim() || null,
+    paymentCount: Number.isFinite(input.paymentCount) ? input.paymentCount : null,
+    paymentFrequency: input.paymentFrequency || null,
+    paymentAmountMxn: Number.isFinite(input.paymentAmountMxn) ? round2(input.paymentAmountMxn as number) : null,
+    scheduleStartDate: input.scheduleStartDate || null,
+    updatedAt: Date.now(),
+  }
+
+  const batch = writeBatch(db)
+  if (loanId === null) {
+    const ref = doc(collection(db, 'households', hid, 'loan'))
+    batch.set(ref, { id: ref.id, ...body })
+    await batch.commit()
+    return ref.id
+  }
+  const ref = doc(db, 'households', hid, 'loan', loanId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('El préstamo ya no existe.')
+  batch.update(ref, mirrorSnake(snap.data() as FirestoreData, body))
+  await batch.commit()
+  return loanId
+}
+
+/**
+ * Abono a un préstamo: remainingBalanceMxn = max(0, saldo − abono), con
+ * updatedAt (espejo de LoanRepositoryImpl.applyPayment en Android).
+ */
+export async function applyLoanPayment(hid: string, loanId: string, amountMxn: number): Promise<void> {
+  if (!Number.isFinite(amountMxn) || amountMxn <= 0) throw new Error('El abono debe ser mayor que cero.')
+  const ref = doc(db, 'households', hid, 'loan', loanId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('El préstamo ya no existe.')
+  const existing = snap.data() as FirestoreData
+  const remaining = pickNum(existing, 'remainingBalanceMxn', 'remaining_balance_mxn') ?? 0
+
+  const batch = writeBatch(db)
+  batch.update(
+    ref,
+    mirrorSnake(existing, {
+      remainingBalanceMxn: round2(Math.max(0, remaining - amountMxn)),
+      updatedAt: Date.now(),
+    }),
+  )
+  await batch.commit()
+}
+
+/* --------------------------------- MSI ------------------------------------ */
+
+function normInstallmentPlan(id: string, data: FirestoreData): InstallmentPlanWithId {
+  return {
+    id,
+    displayName: pickStr(data, 'displayName', 'display_name') ?? '(sin nombre)',
+    principalMxn: pickNum(data, 'principalMxn', 'principal_mxn') ?? 0,
+    totalInstallments: pickNum(data, 'totalInstallments', 'total_installments') ?? 0,
+    installmentAmountMxn: pickNum(data, 'installmentAmountMxn', 'installment_amount_mxn') ?? 0,
+    startDate: pickStr(data, 'startDate', 'start_date') ?? '',
+    currentInstallment: pickNum(data, 'currentInstallment', 'current_installment') ?? 0,
+    status: pickStr(data, 'status', 'status') ?? 'ACTIVE',
+    paymentMethodId: pickStr(data, 'paymentMethodId', 'payment_method_id') ?? null,
+    fundingPaymentMethodId: pickStr(data, 'fundingPaymentMethodId', 'funding_payment_method_id') ?? null,
+    creditorMemberId: pickStr(data, 'creditorMemberId', 'creditor_member_id') ?? null,
+    categoryId: pickStr(data, 'categoryId', 'category_id') ?? null,
+    interestRateApr: pickNum(data, 'interestRateApr', 'interest_rate_apr') ?? null,
+    updatedAt: pickNum(data, 'updatedAt', 'updated_at') ?? 0,
+  }
+}
+
+export async function listInstallmentPlans(hid: string): Promise<InstallmentPlanWithId[]> {
+  const snap = await getDocs(collection(db, 'households', hid, 'installment_plan'))
+  const rows = snap.docs.map((d) => normInstallmentPlan(d.id, d.data() as FirestoreData))
+  // ACTIVE primero, luego por nombre.
+  return rows.sort(
+    (a, b) =>
+      Number(b.status === 'ACTIVE') - Number(a.status === 'ACTIVE') ||
+      a.displayName.localeCompare(b.displayName, 'es'),
+  )
+}
+
+/**
+ * Crea o edita un plan MSI. Obligatorios del mapper: householdId, displayName,
+ * principalMxn, totalInstallments, installmentAmountMxn, startDate. La web NO
+ * materializa cuotas (las genera el teléfono).
+ */
+export async function upsertInstallmentPlan(
+  hid: string,
+  planId: string | null,
+  input: InstallmentPlanInput,
+): Promise<string> {
+  const displayName = input.displayName.trim()
+  if (!displayName) throw new Error('El nombre del plan no puede estar vacío.')
+  if (!Number.isFinite(input.principalMxn) || input.principalMxn <= 0) {
+    throw new Error('El monto total debe ser mayor que cero.')
+  }
+  if (!Number.isInteger(input.totalInstallments) || input.totalInstallments <= 0) {
+    throw new Error('El número de mensualidades debe ser un entero mayor que cero.')
+  }
+  if (!Number.isFinite(input.installmentAmountMxn) || input.installmentAmountMxn <= 0) {
+    throw new Error('La mensualidad debe ser mayor que cero.')
+  }
+  if (!input.startDate) throw new Error('Indica la fecha de inicio.')
+  const current = input.currentInstallment
+  if (!Number.isInteger(current) || current < 0 || current > input.totalInstallments) {
+    throw new Error('El pago actual debe estar entre 0 y el total de mensualidades.')
+  }
+
+  const body: FirestoreData = {
+    householdId: hid,
+    displayName,
+    principalMxn: round2(input.principalMxn),
+    totalInstallments: input.totalInstallments,
+    installmentAmountMxn: round2(input.installmentAmountMxn),
+    startDate: input.startDate,
+    currentInstallment: current,
+    status: current >= input.totalInstallments ? 'COMPLETED' : 'ACTIVE',
+    paymentMethodId: input.paymentMethodId || null,
+    fundingPaymentMethodId: input.fundingPaymentMethodId || null,
+    categoryId: input.categoryId || null,
+    interestRateApr: Number.isFinite(input.interestRateApr) ? input.interestRateApr : null,
+    updatedAt: Date.now(),
+  }
+
+  const batch = writeBatch(db)
+  if (planId === null) {
+    const ref = doc(collection(db, 'households', hid, 'installment_plan'))
+    batch.set(ref, { id: ref.id, ...body })
+    await batch.commit()
+    return ref.id
+  }
+  const ref = doc(db, 'households', hid, 'installment_plan', planId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('El plan ya no existe.')
+  batch.update(ref, mirrorSnake(snap.data() as FirestoreData, body))
+  await batch.commit()
+  return planId
+}
+
+/* --------------------- Deudas entre miembros (derivado) ------------------- */
+
+/**
+ * Gastos POSTED pendientes de reembolso (`settlementStatus =
+ * 'PENDING_REIMBURSEMENT'`) — la semántica EXACTA de "el hogar le debe" de
+ * MemberBalancesViewModel en Android: gastos que un tercero adelantó,
+ * agrupables por `externalPayerMemberId`. Query del servidor solo por status
+ * (mismo criterio que listPostedExpenses); settlement y lápidas en cliente
+ * con fallback dual.
+ */
+export async function listPendingReimbursements(hid: string): Promise<ExpenseWithId[]> {
+  const snap = await getDocs(
+    query(collection(db, 'households', hid, 'expenses'), where('status', '==', 'POSTED')),
+  )
+  return snap.docs
+    .map((d) => normExpense(d.id, d.data() as FirestoreData))
+    .filter(
+      (e) =>
+        !isTombstoned(e) &&
+        e.settlementStatus === 'PENDING_REIMBURSEMENT' &&
+        !!e.externalPayerMemberId,
+    )
+    .sort((a, b) => (b.occurredAt ?? 0) - (a.occurredAt ?? 0))
+}
+
+/**
+ * Marca un gasto adelantado por un tercero como REEMBOLSADO (espejo del
+ * markReimbursed de Android): settlementStatus = 'REIMBURSED' + updatedAt.
+ * NO mueve saldos de wallet (la reposición ocurre fuera del ledger). Gate en
+ * cliente: solo desde PENDING_REIMBURSEMENT.
+ */
+export async function markExpenseReimbursed(hid: string, expenseId: string): Promise<void> {
+  const ref = doc(db, 'households', hid, 'expenses', expenseId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('El gasto ya no existe.')
+  const expense = normExpense(snap.id, snap.data() as FirestoreData)
+  if (isTombstoned(expense)) throw new Error('El gasto fue eliminado en otro dispositivo.')
+  if (expense.settlementStatus !== 'PENDING_REIMBURSEMENT') {
+    throw new Error('Este gasto ya no está pendiente de reembolso.')
+  }
+
+  const batch = writeBatch(db)
+  batch.update(
+    ref,
+    mirrorSnake(snap.data() as FirestoreData, {
+      settlementStatus: 'REIMBURSED',
+      updatedAt: Date.now(),
+    }),
+  )
+  await batch.commit()
+}
+
+/* --------------------------- Ingresos (lectura) ---------------------------- */
+
+function normIncome(id: string, data: FirestoreData): IncomeSourceWithId {
+  return {
+    id,
+    quincenaId: pickStr(data, 'quincenaId', 'quincena_id') ?? '',
+    memberId: pickStr(data, 'memberId', 'member_id') ?? '',
+    label: pickStr(data, 'label', 'label') ?? '',
+    amountMxn: pickNum(data, 'amountMxn', 'amount_mxn') ?? 0,
+    status: pickStr(data, 'status', 'status') ?? 'PLANNED',
+    expectedDate: pickStr(data, 'expectedDate', 'expected_date'),
+    paymentMethodId: pickStr(data, 'paymentMethodId', 'payment_method_id'),
+    updatedAt: pickNum(data, 'updatedAt', 'updated_at') ?? 0,
+  }
+}
+
+/**
+ * Ingresos de una quincena (Analíticas). Sin where por quincenaId en servidor
+ * (los docs seed solo traen `quincena_id`): se lee la colección y se filtra en
+ * cliente con fallback dual. Volúmenes chicos (2-4 docs por quincena).
+ */
+export async function listIncomesByQuincena(hid: string, quincenaId: string): Promise<IncomeSourceWithId[]> {
+  const snap = await getDocs(collection(db, 'households', hid, 'income_source'))
+  return snap.docs
+    .map((d) => normIncome(d.id, d.data() as FirestoreData))
+    .filter((i) => i.quincenaId === quincenaId)
+    .sort((a, b) => b.amountMxn - a.amountMxn)
 }
