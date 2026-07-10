@@ -125,6 +125,32 @@ abstract class BudgetDatabase : RoomDatabase() {
 
     companion object {
         /**
+         * `ALTER TABLE ADD COLUMN` idempotente. Necesario porque hubo builds de la
+         * línea `feat/expressive-ux` cuya v17 ya incluía las columnas que aquí
+         * entran en v17/v18 (la numeración divergió entre ramas antes de la
+         * integración 2026-07): en esos dispositivos la DB real es un superset de
+         * v17 y el ALTER a secas truena con "duplicate column name" dejando la app
+         * en crash-loop al abrir. Room valida el esquema FINAL por nombre/tipo, no
+         * el camino, así que saltarse el ALTER cuando la columna ya existe produce
+         * exactamente el mismo identityHash.
+         */
+        private fun SupportSQLiteDatabase.addColumnIfMissing(
+            table: String,
+            column: String,
+            ddl: String,
+        ) {
+            val exists = query("PRAGMA table_info(`$table`)").use { c ->
+                val nameIdx = c.getColumnIndexOrThrow("name")
+                var found = false
+                while (c.moveToNext()) {
+                    if (c.getString(nameIdx) == column) { found = true; break }
+                }
+                found
+            }
+            if (!exists) execSQL("ALTER TABLE `$table` ADD COLUMN `$column` $ddl")
+        }
+
+        /**
          * v1 → v2: añade la tabla `sync_queue` (outbox de sincronización).
          *
          * La tabla `expense_attribution` ya existe desde v1, por eso esta
@@ -427,10 +453,13 @@ abstract class BudgetDatabase : RoomDatabase() {
          */
         val MIGRATION_16_17 = object : Migration(16, 17) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `loan` ADD COLUMN `payment_count` INTEGER")
-                db.execSQL("ALTER TABLE `loan` ADD COLUMN `payment_frequency` TEXT")
-                db.execSQL("ALTER TABLE `loan` ADD COLUMN `payment_amount_mxn` REAL")
-                db.execSQL("ALTER TABLE `loan` ADD COLUMN `schedule_start_date` TEXT")
+                // Idempotente: builds de la línea expressive-ux pudieron dejar la DB
+                // con estas columnas ya presentes bajo otra numeración (ver
+                // addColumnIfMissing).
+                db.addColumnIfMissing("loan", "payment_count", "INTEGER")
+                db.addColumnIfMissing("loan", "payment_frequency", "TEXT")
+                db.addColumnIfMissing("loan", "payment_amount_mxn", "REAL")
+                db.addColumnIfMissing("loan", "schedule_start_date", "TEXT")
             }
         }
 
@@ -454,9 +483,21 @@ abstract class BudgetDatabase : RoomDatabase() {
          */
         val MIGRATION_17_18 = object : Migration(17, 18) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `installment_plan` ADD COLUMN `funding_payment_method_id` TEXT")
-                db.execSQL("ALTER TABLE `recurrence_template` ADD COLUMN `default_external_payer_member_id` TEXT")
-                db.execSQL("ALTER TABLE `recurrence_template` ADD COLUMN `default_settlement_status` TEXT NOT NULL DEFAULT 'NONE'")
+                // Idempotente: la v17 de la línea expressive-ux ya traía estas tres
+                // columnas; el upgrade a la numeración integrada tronaba con
+                // "duplicate column name" (crash-loop al abrir la app).
+                db.addColumnIfMissing("installment_plan", "funding_payment_method_id", "TEXT")
+                db.addColumnIfMissing("recurrence_template", "default_external_payer_member_id", "TEXT")
+                db.addColumnIfMissing("recurrence_template", "default_settlement_status", "TEXT NOT NULL DEFAULT 'NONE'")
+                // Reparación para DBs de la línea expressive-ux pre-pre-match: su v17
+                // NO incluía `statement_line` (aquí nace en v15→v16, que ya no corre
+                // para una DB ≥16) y Room fallaba la validación de esquema tras
+                // migrar. Mismo SQL literal de MIGRATION_15_16 (createSql de KSP);
+                // IF NOT EXISTS lo hace no-op en la cadena limpia.
+                db.execSQL("CREATE TABLE IF NOT EXISTS `statement_line` (`id` TEXT NOT NULL, `household_id` TEXT NOT NULL, `wallet_id` TEXT NOT NULL, `import_id` TEXT NOT NULL, `line_fingerprint` TEXT NOT NULL, `post_date` TEXT, `description` TEXT NOT NULL, `description_canonical` TEXT, `amount_mxn` REAL NOT NULL, `direction` TEXT NOT NULL DEFAULT 'CHARGE', `match_status` TEXT NOT NULL DEFAULT 'PENDING', `matched_expense_id` TEXT, `match_confidence` REAL, `match_source` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`matched_expense_id`) REFERENCES `expense`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_statement_line_wallet_id_line_fingerprint` ON `statement_line` (`wallet_id`, `line_fingerprint`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_line_matched_expense_id` ON `statement_line` (`matched_expense_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_statement_line_import_id` ON `statement_line` (`import_id`)")
             }
         }
     }
