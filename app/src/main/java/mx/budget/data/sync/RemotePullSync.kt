@@ -375,7 +375,7 @@ class RemotePullSync(
                 attribs = readAttribs()
             }
 
-            db.withTransaction {
+            suspend fun applyToRoom() = db.withTransaction {
                 // PRESERVAR concept_canonical local (Apéndice F.3): es una columna
                 // calculada SOLO localmente por el pipeline retro. Los docs remotos
                 // que no la traen deserializan a null; un REPLACE ciego la borraría
@@ -393,6 +393,17 @@ class RemotePullSync(
                     attributionDao.deleteByExpenseId(expense.id)
                     attributionDao.insertAll(attribs)
                 }
+            }
+
+            try {
+                applyToRoom()
+            } catch (e: android.database.sqlite.SQLiteConstraintException) {
+                // Carrera de ORDEN entre listeners: una cuota MSI remota puede
+                // llegar antes que su installment_plan (o un gasto antes que su
+                // quincena aprovisionada por el peer). El doc no se re-emite solo,
+                // así que sin reintento quedaría saltado para siempre.
+                kotlinx.coroutines.delay(2_500)
+                applyToRoom()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Fallo al aplicar gasto remoto ${change.document.id} a Room", e)
