@@ -270,10 +270,12 @@ class RemotePullSync(
      *
      * REMOVED: borra el gasto por id (las atribuciones caen por FK CASCADE).
      *
-     * TODO(remote-attributions): si en el futuro se decide EMBEBER las
-     *  atribuciones dentro del documento del gasto (campo `attributions`),
-     *  léelas de ahí en vez de hacer el `get()` por subcolección. Por ahora,
-     *  si la subcolección no existe o falla, se deja la lista vacía.
+     * CONTRATO con los escritores remotos (push Android y web del titular): el
+     * gasto y su subcolección `attributions` se escriben en UN batch atómico,
+     * así el `get()` posterior las ve completas. Aun así, para un gasto NUEVO
+     * cuya lectura de atribuciones llegue vacía (carrera de propagación o fallo
+     * transitorio de red) se reintenta una vez con backoff corto antes de
+     * aplicarlo sin atribuciones.
      */
     private suspend fun applyExpenseChange(change: DocumentChange) {
         try {
@@ -295,12 +297,21 @@ class RemotePullSync(
             val local = expenseDao.getById(expense.id)
             if (local != null && expense.updatedAt <= local.updatedAt) return
 
-            val attribs: List<ExpenseAttributionEntity> = try {
+            suspend fun readAttribs(): List<ExpenseAttributionEntity> = try {
                 doc.reference.collection("attributions").get().await()
                     .documents.mapNotNull { it.toExpenseAttributionEntity(expense.id) }
             } catch (e: Exception) {
                 // Sin subcolección de atribuciones o fallo de red: lista vacía.
                 emptyList()
+            }
+
+            var attribs = readAttribs()
+            if (attribs.isEmpty() && local == null) {
+                // Gasto nuevo sin atribuciones visibles: probable carrera de
+                // propagación del batch remoto. Un reintento corto evita dejarlo
+                // sin atribución hasta el próximo updated_at.
+                kotlinx.coroutines.delay(1_500)
+                attribs = readAttribs()
             }
 
             db.withTransaction {
