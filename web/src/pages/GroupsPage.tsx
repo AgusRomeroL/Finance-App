@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { useHousehold } from '../context/HouseholdContext'
 import { Button, Card, EmptyState, ErrorState, LoadingState } from '../components/ui'
 import { createHousehold, joinByCode } from '../lib/repository'
+import { ROLE_LABELS } from '../lib/types'
 
 export default function GroupsPage() {
   const { user } = useAuth()
@@ -38,7 +39,7 @@ export default function GroupsPage() {
                     <div className="min-w-0">
                       <p className="truncate font-medium">{h.name}</p>
                       <p className={`text-xs ${isActive ? 'opacity-75' : 'text-on-surface-variant'}`}>
-                        {h.role === 'OWNER' ? 'Titular' : 'Colaborador'} · {h.currency}
+                        {ROLE_LABELS[h.role]} · {h.currency}
                       </p>
                     </div>
                     {isActive && (
@@ -81,7 +82,7 @@ function JoinGroup({ onJoined }: { onJoined: () => Promise<void> }) {
     try {
       const displayName = user.displayName ?? user.email ?? 'Colaborador'
       const result = await joinByCode(user, code, displayName)
-      setMsg({ kind: 'ok', text: `Te uniste como ${result.role === 'OWNER' ? 'titular' : 'colaborador'}.` })
+      setMsg({ kind: 'ok', text: `Te uniste como ${ROLE_LABELS[result.role].toLowerCase()}.` })
       setCode('')
       await onJoined()
     } catch (err) {

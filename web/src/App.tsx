@@ -12,13 +12,14 @@ import MyProposalsPage from './pages/MyProposalsPage'
 import OwnerDashboardPage from './pages/OwnerDashboardPage'
 import CapturePage from './pages/CapturePage'
 import CalendarPage from './pages/CalendarPage'
+import LedgerPage from './pages/LedgerPage'
 
 /**
- * Guard de las rutas del TITULAR: mientras el rol carga muestra loading; un
- * COLLABORATOR es redirigido a Proponer (ya no tiene Resumen); sin hogar
- * activo se pide elegir uno.
+ * Guard de las rutas de ACCESO COMPLETO (rol v2): pasan OWNER ("Dueño") y
+ * PAYER ("Administrador" — escribe el ledger igual que el dueño). Un MEMBER
+ * (colaborador) es redirigido a Proponer; sin hogar activo se pide elegir uno.
  */
-function RequireOwner({ children }: { children: ReactNode }) {
+function RequireFullAccess({ children }: { children: ReactNode }) {
   const { active, myRole, loading } = useHousehold()
   if (loading) return <LoadingState />
   if (!active) {
@@ -29,33 +30,33 @@ function RequireOwner({ children }: { children: ReactNode }) {
       />
     )
   }
-  if (myRole === 'COLLABORATOR') return <Navigate to="/proponer" replace />
-  if (myRole !== 'OWNER') return <LoadingState label="Verificando tu rol…" />
+  if (myRole === 'MEMBER') return <Navigate to="/proponer" replace />
+  if (myRole !== 'OWNER' && myRole !== 'PAYER') return <LoadingState label="Verificando tu rol…" />
   return <>{children}</>
 }
 
 /**
- * Guard de /dashboard (Resumen): el COLLABORATOR ya no debe ver el resumen
- * financiero del hogar — se le redirige a Proponer. El OWNER conserva el
- * acceso (navegación manual), igual que antes.
+ * Guard de /dashboard (Resumen): el MEMBER no debe ver el resumen financiero
+ * del hogar — se le redirige a Proponer. OWNER y PAYER conservan el acceso
+ * (navegación manual), igual que antes.
  *
  * TODO(rules-collaborator): esto solo oculta la UI. Falta endurecer las
- * reglas de Firestore para que el COLLABORATOR tampoco pueda LEER
+ * reglas de Firestore para que el MEMBER tampoco pueda LEER
  * expenses/wallets/quincenas por API directa (hoy `isMember` le concede
  * lectura de todos los datos del hogar en firestore.rules).
  */
 function DashboardRoute() {
   const { myRole, loading } = useHousehold()
   if (loading) return <LoadingState />
-  if (myRole === 'COLLABORATOR') return <Navigate to="/proponer" replace />
+  if (myRole === 'MEMBER') return <Navigate to="/proponer" replace />
   return <DashboardPage />
 }
 
 /**
  * Redirección post-login: una sola vez por sesión, si el usuario entró en "/"
- * y su rol en el hogar activo resulta OWNER, se le lleva a /panel. Un
- * COLLABORATOR se queda en "/" (Grupos) y navega a Proponer / Mis propuestas,
- * y la navegación manual posterior a Grupos nunca se secuestra.
+ * y su rol en el hogar activo resulta OWNER o PAYER, se le lleva a /panel. Un
+ * MEMBER se queda en "/" (Grupos) y navega a Proponer / Mis propuestas, y la
+ * navegación manual posterior a Grupos nunca se secuestra.
  */
 function PostLoginRedirect() {
   const { myRole, loading } = useHousehold()
@@ -66,7 +67,7 @@ function PostLoginRedirect() {
   useEffect(() => {
     if (done.current || loading || myRole === null) return
     done.current = true
-    if (myRole === 'OWNER' && location.pathname === '/') {
+    if ((myRole === 'OWNER' || myRole === 'PAYER') && location.pathname === '/') {
       navigate('/panel', { replace: true })
     }
   }, [myRole, loading, location.pathname, navigate])
@@ -81,29 +82,37 @@ function AuthedApp() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<GroupsPage />} />
-          {/* Rutas del titular (OWNER) */}
+          {/* Rutas de acceso completo (OWNER | PAYER) */}
           <Route
             path="panel"
             element={
-              <RequireOwner>
+              <RequireFullAccess>
                 <OwnerDashboardPage />
-              </RequireOwner>
+              </RequireFullAccess>
             }
           />
           <Route
             path="capturar"
             element={
-              <RequireOwner>
+              <RequireFullAccess>
                 <CapturePage />
-              </RequireOwner>
+              </RequireFullAccess>
             }
           />
           <Route
             path="calendario"
             element={
-              <RequireOwner>
+              <RequireFullAccess>
                 <CalendarPage />
-              </RequireOwner>
+              </RequireFullAccess>
+            }
+          />
+          <Route
+            path="ledger"
+            element={
+              <RequireFullAccess>
+                <LedgerPage />
+              </RequireFullAccess>
             }
           />
           {/* Rutas del colaborador */}

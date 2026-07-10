@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useHousehold } from '../context/HouseholdContext'
 import { Button, Chip, EmptyState, ErrorState, Eyebrow, LoadingState } from '../components/ui'
-import { createExpense, listCategories, listMembers, listWallets } from '../lib/repository'
+import { createExpense, createIncome, listCategories, listMembers, listWallets } from '../lib/repository'
 import { dateInputToEpochMs, epochMsToDateInput, formatMxn } from '../lib/format'
 import type {
   AttributionInput,
@@ -11,12 +11,17 @@ import type {
 } from '../lib/types'
 
 /* ---------------------------------------------------------------------------
- * Captura real del TITULAR (OWNER) — espejo web de la captura Android.
- * Monto héroe + keypad (mismo patrón/px que ProposePage), categoría con
- * recientes + búsqueda, wallet con saldo, fecha, y atribución en dos
- * dimensiones: "Beneficia a" visible con % editable (stepper ±5, "Todos"
- * equitativo) y "Pagó" colapsado (un solo miembro al 100%, default el dueño
- * del wallet). La conversión %→bps (suma exacta 10000) la hace repository.
+ * Captura real (OWNER | PAYER) — espejo web de la captura Android.
+ * Monto héroe + keypad (mismo patrón/px que ProposePage), toggle Gasto/Ingreso,
+ * categoría con recientes + búsqueda, wallet con saldo, fecha, notas, y
+ * atribución en dos dimensiones: "Beneficia a" visible con % editable
+ * (stepper ±5, "Todos" equitativo) y "Pagó" colapsado (un solo miembro al
+ * 100%, default el member VINCULADO al usuario o el dueño del wallet). La
+ * conversión %→bps (suma exacta 10000) la hace repository.
+ *
+ * Modo "Planear": si la fecha del gasto es FUTURA se crea con status PLANNED
+ * (no toca el saldo; se confirma desde Historial/Calendario o el teléfono).
+ * Un INGRESO se registra POSTED en income_source y acredita la cuenta.
  * ------------------------------------------------------------------------- */
 
 const KEYPAD: string[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del']
@@ -89,8 +94,10 @@ interface Catalog {
   members: MemberWithId[]
 }
 
+type CaptureMode = 'expense' | 'income'
+
 export default function CapturePage() {
-  const { active, loading: hhLoading } = useHousehold()
+  const { active, linkedMemberId, loading: hhLoading } = useHousehold()
   const hid = active?.id ?? null
 
   const [catalog, setCatalog] = useState<Catalog | null>(null)
@@ -98,8 +105,10 @@ export default function CapturePage() {
   const [reloadKey, setReloadKey] = useState(0)
 
   // Formulario
+  const [mode, setMode] = useState<CaptureMode>('expense')
   const [amount, setAmount] = useState('')
   const [concept, setConcept] = useState('')
+  const [notes, setNotes] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [walletId, setWalletId] = useState('')
   const [date, setDate] = useState(() => epochMsToDateInput(Date.now()))
@@ -108,6 +117,8 @@ export default function CapturePage() {
   const [payerOpen, setPayerOpen] = useState(false)
   const [catSearch, setCatSearch] = useState('')
   const [recents, setRecents] = useState<string[]>([])
+  // Ingreso: quién lo recibe (default: member vinculado al usuario).
+  const [incomeMemberId, setIncomeMemberId] = useState('')
 
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
@@ -125,19 +136,27 @@ export default function CapturePage() {
         const activeWallets = wallets.filter((w) => w.isActive)
         setCatalog({ categories, wallets: activeWallets, members: activeMembers })
         setRecents(readRecents(hid))
-        // Defaults: reparto equitativo entre miembros activos; pagador = primer
-        // adulto pagador (o el primero); wallet = primero activo.
+        // Defaults: reparto equitativo entre miembros activos; pagador = member
+        // VINCULADO al usuario (rol v2) si existe; fallback: dueño del primer
+        // wallet, primer adulto pagador o el primero.
         setBenefShares(equalSplit(activeMembers.map((m) => m.id)))
+        const linked = activeMembers.find((m) => m.id === linkedMemberId)
         const defaultPayer =
           activeMembers.find((m) => m.role.toUpperCase().includes('PAYER')) ?? activeMembers[0]
-        setPayerId(defaultPayer?.id ?? '')
+        let payer = linked ?? defaultPayer
         const firstWallet = activeWallets[0]
         if (firstWallet) {
           setWalletId(firstWallet.id)
-          if (firstWallet.ownerMemberId && activeMembers.some((m) => m.id === firstWallet.ownerMemberId)) {
-            setPayerId(firstWallet.ownerMemberId)
+          if (
+            !linked &&
+            firstWallet.ownerMemberId &&
+            activeMembers.some((m) => m.id === firstWallet.ownerMemberId)
+          ) {
+            payer = activeMembers.find((m) => m.id === firstWallet.ownerMemberId) ?? payer
           }
         }
+        setPayerId(payer?.id ?? '')
+        setIncomeMemberId((linked ?? activeMembers[0])?.id ?? '')
       })
       .catch((e) => {
         if (!cancelled) {
@@ -147,7 +166,7 @@ export default function CapturePage() {
     return () => {
       cancelled = true
     }
-  }, [hid, reloadKey])
+  }, [hid, reloadKey, linkedMemberId])
 
   const members = catalog?.members ?? []
   const wallets = catalog?.wallets ?? []
@@ -180,6 +199,11 @@ export default function CapturePage() {
   const payer = members.find((m) => m.id === payerId) ?? null
   const benefTotal = members.reduce((s, m) => s + (benefShares[m.id] ?? 0), 0)
 
+  // Modo "Planear": fecha futura (comparación de strings YYYY-MM-DD) → el
+  // gasto se crea PLANNED y NO toca el saldo hasta confirmarse.
+  const isFutureDate = date > epochMsToDateInput(Date.now())
+  const planned = mode === 'expense' && isFutureDate
+
   function setShare(memberId: string, delta: number) {
     setBenefShares((prev) => {
       const current = prev[memberId] ?? 0
@@ -196,6 +220,17 @@ export default function CapturePage() {
     }
   }
 
+  /** Reset del formulario tras registrar (se conservan wallet/pagador/recibe). */
+  function resetForm() {
+    setAmount('')
+    setConcept('')
+    setNotes('')
+    setCategoryId('')
+    setCatSearch('')
+    setDate(epochMsToDateInput(Date.now()))
+    setBenefShares(equalSplit(members.map((m) => m.id)))
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!hid || busy) return
@@ -208,12 +243,40 @@ export default function CapturePage() {
       setMsg({ kind: 'err', text: 'Escribe un concepto.' })
       return
     }
-    if (!categoryId) {
-      setMsg({ kind: 'err', text: 'Selecciona una categoría.' })
+    if (!walletId) {
+      setMsg({ kind: 'err', text: mode === 'income' ? 'Selecciona la cuenta destino.' : 'Selecciona un método de pago.' })
       return
     }
-    if (!walletId) {
-      setMsg({ kind: 'err', text: 'Selecciona un método de pago.' })
+
+    // ── Ingreso ──────────────────────────────────────────────────────────
+    if (mode === 'income') {
+      if (!incomeMemberId) {
+        setMsg({ kind: 'err', text: 'Selecciona quién recibe el ingreso.' })
+        return
+      }
+      setBusy(true)
+      setMsg(null)
+      try {
+        await createIncome(hid, {
+          label: concept,
+          amountMxn: amountNum,
+          receivedAt: dateInputToEpochMs(date),
+          memberId: incomeMemberId,
+          paymentMethodId: walletId,
+        })
+        setMsg({ kind: 'ok', text: `Ingreso registrado: ${concept.trim()} por ${formatMxn(amountNum)}.` })
+        resetForm()
+      } catch (err) {
+        setMsg({ kind: 'err', text: err instanceof Error ? err.message : 'No se pudo registrar el ingreso.' })
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
+
+    // ── Gasto (POSTED, o PLANNED si la fecha es futura) ──────────────────
+    if (!categoryId) {
+      setMsg({ kind: 'err', text: 'Selecciona una categoría.' })
       return
     }
     const beneficiaries: AttributionInput[] = members
@@ -231,25 +294,29 @@ export default function CapturePage() {
     setBusy(true)
     setMsg(null)
     try {
-      await createExpense(hid, {
-        concept,
-        amountMxn: amountNum,
-        occurredAt: dateInputToEpochMs(date),
-        categoryId,
-        paymentMethodId: walletId,
-        beneficiaries,
-        payers: [{ memberId: payerId, percent: 100 }],
-      })
+      await createExpense(
+        hid,
+        {
+          concept,
+          amountMxn: amountNum,
+          occurredAt: dateInputToEpochMs(date),
+          categoryId,
+          paymentMethodId: walletId,
+          notes: notes.trim() || undefined,
+          beneficiaries,
+          payers: [{ memberId: payerId, percent: 100 }],
+        },
+        { planned },
+      )
       pushRecent(hid, categoryId)
       setRecents(readRecents(hid))
-      setMsg({ kind: 'ok', text: `Gasto registrado: ${concept.trim()} por ${formatMxn(amountNum)}.` })
-      // Reset del formulario (se conservan wallet y pagador para capturas en ráfaga).
-      setAmount('')
-      setConcept('')
-      setCategoryId('')
-      setCatSearch('')
-      setDate(epochMsToDateInput(Date.now()))
-      setBenefShares(equalSplit(members.map((m) => m.id)))
+      setMsg({
+        kind: 'ok',
+        text: planned
+          ? `Pago planeado: ${concept.trim()} por ${formatMxn(amountNum)} (se confirma en su fecha).`
+          : `Gasto registrado: ${concept.trim()} por ${formatMxn(amountNum)}.`,
+      })
+      resetForm()
     } catch (err) {
       setMsg({ kind: 'err', text: err instanceof Error ? err.message : 'No se pudo registrar el gasto.' })
     } finally {
@@ -289,6 +356,35 @@ export default function CapturePage() {
 
   return (
     <form onSubmit={submit} className="mx-auto max-w-md space-y-5 pb-8">
+      {/* Toggle Gasto / Ingreso */}
+      <div className="grid grid-cols-2 gap-1 rounded-full bg-surface-1 p-1" role="group" aria-label="Tipo de movimiento">
+        {(
+          [
+            { value: 'expense', label: 'Gasto' },
+            { value: 'income', label: 'Ingreso' },
+          ] as const
+        ).map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => {
+              setMode(opt.value)
+              setMsg(null)
+            }}
+            aria-pressed={mode === opt.value}
+            className={`rounded-full px-4 py-2.5 text-sm font-medium transition-colors ${
+              mode === opt.value
+                ? opt.value === 'income'
+                  ? 'bg-income/15 text-income'
+                  : 'bg-primary-container text-on-primary-container'
+                : 'text-on-surface-variant hover:bg-surface-2'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* Monto héroe + keypad (mismo patrón que ProposePage) */}
       <div className="rounded-card bg-surface-1 px-5 pb-5 pt-6 text-center">
         <Eyebrow>Monto MXN</Eyebrow>
@@ -340,12 +436,13 @@ export default function CapturePage() {
         <input
           value={concept}
           onChange={(e) => setConcept(e.target.value)}
-          placeholder="ej. Súper, Gasolina, Colegiatura"
+          placeholder={mode === 'income' ? 'ej. Nómina, Aguinaldo, Venta' : 'ej. Súper, Gasolina, Colegiatura'}
           className={inputCls}
         />
       </Field>
 
-      {/* Categoría: recientes + búsqueda */}
+      {/* Categoría: recientes + búsqueda (solo gasto) */}
+      {mode === 'expense' && (
       <div>
         <Eyebrow className="mb-2 px-1">Categoría</Eyebrow>
         <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-2">
@@ -393,10 +490,11 @@ export default function CapturePage() {
           </p>
         )}
       </div>
+      )}
 
       {/* Wallet / método de pago con saldo */}
       <div>
-        <Eyebrow className="mb-2 px-1">Método de pago</Eyebrow>
+        <Eyebrow className="mb-2 px-1">{mode === 'income' ? 'Cuenta destino' : 'Método de pago'}</Eyebrow>
         <ul className="space-y-1.5">
           {wallets.map((w) => {
             const selected = walletId === w.id
@@ -430,8 +528,42 @@ export default function CapturePage() {
       <Field label="Fecha">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
       </Field>
+      {planned && (
+        <p className="rounded-2xl bg-alert/10 px-4 py-3 text-xs font-medium text-alert" role="status">
+          Fecha futura: se registrará como <span className="font-semibold">pago planeado</span> (PLANNED).
+          No afecta el saldo hasta que lo confirmes en Historial o Calendario.
+        </p>
+      )}
 
-      {/* Beneficia a: % editable por miembro */}
+      {/* Notas (opcional, solo gasto — income_source no tiene campo de notas) */}
+      {mode === 'expense' && (
+        <Field label="Notas (opcional)">
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Detalle opcional del gasto…"
+            className={`${inputCls} resize-none`}
+          />
+        </Field>
+      )}
+
+      {/* Recibe (solo ingreso): member obligatorio para el sync de Android */}
+      {mode === 'income' && (
+        <div className="rounded-card bg-surface-1 p-4">
+          <Eyebrow className="mb-3">Recibe</Eyebrow>
+          <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1">
+            {members.map((m) => (
+              <Chip key={m.id} selected={incomeMemberId === m.id} onClick={() => setIncomeMemberId(m.id)}>
+                {m.displayName}
+              </Chip>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Beneficia a: % editable por miembro (solo gasto) */}
+      {mode === 'expense' && (
       <div className="rounded-card bg-surface-1 p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <Eyebrow>Beneficia a</Eyebrow>
@@ -477,8 +609,10 @@ export default function CapturePage() {
           <p className="mt-2 text-xs font-medium text-expense">La suma debe ser exactamente 100%.</p>
         )}
       </div>
+      )}
 
-      {/* Pagó: colapsado, un miembro al 100% */}
+      {/* Pagó: colapsado, un miembro al 100% (solo gasto) */}
+      {mode === 'expense' && (
       <div className="rounded-card bg-surface-1 p-4">
         <button
           type="button"
@@ -507,9 +641,10 @@ export default function CapturePage() {
           </p>
         )}
       </div>
+      )}
 
       <Button type="submit" loading={busy} className="w-full py-3.5">
-        Registrar gasto
+        {mode === 'income' ? 'Registrar ingreso' : planned ? 'Planear pago' : 'Registrar gasto'}
       </Button>
 
       {msg && (

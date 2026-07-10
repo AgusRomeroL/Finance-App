@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useAuth } from './AuthContext'
 import {
-  getMyRole,
+  getMyRoleInfo,
   getUserDoc,
   listUserHouseholds,
   setActiveHousehold as persistActiveHousehold,
@@ -20,12 +20,19 @@ interface HouseholdContextValue {
   households: HouseholdWithId[]
   active: HouseholdWithId | null
   /**
-   * Rol REAL del usuario en el hogar activo, leído de households/{hid}/roles/{uid}
-   * (fuente canónica; el espejo users/{uid}/households se usa como valor
-   * optimista mientras carga). La UI bifurca con esto: OWNER captura gastos
-   * reales, COLLABORATOR solo lee y propone. null = sin hogar activo o sin rol.
+   * Rol REAL (normalizado v2) del usuario en el hogar activo, leído de
+   * households/{hid}/roles/{uid} (fuente canónica; el espejo
+   * users/{uid}/households se usa como valor optimista mientras carga). La UI
+   * bifurca con esto: OWNER|PAYER escriben el ledger real, MEMBER solo lee y
+   * propone. null = sin hogar activo o sin rol.
    */
   myRole: Role | null
+  /**
+   * Member del hogar al que este usuario está VINCULADO (invites v2
+   * nominados), leído del mismo doc roles/{hid}/{uid}. null si el rol es
+   * legacy sin nominación. La captura lo usa como pagador default.
+   */
+  linkedMemberId: string | null
   loading: boolean
   error: string | null
   reload: () => Promise<void>
@@ -39,6 +46,7 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   const [households, setHouseholds] = useState<HouseholdWithId[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [myRole, setMyRole] = useState<Role | null>(null)
+  const [linkedMemberId, setLinkedMemberId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -69,20 +77,25 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
     }
   }, [user, reload])
 
-  // Rol en el hogar activo: valor optimista desde el espejo (households[].role)
-  // y verificación contra el doc canónico roles/{uid}. Se recarga al cambiar de
-  // hogar activo o de usuario.
+  // Rol en el hogar activo: valor optimista desde el espejo (households[].role,
+  // ya normalizado v2 por listUserHouseholds) y verificación contra el doc
+  // canónico roles/{uid}, del que también sale linkedMemberId. Se recarga al
+  // cambiar de hogar activo o de usuario.
   useEffect(() => {
     if (!user || !activeId) {
       setMyRole(null)
+      setLinkedMemberId(null)
       return
     }
     let cancelled = false
     const mirror = households.find((h) => h.id === activeId)?.role ?? null
     setMyRole(mirror)
-    getMyRole(activeId, user.uid)
-      .then((role) => {
-        if (!cancelled) setMyRole(role ?? mirror)
+    setLinkedMemberId(null)
+    getMyRoleInfo(activeId, user.uid)
+      .then((info) => {
+        if (cancelled) return
+        setMyRole(info?.role ?? mirror)
+        setLinkedMemberId(info?.linkedMemberId ?? null)
       })
       .catch(() => {
         // Silencioso: nos quedamos con el valor del espejo.
@@ -113,7 +126,7 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
 
   return (
     <HouseholdContext.Provider
-      value={{ households, active, myRole, loading, error, reload, selectHousehold }}
+      value={{ households, active, myRole, linkedMemberId, loading, error, reload, selectHousehold }}
     >
       {children}
     </HouseholdContext.Provider>

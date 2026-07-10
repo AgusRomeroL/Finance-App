@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useHousehold } from '../context/HouseholdContext'
 import { EmptyState, ErrorState, Eyebrow, LoadingState } from '../components/ui'
-import { getActiveQuincena, listCategories, listPostedExpenses } from '../lib/repository'
+import {
+  confirmPlanned,
+  getActiveQuincena,
+  listCategories,
+  listPlannedExpenses,
+  listPostedExpenses,
+} from '../lib/repository'
 import { formatMxn } from '../lib/format'
 import type { CategoryWithId, ExpenseWithId, QuincenaWithId } from '../lib/types'
 
 /* ---------------------------------------------------------------------------
- * Calendario del TITULAR: mes con puntos por día y lista al tocar un día.
+ * Calendario (OWNER | PAYER): mes con puntos por día y lista al tocar un día.
  *
- * Alcance de datos (deliberado): repository solo expone gastos POSTED por
- * quincena (listPostedExpenses) y la quincena ACTIVE (getActiveQuincena) — no
- * hay listado de quincenas ni de PLANNED. Por eso el calendario muestra los
- * movimientos REGISTRADOS de la quincena activa; los pagos planeados (PLANNED)
- * se consultan y confirman desde el teléfono, y así se indica en la UI.
+ * Datos: gastos POSTED de la quincena ACTIVE (registrados) + TODOS los pagos
+ * planeados (PLANNED) del hogar, que cruzan quincenas/meses. Los planeados se
+ * pintan con marcador y badge distintivos (ámbar) y se pueden CONFIRMAR desde
+ * la lista del día (PLANNED → POSTED con descuento del wallet, mismo flujo
+ * que el calendario del teléfono).
  * ------------------------------------------------------------------------- */
 
 const WEEKDAY_HEADERS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
@@ -54,6 +60,7 @@ function shiftMonth(view: MonthView, delta: number): MonthView {
 interface CalendarData {
   quincena: QuincenaWithId | null
   expenses: ExpenseWithId[]
+  planned: ExpenseWithId[]
   categories: CategoryWithId[]
 }
 
@@ -67,6 +74,8 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!hid) {
@@ -78,9 +87,13 @@ export default function CalendarPage() {
     setError(null)
     ;(async () => {
       try {
-        const [quincena, categories] = await Promise.all([getActiveQuincena(hid), listCategories(hid)])
+        const [quincena, categories, planned] = await Promise.all([
+          getActiveQuincena(hid),
+          listCategories(hid),
+          listPlannedExpenses(hid),
+        ])
         const expenses = quincena ? await listPostedExpenses(hid, quincena.id) : []
-        if (!cancelled) setData({ quincena, expenses, categories })
+        if (!cancelled) setData({ quincena, expenses, planned, categories })
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'No se pudo cargar el calendario.')
       } finally {
@@ -92,10 +105,25 @@ export default function CalendarPage() {
     }
   }, [hid, reloadKey])
 
-  /** Movimientos agrupados por día calendario MX. */
+  async function onConfirmPlanned(expenseId: string) {
+    if (!hid || confirmingId) return
+    setConfirmingId(expenseId)
+    setActionError(null)
+    try {
+      await confirmPlanned(hid, expenseId)
+      // Recarga: el planeado pasó a POSTED y el saldo del wallet cambió.
+      setReloadKey((k) => k + 1)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'No se pudo confirmar el pago.')
+    } finally {
+      setConfirmingId(null)
+    }
+  }
+
+  /** Movimientos (registrados + planeados) agrupados por día calendario MX. */
   const byDay = useMemo<Map<string, ExpenseWithId[]>>(() => {
     const map = new Map<string, ExpenseWithId[]>()
-    for (const e of data?.expenses ?? []) {
+    for (const e of [...(data?.expenses ?? []), ...(data?.planned ?? [])]) {
       const key = toDayKey(e.occurredAt)
       const list = map.get(key)
       if (list) list.push(e)
@@ -196,7 +224,13 @@ export default function CalendarPage() {
                   {dayExpenses.slice(0, 3).map((e) => (
                     <span
                       key={e.id}
-                      className={`h-1.5 w-1.5 rounded-full ${isSelected ? 'bg-on-primary/80' : 'bg-expense'}`}
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        isSelected
+                          ? 'bg-on-primary/80'
+                          : e.status === 'PLANNED'
+                            ? 'bg-alert'
+                            : 'bg-expense'
+                      }`}
                     />
                   ))}
                 </span>
@@ -209,10 +243,18 @@ export default function CalendarPage() {
       {/* Cobertura de datos */}
       <p className="px-1 text-center text-xs text-on-surface-variant/80">
         {data?.quincena
-          ? `Se muestran los movimientos registrados de la quincena activa (${data.quincena.label}).`
-          : 'No hay quincena activa: abre la app del teléfono para provisionarla.'}{' '}
-        Los pagos planeados (PLANNED) se consultan y confirman desde el teléfono.
+          ? `Se muestran los movimientos registrados de la quincena activa (${data.quincena.label})`
+          : 'No hay quincena activa: abre la app del teléfono para provisionarla'}{' '}
+        y todos los pagos planeados (
+        <span className="mx-0.5 inline-block h-1.5 w-1.5 rounded-full bg-alert align-middle" aria-hidden="true" />{' '}
+        ámbar), confirmables desde aquí.
       </p>
+
+      {actionError && (
+        <p className="rounded-2xl bg-expense/10 px-4 py-3 text-sm text-expense" role="alert">
+          {actionError}
+        </p>
+      )}
 
       {/* Movimientos del día seleccionado */}
       {selectedDay && (
@@ -229,22 +271,48 @@ export default function CalendarPage() {
             <EmptyState title="Sin movimientos este día" />
           ) : (
             <ul className="space-y-2">
-              {selectedExpenses.map((e) => (
-                <li
-                  key={e.id}
-                  className="flex items-center justify-between gap-3 rounded-card-sm bg-surface-1 px-4 py-3.5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-on-surface">{e.concept}</p>
-                    <p className="mt-0.5 text-xs text-on-surface-variant">
-                      {catMap.get(e.categoryId) ?? 'Sin categoría'}
-                    </p>
-                  </div>
-                  <p className="tnum shrink-0 text-sm font-semibold text-expense">
-                    −{formatMxn(e.amountMxn)}
-                  </p>
-                </li>
-              ))}
+              {selectedExpenses.map((e) => {
+                const isPlanned = e.status === 'PLANNED'
+                const confirming = confirmingId === e.id
+                return (
+                  <li key={e.id} className="rounded-card-sm bg-surface-1 px-4 py-3.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate text-sm font-medium text-on-surface">{e.concept}</p>
+                          {isPlanned && (
+                            <span className="shrink-0 rounded-full bg-alert/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-alert">
+                              Planeado
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-on-surface-variant">
+                          {catMap.get(e.categoryId) ?? 'Sin categoría'}
+                        </p>
+                      </div>
+                      <p
+                        className={`tnum shrink-0 text-sm font-semibold ${
+                          isPlanned ? 'text-alert' : 'text-expense'
+                        }`}
+                      >
+                        −{formatMxn(e.amountMxn)}
+                      </p>
+                    </div>
+                    {isPlanned && (
+                      <div className="mt-2.5 flex justify-end">
+                        <button
+                          type="button"
+                          disabled={confirmingId !== null}
+                          onClick={() => void onConfirmPlanned(e.id)}
+                          className="rounded-full bg-primary-container px-3.5 py-1.5 text-xs font-semibold text-on-primary-container transition-all active:scale-95 disabled:opacity-60"
+                        >
+                          {confirming ? 'Confirmando…' : 'Confirmar pago'}
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>

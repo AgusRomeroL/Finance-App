@@ -16,7 +16,39 @@
  * Montos en MXN (number).
  */
 
-export type Role = 'OWNER' | 'COLLABORATOR'
+/**
+ * Rol NORMALIZADO v2 (nivel app):
+ *   - OWNER  ("Dueño"): fundador, administra roles/invites y escribe todo.
+ *   - PAYER  ("Administrador"): escribe el ledger igual que OWNER (reglas v2).
+ *   - MEMBER ("Colaborador"): solo lee y propone. El valor legacy en el wire
+ *     es 'COLLABORATOR'; se normaliza al leer con [normalizeRole].
+ *
+ * En el WIRE (roles/{uid}, invites, espejo users/…/households) el campo `role`
+ * es un string crudo que puede traer el valor legacy — por eso esos interfaces
+ * lo tipan como `string` y la app normaliza en el borde de lectura.
+ */
+export type Role = 'OWNER' | 'PAYER' | 'MEMBER'
+
+/** Normaliza un rol crudo del wire al modelo v2. Default seguro: MEMBER. */
+export function normalizeRole(raw?: string): Role {
+  switch ((raw ?? '').toUpperCase()) {
+    case 'OWNER':
+      return 'OWNER'
+    case 'PAYER':
+      return 'PAYER'
+    case 'COLLABORATOR':
+    case 'MEMBER':
+    default:
+      return 'MEMBER'
+  }
+}
+
+/** Etiquetas visibles en español para cada rol v2. */
+export const ROLE_LABELS: Record<Role, string> = {
+  OWNER: 'Dueño',
+  PAYER: 'Administrador',
+  MEMBER: 'Colaborador',
+}
 
 // users/{uid}
 export interface UserDoc {
@@ -28,7 +60,8 @@ export interface UserDoc {
 
 // users/{uid}/households/{hid}
 export interface UserHouseholdRef {
-  role: Role
+  /** Rol CRUDO del wire (puede traer 'COLLABORATOR' legacy). */
+  role: string
   joinedAt: number
 }
 
@@ -46,6 +79,7 @@ export interface Household {
 
 export interface HouseholdWithId extends Household {
   id: string
+  /** Rol NORMALIZADO v2 (el espejo crudo se normaliza al listar). */
   role: Role
   /** En la lista mergeada siempre viene resuelto (con default). */
   currency: string
@@ -54,7 +88,13 @@ export interface HouseholdWithId extends Household {
 
 // households/{hid}/roles/{uid}
 export interface HouseholdRole {
-  role: Role
+  /** Rol CRUDO del wire ('OWNER' | 'PAYER' | 'COLLABORATOR' legacy | 'MEMBER'). */
+  role: string
+  /**
+   * Member del hogar al que este usuario queda vinculado. En invites v2
+   * nominados las reglas exigen que coincida con el `linkedMemberId` del
+   * invite canjeado — el canje DEBE copiarlo.
+   */
   linkedMemberId?: string
   displayName: string
   /**
@@ -67,7 +107,10 @@ export interface HouseholdRole {
 
 // households/{hid}/invites/{code}
 export interface Invite {
-  role: Role
+  /** Rol CRUDO que otorga el invite (las reglas comparan igualdad literal). */
+  role: string
+  /** Invites v2 nominados: member al que queda vinculado quien canjea. */
+  linkedMemberId?: string
   expiresAt: number // epoch ms
   maxUses: number
   uses: number
@@ -82,7 +125,8 @@ export interface Invite {
  */
 export interface InviteCodeDoc {
   householdId: string
-  role: Role
+  /** Rol CRUDO (mismo criterio que Invite.role). */
+  role: string
   expiresAt: number // epoch ms
   maxUses: number
   uses: number
@@ -209,7 +253,7 @@ export interface AttributionInput {
 }
 
 /**
- * Entrada para crear/editar un gasto real (solo OWNER; los colaboradores usan
+ * Entrada para crear/editar un gasto real (OWNER|PAYER; los colaboradores usan
  * proposals). Mismo contrato que la captura de la app Android: dos dimensiones
  * independientes de atribución (BENEFICIARY = quién consume, PAYER = quién
  * paga), cada una convertida a basis points que suman EXACTO 10000.
@@ -227,6 +271,25 @@ export interface ExpenseInput {
   beneficiaries: AttributionInput[]
   /** Dimensión PAYER: debe sumar 100%. */
   payers: AttributionInput[]
+}
+
+/**
+ * Entrada para registrar un INGRESO real (OWNER|PAYER). Contrato con el pull
+ * de Android (FirestoreMappers.toIncomeSourceEntity): householdId, quincenaId,
+ * memberId, label, amountMxn y expectedDate son OBLIGATORIOS (el mapper
+ * descarta el doc si falta cualquiera); cadence default "QUINCENAL", status
+ * "POSTED" (un ingreso capturado ya se recibió) acredita el wallet.
+ */
+export interface IncomeInput {
+  /** Descripción del ingreso (p. ej. "Nómina", "Aguinaldo"). */
+  label: string
+  amountMxn: number
+  /** Epoch ms de recepción; define la quincena y el expectedDate (fecha MX). */
+  receivedAt: number
+  /** Miembro que recibe el ingreso. OBLIGATORIO para el mapper de Android. */
+  memberId: string
+  /** Wallet donde se deposita (se acredita el saldo). */
+  paymentMethodId: string
 }
 
 export type ProposalKind = 'EXPENSE' | 'FUTURE_PAYMENT'

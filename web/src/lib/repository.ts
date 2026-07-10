@@ -15,6 +15,7 @@ import {
 import type { User } from 'firebase/auth'
 import { db } from './firebase'
 import type {
+  Attribution,
   AttributionInput,
   CategoryWithId,
   ExpenseInput,
@@ -22,6 +23,7 @@ import type {
   Household,
   HouseholdRole,
   HouseholdWithId,
+  IncomeInput,
   Invite,
   InviteCodeDoc,
   MemberWithId,
@@ -34,6 +36,7 @@ import type {
   UserHouseholdRef,
   WalletWithId,
 } from './types'
+import { normalizeRole } from './types'
 
 /* ---------------------------------------------------------------------------
  * Normalización camelCase / snake_case
@@ -133,7 +136,7 @@ export async function listUserHouseholds(uid: string): Promise<HouseholdWithId[]
       const h = hSnap.data() as Household | undefined
       return {
         id: hid,
-        role: ref.role,
+        role: normalizeRole(ref.role),
         name: h?.name ?? '(sin nombre)',
         currency: h?.currency ?? 'MXN',
         timezone: h?.timezone ?? 'America/Mexico_City',
@@ -176,18 +179,32 @@ export async function createHousehold(uid: string, name: string, displayName: st
 
 /* ------------------------------- Roles ----------------------------------- */
 
+export interface MyRoleInfo {
+  role: Role
+  /** Member del hogar al que este usuario está vinculado (invites v2 nominados). */
+  linkedMemberId: string | null
+}
+
 /**
- * Rol del usuario en el household leyendo households/{hid}/roles/{uid}.
- * Devuelve null si no hay doc de rol (no es miembro) o si el valor es raro.
- * La UI bifurca con esto: OWNER captura gastos reales; COLLABORATOR propone.
+ * Rol del usuario en el household leyendo households/{hid}/roles/{uid}
+ * (normalizado v2: COLLABORATOR legacy → MEMBER) + el linkedMemberId del
+ * mismo doc. Devuelve null si no hay doc de rol (no es miembro). La UI
+ * bifurca con esto: OWNER|PAYER escriben el ledger; MEMBER solo propone.
  */
-export async function getMyRole(hid: string, uid: string): Promise<Role | null> {
+export async function getMyRoleInfo(hid: string, uid: string): Promise<MyRoleInfo | null> {
   const snap = await getDoc(doc(db, 'households', hid, 'roles', uid))
   if (!snap.exists()) return null
-  const role = pickStr(snap.data() as FirestoreData, 'role', 'role')
-  if (role === 'OWNER') return 'OWNER'
-  if (role === 'COLLABORATOR') return 'COLLABORATOR'
-  return null
+  const data = snap.data() as FirestoreData
+  return {
+    role: normalizeRole(pickStr(data, 'role', 'role')),
+    linkedMemberId: pickStr(data, 'linkedMemberId', 'linked_member_id') ?? null,
+  }
+}
+
+/** Compat: solo el rol normalizado. */
+export async function getMyRole(hid: string, uid: string): Promise<Role | null> {
+  const info = await getMyRoleInfo(hid, uid)
+  return info?.role ?? null
 }
 
 /* --------------------------------- Invites -------------------------------- */
@@ -255,16 +272,23 @@ export async function joinByCode(
     throw new Error('El código de invitación alcanzó su número máximo de usos.')
   }
 
-  const role: Role = invite.role ?? 'COLLABORATOR'
+  // Rol CRUDO del invite: las reglas comparan igualdad LITERAL entre el role
+  // que te asignas y el del invite, así que se escribe tal cual viene (un
+  // invite legacy con 'COLLABORATOR' se escribe 'COLLABORATOR'); la app lo
+  // normaliza al leer.
+  const rawRole: string = invite.role ?? 'MEMBER'
 
   // Crea el rol en el household. `inviteCode` es OBLIGATORIO para las reglas:
   // el create de un rol no-OWNER solo pasa si existe invites/{inviteCode} y su
-  // `role` coincide con el que el usuario se asigna.
-  const roleDoc: HouseholdRole = { role, displayName, inviteCode: code }
+  // `role` coincide con el que el usuario se asigna. En invites v2 NOMINADOS
+  // las reglas además exigen que `linkedMemberId` coincida con el del invite —
+  // se copia tal cual (y se omite si el invite no lo trae, como los legacy).
+  const roleDoc: HouseholdRole = { role: rawRole, displayName, inviteCode: code }
+  if (invite.linkedMemberId) roleDoc.linkedMemberId = invite.linkedMemberId
   await setDoc(doc(db, 'households', hid, 'roles', user.uid), roleDoc)
 
   // Espejo en users/{uid}/households/{hid}.
-  const mirror: UserHouseholdRef = { role, joinedAt: Date.now() }
+  const mirror: UserHouseholdRef = { role: rawRole, joinedAt: Date.now() }
   await setDoc(doc(db, 'users', user.uid, 'households', hid), mirror)
 
   // Incrementa el contador de usos (atómico) — en AMBOS docs si el código se
@@ -274,7 +298,7 @@ export async function joinByCode(
     await updateDoc(globalCodeRef, { uses: increment(1) })
   }
 
-  return { hid, role }
+  return { hid, role: normalizeRole(rawRole) }
 }
 
 /* -------------------------------- Categories ------------------------------ */
@@ -391,6 +415,22 @@ function normQuincena(id: string, data: FirestoreData): QuincenaWithId {
   }
 }
 
+/**
+ * Todas las quincenas del hogar ordenadas DESC por fecha de inicio (la más
+ * reciente primero). Orden en cliente con fallback dual: un orderBy del
+ * servidor sobre `startDate` excluiría los docs seed que solo traen
+ * `start_date`.
+ */
+export async function listQuincenas(hid: string): Promise<QuincenaWithId[]> {
+  const snap = await getDocs(collection(db, 'households', hid, 'quincenas'))
+  const rows = snap.docs.map((d) => normQuincena(d.id, d.data() as FirestoreData))
+  return rows.sort((a, b) => {
+    const sa = toDateStr(a.startDate) ?? ''
+    const sb = toDateStr(b.startDate) ?? ''
+    return sb.localeCompare(sa)
+  })
+}
+
 /** Devuelve la quincena con status ACTIVE del household (o null). */
 export async function getActiveQuincena(hid: string): Promise<QuincenaWithId | null> {
   const snap = await getDocs(
@@ -497,6 +537,60 @@ export async function listPostedExpenses(hid: string, quincenaId: string): Promi
   return rows.sort((a, b) => (b.occurredAt ?? 0) - (a.occurredAt ?? 0))
 }
 
+/**
+ * Gastos POSTED **y** PLANNED de una quincena (Historial). Mismo criterio que
+ * listPostedExpenses: `where in` por status en servidor, quincena y lápidas en
+ * cliente (fallback dual), orden por fecha desc en cliente.
+ */
+export async function listExpensesByQuincena(hid: string, quincenaId: string): Promise<ExpenseWithId[]> {
+  const snap = await getDocs(
+    query(collection(db, 'households', hid, 'expenses'), where('status', 'in', ['POSTED', 'PLANNED'])),
+  )
+  const rows = snap.docs
+    .map((d) => normExpense(d.id, d.data() as FirestoreData))
+    .filter((e) => e.quincenaId === quincenaId && !isTombstoned(e))
+  return rows.sort((a, b) => (b.occurredAt ?? 0) - (a.occurredAt ?? 0))
+}
+
+/**
+ * TODOS los gastos PLANNED del hogar (pagos futuros, cruzan quincenas — los
+ * usa el Calendario para pintar y confirmar planeados de cualquier mes).
+ */
+export async function listPlannedExpenses(hid: string): Promise<ExpenseWithId[]> {
+  const snap = await getDocs(
+    query(collection(db, 'households', hid, 'expenses'), where('status', '==', 'PLANNED')),
+  )
+  const rows = snap.docs
+    .map((d) => normExpense(d.id, d.data() as FirestoreData))
+    .filter((e) => !isTombstoned(e))
+  return rows.sort((a, b) => (a.occurredAt ?? 0) - (b.occurredAt ?? 0))
+}
+
+/**
+ * Atribuciones de un gasto (subcolección `attributions`), normalizadas con
+ * fallback dual. Las usa el Historial para el filtro por miembro y el modal
+ * de edición (updateExpense REEMPLAZA la subcolección completa, así que hay
+ * que reenviar las participaciones existentes).
+ */
+export async function listExpenseAttributions(hid: string, expenseId: string): Promise<Attribution[]> {
+  const snap = await getDocs(
+    collection(db, 'households', hid, 'expenses', expenseId, 'attributions'),
+  )
+  return snap.docs
+    .map((d) => {
+      const data = d.data() as FirestoreData
+      const role = pickStr(data, 'role', 'role')
+      return {
+        expenseId: pickStr(data, 'expenseId', 'expense_id') ?? expenseId,
+        memberId: pickStr(data, 'memberId', 'member_id') ?? '',
+        role: role === 'PAYER' ? ('PAYER' as const) : ('BENEFICIARY' as const),
+        shareBps: pickNum(data, 'shareBps', 'share_bps') ?? 0,
+        shareAmountMxn: pickNum(data, 'shareAmountMxn', 'share_amount_mxn') ?? 0,
+      }
+    })
+    .filter((a) => a.memberId !== '')
+}
+
 /* ---------------------------------------------------------------------------
  * Captura real del titular (OWNER) — contrato con el pull de Android
  * ---------------------------------------------------------------------------
@@ -561,11 +655,20 @@ function buildAttributionRows(expenseId: string, amountMxn: number, input: Expen
 }
 
 /**
- * Crea un gasto REAL (status POSTED) como lo haría la captura del teléfono:
- * doc del gasto + subcolección attributions + descuento del saldo del wallet,
- * todo en un writeBatch atómico. Devuelve el id del gasto.
+ * Crea un gasto REAL como lo haría la captura del teléfono: doc del gasto +
+ * subcolección attributions + descuento del saldo del wallet, todo en un
+ * writeBatch atómico. Devuelve el id del gasto.
+ *
+ * Con `opts.planned = true` (modo "Planear", fecha futura) el gasto nace con
+ * status PLANNED y NO toca el saldo del wallet — se descuenta al confirmarlo
+ * (confirmPlanned aquí o el flujo del calendario en el teléfono).
  */
-export async function createExpense(hid: string, input: ExpenseInput): Promise<string> {
+export async function createExpense(
+  hid: string,
+  input: ExpenseInput,
+  opts?: { planned?: boolean },
+): Promise<string> {
+  const planned = opts?.planned === true
   const amount = input.amountMxn
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('El monto debe ser mayor que cero.')
@@ -578,7 +681,8 @@ export async function createExpense(hid: string, input: ExpenseInput): Promise<s
   // Quincena REAL consultada por fecha (nunca inventada).
   const quincena = await findQuincenaForDate(hid, input.occurredAt)
 
-  // Wallet: read-before-batch (ver riesgo aceptado arriba).
+  // Wallet: read-before-batch (ver riesgo aceptado arriba). Se valida también
+  // en modo planned (Android descarta expenses sin paymentMethodId válido).
   const walletRef = doc(db, 'households', hid, 'wallets', input.paymentMethodId)
   const walletSnap = await getDoc(walletRef)
   if (!walletSnap.exists()) {
@@ -600,7 +704,7 @@ export async function createExpense(hid: string, input: ExpenseInput): Promise<s
     concept,
     amountMxn: amount,
     paymentMethodId: input.paymentMethodId,
-    status: 'POSTED',
+    status: planned ? 'PLANNED' : 'POSTED',
     settlementStatus: 'NONE',
     notes: input.notes?.trim() || null,
     createdAt: now,
@@ -611,7 +715,10 @@ export async function createExpense(hid: string, input: ExpenseInput): Promise<s
     batch.set(doc(collection(expenseRef, 'attributions')), row)
   }
 
-  batch.update(walletRef, walletBalanceUpdate(walletData, balance - amount))
+  // Un PLANNED nunca mueve saldo: se descuenta al confirmar.
+  if (!planned) {
+    batch.update(walletRef, walletBalanceUpdate(walletData, balance - amount))
+  }
 
   await batch.commit()
   return expenseRef.id
@@ -669,6 +776,13 @@ export async function updateExpense(hid: string, expenseId: string, input: Expen
   prevAttribs.docs.forEach((d) => batch.delete(d.ref))
   for (const row of buildAttributionRows(expenseId, amount, input)) {
     batch.set(doc(collection(expenseRef, 'attributions')), row)
+  }
+
+  // Un PLANNED nunca movió saldo (se descuenta al confirmar), así que editarlo
+  // tampoco debe ajustar ningún wallet.
+  if (prev.status === 'PLANNED') {
+    await batch.commit()
+    return
   }
 
   if (walletChanged && oldWalletId) {
@@ -764,6 +878,64 @@ export async function confirmPlanned(hid: string, expenseId: string): Promise<vo
   await batch.commit()
 }
 
+/* -------------------------------- Incomes --------------------------------- */
+
+/**
+ * Registra un INGRESO real en `households/{hid}/income_source` (misma
+ * subcolección que empuja/lee el sync de Android). Contrato con el pull
+ * (FirestoreMappers.toIncomeSourceEntity): householdId, quincenaId, memberId,
+ * label, amountMxn y expectedDate son OBLIGATORIOS o el mapper descarta el
+ * doc. Se escribe camelCase, status POSTED (ya se recibió) y el saldo del
+ * wallet se ACREDITA en el mismo batch (espejo del creditWallet de
+ * IncomeRepositoryImpl al insertar un ingreso POSTED). Devuelve el id.
+ */
+export async function createIncome(hid: string, input: IncomeInput): Promise<string> {
+  const amount = input.amountMxn
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('El monto debe ser mayor que cero.')
+  }
+  const label = input.label.trim()
+  if (!label) throw new Error('El concepto del ingreso no puede estar vacío.')
+  if (!input.memberId) throw new Error('Selecciona quién recibe el ingreso.')
+  if (!input.paymentMethodId) throw new Error('Selecciona la cuenta donde se deposita.')
+
+  // Quincena REAL por fecha de recepción (nunca inventada).
+  const quincena = await findQuincenaForDate(hid, input.receivedAt)
+
+  const walletRef = doc(db, 'households', hid, 'wallets', input.paymentMethodId)
+  const walletSnap = await getDoc(walletRef)
+  if (!walletSnap.exists()) {
+    throw new Error('La cuenta seleccionada ya no existe.')
+  }
+  const walletData = walletSnap.data() as FirestoreData
+  const balance = pickNum(walletData, 'currentBalanceMxn', 'current_balance_mxn') ?? 0
+
+  const now = Date.now()
+  const batch = writeBatch(db)
+
+  const incomeRef = doc(collection(db, 'households', hid, 'income_source'))
+  batch.set(incomeRef, {
+    id: incomeRef.id,
+    householdId: hid,
+    quincenaId: quincena.id,
+    memberId: input.memberId,
+    label,
+    amountMxn: amount,
+    cadence: 'QUINCENAL',
+    expectedDate: epochToMxDateStr(input.receivedAt),
+    paymentMethodId: input.paymentMethodId,
+    status: 'POSTED',
+    createdAt: now,
+    updatedAt: now, // > 0 SIEMPRE: llave del LWW en el pull de Android.
+  })
+
+  // Ingreso POSTED acredita (+) el wallet destino.
+  batch.update(walletRef, walletBalanceUpdate(walletData, balance + amount))
+
+  await batch.commit()
+  return incomeRef.id
+}
+
 /* -------------------------------- Proposals ------------------------------- */
 
 export interface ProposalInput {
@@ -824,7 +996,7 @@ export async function listPendingProposals(hid: string): Promise<ProposalWithId[
 }
 
 /**
- * Resuelve una propuesta (solo el OWNER — las reglas rechazan a cualquier
+ * Resuelve una propuesta (OWNER|PAYER — las reglas rechazan a cualquier
  * otro): escribe ACCEPTED/REJECTED + resolvedAt. NO crea el gasto: si el
  * titular la acepta y quiere materializarla, llama después a createExpense
  * con los datos de la propuesta (la app Android hace lo propio con su bandeja
