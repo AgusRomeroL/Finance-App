@@ -85,6 +85,20 @@ class MembershipRepository(
                         displayName = doc.getString("displayName") ?: doc.id,
                     )
                 }.orEmpty()
+                // Backfill best-effort: espejos escritos por versiones con el bug
+                // (displayName = id) se reparan con el nombre real del hogar.
+                list.filter { it.displayName == it.householdId }.forEach { hh ->
+                    households().document(hh.householdId).get()
+                        .addOnSuccessListener { h ->
+                            val name = h.getString("name") ?: return@addOnSuccessListener
+                            users().document(uid).collection("households")
+                                .document(hh.householdId)
+                                .set(
+                                    mapOf("displayName" to name),
+                                    com.google.firebase.firestore.SetOptions.merge(),
+                                )
+                        }
+                }
                 trySend(list)
             }
         awaitClose { reg.remove() }
@@ -278,7 +292,14 @@ class MembershipRepository(
      *    se incrementa el doc de la subcolección (el índice global no existe
      *    para códigos viejos).
      */
-    suspend fun joinByCode(fullCode: String, uid: String, displayName: String): String? {
+    /** Resultado tipado del canje: la UI distingue unión, pertenencia previa e inválido. */
+    sealed interface JoinResult {
+        data class Joined(val householdId: String) : JoinResult
+        data class AlreadyMember(val householdId: String, val role: String) : JoinResult
+        data object Invalid : JoinResult
+    }
+
+    suspend fun joinByCode(fullCode: String, uid: String, displayName: String): JoinResult {
         val trimmed = fullCode.trim()
         return try {
             val hid: String
@@ -290,7 +311,7 @@ class MembershipRepository(
                 // Camino LEGACY {hid}.{code}.
                 val parsed = parseInviteCode(trimmed) ?: run {
                     Log.w(TAG, "Código de invitación mal formado: $trimmed")
-                    return null
+                    return JoinResult.Invalid
                 }
                 hid = parsed.first
                 code = parsed.second
@@ -299,14 +320,14 @@ class MembershipRepository(
                 code = trimmed.uppercase()
                 if (code.length != CODE_LENGTH) {
                     Log.w(TAG, "Código de invitación mal formado: $trimmed")
-                    return null
+                    return JoinResult.Invalid
                 }
                 val ref = inviteCodes().document(code)
                 val snap = ref.get().await()
                 val resolved = snap.getString("householdId")
                 if (resolved.isNullOrBlank()) {
                     Log.w(TAG, "Código opaco inexistente o sin hogar: $code")
-                    return null
+                    return JoinResult.Invalid
                 }
                 hid = resolved
                 globalCodeRef = ref
@@ -316,21 +337,34 @@ class MembershipRepository(
             val invite = inviteRef.get().await()
             if (!invite.exists()) {
                 Log.w(TAG, "Invitación inexistente: $hid/$code")
-                return null
+                return JoinResult.Invalid
             }
             val expiresAt = invite.getLong("expiresAt") ?: 0L
             val maxUses = invite.getLong("maxUses") ?: 0L
             val uses = invite.getLong("uses") ?: 0L
             if (expiresAt in 1..System.currentTimeMillis()) {
                 Log.w(TAG, "Invitación expirada: $hid/$code")
-                return null
+                return JoinResult.Invalid
             }
             if (maxUses > 0 && uses >= maxUses) {
                 Log.w(TAG, "Invitación sin usos: $hid/$code")
-                return null
+                return JoinResult.Invalid
             }
             val role = invite.getString("role") ?: ROLE_COLLABORATOR
             val now = System.currentTimeMillis()
+
+            // GUARD anti-degradacion: si el uid YA tiene rol en este hogar (p.ej.
+            // el dueno canjeando su propio codigo), NO se toca nada - el set plano
+            // degradaba OWNER a COLLABORATOR y borraba linkedMemberId.
+            val existingRole =
+                households().document(hid).collection("roles").document(uid).get().await()
+            if (existingRole.exists()) {
+                return JoinResult.AlreadyMember(hid, existingRole.getString("role") ?: "")
+            }
+
+            // Nombre REAL del hogar para el espejo (antes se escribia el id y
+            // "MIS GRUPOS" mostraba hh_XXXX en vez del nombre).
+            val householdName = households().document(hid).get().await().getString("name")
 
             // `inviteCode` queda en el doc de rol: la regla valida que exista ese
             // invite y que su `role` coincida (así el colaborador solo obtiene el
@@ -339,22 +373,24 @@ class MembershipRepository(
                 mapOf(
                     "role" to role,
                     "displayName" to displayName,
-                    "linkedMemberId" to null,
+                    // Vínculo nominado del invite (roles v2): a qué member del hogar
+                    // corresponde quien canjea. Null en invites legacy.
+                    "linkedMemberId" to invite.getString("linkedMemberId"),
                     "inviteCode" to code,
                 )
             ).await()
             users().document(uid).collection("households").document(hid).set(
-                mapOf("role" to role, "joinedAt" to now, "displayName" to hid)
+                mapOf("role" to role, "joinedAt" to now, "displayName" to (householdName ?: hid))
             ).await()
             inviteRef.update("uses", FieldValue.increment(1)).await()
             // Camino opaco: el contador también avanza en el índice global,
             // para que ambos docs reflejen los usos consumidos.
             globalCodeRef?.update("uses", FieldValue.increment(1))?.await()
 
-            hid
+            JoinResult.Joined(hid)
         } catch (e: Exception) {
             Log.w(TAG, "joinByCode falló para $fullCode", e)
-            null
+            JoinResult.Invalid
         }
     }
 

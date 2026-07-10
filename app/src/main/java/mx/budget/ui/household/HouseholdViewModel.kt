@@ -40,6 +40,8 @@ class HouseholdViewModel(
         val inviteCode: String? = null,
         val busy: Boolean = false,
         val message: String? = null,
+        /** true = el mensaje es de error (el banner usa colores de error). */
+        val messageIsError: Boolean = false,
         /**
          * Contadores de éxito de crear/unirse. La pantalla los observa para
          * limpiar los campos de texto SOLO cuando la operación tuvo éxito
@@ -113,7 +115,7 @@ class HouseholdViewModel(
     fun createHousehold(name: String) {
         val user = authManager.currentUser.value ?: return
         if (user.isAnonymous) {
-            _extra.value = _extra.value.copy(message = "Inicia sesión con Google primero")
+            _extra.value = _extra.value.copy(message = "Inicia sesión con Google primero", messageIsError = true)
             return
         }
         viewModelScope.launch {
@@ -125,6 +127,7 @@ class HouseholdViewModel(
                     _extra.value = _extra.value.copy(
                         busy = false,
                         message = "Grupo \"$name\" creado",
+                        messageIsError = false,
                         createSuccessCount = _extra.value.createSuccessCount + 1,
                     )
                     switchTo(hid)
@@ -132,7 +135,7 @@ class HouseholdViewModel(
                 .onFailure {
                     // El colector de `_extra` del init propaga este mensaje al
                     // uiState — antes se perdía por no llamar recompute().
-                    _extra.value = _extra.value.copy(busy = false, message = "No se pudo crear el grupo")
+                    _extra.value = _extra.value.copy(busy = false, message = "No se pudo crear el grupo", messageIsError = true)
                 }
         }
     }
@@ -140,24 +143,33 @@ class HouseholdViewModel(
     fun joinByCode(fullCode: String) {
         val user = authManager.currentUser.value ?: return
         if (user.isAnonymous) {
-            _extra.value = _extra.value.copy(message = "Inicia sesión con Google primero")
+            _extra.value = _extra.value.copy(message = "Inicia sesión con Google primero", messageIsError = true)
             return
         }
         viewModelScope.launch {
             _extra.value = _extra.value.copy(busy = true, message = null)
             val displayName = user.displayName ?: user.email ?: "Yo"
-            val hid = membershipRepository.joinByCode(fullCode.trim(), user.uid, displayName)
-            if (hid != null) {
-                membershipRepository.setActiveHousehold(user.uid, hid)
-                _extra.value = _extra.value.copy(
-                    busy = false,
-                    message = "Te uniste al grupo",
-                    joinSuccessCount = _extra.value.joinSuccessCount + 1,
-                )
-                switchTo(hid)
-            } else {
-                // Visible gracias al colector de `_extra` (mismo fix que crear).
-                _extra.value = _extra.value.copy(busy = false, message = "Código inválido o expirado")
+            when (val res = membershipRepository.joinByCode(fullCode.trim(), user.uid, displayName)) {
+                is mx.budget.data.remote.MembershipRepository.JoinResult.Joined -> {
+                    membershipRepository.setActiveHousehold(user.uid, res.householdId)
+                    _extra.value = _extra.value.copy(
+                        busy = false,
+                        message = "Te uniste al grupo",
+                        messageIsError = false,
+                        joinSuccessCount = _extra.value.joinSuccessCount + 1,
+                    )
+                    switchTo(res.householdId)
+                }
+                is mx.budget.data.remote.MembershipRepository.JoinResult.AlreadyMember -> {
+                    _extra.value = _extra.value.copy(
+                        busy = false,
+                        message = "Ya perteneces a este grupo — tu rol no cambió",
+                    )
+                }
+                mx.budget.data.remote.MembershipRepository.JoinResult.Invalid -> {
+                    // Visible gracias al colector de `_extra` (mismo fix que crear).
+                    _extra.value = _extra.value.copy(busy = false, message = "Código inválido o expirado", messageIsError = true)
+                }
             }
         }
     }
@@ -167,7 +179,8 @@ class HouseholdViewModel(
         // GRUPO creado por el usuario, jamás al hogar sembrado con sus datos reales.
         if (_extra.value.activeHouseholdId == "default_household") {
             _extra.value = _extra.value.copy(
-                message = "Crea un grupo y selecciónalo antes de invitar."
+                message = "Crea un grupo y selecciónalo antes de invitar.",
+                messageIsError = true
             )
             return
         }
@@ -183,7 +196,7 @@ class HouseholdViewModel(
                 _extra.value = _extra.value.copy(busy = false, inviteCode = code)
                 recompute()
             }.onFailure {
-                _extra.value = _extra.value.copy(busy = false, message = "No se pudo generar el código")
+                _extra.value = _extra.value.copy(busy = false, message = "No se pudo generar el código", messageIsError = true)
             }
         }
     }

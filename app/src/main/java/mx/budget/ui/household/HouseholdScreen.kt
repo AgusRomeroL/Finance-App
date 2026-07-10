@@ -113,14 +113,21 @@ fun HouseholdScreen(
             exit = fadeOut(spring()),
         ) {
             Column {
+                // Contraste correcto M3: on*Container sobre *Container (antes era
+                // primary sobre primaryContainer y el texto resultaba ilegible);
+                // los errores usan el par de error para distinguirse de los avisos.
+                val bannerBg = if (state.messageIsError) MaterialTheme.colorScheme.errorContainer
+                else MaterialTheme.colorScheme.primaryContainer
+                val bannerFg = if (state.messageIsError) MaterialTheme.colorScheme.onErrorContainer
+                else MaterialTheme.colorScheme.onPrimaryContainer
                 Text(
                     state.message ?: "",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = bannerFg,
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .background(bannerBg)
                         .clickable { viewModel.clearMessage() }
                         .padding(14.dp),
                 )
