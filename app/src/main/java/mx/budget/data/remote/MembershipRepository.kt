@@ -174,19 +174,10 @@ class MembershipRepository(
             mapOf("name" to name, "updatedAt" to now, "createdBy" to uid)
         ).await()
 
-        households().document(hid).collection("roles").document(uid).set(
-            mapOf(
-                "role" to ROLE_OWNER,
-                "displayName" to displayName,
-                "linkedMemberId" to null,
-            )
-        ).await()
-
-        users().document(uid).collection("households").document(hid).set(
-            mapOf("role" to ROLE_OWNER, "joinedAt" to now, "displayName" to name)
-        ).await()
-
         // Miembro dueño (para que el hogar tenga al menos un pagador adulto).
+        // El id se genera ANTES de escribir el rol para vincularlo a la sesión
+        // (identidad "(Tú)"), pero el DOC del member se escribe DESPUÉS del rol:
+        // las reglas solo dejan escribir members a quien ya tiene rol OWNER/PAYER.
         val member = MemberEntity(
             id = UUID.randomUUID().toString(),
             householdId = hid,
@@ -195,6 +186,24 @@ class MembershipRepository(
             isActive = true,
             updatedAt = now,
         )
+        households().document(hid).collection("roles").document(uid).set(
+            mapOf(
+                "role" to ROLE_OWNER,
+                "displayName" to displayName,
+                // El creador ES este member: identidad de sesión desde el día uno.
+                "linkedMemberId" to member.id,
+            )
+        ).await()
+
+        users().document(uid).collection("households").document(hid).set(
+            mapOf(
+                "role" to ROLE_OWNER,
+                "joinedAt" to now,
+                "displayName" to name,
+                "linkedMemberId" to member.id,
+            )
+        ).await()
+
         households().document(hid).collection("members").document(member.id).set(
             mapOf(
                 "id" to member.id,

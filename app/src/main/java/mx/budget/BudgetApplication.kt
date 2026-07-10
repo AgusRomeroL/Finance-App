@@ -1,6 +1,9 @@
 package mx.budget
 
 import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.room.Room
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -159,9 +162,14 @@ class BudgetApplication : Application() {
      * DataStore para arranques offline. Es el **pagador default de sesión** de
      * la captura ([mx.budget.ui.capture.CaptureViewModel]) y del pago planeado
      * manual ([mx.budget.ui.calendar.NewPlannedViewModel]).
+     *
+     * Es estado Compose ([mutableStateOf], no `@Volatile`): MainActivity lo
+     * provee como [mx.budget.ui.common.LocalSessionMemberId] y, al resolverse
+     * TARDE (refreshSessionIdentity corre online tras el arranque), el Provider
+     * recompone y las listas de miembros pintan "(Tú)" sin reiniciar. Snapshot
+     * state es thread-safe para las escrituras desde el appScope.
      */
-    @Volatile
-    var linkedMemberId: String? = null
+    var linkedMemberId: String? by mutableStateOf(null)
         private set
 
     /** Preferencias de usuario (toggle de color dinámico, etc.). */
@@ -695,13 +703,43 @@ class BudgetApplication : Application() {
     }
 
     private suspend fun refreshSessionIdentity(hid: String) {
-        val uid = authManager.currentUser.filterNotNull().first().uid
+        val user = authManager.currentUser.filterNotNull().first()
         val snap = runCatching {
             firestore.collection("households").document(hid)
-                .collection("roles").document(uid)
+                .collection("roles").document(user.uid)
                 .get().await()
         }.getOrNull() ?: return // offline / sin permisos: el caché manda
-        val resolved = snap.getString("linkedMemberId")
+        var resolved = snap.getString("linkedMemberId")
+
+        // Fallback para roles legados sin vínculo (hogares reclamados/sembrados):
+        // si el nombre de pila de la cuenta coincide de forma ÚNICA con un member
+        // activo del hogar, se adopta y se PERSISTE en roles/{uid} — así la app
+        // sabe quién "eres tú" ("(Tú)" en las listas, exclusión del selector de
+        // invitación, pagador default) sin pedir nada al usuario.
+        if (resolved == null) {
+            val firstName = user.displayName?.trim()?.substringBefore(' ')
+            if (!firstName.isNullOrBlank()) {
+                fun norm(s: String) = java.text.Normalizer
+                    .normalize(s.lowercase(), java.text.Normalizer.Form.NFD)
+                    .replace(Regex("\\p{Mn}+"), "")
+                val target = norm(firstName)
+                val matches = runCatching {
+                    database.memberDao().getActiveMembers(hid)
+                        .filter { norm(it.displayName.substringBefore(' ')) == target }
+                }.getOrDefault(emptyList())
+                if (matches.size == 1) {
+                    resolved = matches.first().id
+                    runCatching {
+                        firestore.collection("households").document(hid)
+                            .collection("roles").document(user.uid)
+                            .set(
+                                mapOf("linkedMemberId" to resolved),
+                                com.google.firebase.firestore.SetOptions.merge(),
+                            ).await()
+                    }
+                }
+            }
+        }
         linkedMemberId = resolved
         settingsRepository.setSessionLinkedMemberId(resolved)
     }
