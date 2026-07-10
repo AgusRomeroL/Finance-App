@@ -163,6 +163,14 @@ class HouseholdViewModel(
     }
 
     fun generateInvite() {
+        // Guard de producto (espejo del gate de la UI): los invitados entran a un
+        // GRUPO creado por el usuario, jamás al hogar sembrado con sus datos reales.
+        if (_extra.value.activeHouseholdId == "default_household") {
+            _extra.value = _extra.value.copy(
+                message = "Crea un grupo y selecciónalo antes de invitar."
+            )
+            return
+        }
         val user = authManager.currentUser.value ?: return
         viewModelScope.launch {
             _extra.value = _extra.value.copy(busy = true, message = null)

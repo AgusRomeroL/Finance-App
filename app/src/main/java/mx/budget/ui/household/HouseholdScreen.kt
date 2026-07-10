@@ -295,14 +295,22 @@ fun HouseholdScreen(
             Spacer(Modifier.height(20.dp))
 
             // ── Invitar (generar y compartir código) ─────────────────────────
+            // Gate de producto: invitar exige un GRUPO creado por el usuario y
+            // seleccionado — nunca el hogar sembrado (default_household), cuyos
+            // datos reales no son para invitados.
+            val canInvite = state.activeHouseholdId.isNotBlank() &&
+                state.activeHouseholdId != "default_household"
             SectionCard(label = "INVITAR A OTRO DISPOSITIVO") {
                 Text(
-                    "Genera un código de 8 caracteres y compártelo. Quien lo canjee (app o web) entra como colaborador y puede proponer gastos que confirmas tú.",
+                    if (canInvite)
+                        "Genera un código de 8 caracteres y compártelo. Quien lo canjee (app o web) entra como colaborador de este grupo y puede proponer gastos que confirmas tú."
+                    else
+                        "Para invitar, primero crea un grupo (arriba) y selecciónalo. Los invitados entran a ese grupo — nunca a tu presupuesto personal.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(12.dp))
-                if (state.inviteCode != null) {
+                if (state.inviteCode != null && canInvite) {
                     Text(
                         state.inviteCode!!,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -338,13 +346,13 @@ fun HouseholdScreen(
                 } else {
                     Button(
                         onClick = { viewModel.generateInvite() },
-                        enabled = !state.busy,
+                        enabled = !state.busy && canInvite,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         if (state.busy) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         } else {
-                            Text("Generar código")
+                            Text(if (canInvite) "Generar código" else "Crea un grupo primero")
                         }
                     }
                 }
