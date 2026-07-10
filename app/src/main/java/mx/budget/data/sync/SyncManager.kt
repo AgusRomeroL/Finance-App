@@ -91,6 +91,22 @@ class SyncManager(
 
     private val mutex = Mutex()
 
+    /**
+     * Reintento diferido tras un corte por conectividad. Sin esto, un hipo de
+     * DNS/red durante el drenado del arranque dejaba la cola varada hasta el
+     * SIGUIENTE cambio de red o alta local (observeCount solo re-emite cuando
+     * el conteo CAMBIA) — observado en hardware real con Private DNS.
+     */
+    private var retryJob: kotlinx.coroutines.Job? = null
+
+    private fun scheduleRetry() {
+        retryJob?.cancel()
+        retryJob = scope.launch {
+            kotlinx.coroutines.delay(RETRY_BACKOFF_MS)
+            drain()
+        }
+    }
+
     private val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
@@ -279,9 +295,12 @@ class SyncManager(
                 } catch (e: Exception) {
                     if (isConnectivityError(e)) {
                         // Sin red no tiene caso seguir: se corta el drenado sin
-                        // castigar a la fila (attempts intacto) y se reintenta
-                        // todo en el siguiente disparo (onAvailable/observe).
-                        Log.w(TAG, "Error de conectividad al drenar el outbox; se corta y reintenta al volver la red", e)
+                        // castigar a la fila (attempts intacto). Además del
+                        // disparo por onAvailable/observe, se agenda un reintento
+                        // diferido: un hipo transitorio (DNS) no debe dejar la
+                        // cola varada hasta el próximo cambio de red.
+                        Log.w(TAG, "Error de conectividad al drenar el outbox; reintento en ${RETRY_BACKOFF_MS / 1000}s", e)
+                        scheduleRetry()
                         break
                     }
                     val attemptsNow = row.attempts + 1
@@ -339,5 +358,8 @@ class SyncManager(
          * outbox se considera fallida definitiva y `getPending` la excluye.
          */
         private const val MAX_ATTEMPTS = 8
+
+        /** Espera antes del reintento tras un corte por conectividad. */
+        private const val RETRY_BACKOFF_MS = 30_000L
     }
 }
