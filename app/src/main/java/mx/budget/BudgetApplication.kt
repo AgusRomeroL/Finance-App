@@ -570,6 +570,12 @@ class BudgetApplication : Application() {
         // push. Firestore cachea offline, así que es seguro aunque no haya red.
         appScope.launch {
             authManager.signInAnonymously()
+            // Fila local del hogar activo ANTES del primer pull: si el activo es un
+            // grupo creado/unido (solo existe en Firestore), sin esta fila las FKs
+            // member/wallet/expense → household rompen el pull entero y cualquier
+            // alta local (agregar un miembro crasheaba la app). No-op para el
+            // hogar sembrado.
+            runCatching { ensureLocalHousehold(householdId) }
             // Sembrado histórico de estados (v2) ANTES de arrancar el pull, para que
             // el pull no escriba por DAO directo a mitad del seed; el drain empuja
             // todo lo sembrado de una vez. No-op sin el asset o si ya corrió.
@@ -664,6 +670,30 @@ class BudgetApplication : Application() {
      * (offline), conserva el caché vigente; si tiene éxito, refresca propiedad y
      * caché DataStore aunque el campo venga null (OWNER legacy sin vínculo).
      */
+    /**
+     * Garantiza que exista una fila `household` en Room para [hid]. Un grupo
+     * creado/unido vía [mx.budget.data.remote.MembershipRepository] vive solo en
+     * Firestore; Room únicamente traía `default_household` de la semilla, y el
+     * pull nunca refleja el doc del hogar (solo sus subcolecciones). Sin esta
+     * fila, la FK `member/wallet/expense.household_id → household.id` rompe toda
+     * escritura sobre el hogar nuevo. Lee el nombre real del doc remoto (fallback
+     * al id) y upserta vía DAO directo (anti-eco: no encola push).
+     */
+    private suspend fun ensureLocalHousehold(hid: String) {
+        val dao = database.householdDao()
+        if (dao.getById(hid) != null) return
+        val name = runCatching {
+            firestore.collection("households").document(hid).get().await().getString("name")
+        }.getOrNull() ?: hid
+        dao.insert(
+            mx.budget.data.local.entity.HouseholdEntity(
+                id = hid,
+                name = name,
+                createdAt = System.currentTimeMillis(),
+            )
+        )
+    }
+
     private suspend fun refreshSessionIdentity(hid: String) {
         val uid = authManager.currentUser.filterNotNull().first().uid
         val snap = runCatching {
@@ -729,6 +759,11 @@ class BudgetApplication : Application() {
         }
         appScope.launch {
             settingsRepository.setActiveHouseholdId(newHouseholdId)
+            // CRÍTICO: garantiza la fila del hogar en Room ANTES de re-anclar el
+            // pull. Sin ella, member/wallet/expense (FK a household) truenan con
+            // FOREIGN KEY constraint failed — tanto el pull de las subcolecciones
+            // como cualquier alta local (agregar un miembro crasheaba la app).
+            runCatching { ensureLocalHousehold(newHouseholdId) }
             // Re-ancla el PULL al nuevo hogar (stop viejo → new(hid).start()).
             runCatching { remotePullSync.stop() }
             remotePullSync = RemotePullSync(

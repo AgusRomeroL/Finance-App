@@ -22,6 +22,10 @@ interface HouseholdDao {
     @Query("SELECT id FROM household LIMIT 1")
     suspend fun getSingleId(): String?
 
+    /** Fila del hogar por id, o null si no existe localmente (multi-hogar). */
+    @Query("SELECT * FROM household WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): HouseholdEntity?
+
     /** Nº de hogares (0 = instalación virgen, sin semilla — dispara el wizard). */
     @Query("SELECT COUNT(*) FROM household")
     suspend fun count(): Int
