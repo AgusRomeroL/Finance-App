@@ -425,7 +425,13 @@ function normExpense(id: string, data: FirestoreData): ExpenseWithId {
     householdId: pickStr(data, 'householdId', 'household_id'),
     createdAt: pickNum(data, 'createdAt', 'created_at'),
     updatedAt: pickNum(data, 'updatedAt', 'updated_at') ?? 0,
+    deletedAt: pickNum(data, 'deletedAt', 'deleted_at'),
   }
+}
+
+/** ¿El doc es una lápida (soft-delete)? Las lecturas deben excluirlo. */
+function isTombstoned(e: ExpenseWithId): boolean {
+  return (e.deletedAt ?? 0) > 0
 }
 
 /**
@@ -443,7 +449,10 @@ export async function listPostedExpenses(hid: string, quincenaId: string): Promi
   )
   const rows = snap.docs
     .map((d) => normExpense(d.id, d.data() as FirestoreData))
-    .filter((e) => e.quincenaId === quincenaId)
+    // Lápidas fuera: una lápida "limpia" ni siquiera matchea el where de
+    // status, pero una zombi (campos vivos + deletedAt por un merge posterior)
+    // sí llegaría — el filtro en cliente cubre ambos casos.
+    .filter((e) => e.quincenaId === quincenaId && !isTombstoned(e))
   // Ordenamos en cliente para no exigir un índice compuesto de Firestore.
   return rows.sort((a, b) => (b.occurredAt ?? 0) - (a.occurredAt ?? 0))
 }
@@ -587,6 +596,7 @@ export async function updateExpense(hid: string, expenseId: string, input: Expen
   const expenseSnap = await getDoc(expenseRef)
   if (!expenseSnap.exists()) throw new Error('El gasto ya no existe.')
   const prev = normExpense(expenseSnap.id, expenseSnap.data() as FirestoreData)
+  if (isTombstoned(prev)) throw new Error('El gasto fue eliminado en otro dispositivo.')
 
   const quincena = await findQuincenaForDate(hid, input.occurredAt)
 
@@ -644,21 +654,30 @@ export async function updateExpense(hid: string, expenseId: string, input: Expen
 }
 
 /**
- * Borra un gasto: delete del doc + deletes de su subcolección attributions +
- * reversión del saldo del wallet, en un batch. Android refleja el REMOVED del
- * gasto y el nuevo saldo llega por el listener del wallet.
+ * Borra un gasto con LÁPIDA (tombstone): el doc principal NO se borra — se
+ * reemplaza por una lápida mínima ({ id, householdId, deletedAt, updatedAt })
+ * para que un dispositivo offline prolongado, que ya no vería el REMOVED en su
+ * cache, reciba la lápida como ADDED y borre localmente en vez de resucitar el
+ * gasto. La subcolección attributions SÍ se borra de verdad y la reversión del
+ * saldo del wallet se mantiene, todo en un batch. Android trata deleted_at > 0
+ * como borrado (gate LWW) y el nuevo saldo llega por el listener del wallet.
  */
 export async function deleteExpense(hid: string, expenseId: string): Promise<void> {
   const expenseRef = doc(db, 'households', hid, 'expenses', expenseId)
   const expenseSnap = await getDoc(expenseRef)
   if (!expenseSnap.exists()) throw new Error('El gasto ya no existe.')
   const expense = normExpense(expenseSnap.id, expenseSnap.data() as FirestoreData)
+  // Ya era lápida: no volver a revertir el saldo del wallet (doble reversión).
+  if (isTombstoned(expense)) throw new Error('El gasto ya fue eliminado.')
 
   const attribs = await getDocs(collection(expenseRef, 'attributions'))
 
+  const now = Date.now()
   const batch = writeBatch(db)
   attribs.docs.forEach((d) => batch.delete(d.ref))
-  batch.delete(expenseRef)
+  // set SIN merge: reemplaza el doc entero por la lápida (queda chica y fuera
+  // de las queries por status).
+  batch.set(expenseRef, { id: expenseId, householdId: hid, deletedAt: now, updatedAt: now })
 
   // Reversión del saldo SOLO si el gasto estaba POSTED (un PLANNED nunca movió saldo).
   if (expense.status === 'POSTED' && expense.paymentMethodId) {
@@ -684,6 +703,7 @@ export async function confirmPlanned(hid: string, expenseId: string): Promise<vo
   const expenseSnap = await getDoc(expenseRef)
   if (!expenseSnap.exists()) throw new Error('El gasto ya no existe.')
   const expense = normExpense(expenseSnap.id, expenseSnap.data() as FirestoreData)
+  if (isTombstoned(expense)) throw new Error('El gasto fue eliminado en otro dispositivo.')
   if (expense.status !== 'PLANNED') {
     throw new Error(`Solo se puede confirmar un gasto PLANNED (este está ${expense.status}).`)
   }

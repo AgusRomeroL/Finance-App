@@ -31,8 +31,17 @@ class TransferRepositoryFirestore(
 
     override suspend fun deleteTransfer(transferId: String) {
         // El SyncManager solo conoce el id; localiza el doc por collectionGroup.
-        firestore.collectionGroup("wallet_transfer")
+        // LÁPIDA (tombstone): en vez de borrar el doc (cuyo REMOVED puede
+        // perderse para un dispositivo offline prolongado), se reemplaza por
+        // una lápida mínima con `deletedAt`; los pulls la tratan como borrado
+        // (set SIN merge limpia el resto de campos). Decisión consciente: para
+        // transfers el borrado GANA sobre una edición offline concurrente
+        // (las transferencias no se editan en la app; no hay flujo de
+        // "resurrección" como el de expenses).
+        val ref = firestore.collectionGroup("wallet_transfer")
             .whereEqualTo("id", transferId).get().await()
-            .documents.firstOrNull()?.reference?.delete()?.await()
+            .documents.firstOrNull()?.reference ?: return
+        val now = System.currentTimeMillis()
+        ref.set(mapOf("id" to transferId, "deletedAt" to now, "updatedAt" to now)).await()
     }
 }

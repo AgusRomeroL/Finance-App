@@ -52,6 +52,10 @@ import mx.budget.data.repository.WalletRepository
  * - **Conflictos:** last-write-wins por `updated_at` — el pull solo aplica un
  *   doc remoto si su timestamp supera al local (seeds/legados con 0 nunca
  *   pisan ediciones locales).
+ * - **Deletes (lápidas):** los DELETE del outbox NO borran el doc remoto: lo
+ *   reemplazan por una lápida (`deleted_at` + `updated_at`). El dato local sí
+ *   se borra de verdad; lo que persiste es la lápida en Firestore, para que
+ *   un dispositivo offline prolongado no resucite el doc al reconectar.
  *
  * @param remoteExpenseRepository implementación Firestore del
  *  [ExpenseRepository] (el "lado nube"), NO la implementación Room.
@@ -163,11 +167,13 @@ class SyncManager(
                         }
 
                         row.entityType == "EXPENSE" && row.operation == "DELETE" -> {
-                            // TODO(remote-delete): se requiere un borrado remoto fiable.
-                            //  `ExpenseRepositoryFirestore.deleteAndRevertBalance` existe pero
-                            //  depende de un collectionGroup query por id; hasta validarlo lo
-                            //  intentamos best-effort y, si falla, se reintenta. Decisión:
-                            //  intentamos el delete remoto y solo quitamos la fila en éxito.
+                            // Borrado remoto fiable con LÁPIDA (tombstone): la impl
+                            // Firestore ya no borra el doc — lo reemplaza por una
+                            // lápida (`deleted_at` + `updated_at`) y borra la
+                            // subcolección `attributions` en el mismo batch. Así un
+                            // dispositivo offline prolongado cuyo cache ya no ve el
+                            // REMOVED recibe la lápida como ADDED y borra localmente,
+                            // en vez de resucitar el gasto.
                             remoteExpenseRepository.deleteAndRevertBalance(row.entityId)
                             syncQueueDao.delete(row.id)
                         }

@@ -1,5 +1,6 @@
 package mx.budget.data.remote
 
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.flow.Flow
@@ -40,12 +41,26 @@ class LoanRepositoryFirestore(
     override suspend fun update(loan: LoanEntity) = insert(loan)
 
     override suspend fun delete(loan: LoanEntity) {
-        collection(loan.householdId).document(loan.id).delete().await()
+        writeTombstone(collection(loan.householdId).document(loan.id), loan.id)
     }
 
     /** Borrado remoto por id (drenado de `LOAN|DELETE` del outbox). */
     suspend fun deleteById(loanId: String) {
-        collection(householdId).document(loanId).delete().await()
+        writeTombstone(collection(householdId).document(loanId), loanId)
+    }
+
+    /**
+     * LÁPIDA (tombstone): en vez de borrar el doc (cuyo REMOVED puede perderse
+     * para un dispositivo offline prolongado, que "resucitaría" el préstamo),
+     * se reemplaza por una lápida mínima con `deletedAt`; los pulls la tratan
+     * como borrado (set SIN merge limpia el resto de campos). Decisión
+     * consciente: para loans el borrado GANA sobre una edición offline
+     * concurrente (un abono re-pusheado tras el borrado converge a borrado en
+     * todos los dispositivos vía el gate LWW >= del pull).
+     */
+    private suspend fun writeTombstone(ref: DocumentReference, id: String) {
+        val now = System.currentTimeMillis()
+        ref.set(mapOf("id" to id, "deletedAt" to now, "updatedAt" to now)).await()
     }
 
     override suspend fun applyPayment(loanId: String, paymentMxn: Double) {

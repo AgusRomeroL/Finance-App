@@ -1,5 +1,6 @@
 package mx.budget.data.remote
 
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.channels.awaitClose
@@ -247,16 +248,28 @@ class ExpenseRepositoryFirestore(
 
     override suspend fun insertWithAttributions(expense: ExpenseEntity, attributions: List<ExpenseAttributionEntity>) {
         val ref = getCollection(expense.householdId).document(expense.id)
-        
-        // In NoSQL it is better to embed attributions within the expense or subcollection
-        val data = hashMapOf<String, Any>()
-        data["expense"] = expense
-        data["attributions"] = attributions
-        
-        ref.set(expense, SetOptions.merge()).await()
+
+        // UN batch atómico (contrato con el pull: el gasto nunca se ve sin sus
+        // atribuciones ya escritas). Además LIMPIA la lápida (`deleted_at`):
+        // un UPSERT posterior a un borrado remoto "resucita" legítimamente el
+        // doc (la edición local ganó el LWW por updated_at) — sin esta
+        // limpieza el doc quedaría zombi (campos vivos + lápida) y todos los
+        // pulls lo seguirían tratando como borrado.
+        val batch = firestore.batch()
+        batch.set(ref, expense, SetOptions.merge())
+        // update tras set sobre el mismo ref es válido dentro del batch (el
+        // doc existe al aplicarse en orden).
+        batch.update(
+            ref,
+            mapOf(
+                "deletedAt" to FieldValue.delete(),
+                "deleted_at" to FieldValue.delete(),
+            )
+        )
         attributions.forEach { attr ->
-            ref.collection("attributions").document(attr.id).set(attr).await()
+            batch.set(ref.collection("attributions").document(attr.id), attr)
         }
+        batch.commit().await()
     }
 
     override suspend fun updateWithAttributions(expense: ExpenseEntity, attributions: List<ExpenseAttributionEntity>) {
@@ -274,10 +287,15 @@ class ExpenseRepositoryFirestore(
     }
 
     override suspend fun deleteAndRevertBalance(expenseId: String) {
-        // Delete remoto fiable (MVP Fase 2e): ruta directa por id (el id del doc
-        // ES el id de la entidad) + borrado de la subcolección `attributions` en
-        // batch (Firestore NO borra subcolecciones al borrar el padre). Fallback
-        // al collectionGroup legado solo si no se conoce el household.
+        // Delete remoto fiable con LÁPIDA (tombstone): en vez de borrar el doc
+        // (cuyo REMOVED puede perderse para un dispositivo offline prolongado,
+        // que al reconectar recibiría el doc como ADDED y "resucitaría" el
+        // gasto), el doc se REEMPLAZA por una lápida mínima con `deletedAt`.
+        // Los pulls tratan deleted_at > 0 como borrado (gate LWW). Ruta directa
+        // por id (el id del doc ES el id de la entidad) con fallback al
+        // collectionGroup legado si no se conoce el household. La subcolección
+        // `attributions` SÍ se borra de verdad en el MISMO batch (Firestore no
+        // toca subcolecciones al escribir el padre y la lápida no las necesita).
         val ref = if (householdId != null) {
             getCollection(householdId).document(expenseId)
         } else {
@@ -285,12 +303,20 @@ class ExpenseRepositoryFirestore(
                 .documents.firstOrNull()?.reference ?: return
         }
         val attribs = ref.collection("attributions").get().await()
-        if (!attribs.isEmpty) {
-            val batch = firestore.batch()
-            attribs.documents.forEach { batch.delete(it.reference) }
-            batch.commit().await()
+        val now = System.currentTimeMillis()
+        val hh = householdId ?: ref.parent.parent?.id
+        val tombstone = buildMap<String, Any> {
+            put("id", expenseId)
+            if (hh != null) put("householdId", hh)
+            put("deletedAt", now)
+            put("updatedAt", now)
         }
-        ref.delete().await()
+        val batch = firestore.batch()
+        attribs.documents.forEach { batch.delete(it.reference) }
+        // set SIN merge: limpia el resto de campos — la lápida queda chica y
+        // fuera de las queries por status/quincena.
+        batch.set(ref, tombstone)
+        batch.commit().await()
     }
 
     override suspend fun postPlannedExpense(expenseId: String) {

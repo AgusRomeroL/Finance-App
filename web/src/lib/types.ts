@@ -161,6 +161,13 @@ export interface Expense {
   householdId?: string
   createdAt?: number
   updatedAt: number
+  /**
+   * Lápida (tombstone): epoch ms del soft-delete, ausente/0 = vivo. El delete
+   * NO borra el doc (un dispositivo offline prolongado lo resucitaría al no
+   * ver el REMOVED); lo reemplaza por una lápida mínima con este campo. Toda
+   * lectura debe filtrar los docs con deletedAt > 0.
+   */
+  deletedAt?: number
 }
 
 export interface ExpenseWithId extends Expense {
