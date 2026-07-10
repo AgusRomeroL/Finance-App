@@ -267,7 +267,6 @@ fun BudgetNavGraph(
             SearchResultsScreen(
                 searchViewModel = searchViewModel,
                 dashboardViewModel = dashboardViewModel,
-                captureViewModel = captureViewModel,
                 onBack = { onNavigate(BudgetDestinations.DASHBOARD) }
             )
         }

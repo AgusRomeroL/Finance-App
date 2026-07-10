@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -108,10 +107,11 @@ fun TemplatesScreen(
         },
     ) { inner ->
         Column(
+            // Edge-to-edge: el Scaffold ya aporta el inset real de las barras vía
+            // [inner]; sin statusBarsPadding extra (duplicaría el inset superior).
             modifier = Modifier
                 .fillMaxSize()
-                .padding(inner)
-                .statusBarsPadding(),
+                .padding(inner),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 10.dp),

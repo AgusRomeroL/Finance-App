@@ -79,17 +79,21 @@ fun FloatingNavBar(
             tonalElevation = 2.dp,
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 navItems.take(4).forEach { item ->
+                    val isSel = currentRoute == item.route
+                    // Los no-seleccionados se dimensionan a su ícono; el seleccionado
+                    // toma el espacio restante (weight) para mostrar ícono+etiqueta sin
+                    // recortarse a "I" a fontScale 1.3 + bold (ellipsis de seguridad).
                     NavPillItem(
                         label = item.label,
                         icon = item.icon,
-                        selected = currentRoute == item.route,
+                        selected = isSel,
                         onClick = { onNavigate(item.route) },
-                        modifier = Modifier.weight(1f, fill = false),
+                        modifier = if (isSel) Modifier.weight(1f) else Modifier,
                     )
                 }
             }
@@ -148,7 +152,9 @@ private fun NavPillItem(
             .clip(CircleShape)
             .background(container)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            // Menos padding horizontal en los no-seleccionados: libera ancho para que
+            // la etiqueta del seleccionado ("Cuentas"/"Analíticas") entre a fontScale 1.3.
+            .padding(horizontal = if (selected) 12.dp else 7.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -169,6 +175,8 @@ private fun NavPillItem(
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = contentColor,
                     maxLines = 1,
+                    softWrap = false,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
             }
         }
