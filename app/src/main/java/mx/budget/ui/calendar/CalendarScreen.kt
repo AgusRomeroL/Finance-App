@@ -54,10 +54,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import mx.budget.data.local.result.ExpenseWithDetails
+import mx.budget.ui.common.toMxn
 import mx.budget.ui.dashboard.iconForCategory
 import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
-import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -67,9 +67,6 @@ import java.util.Date
 import java.util.Locale
 
 private val ZONE: ZoneId = ZoneId.of("America/Mexico_City")
-
-private val mxnInt: NumberFormat = NumberFormat.getIntegerInstance(Locale("es", "MX"))
-private fun Double.toMxn(): String = "$" + mxnInt.format(this.toLong())
 
 private val dayFmt = java.text.SimpleDateFormat("EEE d MMM", Locale("es", "MX"))
 private fun formatDay(epochMillis: Long): String =

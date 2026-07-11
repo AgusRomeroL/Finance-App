@@ -109,6 +109,7 @@ fun SearchResultsScreen(
                 query = query,
                 onQueryChange = searchViewModel::onQueryChange,
                 readOnly = false,
+                autoFocus = true,
                 modifier = Modifier.weight(1f)
             )
         }

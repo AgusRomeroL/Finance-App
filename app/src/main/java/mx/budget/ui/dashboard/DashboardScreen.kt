@@ -4,6 +4,7 @@ import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.DraggableState
 import androidx.compose.foundation.gestures.Orientation
@@ -24,7 +25,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -53,7 +55,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Event
@@ -114,12 +119,16 @@ import mx.budget.data.capture.toReviewMode
 import mx.budget.ui.common.AppTopBar
 import mx.budget.ui.common.LocalSessionMemberId
 import mx.budget.ui.common.SearchPill
+import mx.budget.ui.common.pressScale
+import mx.budget.ui.common.rememberPressInteractionSource
+import mx.budget.ui.common.staggeredEntrance
 import mx.budget.ui.common.youLabel
 import mx.budget.ui.capture.CaptureBottomSheet
 import mx.budget.ui.capture.CaptureField
 import mx.budget.ui.capture.CapturePrefill
 import mx.budget.ui.capture.CaptureSheetMode
 import mx.budget.ui.capture.CaptureViewModel
+import mx.budget.ui.theme.BudgetMotion
 import mx.budget.ui.theme.FinancialTone
 import mx.budget.ui.theme.amountSemantic
 import java.text.NumberFormat
@@ -470,9 +479,14 @@ private fun ExpandedDashboard(
                             modifier = Modifier.weight(1f),
                         )
                     }
+                    // La PÁGINA entera scrollea (no los tiles por dentro): con
+                    // sugerencias ocupando alto, el hero y transacciones quedaban
+                    // recortados con scrolls internos propios — ahora ambos paneles
+                    // crecen a su altura natural y se recorren completos hacia abajo.
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
                             .padding(start = 30.dp, top = 8.dp, end = 32.dp, bottom = 24.dp)
                     ) {
                         DashboardHeader(
@@ -525,15 +539,12 @@ private fun ExpandedDashboard(
                             )
                         }
                         Spacer(Modifier.height(22.dp))
-                        // weight(1f) y NO fillMaxSize: dentro de esta Column sin scroll,
-                        // fillMaxSize pedía TODA la altura y el Bento se recortaba bajo
-                        // el borde inferior en la pantalla casi cuadrada del Fold.
+                        // Sin weight: dentro de la página scrollable el Bento toma su
+                        // altura natural (la del panel más alto) y se ve completo.
                         BentoPanes(
                             state = state,
                             singleMember = reimbursementUi.singleMember,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                             tutorialController = tutorialController,
                             onOpenBreakdown = onNavigate?.let { nav -> { nav("member_balances") } }
                         )
@@ -564,12 +575,20 @@ private fun BentoPanes(
 ) {
     var fraction by rememberSaveable { mutableStateOf(0.55f) }
     val settleScope = rememberCoroutineScope()
-    BoxWithConstraints(modifier = modifier) {
-        val totalPx = constraints.maxWidth.toFloat()
+    // onSizeChanged en vez de BoxWithConstraints: la Row usa IntrinsicSize.Min (altura
+    // natural del panel más alto, para la página scrollable) y BoxWithConstraints no
+    // soporta medición intrínseca.
+    var totalPx by remember { mutableStateOf(0f) }
+    Box(modifier = modifier) {
         val dragState = rememberDraggableState { delta ->
             if (totalPx > 0f) fraction = (fraction + delta / totalPx).coerceIn(0.45f, 0.78f)
         }
-        Row(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                .onSizeChanged { totalPx = it.width.toFloat() }
+        ) {
             MainHealthPane(
                 state = state,
                 singleMember = singleMember,
@@ -1115,18 +1134,13 @@ private fun MainHealthPane(
     tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
     onOpenBreakdown: (() -> Unit)? = null,
 ) {
-    // Scroll vertical: en pantalla casi cuadrada del Fold + fontScale 1.3 + bold, el
-    // KPI héroe + las barras por miembro exceden el alto del panel. Sin scroll el pie
-    // (barras del último miembro + "Ver desglose") quedaba cortado sin poder verse.
+    // Sin scroll interno: la página completa del dashboard expandido ya scrollea,
+    // así que el panel crece a su altura natural y se ve entero.
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .verticalScroll(rememberScrollState())
-            // bottom holgado: el pill flotante de navegación se superpone al pie del
-            // panel; sin esta reserva el final del scroll ("Ver desglose" / última
-            // barra por miembro) queda tapado en el Fold.
-            .padding(start = 36.dp, top = 36.dp, end = 36.dp, bottom = 120.dp)
+            .padding(36.dp)
     ) {
         // Paridad teléfono/Fold: el mismo hero de anillo + tiles del layout compacto.
         // TUTORIAL: DASH_HERO_KPI — ver TUTORIAL.md
@@ -1624,15 +1638,42 @@ private fun RitmoCard(
     val progress = remember(quincena?.id) { computeProgress(quincena) }
     val available = income - postedTotal
     val expectedByNow = budget * progress.fraction
-    val deviation = if (expectedByNow > 0.0) (postedTotal - expectedByNow) / expectedByNow else 0.0
+    val hasPlan = expectedByNow > 0.0
+    val deviation = if (hasPlan) (postedTotal - expectedByNow) / expectedByNow else 0.0
     val pct = (abs(deviation) * 100).roundToInt()
     val onTrack = pct < 1
     val below = deviation < 0
-    val good = onTrack || below
+    val overIncome = income > 0.0 && postedTotal > income
     val showPerDay = viewingActive && progress.daysRemaining > 0
     val perDay = if (progress.daysRemaining > 0) available / progress.daysRemaining else available
 
-    val sem = amountSemantic(if (good) FinancialTone.INCOME else FinancialTone.WARNING)
+    // Estado → tono + símbolo + frase (redundancia no-cromática: icono+texto+color).
+    // Cada situación tiene su propio mensaje e icono, no siempre el mismo.
+    data class RitmoUi(val tone: FinancialTone, val icon: ImageVector, val hi: String, val rest: String, val lead: String = "")
+    val ui = when {
+        !hasPlan -> RitmoUi(
+            FinancialTone.NEUTRAL, Icons.AutoMirrored.Filled.TrendingFlat,
+            "Sin plan de gasto", " esta quincena — captura para ver tu ritmo", "Aún ")
+        overIncome -> RitmoUi(
+            FinancialTone.EXPENSE, Icons.Filled.WarningAmber,
+            "más de lo que entró", " esta quincena", "Gastaste ")
+        onTrack -> RitmoUi(
+            FinancialTone.INCOME, Icons.AutoMirrored.Filled.TrendingFlat,
+            "al ritmo", " del gasto previsto", "Vas ")
+        below && pct >= 15 -> RitmoUi(
+            FinancialTone.INCOME, Icons.Filled.Savings,
+            "$pct % por debajo", " del plan — buen colchón", "Vas ")
+        below -> RitmoUi(
+            FinancialTone.INCOME, Icons.AutoMirrored.Filled.TrendingDown,
+            "$pct % por debajo", " del gasto previsto", "Vas ")
+        pct >= 15 -> RitmoUi(
+            FinancialTone.WARNING, Icons.AutoMirrored.Filled.TrendingUp,
+            "$pct % por encima", " del plan — conviene frenar", "Vas ")
+        else -> RitmoUi(
+            FinancialTone.WARNING, Icons.AutoMirrored.Filled.TrendingUp,
+            "$pct % por encima", " del gasto previsto", "Vas ")
+    }
+    val sem = amountSemantic(ui.tone)
 
     Row(
         modifier = modifier
@@ -1646,21 +1687,18 @@ private fun RitmoCard(
             modifier = Modifier.size(34.dp).clip(CircleShape).background(sem.container),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                if (below) Icons.AutoMirrored.Filled.TrendingDown else Icons.AutoMirrored.Filled.TrendingUp,
-                "Ritmo de gasto", tint = sem.color, modifier = Modifier.size(18.dp)
-            )
+            Icon(ui.icon, "Ritmo de gasto", tint = sem.color, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Eyebrow("Ritmo", maxLines = 1)
             Spacer(Modifier.height(2.dp))
             val msg = buildAnnotatedString {
-                append("Vas ")
+                append(ui.lead)
                 withStyle(SpanStyle(color = sem.color, fontWeight = FontWeight.SemiBold)) {
-                    append(if (onTrack) "al ritmo" else "$pct % ${if (below) "por debajo" else "por encima"}")
+                    append(ui.hi)
                 }
-                append(" del gasto previsto")
+                append(ui.rest)
             }
             Text(
                 msg,
@@ -2026,7 +2064,10 @@ private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: M
         Spacer(Modifier.height(16.dp))
 
         if (transactions.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     "Sin gastos registrados.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -2034,14 +2075,13 @@ private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: M
                 )
             }
         } else {
-            LazyColumn(
-                state = rememberLazyListState(),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                contentPadding = PaddingValues(bottom = 112.dp) // el pill flotante de navegación no debe tapar la última fila
-            ) {
-                itemsIndexed(transactions, key = { _, it -> it.expenseId }) { index, tx ->
-                    // Motion expresivo: filas nuevas/reordenadas entran con resorte.
-                    Box(Modifier.animateItem()) {
+            // Column normal (no Lazy): la página completa scrollea, así que el panel
+            // muestra TODAS las filas a su altura natural (una LazyColumn sin alto
+            // acotado dentro de un verticalScroll ni siquiera compone).
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                transactions.forEachIndexed { index, tx ->
+                    // Motion expresivo: entrada escalonada en la carga inicial.
+                    Box(Modifier.staggeredEntrance(index)) {
                         TransactionRow(tx, alternate = index % 2 == 1)
                     }
                 }
@@ -2067,13 +2107,18 @@ internal fun TransactionRow(
             .getOrNull()
     }
     val onRowClick = onClick ?: LocalExpenseRowClick.current
+    val interaction = rememberPressInteractionSource()
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .pressScale(interactionSource = interaction)
             .clip(RoundedCornerShape(18.dp))
-            .clickable { onRowClick(tx) }
             .background(rowBg)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+            ) { onRowClick(tx) }
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -2175,18 +2220,31 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
     val spendFraction = if (income > 0.0) (spent / income).toFloat() else 0f
     val overBudget = spent > income
     val expenseC = amountSemantic(FinancialTone.EXPENSE)
+    val warningC = amountSemantic(FinancialTone.WARNING)
+    // Salud del gasto por umbral: neutral bajo control → ámbar al acercarse al ingreso
+    // (≥85%) → rojo al excederlo. El color cruza suave (no salta) y refuerza la señal
+    // que el % y el signo ya dan (nunca depende solo del color).
+    val ringColor by animateColorAsState(
+        targetValue = when {
+            overBudget -> expenseC.color
+            spendFraction >= 0.85f -> warningC.color
+            else -> MaterialTheme.colorScheme.primary
+        },
+        animationSpec = BudgetMotion.standard(),
+        label = "ringColor",
+    )
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-            // Anillo: fracción del ingreso ya gastada (rojo si excede el ingreso).
+            // Anillo: fracción del ingreso ya gastada; color por umbral (neutral/ámbar/rojo).
             BudgetRing(
                 fraction = spendFraction,
                 ringSize = 126.dp,
                 strokeWidth = 13.dp,
-                progressColor = if (overBudget) expenseC.color else MaterialTheme.colorScheme.primary,
+                progressColor = ringColor,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(

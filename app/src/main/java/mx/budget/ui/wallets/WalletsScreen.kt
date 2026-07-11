@@ -7,7 +7,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import mx.budget.ui.common.KpiCard
+import mx.budget.ui.common.ScreenHeader
+import mx.budget.ui.common.pressScale
+import mx.budget.ui.common.rememberPressInteractionSource
+import mx.budget.ui.common.toMxn
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,14 +85,10 @@ import mx.budget.ui.theme.amountSemantic
 import mx.budget.ui.theme.financeColors
 import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
-import java.text.NumberFormat
 import java.util.Date
 import java.util.Locale
 
-// ── Helpers locales (mismo formato que el resto de las pantallas) ─────────────
-
-private val mxnInt: NumberFormat = NumberFormat.getIntegerInstance(Locale("es", "MX"))
-private fun Double.toMxn(): String = "$" + mxnInt.format(this.toLong())
+// ── Helpers locales (el formato de montos vive en ui/common/MoneyFormat.kt) ──
 
 private val dayFmt = java.text.SimpleDateFormat("EEE d MMM", Locale("es", "MX"))
 private fun formatDay(epochMillis: Long): String =
@@ -452,6 +454,9 @@ private fun Header(
     onTransfer: () -> Unit,
     tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
 ) {
+    val backInteraction = rememberPressInteractionSource()
+    val incomeInteraction = rememberPressInteractionSource()
+    val transferInteraction = rememberPressInteractionSource()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -461,9 +466,14 @@ private fun Header(
         Box(
             modifier = Modifier
                 .size(40.dp)
+                .pressScale(pressedScale = 0.92f, interactionSource = backInteraction)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .clickable(onClick = onBack),
+                .clickable(
+                    interactionSource = backInteraction,
+                    indication = LocalIndication.current,
+                    onClick = onBack,
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -472,20 +482,7 @@ private fun Header(
             )
         }
         Spacer(Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                "CUENTAS",
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                letterSpacing = 1.6.sp,
-            )
-            Text(
-                "Saldos",
-                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Light, fontSize = 28.sp),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-            )
-        }
+        ScreenHeader(eyebrow = "Cuentas", title = "Saldos", modifier = Modifier.weight(1f))
         // TUTORIAL: WAL_HEADER — ver TUTORIAL.md
         Row(
             modifier = Modifier.tutorialTarget(TutorialKey.WAL_HEADER, tutorialController),
@@ -494,9 +491,14 @@ private fun Header(
             Box(
                 modifier = Modifier
                     .size(40.dp)
+                    .pressScale(pressedScale = 0.92f, interactionSource = incomeInteraction)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .clickable(onClick = onIncome),
+                    .clickable(
+                        interactionSource = incomeInteraction,
+                        indication = LocalIndication.current,
+                        onClick = onIncome,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -508,9 +510,14 @@ private fun Header(
             Box(
                 modifier = Modifier
                     .size(40.dp)
+                    .pressScale(pressedScale = 0.92f, interactionSource = transferInteraction)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .clickable(onClick = onTransfer),
+                    .clickable(
+                        interactionSource = transferInteraction,
+                        indication = LocalIndication.current,
+                        onClick = onTransfer,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -642,31 +649,6 @@ private fun KpiRow(liquidTotal: Double, revolvingDebt: Double) {
     }
 }
 
-@Composable
-private fun KpiCard(label: String, amount: Double, tone: FinancialTone, modifier: Modifier = Modifier) {
-    val sem = amountSemantic(tone)
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(sem.container)
-            .padding(16.dp),
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = sem.onContainer,
-            maxLines = 2,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            amount.toMxn(),
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = sem.onContainer,
-            maxLines = 1,
-        )
-    }
-}
-
 /**
  * Fila de acceso a "Cuentas entre miembros" (netting). Punto de entrada desde
  * Cuentas: aquí ya vive el concepto de saldos, así que comparte encabezado/estilo
@@ -674,12 +656,18 @@ private fun KpiCard(label: String, amount: Double, tone: FinancialTone, modifier
  */
 @Composable
 private fun MemberBalancesEntry(onClick: () -> Unit) {
+    val interaction = rememberPressInteractionSource()
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .pressScale(interactionSource = interaction)
             .clip(RoundedCornerShape(18.dp))
             .background(MaterialTheme.colorScheme.secondaryContainer)
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            )
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -745,13 +733,20 @@ private fun WalletCard(
     // El saldo: líquido = neutral (disponible); crédito/deuda = tono de gasto.
     val tone = if (liquid) FinancialTone.NEUTRAL else FinancialTone.EXPENSE
     val sem = amountSemantic(tone)
+    val interaction = rememberPressInteractionSource()
 
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .pressScale(interactionSource = interaction)
             .clip(RoundedCornerShape(20.dp))
             .background(bg)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -984,12 +979,19 @@ private fun TransferRow(
     modifier: Modifier = Modifier,
 ) {
     val credit = !isLiquid(transfer.toKind)
+    val interaction = rememberPressInteractionSource()
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .pressScale(interactionSource = interaction)
             .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .combinedClickable(onClick = {}, onLongClick = onLongClick)
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = {},
+                onLongClick = onLongClick,
+            )
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1060,12 +1062,18 @@ private fun DeleteTransferDialog(
 
 @Composable
 private fun HeaderAction(icon: ImageVector, description: String, onClick: () -> Unit) {
+    val interaction = rememberPressInteractionSource()
     Box(
         modifier = Modifier
             .size(40.dp)
+            .pressScale(pressedScale = 0.92f, interactionSource = interaction)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

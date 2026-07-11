@@ -8,9 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -50,14 +49,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import mx.budget.BudgetApplication
+import mx.budget.ui.common.LocalReducedMotion
 import mx.budget.ui.search.SpeechRecognizerController
 import mx.budget.ui.search.SpeechState
 import mx.budget.ui.theme.BudgetAppTheme
+import mx.budget.ui.theme.BudgetMotion
 
 /**
  * Overlay transparente de **captura en lenguaje natural** (Apéndice G.3).
@@ -162,16 +164,20 @@ private fun VoiceCaptureOverlay(
     }
     DisposableEffect(Unit) { onDispose { controller.destroy() } }
 
-    // Entrada con resorte espacial (Material Expressive, obligatorio en este repo).
-    val appear by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
-        label = "appear",
-    )
+    // "Materialize" (Material Expressive): el overlay no aparece de golpe — el scrim
+    // se atenúa y la tarjeta crece 0.9→1 con fade. (El animateFloatAsState anterior
+    // arrancaba YA en 1f, por lo que la animación nunca corría y el pop-up entraba
+    // brusco.) Respeta reduced-motion.
+    val reducedMotion = LocalReducedMotion.current
+    val appear = remember { Animatable(if (reducedMotion) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (!reducedMotion) appear.animateTo(1f, animationSpec = BudgetMotion.standard())
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.35f * appear.value))
             .clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
@@ -179,7 +185,12 @@ private fun VoiceCaptureOverlay(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(24.dp)
-                .scale(0.9f + 0.1f * appear)
+                .graphicsLayer {
+                    val p = appear.value
+                    scaleX = 0.9f + 0.1f * p
+                    scaleY = 0.9f + 0.1f * p
+                    alpha = p
+                }
                 // Consume el clic para que tocar la tarjeta NO se propague al scrim
                 // (un clickable disabled no intercepta; este no-op sin ripple sí).
                 .clickable(

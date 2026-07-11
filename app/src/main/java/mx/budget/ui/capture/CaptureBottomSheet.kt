@@ -2,16 +2,27 @@ package mx.budget.ui.capture
 
 import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
+import mx.budget.ui.common.LocalReducedMotion
+import mx.budget.ui.common.pressScale
+import mx.budget.ui.common.rememberPressInteractionSource
+import mx.budget.ui.theme.AppShapes
+import mx.budget.ui.theme.BudgetMotion
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -208,7 +219,24 @@ fun CaptureBottomSheet(
             )
         }
     ) {
-      Box {
+      // "Materialize" (Kowalski/Apple): el contenido no aparece de golpe — crece
+      // de 0.92→1 con fade desde el borde inferior mientras el sheet sube, para que
+      // se sienta como un material que llega, no un salto. Sin blur (eso sería el
+      // look Apple que evitamos). Respeta reduced-motion.
+      val reducedMotion = LocalReducedMotion.current
+      val materialize = remember { Animatable(if (reducedMotion) 1f else 0f) }
+      LaunchedEffect(Unit) {
+          if (!reducedMotion) materialize.animateTo(1f, animationSpec = BudgetMotion.standard())
+      }
+      Box(
+          modifier = Modifier.graphicsLayer {
+              val p = materialize.value
+              scaleX = 0.92f + 0.08f * p
+              scaleY = 0.92f + 0.08f * p
+              alpha = p
+              transformOrigin = TransformOrigin(0.5f, 1f)
+          }
+      ) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             containerColor = Color.Transparent
@@ -246,9 +274,6 @@ fun CaptureBottomSheet(
                             kind = captureKind,
                             onConceptChange = { viewModel?.onConceptChange(it) },
                             onKey = { viewModel?.onNumpadKey(it) },
-                            onRegister = { viewModel?.onRegister() },
-                            canRegister = canRegister,
-                            isLoading = operationState is CaptureOperationState.Loading,
                             amountPending = CaptureField.AMOUNT in unresolvedFields,
                             conceptPending = CaptureField.CONCEPT in unresolvedFields
                         )
@@ -550,9 +575,6 @@ private fun AmountCard(
     kind: CaptureKind,
     onConceptChange: (String) -> Unit,
     onKey: (String) -> Unit,
-    onRegister: () -> Unit,
-    canRegister: Boolean,
-    isLoading: Boolean = false,
     amountPending: Boolean = false,
     conceptPending: Boolean = false
 ) {
@@ -623,17 +645,12 @@ private fun AmountCard(
             )
         )
         Spacer(Modifier.height(16.dp))
-        Keypad(onKey = onKey, onRegister = onRegister, canRegister = canRegister, isLoading = isLoading)
+        Keypad(onKey = onKey)
     }
 }
 
 @Composable
-private fun Keypad(
-    onKey: (String) -> Unit,
-    onRegister: () -> Unit,
-    canRegister: Boolean,
-    isLoading: Boolean = false,
-) {
+private fun Keypad(onKey: (String) -> Unit) {
     val rows = listOf(
         listOf("1", "2", "3", "DEL"),
         listOf("4", "5", "6", "."),
@@ -649,49 +666,28 @@ private fun Keypad(
                 }
             }
         }
-        // Última fila: 0 ancho + ✓ confirmar
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            KeypadKey("0", Modifier.weight(3f)) { onKey("0") }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(
-                        if (canRegister) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceContainerHighest
-                    )
-                    .clickable(enabled = canRegister && !isLoading, onClick = onRegister),
-                contentAlignment = Alignment.Center
-            ) {
-                // Feedback de progreso: mismo patrón que CaptureFooter (el VM ya
-                // protege la reentrada; esto solo lo hace visible).
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                } else {
-                    Icon(
-                        Icons.Filled.Check, "Registrar",
-                        tint = if (canRegister) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
+        // Última fila: 0 a lo ancho. (La ✓ de confirmar se quitó: duplicaba al botón
+        // "Guardar" del footer y confundía — un solo lugar para registrar.)
+        Row(modifier = Modifier.fillMaxWidth()) {
+            KeypadKey("0", Modifier.weight(1f)) { onKey("0") }
         }
     }
 }
 
 @Composable
 private fun KeypadKey(key: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val interaction = rememberPressInteractionSource()
     Box(
         modifier = modifier
+            .pressScale(interactionSource = interaction)
             .height(52.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(AppShapes.keypadKey)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center
     ) {
         if (key == "DEL") {
@@ -961,9 +957,15 @@ private fun AccordionGroup(
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 )
             }
+            val chevronRot by animateFloatAsState(
+                targetValue = if (open) 180f else 0f,
+                animationSpec = BudgetMotion.standard(),
+                label = "categoryChevron",
+            )
             Icon(
-                if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)
+                Icons.Filled.ExpandMore, null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp).rotate(chevronRot)
             )
         }
         AnimatedVisibility(visible = open) {
@@ -979,17 +981,34 @@ private fun AccordionGroup(
 
 @Composable
 private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val interaction = rememberPressInteractionSource()
+    // Continuidad: el relleno y el texto cruzan suave al seleccionar, no saltan.
+    val chipBg by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = BudgetMotion.standard(),
+        label = "categoryChipBg",
+    )
+    val chipFg by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        animationSpec = BudgetMotion.standard(),
+        label = "categoryChipFg",
+    )
     Box(
         modifier = Modifier
+            .pressScale(interactionSource = interaction)
             .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(onClick = onClick)
+            .background(chipBg)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            )
             .padding(horizontal = 12.dp, vertical = 7.dp)
     ) {
         Text(
             label,
             style = MaterialTheme.typography.labelLarge,
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+            color = chipFg,
             maxLines = 1
         )
     }
@@ -1041,12 +1060,18 @@ private fun WalletCard(wallet: PaymentMethodEntity, selected: Boolean, onClick: 
     val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
     val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     val sub = if (selected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val interaction = rememberPressInteractionSource()
     Column(
         modifier = Modifier
             .width(132.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .pressScale(interactionSource = interaction)
+            .clip(AppShapes.card)
             .background(bg)
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            )
             .padding(14.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -1331,7 +1356,12 @@ private fun MoreSection(
                     )
                 }
             }
-            Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            val moreChevronRot by animateFloatAsState(
+                targetValue = if (open) 180f else 0f,
+                animationSpec = BudgetMotion.standard(),
+                label = "moreChevron",
+            )
+            Icon(Icons.Filled.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp).rotate(moreChevronRot))
         }
         AnimatedVisibility(visible = open) {
             Column {

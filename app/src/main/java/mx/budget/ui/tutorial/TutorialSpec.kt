@@ -102,9 +102,11 @@ object TutorialSpec {
         TutorialStep(
             key = TutorialKey.CAP_ATTRIBUTION,
             route = BudgetDestinations.DASHBOARD,
-            title = "Beneficia a / Pagó",
-            body = "Reparte el gasto por porcentaje: a quién beneficia y quién lo pagó. Los ± ajustan " +
-                "en pasos de 5% y \"Todos\" reparte en partes iguales.",
+            title = "¿Para quién fue el gasto?",
+            body = "Cada gasto tiene dos lados. \"Beneficia a\" = quién lo disfruta (p. ej. la " +
+                "escuela beneficia a los niños). \"Pagó\" = de quién salió el dinero (vive en " +
+                "\"Más\"). Reparte con porcentajes: ± mueve de 5 en 5 y \"Todos\" divide en " +
+                "partes iguales.",
             requiresCaptureSheet = true,
         ),
 
