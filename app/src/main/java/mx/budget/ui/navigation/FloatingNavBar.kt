@@ -9,6 +9,7 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +40,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mx.budget.ui.capture.VoiceCaptureActivity
+import mx.budget.ui.common.pressScale
+import mx.budget.ui.common.rememberPressInteractionSource
 import mx.budget.ui.dashboard.navItems
 import mx.budget.ui.tutorial.TutorialController
 import mx.budget.ui.tutorial.TutorialKey
@@ -153,11 +156,17 @@ private fun NavPillItem(
         animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium),
         label = "navPillContent",
     )
+    val interaction = rememberPressInteractionSource()
     Row(
         modifier = modifier
+            .pressScale(interactionSource = interaction)
             .clip(CircleShape)
             .background(container)
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            )
             // Menos padding horizontal en los no-seleccionados: libera ancho para que
             // la etiqueta del seleccionado ("Cuentas"/"Analíticas") entre a fontScale 1.3.
             .padding(horizontal = if (selected) 12.dp else 7.dp, vertical = 10.dp),
@@ -199,11 +208,20 @@ private fun CircleActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val interaction = rememberPressInteractionSource()
     Surface(
         shape = CircleShape,
         color = container,
         shadowElevation = 6.dp,
-        modifier = modifier.size(52.dp).clip(CircleShape).clickable(onClick = onClick),
+        modifier = modifier
+            .size(52.dp)
+            .pressScale(pressedScale = 0.92f, interactionSource = interaction)
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(

@@ -68,7 +68,9 @@ dependencies {
     // Preferencias persistidas (toggle de color dinámico)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.activity:activity-compose:1.8.2")
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    // 2.9.x: soporte de predictive back animado en NavHost (usa las pop-transitions
+    // ya definidas en BudgetNavGraph). Alineado con compose-ui 1.10 / lifecycle 2.9.
+    implementation("androidx.navigation:navigation-compose:2.9.4")
     
     // Hilt just in case
     implementation("com.google.dagger:hilt-android:2.57")

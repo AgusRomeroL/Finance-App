@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import mx.budget.ui.common.LocalReducedMotion
+import mx.budget.ui.common.rememberReducedMotion
 
 // ── Esquema de color claro ────────────────────────────────────────────────────
 // Modo default: light — los prototipos de referencia usan class="light"
@@ -169,15 +171,25 @@ fun BudgetAppTheme(
         }
     }
 
-    CompositionLocalProvider(LocalFinanceColors provides financeColors) {
-        // Nota de motion (M3 1.4): los componentes M3 ya animan con física de
-        // resortes por default. El MotionScheme público (expressive()) sigue
-        // experimental en material3 1.5-alpha; cuando gradúe, se pasa aquí.
-        // Mientras, el sello expresivo se aplica con springs en los componentes
-        // custom (specs dampingRatio≈0.8, stiffness≈380).
+    // Reduced-motion del sistema (ANIMATOR_DURATION_SCALE): los helpers de motion
+    // custom lo consultan vía LocalReducedMotion para saltar el movimiento cuando
+    // el usuario desactiva animaciones, conservando color y semántica.
+    val reducedMotion = rememberReducedMotion()
+
+    CompositionLocalProvider(
+        LocalFinanceColors provides financeColors,
+        LocalReducedMotion provides reducedMotion,
+    ) {
+        // Nota de motion (M3 1.4.0 estable): `MaterialExpressiveTheme` y
+        // `MotionScheme.expressive()` siguen siendo `internal` en 1.4.0 — solo son
+        // públicos en material3 1.5.x-alpha. Mientras se decide el override a alpha,
+        // el sello expresivo se logra con: (1) BudgetShapes centralizadas aquí,
+        // (2) los specs de BudgetMotion en los componentes custom. Al pasar a alpha,
+        // esto se cambia por MaterialExpressiveTheme(shapes=…, motionScheme=…).
         MaterialTheme(
             colorScheme = colorScheme,
             typography = BudgetTypography,
+            shapes = BudgetShapes,
             content = content
         )
     }

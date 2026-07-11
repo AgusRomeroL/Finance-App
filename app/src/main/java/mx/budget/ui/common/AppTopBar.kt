@@ -25,10 +25,15 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -126,6 +131,9 @@ fun SearchPill(
     readOnly: Boolean = false,
     onActivate: () -> Unit = {},
     placeholder: String = "Buscar movimientos",
+    // Cuando true (y editable), el campo pide foco y abre el teclado al aparecer —
+    // así al entrar a la pantalla de búsqueda se puede escribir sin un tap extra.
+    autoFocus: Boolean = false,
 ) {
     Row(
         modifier = modifier
@@ -155,6 +163,14 @@ fun SearchPill(
                 )
             }
             if (!readOnly) {
+                val focusRequester = remember { FocusRequester() }
+                val keyboard = LocalSoftwareKeyboardController.current
+                if (autoFocus) {
+                    LaunchedEffect(Unit) {
+                        focusRequester.requestFocus()
+                        keyboard?.show()
+                    }
+                }
                 BasicTextField(
                     value = query,
                     onValueChange = onQueryChange,
@@ -162,7 +178,9 @@ fun SearchPill(
                     textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester),
                 )
             } else if (query.isNotEmpty()) {
                 Text(

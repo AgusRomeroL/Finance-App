@@ -1,6 +1,11 @@
 package mx.budget.ui.ledger
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import mx.budget.ui.common.ScreenHeader
+import mx.budget.ui.common.pressScale
+import mx.budget.ui.common.rememberPressInteractionSource
+import mx.budget.ui.common.staggeredEntrance
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -84,20 +89,11 @@ fun LedgerScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
             }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "Libro Mayor",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                quincena?.let {
-                    Text(
-                        it.label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            ScreenHeader(
+                eyebrow = quincena?.label,
+                title = "Libro Mayor",
+                modifier = Modifier.weight(1f),
+            )
             // Chevrones ← → sobre la lista ordenada de quincenas.
             val ordered = remember(quincenas) { quincenas.sortedBy { it.startDate } }
             val idx = ordered.indexOfFirst { it.id == quincena?.id }
@@ -176,9 +172,13 @@ fun LedgerScreen(
                         money = money,
                         dateFmt = dateFmt,
                         onClick = { onOpenDetail(row) },
-                        modifier = if (index == 0)
-                            Modifier.tutorialTarget(TutorialKey.LED_ROWS, tutorialController)
-                        else Modifier,
+                        modifier = Modifier
+                            .staggeredEntrance(index)
+                            .then(
+                                if (index == 0)
+                                    Modifier.tutorialTarget(TutorialKey.LED_ROWS, tutorialController)
+                                else Modifier
+                            ),
                     )
                 }
             }
@@ -195,12 +195,18 @@ private fun LedgerRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val interaction = rememberPressInteractionSource()
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .pressScale(interactionSource = interaction)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
     ) {
         Row(
             modifier = Modifier

@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.dp
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.QuincenaSnapshot
 import mx.budget.data.local.result.SpendByCategory
+import mx.budget.ui.common.KpiCard
+import mx.budget.ui.common.ScreenHeader
 import mx.budget.ui.theme.financeColors
 import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
@@ -124,20 +126,11 @@ fun AnalyticsScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "Analíticas",
-                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        quincena?.let {
-                            Text(
-                                it.label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                    ScreenHeader(
+                        eyebrow = quincena?.label,
+                        title = "Analíticas",
+                        modifier = Modifier.weight(1f),
+                    )
                     onOpenLedger?.let {
                         // TUTORIAL: ANA_LEDGER_ENTRY — ver TUTORIAL.md
                         IconButton(
@@ -177,9 +170,21 @@ fun AnalyticsScreen(
                     modifier = Modifier.tutorialTarget(TutorialKey.ANA_KPI_ROW, tutorialController),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    KpiCard("Ahorro", money.format(totalSavings), Modifier.weight(1f))
-                    KpiCard("Por cobrar", money.format(totalReceivable), Modifier.weight(1f))
-                    KpiCard("MSI pendiente", money.format(totalCommitment), Modifier.weight(1f))
+                    KpiCard(
+                        label = "Ahorro",
+                        valueText = money.format(totalSavings),
+                        modifier = Modifier.weight(1f),
+                    )
+                    KpiCard(
+                        label = "Por cobrar",
+                        valueText = money.format(totalReceivable),
+                        modifier = Modifier.weight(1f),
+                    )
+                    KpiCard(
+                        label = "MSI pendiente",
+                        valueText = money.format(totalCommitment),
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
 
@@ -418,7 +423,9 @@ private fun WidgetCard(
 ) {
     Surface(
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        // Estándar de elevación tonal: las cards de contenido usan
+        // surfaceContainerHigh (mismo nivel que Wallets y Ledger).
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(18.dp)) {
@@ -440,31 +447,6 @@ private fun EmptyHint(text: String) {
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-}
-
-@Composable
-private fun KpiCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = modifier,
-    ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                value,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-            )
-        }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
