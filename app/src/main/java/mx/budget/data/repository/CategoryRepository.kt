@@ -1,6 +1,7 @@
 package mx.budget.data.repository
 
 import kotlinx.coroutines.flow.Flow
+import mx.budget.data.local.DefaultCategoryCatalog
 import mx.budget.data.local.entity.CategoryEntity
 
 /**
@@ -28,6 +29,15 @@ interface CategoryRepository {
     suspend fun insert(category: CategoryEntity)
 
     suspend fun insertAll(categories: List<CategoryEntity>)
+
+    /**
+     * Siembra un catálogo de grupos + categorías comunes ([DefaultCategoryCatalog])
+     * SOLO si el household aún no tiene ninguna categoría. No-op idempotente en
+     * cualquier otro caso (households sembrados del Excel NUNCA se tocan). Se llama
+     * al arranque para eliminar el callejón sin salida de la captura (crear una
+     * categoría sin grupos disponibles).
+     */
+    suspend fun seedDefaultsIfEmpty(householdId: String)
 
     suspend fun update(category: CategoryEntity)
 

@@ -248,6 +248,7 @@ fun WalletsScreen(
                         tutorialController = tutorialController,
                         onOpenMemberBalances = onOpenMemberBalances,
                         cardDebts = cardDebts,
+                        onCreateFirst = { formInitial = null; showForm = true },
                         modifier = Modifier.weight(0.62f).fillMaxHeight(),
                     )
                     DetailPane(
@@ -272,6 +273,7 @@ fun WalletsScreen(
                     tutorialController = tutorialController,
                     onOpenMemberBalances = onOpenMemberBalances,
                     cardDebts = cardDebts,
+                    onCreateFirst = { formInitial = null; showForm = true },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -543,6 +545,7 @@ private fun WalletList(
     tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
     onOpenMemberBalances: (() -> Unit)? = null,
     cardDebts: List<CardDebt> = emptyList(),
+    onCreateFirst: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     // Agrupa por sección preservando el orden definido; el resto cae en "Otras".
@@ -585,7 +588,16 @@ private fun WalletList(
         }
 
         if (balances.isEmpty()) {
-            item(key = "empty") { EmptyState() }
+            // Journey guiado: el vacío ofrece el siguiente paso, no solo lo describe.
+            item(key = "empty") {
+                mx.budget.ui.common.EmptyState(
+                    icon = Icons.Filled.AccountBalanceWallet,
+                    title = "No hay cuentas registradas.",
+                    body = "Las cuentas son la fuente de cada gasto: crea la primera para empezar a capturar.",
+                    ctaLabel = "Crear tu primera cuenta",
+                    onCta = onCreateFirst,
+                )
+            }
         }
 
         grouped.forEach { (label, items) ->
@@ -1127,22 +1139,3 @@ private fun ReconcileDialog(
     )
 }
 
-@Composable
-private fun EmptyState() {
-    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                Icons.Filled.AccountBalanceWallet,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(48.dp),
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "No hay cuentas registradas.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}

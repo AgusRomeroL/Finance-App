@@ -120,8 +120,23 @@ class DashboardViewModel(
     private val pendingCaptureDao: PendingCaptureDao,
     private val bankCaptureManager: BankCaptureManager,
     private val categoryDao: CategoryDao,
-    private val proactiveReasoner: ProactiveReasoner
+    private val proactiveReasoner: ProactiveReasoner,
+    private val walletRepository: mx.budget.data.repository.WalletRepository,
 ) : ViewModel() {
+
+    // ── Primeros pasos (journey guiado) ──────────────────────────────────────────
+
+    /**
+     * `true` si el hogar ya tiene al menos una cuenta. Alimenta la tarjeta
+     * "Primeros pasos" del dashboard (sin cuentas → crear cuenta; con cuentas pero
+     * sin gastos → registrar el primero). Inicial `true` para no parpadear la
+     * tarjeta durante la carga.
+     */
+    val hasWallets: StateFlow<Boolean> = walletRepository
+        .observeActive(householdId)
+        .map { it.isNotEmpty() }
+        .catch { emit(true) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     // ── Capturas bancarias pendientes (Feature D, §F.6) ─────────────────────────
 

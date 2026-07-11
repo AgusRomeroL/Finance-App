@@ -584,6 +584,11 @@ class BudgetApplication : Application() {
             // alta local (agregar un miembro crasheaba la app). No-op para el
             // hogar sembrado.
             runCatching { ensureLocalHousehold(householdId) }
+            // Catálogo de categorías por defecto si el hogar está vacío de categorías
+            // (elimina el callejón sin salida de la captura: crear categoría sin grupos).
+            // No-op para el hogar sembrado del Excel (ya trae grupos). Va ANTES del pull
+            // para que el drain suba las altas de una vez y el pull no escriba a la par.
+            runCatching { categoryRepository.seedDefaultsIfEmpty(householdId) }
             // Sembrado histórico de estados (v2) ANTES de arrancar el pull, para que
             // el pull no escriba por DAO directo a mitad del seed; el drain empuja
             // todo lo sembrado de una vez. No-op sin el asset o si ya corrió.
