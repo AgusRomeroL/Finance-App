@@ -50,6 +50,21 @@ class CategoryRepositoryImpl(
         categories.forEach { enqueueSync(it.id) }
     }
 
+    /**
+     * Idempotente: si el household ya tiene AL MENOS una categoría, no-op absoluto
+     * (nunca duplica ni toca los grupos sembrados del Excel). La comprobación del
+     * conteo y las inserciones corren en la MISMA transacción para evitar una
+     * carrera si dos arranques concurrieran. Cada fila estampa `updated_at` y
+     * encola `CATEGORY|UPSERT` (mismo camino que el alta inline de captura).
+     */
+    override suspend fun seedDefaultsIfEmpty(householdId: String) = db.withTransaction {
+        if (dao.countByHousehold(householdId) > 0) return@withTransaction
+        val now = System.currentTimeMillis()
+        val defaults = mx.budget.data.local.DefaultCategoryCatalog.build(householdId)
+        dao.insertAll(defaults.map { it.copy(updatedAt = now) })
+        defaults.forEach { enqueueSync(it.id) }
+    }
+
     override suspend fun update(category: CategoryEntity) = db.withTransaction {
         dao.update(category.copy(updatedAt = System.currentTimeMillis()))
         enqueueSync(category.id)

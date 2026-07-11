@@ -90,6 +90,15 @@ class CategoryRepositoryFirestore(
         insert(category) // Merges in firestore
     }
 
+    /**
+     * No-op en el lado nube: el sembrado de defaults es una decisión LOCAL de
+     * arranque (offline-first). El push de esas altas ocurre por el outbox/sync,
+     * no directamente aquí.
+     */
+    override suspend fun seedDefaultsIfEmpty(householdId: String) {
+        // intencionalmente vacío
+    }
+
     override suspend fun delete(category: CategoryEntity) {
         getCollection(category.householdId).document(category.id).delete().await()
     }

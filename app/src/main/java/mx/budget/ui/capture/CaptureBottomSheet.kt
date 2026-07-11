@@ -17,13 +17,16 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +43,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,6 +58,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -70,6 +76,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -96,6 +103,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -133,7 +142,7 @@ import java.util.Locale
 /** Resorte espacial estándar del sheet (Material Expressive). */
 private fun <T> captureSpring() = spring<T>(dampingRatio = 0.8f, stiffness = 380f)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CaptureBottomSheet(
     viewModel: CaptureViewModel? = null,
@@ -181,8 +190,24 @@ fun CaptureBottomSheet(
     val thirdPartyPayerId by (viewModel?.thirdPartyPayerId ?: dummyStateFlow<String?>(null)).collectAsState()
     val thirdPartyMode by (viewModel?.thirdPartyMode
         ?: dummyStateFlow(CaptureViewModel.ThirdPartyMode.REIMBURSE)).collectAsState()
+    // Validación guiada (F2/F3): faltantes en orden visual + resaltado activo.
+    val missingFields by (viewModel?.missingFields ?: dummyStateFlow(emptyList<CaptureField>())).collectAsState()
+    val showMissingHighlights by (viewModel?.showMissingHighlights ?: dummyStateFlow(false)).collectAsState()
 
     var showDatePicker by remember { mutableStateOf(false) }
+    // F4: form de nueva cuenta apilado sobre el sheet de captura.
+    var showWalletForm by remember { mutableStateOf(false) }
+
+    /** `true` si [field] debe resaltarse (hubo intento fallido y sigue faltando). */
+    fun fieldMissing(field: CaptureField): Boolean =
+        showMissingHighlights && field in missingFields
+
+    // F3: anclas de scroll por campo — el nudge de validación trae a la vista la
+    // sección del primer campo faltante.
+    val anchors = remember { CaptureField.entries.associateWith { BringIntoViewRequester() } }
+    LaunchedEffect(viewModel) {
+        viewModel?.validationNudge?.collect { field -> anchors[field]?.bringIntoView() }
+    }
 
     // Aplica el modo de apertura (SP-A1) una vez por instancia de modo.
     LaunchedEffect(mode, viewModel) { viewModel?.applyMode(mode) }
@@ -267,7 +292,12 @@ fun CaptureBottomSheet(
                         .padding(horizontal = 24.dp)
                 ) {
                     // TUTORIAL: CAP_AMOUNT_KEYPAD — ver TUTORIAL.md
-                    Box(Modifier.tutorialTarget(TutorialKey.CAP_AMOUNT_KEYPAD, tutorialController)) {
+                    Box(
+                        Modifier
+                            .tutorialTarget(TutorialKey.CAP_AMOUNT_KEYPAD, tutorialController)
+                            .bringIntoViewRequester(anchors[CaptureField.AMOUNT]!!)
+                            .missingHighlight(fieldMissing(CaptureField.AMOUNT))
+                    ) {
                         AmountCard(
                             displayAmount = displayAmount,
                             concept = concept,
@@ -275,7 +305,8 @@ fun CaptureBottomSheet(
                             onConceptChange = { viewModel?.onConceptChange(it) },
                             onKey = { viewModel?.onNumpadKey(it) },
                             amountPending = CaptureField.AMOUNT in unresolvedFields,
-                            conceptPending = CaptureField.CONCEPT in unresolvedFields
+                            conceptPending = CaptureField.CONCEPT in unresolvedFields,
+                            missing = fieldMissing(CaptureField.AMOUNT)
                         )
                     }
                     Spacer(Modifier.height(14.dp))
@@ -308,13 +339,19 @@ fun CaptureBottomSheet(
                                     }
                                 }
                                 // TUTORIAL: CAP_CATEGORY — ver TUTORIAL.md
-                                Box(Modifier.tutorialTarget(TutorialKey.CAP_CATEGORY, tutorialController)) {
+                                Box(
+                                    Modifier
+                                        .tutorialTarget(TutorialKey.CAP_CATEGORY, tutorialController)
+                                        .bringIntoViewRequester(anchors[CaptureField.CATEGORY]!!)
+                                        .missingHighlight(fieldMissing(CaptureField.CATEGORY))
+                                ) {
                                     CategoryCard(
                                         categories = categories,
                                         recents = recentCategories,
                                         searchResults = categorySearchResults,
                                         selectedCategoryId = selectedCategoryId,
                                         pending = CaptureField.CATEGORY in unresolvedFields,
+                                        missing = fieldMissing(CaptureField.CATEGORY),
                                         onSelect = { viewModel?.onCategorySelected(it) },
                                         onQueryChange = { viewModel?.onCategoryQueryChange(it) },
                                         onCreateCategory = { name, parentId ->
@@ -323,23 +360,37 @@ fun CaptureBottomSheet(
                                     )
                                 }
                                 Spacer(Modifier.height(14.dp))
-                                WalletsCard(
-                                    title = "Fuente de pago",
-                                    wallets = wallets,
-                                    selectedWalletId = selectedWalletId,
-                                    pending = CaptureField.WALLET in unresolvedFields,
-                                    onSelect = { viewModel?.onWalletSelected(it) }
-                                )
+                                Box(
+                                    Modifier
+                                        .bringIntoViewRequester(anchors[CaptureField.WALLET]!!)
+                                        .missingHighlight(fieldMissing(CaptureField.WALLET))
+                                ) {
+                                    WalletsCard(
+                                        title = "Fuente de pago",
+                                        wallets = wallets,
+                                        selectedWalletId = selectedWalletId,
+                                        pending = CaptureField.WALLET in unresolvedFields,
+                                        missing = fieldMissing(CaptureField.WALLET),
+                                        onSelect = { viewModel?.onWalletSelected(it) },
+                                        onCreateWallet = { showWalletForm = true }
+                                    )
+                                }
                                 Spacer(Modifier.height(14.dp))
                                 // Atribución visible = solo "Beneficia a". El pagador (casi
                                 // siempre el adulto dueño de la cuenta) se autodefine y vive
                                 // bajo "Más" para overridear/repartir.
                                 // TUTORIAL: CAP_ATTRIBUTION — ver TUTORIAL.md
-                                Box(Modifier.tutorialTarget(TutorialKey.CAP_ATTRIBUTION, tutorialController)) {
+                                Box(
+                                    Modifier
+                                        .tutorialTarget(TutorialKey.CAP_ATTRIBUTION, tutorialController)
+                                        .bringIntoViewRequester(anchors[CaptureField.BENEFICIARY]!!)
+                                        .missingHighlight(fieldMissing(CaptureField.BENEFICIARY))
+                                ) {
                                     BeneficiaryCard(
                                         members = members,
                                         beneficiaryShares = beneficiaryShares,
                                         pending = CaptureField.BENEFICIARY in unresolvedFields,
+                                        missing = fieldMissing(CaptureField.BENEFICIARY),
                                         onToggle = { viewModel?.onBeneficiaryToggled(it) },
                                         onDelta = { id, d -> viewModel?.onBeneficiaryShareDelta(id, d) },
                                         onSelectAll = { viewModel?.onSelectAllMembers() },
@@ -347,43 +398,66 @@ fun CaptureBottomSheet(
                                     )
                                 }
                                 Spacer(Modifier.height(14.dp))
-                                MoreSection(
-                                    members = members,
-                                    payerShares = payerShares,
-                                    onPayerToggle = { viewModel?.onPayerToggled(it) },
-                                    onPayerDelta = { id, d -> viewModel?.onPayerShareDelta(id, d) },
-                                    notes = notes,
-                                    onNotesChange = { viewModel?.onNotesChange(it) },
-                                    selectedDate = selectedDate,
-                                    onPickDate = { showDatePicker = true },
-                                    onResetDate = { viewModel?.onDateSelected(null) },
-                                    datePending = CaptureField.DATE in unresolvedFields,
-                                    payerPending = CaptureField.PAYER in unresolvedFields,
-                                    // Fase B/B3: pagó un tercero.
-                                    allMembers = allMembers,
-                                    thirdPartyPayerId = thirdPartyPayerId,
-                                    thirdPartyMode = thirdPartyMode,
-                                    onThirdPartySelected = { viewModel?.onThirdPartyPayerSelected(it) },
-                                    onThirdPartyMode = { viewModel?.onThirdPartyModeChange(it) },
-                                    onCreateExternalPayer = { viewModel?.onCreateExternalPayer(it) }
-                                )
+                                Box(
+                                    Modifier
+                                        .bringIntoViewRequester(anchors[CaptureField.PAYER]!!)
+                                        .missingHighlight(fieldMissing(CaptureField.PAYER))
+                                ) {
+                                    MoreSection(
+                                        members = members,
+                                        payerShares = payerShares,
+                                        onPayerToggle = { viewModel?.onPayerToggled(it) },
+                                        onPayerDelta = { id, d -> viewModel?.onPayerShareDelta(id, d) },
+                                        notes = notes,
+                                        onNotesChange = { viewModel?.onNotesChange(it) },
+                                        selectedDate = selectedDate,
+                                        onPickDate = { showDatePicker = true },
+                                        onResetDate = { viewModel?.onDateSelected(null) },
+                                        datePending = CaptureField.DATE in unresolvedFields,
+                                        payerPending = CaptureField.PAYER in unresolvedFields,
+                                        payerMissing = fieldMissing(CaptureField.PAYER),
+                                        // Fase B/B3: pagó un tercero.
+                                        allMembers = allMembers,
+                                        thirdPartyPayerId = thirdPartyPayerId,
+                                        thirdPartyMode = thirdPartyMode,
+                                        onThirdPartySelected = { viewModel?.onThirdPartyPayerSelected(it) },
+                                        onThirdPartyMode = { viewModel?.onThirdPartyModeChange(it) },
+                                        onCreateExternalPayer = { viewModel?.onCreateExternalPayer(it) }
+                                    )
+                                }
                             }
 
                             CaptureKind.INCOME -> Column {
-                                WalletsCard(
-                                    title = "Cuenta destino",
-                                    wallets = wallets,
-                                    selectedWalletId = selectedWalletId,
-                                    onSelect = { viewModel?.onWalletSelected(it) }
-                                )
+                                Box(
+                                    Modifier
+                                        .bringIntoViewRequester(anchors[CaptureField.WALLET]!!)
+                                        .missingHighlight(fieldMissing(CaptureField.WALLET))
+                                ) {
+                                    WalletsCard(
+                                        title = "Cuenta destino",
+                                        wallets = wallets,
+                                        selectedWalletId = selectedWalletId,
+                                        missing = fieldMissing(CaptureField.WALLET),
+                                        onSelect = { viewModel?.onWalletSelected(it) },
+                                        onCreateWallet = { showWalletForm = true }
+                                    )
+                                }
                                 Spacer(Modifier.height(14.dp))
                                 // Solo un Pagador (adulto-cuenta) puede recibir ingreso;
                                 // el dinero a un dependiente es egreso (mesada), no ingreso.
-                                IncomeMemberCard(
-                                    members = members.filter { it.role == "PAYER_ADULT" },
-                                    selectedMemberId = incomeMemberId,
-                                    onSelect = { viewModel?.onIncomeMemberSelected(it) }
-                                )
+                                // Validación (F2): _incomeMemberId se mapea a PAYER.
+                                Box(
+                                    Modifier
+                                        .bringIntoViewRequester(anchors[CaptureField.PAYER]!!)
+                                        .missingHighlight(fieldMissing(CaptureField.PAYER))
+                                ) {
+                                    IncomeMemberCard(
+                                        members = members.filter { it.role == "PAYER_ADULT" },
+                                        selectedMemberId = incomeMemberId,
+                                        missing = fieldMissing(CaptureField.PAYER),
+                                        onSelect = { viewModel?.onIncomeMemberSelected(it) }
+                                    )
+                                }
                                 Spacer(Modifier.height(14.dp))
                                 IncomeDateCard(
                                     selectedDate = selectedDate,
@@ -408,8 +482,9 @@ fun CaptureBottomSheet(
                     selectedWalletId = selectedWalletId,
                     selectedDate = selectedDate,
                     enabled = canRegister,
+                    missingCount = missingFields.size,
                     isLoading = operationState is CaptureOperationState.Loading,
-                    onRegister = { viewModel?.onRegister() }
+                    onRegister = { viewModel?.onRegisterAttempt() }
                 )
             }
         }
@@ -454,6 +529,22 @@ fun CaptureBottomSheet(
         ) {
             DatePicker(state = datePickerState, showModeToggle = false)
         }
+    }
+
+    // F4: crear cuenta sin salir de la captura — se apila como segundo
+    // ModalBottomSheet sobre el de captura; el estado de la captura vive en el
+    // VM, así que no se pierde. Mismo form de Cuentas (WalletFormSheet).
+    if (showWalletForm && viewModel != null) {
+        mx.budget.ui.wallets.WalletFormSheet(
+            initial = null,
+            householdId = viewModel.householdId,
+            members = rawMembers,
+            onSave = {
+                viewModel.createWallet(it)
+                showWalletForm = false
+            },
+            onDismiss = { showWalletForm = false },
+        )
     }
 }
 
@@ -576,7 +667,8 @@ private fun AmountCard(
     onConceptChange: (String) -> Unit,
     onKey: (String) -> Unit,
     amountPending: Boolean = false,
-    conceptPending: Boolean = false
+    conceptPending: Boolean = false,
+    missing: Boolean = false
 ) {
     Card {
         Row(
@@ -589,6 +681,10 @@ private fun AmountCard(
                 if (amountPending) {
                     Spacer(Modifier.width(8.dp))
                     PendingBadge()
+                }
+                if (missing) {
+                    Spacer(Modifier.width(8.dp))
+                    MissingBadge("FALTA MONTO")
                 }
             }
             CapLabel("MXN")
@@ -714,6 +810,7 @@ private fun CategoryCard(
     searchResults: List<CategoryEntity>,
     selectedCategoryId: String?,
     pending: Boolean,
+    missing: Boolean = false,
     onSelect: (String) -> Unit,
     onQueryChange: (String) -> Unit,
     onCreateCategory: (name: String, parentId: String) -> Unit
@@ -754,6 +851,10 @@ private fun CategoryCard(
                     if (pending) {
                         Spacer(Modifier.width(8.dp))
                         PendingBadge()
+                    }
+                    if (missing) {
+                        Spacer(Modifier.width(8.dp))
+                        MissingBadge("FALTA CATEGORÍA")
                     }
                 }
                 Spacer(Modifier.height(3.dp))
@@ -869,14 +970,30 @@ private fun CategoryCard(
                     Column {
                         // Paso 2 de la creación: elegir el grupo padre.
                         CapMicroLabel("Nueva: \"$creating\" — elige el grupo")
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Elige un grupo · puedes crear y gestionar más en Ajustes",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Spacer(Modifier.height(8.dp))
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            parents.forEach { parent ->
-                                CategoryChip(parent.displayName, false) {
-                                    onCreateCategory(creating, parent.id)
-                                    createName = null
-                                    query = ""
-                                    onQueryChange("")
+                        if (parents.isEmpty()) {
+                            // Red de seguridad: tras el sembrado de defaults NO debería
+                            // pasar, pero evitamos el vacío mudo sin salida.
+                            Text(
+                                "Aún no hay grupos. Crea uno desde Ajustes › Categorías para poder clasificar este gasto.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                parents.forEach { parent ->
+                                    CategoryChip(parent.displayName, false) {
+                                        onCreateCategory(creating, parent.id)
+                                        createName = null
+                                        query = ""
+                                        onQueryChange("")
+                                    }
                                 }
                             }
                         }
@@ -1025,7 +1142,11 @@ private fun WalletsCard(
     wallets: List<PaymentMethodEntity>,
     selectedWalletId: String?,
     pending: Boolean = false,
-    onSelect: (String) -> Unit
+    missing: Boolean = false,
+    onSelect: (String) -> Unit,
+    // F4: crear cuenta inline cuando no hay ninguna (solo Fuente de pago /
+    // Cuenta destino lo pasan; null = sin botón).
+    onCreateWallet: (() -> Unit)? = null
 ) {
     Card {
         Row(
@@ -1039,12 +1160,29 @@ private fun WalletsCard(
                     Spacer(Modifier.width(8.dp))
                     PendingBadge()
                 }
+                if (missing) {
+                    Spacer(Modifier.width(8.dp))
+                    MissingBadge("FALTA CUENTA")
+                }
             }
             CapLabel("Saldo")
         }
         Spacer(Modifier.height(12.dp))
         if (wallets.isEmpty()) {
             Text("Sin métodos de pago.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (onCreateWallet != null) {
+                Spacer(Modifier.height(10.dp))
+                val interaction = rememberPressInteractionSource()
+                FilledTonalButton(
+                    onClick = onCreateWallet,
+                    interactionSource = interaction,
+                    modifier = Modifier.pressScale(interactionSource = interaction),
+                ) {
+                    Icon(Icons.Filled.Add, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Crear cuenta")
+                }
+            }
         } else {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 wallets.take(6).forEach { w ->
@@ -1095,6 +1233,7 @@ private fun BeneficiaryCard(
     members: List<MemberEntity>,
     beneficiaryShares: Map<String, Int>,
     pending: Boolean = false,
+    missing: Boolean = false,
     onToggle: (String) -> Unit,
     onDelta: (String, Int) -> Unit,
     onSelectAll: () -> Unit,
@@ -1115,6 +1254,9 @@ private fun BeneficiaryCard(
                         Spacer(Modifier.width(8.dp))
                         PendingBadge()
                     }
+                    // Sin MissingBadge aquí: esta tarjeta ya tiene su propio aviso
+                    // específico ("Falta asignar", el chip a la derecha) — evita el
+                    // doble aviso reportado. El borde ámbar (missingHighlight) queda.
                 }
                 Spacer(Modifier.height(3.dp))
                 Text("Quién consume este gasto", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1172,6 +1314,7 @@ private fun BeneficiaryCard(
 private fun IncomeMemberCard(
     members: List<MemberEntity>,
     selectedMemberId: String?,
+    missing: Boolean = false,
     onSelect: (String) -> Unit
 ) {
     Card {
@@ -1182,7 +1325,13 @@ private fun IncomeMemberCard(
             ) { Icon(Icons.Filled.Person, null, tint = MaterialTheme.financeColors.income, modifier = Modifier.size(15.dp)) }
             Spacer(Modifier.width(8.dp))
             Column {
-                CapLabel("Lo genera")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CapLabel("Lo genera")
+                    if (missing) {
+                        Spacer(Modifier.width(8.dp))
+                        MissingBadge("FALTA · ¿DE QUIÉN?")
+                    }
+                }
                 Spacer(Modifier.height(2.dp))
                 Text("Miembro que recibe este ingreso", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -1297,6 +1446,7 @@ private fun MoreSection(
     onResetDate: () -> Unit,
     datePending: Boolean = false,
     payerPending: Boolean = false,
+    payerMissing: Boolean = false,
     // Fase B/B3: "¿Quién pagó?" con tercero.
     allMembers: List<MemberEntity> = emptyList(),
     thirdPartyPayerId: String? = null,
@@ -1306,8 +1456,10 @@ private fun MoreSection(
     onCreateExternalPayer: (String) -> Unit = {}
 ) {
     // Abre por defecto si ya hay nota (p.ej. prellenada desde una captura NL), si
-    // hay campos por decidir aquí dentro (Review) o si pagó un tercero.
-    val autoOpen = notes.isNotBlank() || datePending || payerPending || thirdPartyPayerId != null
+    // hay campos por decidir aquí dentro (Review), si pagó un tercero o si la
+    // validación guiada marcó al pagador como faltante (F3: el nudge trae aquí).
+    val autoOpen = notes.isNotBlank() || datePending || payerPending ||
+        thirdPartyPayerId != null || payerMissing
     var open by rememberSaveable(autoOpen) { mutableStateOf(autoOpen) }
     // Solo los adultos-cuenta pueden ser "pagador" (Benjamín, Norma). El default es
     // el dueño del wallet (ver CaptureViewModel.onWalletSelected). Los dependientes y
@@ -1346,6 +1498,10 @@ private fun MoreSection(
                         if (datePending || payerPending) {
                             Spacer(Modifier.width(8.dp))
                             PendingBadge()
+                        }
+                        if (payerMissing) {
+                            Spacer(Modifier.width(8.dp))
+                            MissingBadge("FALTA PAGADOR")
                         }
                     }
                     Text(
@@ -1568,6 +1724,7 @@ private fun CaptureFooter(
     selectedWalletId: String?,
     selectedDate: LocalDate?,
     enabled: Boolean,
+    missingCount: Int = 0,
     isLoading: Boolean,
     onRegister: () -> Unit
 ) {
@@ -1617,22 +1774,41 @@ private fun CaptureFooter(
                 maxLines = 2, overflow = TextOverflow.Ellipsis
             )
         }
+        // F3: el CTA es SIEMPRE tappable — incompleto no lo apaga (look disabled),
+        // lo pinta secondaryContainer; el tap dispara la validación guiada
+        // (onRegisterAttempt → resaltados + scroll al primer faltante).
+        val ctaBg by animateColorAsState(
+            targetValue = if (enabled) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.secondaryContainer,
+            animationSpec = BudgetMotion.standard(),
+            label = "captureCtaBg",
+        )
+        val ctaFg by animateColorAsState(
+            targetValue = if (enabled) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSecondaryContainer,
+            animationSpec = BudgetMotion.standard(),
+            label = "captureCtaFg",
+        )
         Box(
             modifier = Modifier
                 .height(52.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest)
-                .clickable(enabled = enabled && !isLoading, onClick = onRegister)
+                .background(ctaBg)
+                .clickable(enabled = !isLoading, onClick = onRegister)
+                .semantics {
+                    stateDescription = if (enabled) "Listo para guardar"
+                    else "Faltan $missingCount campos"
+                }
                 .padding(horizontal = 28.dp),
             contentAlignment = Alignment.Center
         ) {
             if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(22.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                CircularProgressIndicator(modifier = Modifier.size(22.dp), color = ctaFg, strokeWidth = 2.dp)
             } else {
                 Text(
                     "Guardar",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = ctaFg
                 )
             }
         }
@@ -1747,6 +1923,56 @@ private fun PendingBadge() {
             letterSpacing = 1.2.sp,
             maxLines = 1, softWrap = false
         )
+    }
+}
+
+/**
+ * Distintivo "FALTA" de la validación guiada (F3): clon de [PendingBadge] en tono
+ * warning, junto al título de la sección cuyo campo impide guardar. Redundancia
+ * no-cromática: icono + texto, no solo el borde ámbar de [missingHighlight].
+ */
+@Composable
+private fun MissingBadge(text: String = "FALTA") {
+    val fc = MaterialTheme.financeColors
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(fc.warningContainer)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Filled.ErrorOutline, null, tint = fc.onWarningContainer, modifier = Modifier.size(12.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.labelSmall,
+            color = fc.onWarningContainer,
+            letterSpacing = 1.2.sp,
+            maxLines = 1, softWrap = false
+        )
+    }
+}
+
+/**
+ * Resaltado de sección con campo faltante (F3): borde redondeado en
+ * `financeColors.warning` cuya alpha cruza 0→1 al marcarse y 1→0 al resolverse
+ * con [BudgetMotion.standard]. Con [LocalReducedMotion] la alpha salta sin
+ * animar (`snap`). Radio 28dp = el de las tarjetas-sección reales ([Card]/
+ * MoreSection), para que el borde abrace la superficie sin desfase de esquinas.
+ */
+@Composable
+private fun Modifier.missingHighlight(missing: Boolean): Modifier {
+    val reduced = LocalReducedMotion.current
+    val alpha by animateFloatAsState(
+        targetValue = if (missing) 1f else 0f,
+        animationSpec = if (reduced) snap() else BudgetMotion.standard(),
+        label = "missingHighlight",
+    )
+    val warning = MaterialTheme.financeColors.warning
+    return if (alpha > 0.01f) {
+        this.border(2.dp, warning.copy(alpha = alpha), RoundedCornerShape(28.dp))
+    } else {
+        this
     }
 }
 

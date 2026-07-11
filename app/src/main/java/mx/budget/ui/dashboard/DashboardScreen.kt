@@ -25,7 +25,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -263,6 +264,7 @@ fun DashboardScreen(
     tutorialCaptureOpen: Boolean = false,
 ) {
     val rawUiState by viewModel.uiState.collectAsState()
+    val hasWallets by viewModel.hasWallets.collectAsState()
     val pendingReviewCount by viewModel.pendingReviewCount.collectAsState()
     val rawProactiveSuggestions by viewModel.proactiveSuggestions.collectAsState()
     val rawBankCaptures by viewModel.pendingBankCaptures.collectAsState()
@@ -383,7 +385,9 @@ fun DashboardScreen(
                 onConfirmCapture = onConfirmCapture,
                 onDismissCapture = viewModel::dismissBankCapture,
                 reimbursementUi = reimbursementUi,
-                tutorialController = tutorialController
+                tutorialController = tutorialController,
+                hasWallets = hasWallets,
+                onOpenCapture = { onOpenCapture(CaptureSheetMode.New) },
             )
         } else {
             CompactDashboard(
@@ -404,7 +408,9 @@ fun DashboardScreen(
                 onConfirmCapture = onConfirmCapture,
                 onDismissCapture = viewModel::dismissBankCapture,
                 reimbursementUi = reimbursementUi,
-                tutorialController = tutorialController
+                tutorialController = tutorialController,
+                hasWallets = hasWallets,
+                onOpenCapture = { onOpenCapture(CaptureSheetMode.New) },
             )
         }
     }
@@ -456,7 +462,9 @@ private fun ExpandedDashboard(
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit,
     reimbursementUi: ReimbursementUi,
-    tutorialController: mx.budget.ui.tutorial.TutorialController? = null
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
+    hasWallets: Boolean = true,
+    onOpenCapture: () -> Unit = {},
 ) {
     // El rail (con FAB de captura) lo aporta el MainShell. Aquí, la barra superior
     // (búsqueda + avatar de Perfil) es la dueña del inset superior (edge-to-edge).
@@ -498,6 +506,14 @@ private fun ExpandedDashboard(
                             canViewNewer = state.canViewNewer,
                             viewingActive = state.viewingActive,
                             quincenaNav = quincenaNav
+                        )
+                        // Journey guiado: primeros pasos (se oculta solo con datos).
+                        FirstStepsCard(
+                            hasWallets = hasWallets,
+                            hasTransactions = state.transactions.isNotEmpty(),
+                            onCreateAccount = { onNavigate?.invoke("wallets") },
+                            onRegisterExpense = onOpenCapture,
+                            modifier = Modifier.padding(top = 14.dp),
                         )
                         if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestions.isNotEmpty())) {
                             Spacer(Modifier.height(18.dp))
@@ -546,7 +562,8 @@ private fun ExpandedDashboard(
                             singleMember = reimbursementUi.singleMember,
                             modifier = Modifier.fillMaxWidth(),
                             tutorialController = tutorialController,
-                            onOpenBreakdown = onNavigate?.let { nav -> { nav("member_balances") } }
+                            onOpenBreakdown = onNavigate?.let { nav -> { nav("member_balances") } },
+                            onRegisterFirst = onOpenCapture,
                         )
                     }
                 }
@@ -572,27 +589,25 @@ private fun BentoPanes(
     modifier: Modifier = Modifier,
     tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
     onOpenBreakdown: (() -> Unit)? = null,
+    onRegisterFirst: (() -> Unit)? = null,
 ) {
     var fraction by rememberSaveable { mutableStateOf(0.55f) }
     val settleScope = rememberCoroutineScope()
-    // onSizeChanged en vez de BoxWithConstraints: la Row usa IntrinsicSize.Min (altura
-    // natural del panel más alto, para la página scrollable) y BoxWithConstraints no
-    // soporta medición intrínseca.
     var totalPx by remember { mutableStateOf(0f) }
-    Box(modifier = modifier) {
-        val dragState = rememberDraggableState { delta ->
-            if (totalPx > 0f) fraction = (fraction + delta / totalPx).coerceIn(0.45f, 0.78f)
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-                .onSizeChanged { totalPx = it.width.toFloat() }
-        ) {
+    val dragState = rememberDraggableState { delta ->
+        if (totalPx > 0f) fraction = (fraction + delta / totalPx).coerceIn(0.45f, 0.78f)
+    }
+    // Layout custom: mide el hero (health) a su altura NATURAL → H, y fuerza el
+    // handle y el panel de transacciones a exactamente H. Así el tile de
+    // transacciones nunca supera al hero — su altura la determina el hero — y el
+    // excedente de filas scrollea DENTRO del tile (LazyColumn acotada). Determinista
+    // (la altura del hero no depende de transacciones), sin lag de un frame.
+    Layout(
+        modifier = modifier.onSizeChanged { totalPx = it.width.toFloat() },
+        content = {
             MainHealthPane(
                 state = state,
                 singleMember = singleMember,
-                modifier = Modifier.weight(fraction).fillMaxHeight(),
                 tutorialController = tutorialController,
                 onOpenBreakdown = onOpenBreakdown
             )
@@ -614,8 +629,28 @@ private fun BentoPanes(
             )
             TransactionsPane(
                 transactions = state.transactions,
-                modifier = Modifier.weight(1f - fraction).fillMaxHeight()
+                onRegisterFirst = onRegisterFirst,
             )
+        }
+    ) { measurables, constraints ->
+        val total = constraints.maxWidth
+        val gutter = 24.dp.roundToPx()
+        val healthW = ((total - gutter) * fraction).toInt().coerceAtLeast(0)
+        val txW = (total - gutter - healthW).coerceAtLeast(0)
+        // 1) Hero a altura libre → define H.
+        val health = measurables[0].measure(
+            Constraints(minWidth = healthW, maxWidth = healthW)
+        )
+        val h = health.height
+        // 2) Handle y transacciones a H exacta.
+        val handle = measurables[1].measure(Constraints.fixed(gutter, h))
+        val tx = measurables[2].measure(
+            Constraints(minWidth = txW, maxWidth = txW, minHeight = h, maxHeight = h)
+        )
+        layout(total, h) {
+            health.place(0, 0)
+            handle.place(healthW, 0)
+            tx.place(healthW + gutter, 0)
         }
     }
 }
@@ -668,7 +703,9 @@ private fun CompactDashboard(
     onConfirmCapture: (String) -> Unit,
     onDismissCapture: (String) -> Unit,
     reimbursementUi: ReimbursementUi,
-    tutorialController: mx.budget.ui.tutorial.TutorialController? = null
+    tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
+    hasWallets: Boolean = true,
+    onOpenCapture: () -> Unit = {},
 ) {
     // La navegación (pill flotante + "+") la aporta el MainShell. Aquí: barra superior
     // fija (búsqueda + avatar de Perfil) + lista que scrollea por detrás del pill.
@@ -703,6 +740,16 @@ private fun CompactDashboard(
                                 canViewNewer = state.canViewNewer,
                                 viewingActive = state.viewingActive,
                                 quincenaNav = quincenaNav
+                            )
+                        }
+                        // Journey guiado: primeros pasos (se oculta solo cuando ya hay
+                        // cuentas Y gastos).
+                        item(key = "first_steps") {
+                            FirstStepsCard(
+                                hasWallets = hasWallets,
+                                hasTransactions = state.transactions.isNotEmpty(),
+                                onCreateAccount = { onNavigate?.invoke("wallets") },
+                                onRegisterExpense = onOpenCapture,
                             )
                         }
                         if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestions.isNotEmpty())) {
@@ -786,10 +833,99 @@ private fun CompactDashboard(
                             // Motion expresivo: filas nuevas/reordenadas entran con resorte.
                             Box(Modifier.animateItem()) { TransactionRow(tx) }
                         }
+                        if (state.transactions.isEmpty()) {
+                            item(key = "tx_empty") {
+                                mx.budget.ui.common.EmptyState(
+                                    icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                                    title = "Sin gastos esta quincena.",
+                                    ctaLabel = "Registrar tu primer gasto",
+                                    onCta = onOpenCapture,
+                                    compact = true,
+                                )
+                            }
+                        }
                     }
                     }
                 }
             }
+    }
+}
+
+/**
+ * Tarjeta "Primeros pasos" (journey guiado): con el hogar vacío, ofrece el
+ * SIGUIENTE paso natural — sin cuentas → crear la primera; con cuentas pero sin
+ * gastos → registrar el primero. Se oculta sola cuando ya hay ambos (con resorte).
+ */
+@Composable
+private fun FirstStepsCard(
+    hasWallets: Boolean,
+    hasTransactions: Boolean,
+    onCreateAccount: () -> Unit,
+    onRegisterExpense: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val visible = !hasWallets || !hasTransactions
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(spring(stiffness = 380f)) +
+            expandVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+        exit = fadeOut(spring(stiffness = 380f)) +
+            shrinkVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+        modifier = modifier,
+    ) {
+        val needsWallet = !hasWallets
+        val interaction = rememberPressInteractionSource()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .pressScale(interactionSource = interaction)
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .clickable(
+                    interactionSource = interaction,
+                    indication = LocalIndication.current,
+                    onClick = if (needsWallet) onCreateAccount else onRegisterExpense,
+                )
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (needsWallet) Icons.Filled.AccountBalanceWallet else Icons.Filled.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "PRIMEROS PASOS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                    letterSpacing = 1.2.sp,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    if (needsWallet) "Crea tu primera cuenta para empezar a capturar"
+                    else "Ya tienes cuentas — registra tu primer gasto",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
@@ -1135,11 +1271,13 @@ private fun MainHealthPane(
     onOpenBreakdown: (() -> Unit)? = null,
 ) {
     // Sin scroll interno: la página completa del dashboard expandido ya scrollea,
-    // así que el panel crece a su altura natural y se ve entero.
+    // así que el panel crece a su altura natural y se ve entero. Borde visible: en
+    // dark las capas tonales sobre casi-negro no delatan dónde acaba la tarjeta.
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(28.dp))
             .padding(36.dp)
     ) {
         // Paridad teléfono/Fold: el mismo hero de anillo + tiles del layout compacto.
@@ -1653,7 +1791,7 @@ private fun RitmoCard(
     val ui = when {
         !hasPlan -> RitmoUi(
             FinancialTone.NEUTRAL, Icons.AutoMirrored.Filled.TrendingFlat,
-            "Sin plan de gasto", " esta quincena — captura para ver tu ritmo", "Aún ")
+            "sin plan de gasto", " esta quincena — captura para ver tu ritmo", "Aún ")
         overIncome -> RitmoUi(
             FinancialTone.EXPENSE, Icons.Filled.WarningAmber,
             "más de lo que entró", " esta quincena", "Gastaste ")
@@ -1833,10 +1971,11 @@ private fun MemberDistributionSection(
         Spacer(Modifier.height(22.dp))
 
         if (data.isEmpty()) {
-            Text(
-                "Aún no hay gastos atribuidos en esta quincena.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            mx.budget.ui.common.EmptyState(
+                icon = Icons.Filled.Person,
+                title = "Aún no hay gastos atribuidos en esta quincena.",
+                body = "Al registrar gastos verás aquí quién gasta y quién paga.",
+                compact = true,
             )
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -2028,11 +2167,16 @@ private fun SegmentedToggle(options: List<String>, selectedIndex: Int, onSelect:
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: Modifier = Modifier) {
+private fun TransactionsPane(
+    transactions: List<ExpenseWithDetails>,
+    modifier: Modifier = Modifier,
+    onRegisterFirst: (() -> Unit)? = null,
+) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(28.dp))
             .padding(horizontal = 16.dp, vertical = 28.dp)
     ) {
         Row(
@@ -2064,24 +2208,25 @@ private fun TransactionsPane(transactions: List<ExpenseWithDetails>, modifier: M
         Spacer(Modifier.height(16.dp))
 
         if (transactions.isEmpty()) {
-            Box(
-                Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "Sin gastos registrados.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            // Journey guiado: el vacío ofrece el siguiente paso.
+            mx.budget.ui.common.EmptyState(
+                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                title = "Sin gastos registrados.",
+                ctaLabel = "Registrar tu primer gasto",
+                onCta = onRegisterFirst,
+                compact = true,
+            )
         } else {
-            // Column normal (no Lazy): la página completa scrollea, así que el panel
-            // muestra TODAS las filas a su altura natural (una LazyColumn sin alto
-            // acotado dentro de un verticalScroll ni siquiera compone).
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                transactions.forEachIndexed { index, tx ->
-                    // Motion expresivo: entrada escalonada en la carga inicial.
-                    Box(Modifier.staggeredEntrance(index)) {
+            // LazyColumn acotada: el Layout de BentoPanes fija la altura del panel a
+            // la del hero, así que el excedente de filas scrollea DENTRO del tile.
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                contentPadding = PaddingValues(bottom = 8.dp)
+            ) {
+                itemsIndexed(transactions, key = { _, it -> it.expenseId }) { index, tx ->
+                    // Motion expresivo: entrada escalonada en la carga inicial +
+                    // resorte para filas nuevas/reordenadas.
+                    Box(Modifier.staggeredEntrance(index).animateItem()) {
                         TransactionRow(tx, alternate = index % 2 == 1)
                     }
                 }

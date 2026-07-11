@@ -3,9 +3,12 @@ package mx.budget.ui.capture
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -129,7 +132,8 @@ class CaptureViewModel(
     private val categoryRepository: CategoryRepository,
     private val retroAttributionEngine: RetroAttributionEngine,
     private val locationProvider: LocationProvider,
-    private val householdId: String,
+    /** ID del hogar activo. Público para que el sheet pueda crear wallets (F4). */
+    val householdId: String,
     /**
      * Callback opcional para cerrar el ciclo "revisar al confirmar" (§G.3): tras
      * registrar un gasto que vino de una captura pendiente, marca esa captura como
@@ -701,6 +705,31 @@ class CaptureViewModel(
 
     // ── Validación ─────────────────────────────────────────────────────────
 
+    // Helpers puros de validación (F2): cada condición de [canRegister] vive en su
+    // helper para que [missingFields] se derive de las MISMAS reglas, sin drift.
+
+    /** Importe > 0 (el raw del numpad puede traer comas). */
+    private fun amountOk(raw: String): Boolean =
+        (raw.replace(",", "").toDoubleOrNull() ?: 0.0) > 0
+
+    /** Wallet elegido, o pagó un tercero (el sistema usa el wallet EXTERNAL). */
+    private fun walletOk(walletId: String?, thirdPartyId: String?): Boolean =
+        thirdPartyId != null || walletId != null
+
+    /** Categoría seleccionada (solo EXPENSE). */
+    private fun categoryOk(categoryId: String?): Boolean = categoryId != null
+
+    /** Beneficiarios: no vacío y sumando exactamente 100%. */
+    private fun beneficiaryOk(shares: Map<String, Int>): Boolean =
+        shares.isNotEmpty() && shares.values.sum() == 100
+
+    /** Pagadores: suma exacta de 100%, o pagó un tercero (el PAYER es él al 100%). */
+    private fun payerOk(shares: Map<String, Int>, thirdPartyId: String?): Boolean =
+        thirdPartyId != null || (shares.isNotEmpty() && shares.values.sum() == 100)
+
+    /** INCOME: miembro que genera el ingreso elegido. */
+    private fun incomeMemberOk(memberId: String?): Boolean = memberId != null
+
     /**
      * `true` si el formulario es válido para registrar (brief C11 — campos mínimos):
      * - EXPENSE: importe > 0, wallet y categoría seleccionados; beneficiarios y
@@ -721,10 +750,11 @@ class CaptureViewModel(
         _thirdPartyPayerId,
     ) { g1, g2, thirdPartyId ->
         val kind = g1[0] as CaptureKind
-        val amountNum = (g1[1] as String).replace(",", "").toDoubleOrNull() ?: 0.0
+        val raw = g1[1] as String
         val walletId = g1[2] as String?
         when (kind) {
-            CaptureKind.INCOME -> amountNum > 0 && walletId != null && g2[2] != null
+            CaptureKind.INCOME ->
+                amountOk(raw) && walletId != null && incomeMemberOk(g2[2] as String?)
             CaptureKind.EXPENSE -> {
                 @Suppress("UNCHECKED_CAST")
                 val benef = g2[0] as Map<String, Int>
@@ -734,14 +764,95 @@ class CaptureViewModel(
                 val unresolved = g2[3] as Set<CaptureField>
                 // Con tercero (Fase B/B3): el wallet lo pone el sistema (EXTERNAL) y el
                 // PAYER es el tercero, así que no se exigen ni wallet ni payer del form.
-                val walletOk = thirdPartyId != null || walletId != null
-                val payerOk = thirdPartyId != null || (payer.isNotEmpty() && payer.values.sum() == 100)
-                amountNum > 0 && walletOk && g1[3] != null &&
-                    benef.isNotEmpty() && benef.values.sum() == 100 &&
-                    payerOk && unresolved.isEmpty()
+                amountOk(raw) && walletOk(walletId, thirdPartyId) &&
+                    categoryOk(g1[3] as String?) &&
+                    beneficiaryOk(benef) &&
+                    payerOk(payer, thirdPartyId) && unresolved.isEmpty()
             }
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // ── Validación guiada (F2): campos faltantes + resaltado + nudge ────────
+
+    /**
+     * Campos faltantes en el orden visual top→bottom del sheet, derivados de los
+     * MISMOS flows/helpers que [canRegister]:
+     *
+     * - EXPENSE: AMOUNT → CATEGORY → WALLET → BENEFICIARY → PAYER. WALLET falta
+     *   solo si no hay wallet NI tercero; PAYER solo si la suma ≠ 100 y no hay
+     *   tercero. Se añaden además los [unresolvedFields] del modo Review que no
+     *   estén ya, ordenados en esa misma secuencia (CONCEPT tras AMOUNT, DATE al
+     *   final — posición de sus secciones en el sheet).
+     * - INCOME: AMOUNT → WALLET → PAYER. **Mapeo:** en INCOME no existe la
+     *   dimensión PAYER del formulario; `_incomeMemberId == null` (quién genera/
+     *   recibe el ingreso, IncomeMemberCard) se reporta como [CaptureField.PAYER]
+     *   por ser el campo "persona" equivalente en la UI.
+     */
+    val missingFields: StateFlow<List<CaptureField>> = combine(
+        combine(
+            _captureKind, _rawAmount, _selectedWalletId, _selectedCategoryId,
+        ) { k, a, w, c -> arrayOf(k, a, w, c) },
+        combine(
+            _beneficiaryShares, _payerShares, _incomeMemberId, unresolvedFields,
+        ) { b, p, m, u -> arrayOf(b, p, m, u) },
+        _thirdPartyPayerId,
+    ) { g1, g2, thirdPartyId ->
+        val kind = g1[0] as CaptureKind
+        val raw = g1[1] as String
+        val walletId = g1[2] as String?
+        when (kind) {
+            CaptureKind.INCOME -> buildList {
+                if (!amountOk(raw)) add(CaptureField.AMOUNT)
+                if (walletId == null) add(CaptureField.WALLET)
+                if (!incomeMemberOk(g2[2] as String?)) add(CaptureField.PAYER)
+            }
+            CaptureKind.EXPENSE -> {
+                @Suppress("UNCHECKED_CAST")
+                val benef = g2[0] as Map<String, Int>
+                @Suppress("UNCHECKED_CAST")
+                val payer = g2[1] as Map<String, Int>
+                @Suppress("UNCHECKED_CAST")
+                val unresolved = g2[3] as Set<CaptureField>
+                val base = buildList {
+                    if (!amountOk(raw)) add(CaptureField.AMOUNT)
+                    if (!categoryOk(g1[3] as String?)) add(CaptureField.CATEGORY)
+                    if (!walletOk(walletId, thirdPartyId)) add(CaptureField.WALLET)
+                    if (!beneficiaryOk(benef)) add(CaptureField.BENEFICIARY)
+                    if (!payerOk(payer, thirdPartyId)) add(CaptureField.PAYER)
+                }
+                // Review: campos "Por decidir" aún sin resolver que no estén ya.
+                (base + unresolved.filter { it !in base })
+                    .sortedBy { VISUAL_FIELD_ORDER.indexOf(it) }
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _showMissingHighlights = MutableStateFlow(false)
+
+    /**
+     * `true` tras el primer intento fallido de Guardar: la UI resalta las
+     * secciones con campos faltantes. Se resetea en [onDismiss].
+     */
+    val showMissingHighlights: StateFlow<Boolean> = _showMissingHighlights.asStateFlow()
+
+    private val _validationNudge = MutableSharedFlow<CaptureField>(extraBufferCapacity = 1)
+
+    /** Emite el primer campo faltante al intentar guardar incompleto (ancla scroll). */
+    val validationNudge: SharedFlow<CaptureField> = _validationNudge.asSharedFlow()
+
+    /**
+     * Punto de entrada del CTA "Guardar" SIEMPRE tappable (F3): si el formulario
+     * está completo delega en [onRegister]; si no, activa los resaltados y empuja
+     * el scroll hacia el primer campo faltante.
+     */
+    fun onRegisterAttempt() {
+        if (canRegister.value) {
+            onRegister()
+        } else {
+            _showMissingHighlights.value = true
+            _validationNudge.tryEmit(missingFields.value.firstOrNull() ?: return)
+        }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Eventos del numpad
@@ -826,6 +937,25 @@ class CaptureViewModel(
     /** Selecciona una categoría. */
     fun onCategorySelected(categoryId: String) {
         _selectedCategoryId.value = categoryId
+    }
+
+    /**
+     * Crea una cuenta desde el propio sheet (F4 — primer arranque sin wallets):
+     * MISMO camino que `WalletsViewModel.saveWallet` ([WalletRepository.insert],
+     * REPLACE + encola sync) y deja la cuenta recién creada seleccionada como
+     * fuente vía [onWalletSelected] (siembra también el pagador default).
+     */
+    fun createWallet(wallet: PaymentMethodEntity) {
+        viewModelScope.launch {
+            try {
+                walletRepository.insert(wallet)
+                onWalletSelected(wallet.id)
+            } catch (e: Exception) {
+                _operationState.value = CaptureOperationState.Error(
+                    e.message ?: "No se pudo crear la cuenta."
+                )
+            }
+        }
     }
 
     // ── Beneficiarios (quién consume) ──────────────────────────────────────────
@@ -1173,6 +1303,7 @@ class CaptureViewModel(
         _categoryQuery.value = ""
         _thirdPartyPayerId.value = null
         _thirdPartyMode.value = ThirdPartyMode.REIMBURSE
+        _showMissingHighlights.value = false
         pendingCaptureId = null
         _operationState.value = CaptureOperationState.Idle
     }
@@ -1187,6 +1318,16 @@ class CaptureViewModel(
 
         /** Cuántas categorías "recientes" mostrar en el sheet. */
         const val RECENT_LIMIT = 5
+
+        /**
+         * Orden visual top→bottom de las secciones del sheet (F2/F3): monto (con
+         * concepto), categoría, fuente, beneficiarios, "Más" (pagó, fecha).
+         */
+        private val VISUAL_FIELD_ORDER = listOf(
+            CaptureField.AMOUNT, CaptureField.CONCEPT, CaptureField.CATEGORY,
+            CaptureField.WALLET, CaptureField.BENEFICIARY, CaptureField.PAYER,
+            CaptureField.DATE,
+        )
 
         /** Nombres de mes para el label de quincena (mismo formato que QuincenaRollover). */
         private val MONTH_NAMES = listOf(
