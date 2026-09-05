@@ -1,3 +1,13 @@
+> **Documento histórico (marcado el 2026-09-05).** Esta es la especificación original del concepto
+> "The Architectural Ledger" tal como salió de la herramienta de diseño. La implementación real
+> en `app/src/main/java/mx/budget/ui/theme/` difiere en dos puntos que conviene conocer antes de
+> citarla: (1) la tipografía embarcada es **Google Sans Flex** (instancias estáticas en
+> `res/font/`, ver `Type.kt`), no Roboto Flex; (2) los tokens de color viven en `Color.kt`
+> (`Primary = #006C44` como esquema estático derivado de la semilla `#016E3E`) y el tema aplica
+> **color dinámico (Material You)** por default, con los semánticos financieros fuera del
+> `ColorScheme` (`FinanceColors.kt`). Las reglas de superficie sin líneas, radios y jerarquía
+> tonal sí se aplicaron. La guía vigente es `CLAUDE.md` §Capa de UI.
+
 ```markdown
 # Design System Specification: The Architectural Ledger
 
@@ -5,7 +15,7 @@
 **Creative North Star: The Architectural Ledger**
 This design system moves away from the "app-grid" aesthetic and toward a high-end editorial experience. It treats the Pixel 9 Pro Fold’s expansive inner display as a canvas for data storytelling. By combining the precision of a professional financial ledger with the breathing room of an architectural magazine, we create a "High-End Editorial" experience. 
 
-The system leverages the near-square aspect ratio of the Fold to implement asymmetrical "Bento" layouts. We prioritize **Tonal Layering** over structural lines, ensuring that data density does not lead to cognitive overload. Every element feels like a physical object—a slab of fine paper or a pane of frosted glass—resting within a meticulously organized space.
+The system leverages the near-square aspect ratio of the Fold to implement asymmetrical "Bento" layouts. We prioritize **Tonal Layering** over structural lines, ensuring that data density does not lead to cognitive overload. Every element feels like a physical object (a slab of fine paper or a pane of frosted glass) resting within a meticulously organized space.
 
 ## 2. Colors & Surface Philosophy
 The palette is rooted in `primary: #016e3e` (Accounting Green), signaling stability and growth. 
@@ -27,8 +37,8 @@ To move beyond a flat, "out-of-the-box" Material feel:
 - **CTAs:** Use a subtle linear gradient from `primary` (#016e3e) to `primary_dim` (#006035) at a 135° angle to provide visual "soul."
 - **Floating Elements:** Use Glassmorphism for floating action buttons or temporary overlays. Apply a 70% opacity to the surface color with a `24px` backdrop blur to allow the dashboard colors to bleed through softly.
 
-## 3. Typography: Roboto Flex Variable
-We utilize **Roboto Flex** to exploit its variable weight axis, creating a high-contrast hierarchy that feels custom-tuned for financial clarity.
+## 3. Typography: Google Sans Flex (originally specified as Roboto Flex)
+The app ships **Google Sans Flex** as static weight cuts (the original concept named Roboto Flex); the intent is the same: exploit the weight axis, creating a high-contrast hierarchy that feels custom-tuned for financial clarity.
 
 *   **Display (Editorial Impact):** `display-lg` (3.5rem) should use a `wght: 300` (Light) for large balance totals, providing an air of sophisticated wealth management.
 *   **Headlines (Navigation):** `headline-sm` (1.5rem) at `wght: 600` (Semi-Bold) for section titles to ground the user.
