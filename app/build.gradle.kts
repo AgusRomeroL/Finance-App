@@ -54,7 +54,7 @@ dependencies {
     implementation("androidx.room:room-ktx:$room_version")
     ksp("androidx.room:room-compiler:$room_version")
 
-    // WorkManager — pipeline de normalización/atribución retroactiva en background
+    // WorkManager: pipeline de normalización/atribución retroactiva en background
     // (Apéndice F.3.4). Exento de las restricciones de background de Android 14.
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
@@ -72,11 +72,6 @@ dependencies {
     // ya definidas en BudgetNavGraph). Alineado con compose-ui 1.10 / lifecycle 2.9.
     implementation("androidx.navigation:navigation-compose:2.9.4")
     
-    // Hilt just in case
-    implementation("com.google.dagger:hilt-android:2.57")
-    ksp("com.google.dagger:hilt-compiler:2.57")
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
-
     // Wear OS Data Layer
     implementation("com.google.android.gms:play-services-wearable:18.1.0")
 
@@ -85,7 +80,7 @@ dependencies {
     // kotlinx-coroutines-play-services (ya presente más abajo).
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
-    // Jetpack Glance — widget de pantalla de inicio para captura rápida (§G.3).
+    // Jetpack Glance: widget de pantalla de inicio para captura rápida (§G.3).
     // Runtime de Compose propio de Glance, independiente del compose-bom.
     implementation("androidx.glance:glance-appwidget:1.1.0")
     implementation("androidx.glance:glance-material3:1.1.0")
@@ -113,7 +108,7 @@ dependencies {
 
     // Compose Material 3 & Essentials
     implementation("androidx.compose.material3:material3")
-    // Material 3 Adaptive — NavigationSuiteScaffold vive aquí (graduado en material3 1.3)
+    // Material 3 Adaptive: NavigationSuiteScaffold vive aquí (graduado en material3 1.3)
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite")
     // SupportingPaneScaffold + PaneExpansionState (divisor de paneles arrastrable)
     implementation("androidx.compose.material3.adaptive:adaptive:1.1.0")
