@@ -1,6 +1,6 @@
 # Plan maestro de cierre: dejar la app terminada, funcional y en producción
 
-Fecha del diagnóstico: 2026-09-05. Base analizada: rama `develop` en `a06d470` (`main` y `norma` en `0eb8b7f`, tres commits por detrás). El último commit del proyecto es del 2026-07-11; el repositorio lleva ocho semanas sin cambios.
+Fecha del diagnóstico: 2026-09-05. Base analizada: rama `develop` en `a06d470` (`main` y `norma` en `0eb8b7f`, tres commits por detrás). El último commit del proyecto era del 2026-07-11; el repositorio llevaba ocho semanas sin cambios. Nota: en la Fase 0 se reescribió el historial de `develop` desde `b9aa34f` para quitar trailers de coautoría, así que los hashes citados en este diagnóstico (`b9aa34f`, `e2ca12d`, `a06d470`, `0e57c5f`, `0a37e2a`) hoy corresponden a `56f619f`, `6316e80`, `d6e403a`, `31a8710` y `28595ce`; el contenido es idéntico.
 
 Este documento es la fuente única de verdad del cierre. Cada fase la ejecuta un chat independiente que lee `CLAUDE.md`, la sección de su fase y la tabla de estado (§2), y que al terminar deja la tabla actualizada.
 
@@ -23,7 +23,7 @@ Este documento es la fuente única de verdad del cierre. Cada fase la ejecuta un
 
 **Reglas invariables en todas las fases:**
 
-- Rama de trabajo `develop`. Al cerrar una fase verificada se hace *fast-forward* de `develop` a `main`, y `norma` se iguala a `main` (siguen idénticas hasta la Fase 9).
+- Rama de trabajo `develop`. Al cerrar una fase verificada se hace *fast-forward* de `develop` a `main`, y `norma` se iguala a `main` (siguen idénticas; la Fase 9, que las habría separado, quedó cancelada).
 - Autoría única de Agustín Romero López en todo commit; sin trailers ni menciones de IA en commits, código, docs ni producto.
 - Cero U+2014 en cualquier texto.
 - Toda UI se verifica con la configuración fiel del Fold de Norma (`wm size 2076x2152`, `wm density 408`, `font_scale 1.30`, `font_weight_adjustment 300`, modo oscuro) y, cuando la fase lo exija, en hardware real (Pixel 10 Pro XL y Pixel 9 de Agustín, Pixel Watch 4).
@@ -59,28 +59,29 @@ Severidad: **B** bloquea la entrega; **F** funcionalidad incompleta o defecto co
 | 11 | F | `statement_import` es local-only por diseño: el checklist "Estados del mes" no converge entre dispositivos. | `data/local/entity/StatementImportEntity.kt:16` | 2 |
 | 12 | F | Un grupo recién creado nace sin cuentas; la siembra de categorías por defecto ya existe pero no está verificada en el flujo multi-hogar. | memoria `bugs-2026-07-10`; `data/local/DefaultCategoryCatalog.kt` | 2 |
 | 13 | F | Sin exportación ni respaldo visible: RF-34 (reporte PDF/XLSX), RF-91 (XLSX con el layout del Excel), RF-92 (CSV) no existen; el comentario de Perfil lo deja como "se añadirá". Sin cierre manual de quincena (RF-32). | `ui/profile/ProfileScreen.kt:59`; `grep` de export/closeQuincena vacío | 5 |
-| 14 | F | Quick Tap (spec §3.3, "estrella del sistema") no existe; el permiso `SYSTEM_ALERT_WINDOW` está declarado sin uso. `ACCESS_BACKGROUND_LOCATION` declarado aunque `LocationProvider` solo pide fix en primer plano. Ambos permisos comprometen una revisión de Play y la confianza del usuario. | `AndroidManifest.xml:14,29`; `data/location/LocationProvider.kt:47-66` | 0 |
+| 14 | F | Quick Tap (spec §3.3, "estrella del sistema") no existe; el permiso `SYSTEM_ALERT_WINDOW` está declarado y solo lo consumirá su overlay. Decisión 2026-09-05: Quick Tap SÍ se implementa (Fase 6) y el permiso se conserva. Corrección de la evidencia: `ACCESS_BACKGROUND_LOCATION` sí tiene uso real (nivel "Persistente" de Perfil; `MainActivity` lo solicita y `BankCaptureManager` lo aprovecha al ingerir notificaciones en segundo plano); se conserva por decisión del mismo día. Ambos permisos exigirán justificación si algún día se publica en Play (Fase 8). | `AndroidManifest.xml`; `data/location/LocationProvider.kt`; `ui/capture/QuickCaptureActivity.kt` (ya existe, con `CaptureViewModel` real) | 6 |
 | 15 | F | Wear: sin *complications* (spec §4.3) ni *Ongoing Activity*; la sincronización Data Layer solo se ha verificado parcialmente en hardware; la app del reloj no tiene versionado ni firma compartidos con el teléfono. | `wear/src` sin `Complication`; memoria `wear-redesign` | 3 |
 | 16 | F | Chat IA: respuesta genérica en texto libre; latencia de ~54 s por análisis abierto en Pixel 9 (CPU) sin gestión de expectativas en UI. | memoria `mvp-integral-fases` (J5-LLM) | 4 |
 | 17 | C | Pruebas: un solo test JVM (`NaturalLanguageCaptureParserTest`); ninguna prueba de la cadena de migraciones 1→19 sobre el asset real; sin pruebas de reglas Firestore; sin CI. La *golden suite* de IA de la spec no existe. | `app/src/test` (1 archivo); sin `androidTest`; sin `.github/` | 7 |
 | 18 | C | Sin observabilidad de fallos en producción (no hay Crashlytics ni registro local exportable). | `app/build.gradle.kts` sin crashlytics | 7 |
-| 19 | C | Dependencia muerta de Hilt (cero anotaciones) que alarga KSP y engorda el APK. | `app/build.gradle.kts:73-75`; `grep @Inject` = 0 | 0 |
+| 19 | C | Dependencia muerta de Hilt (cero anotaciones) que alarga KSP y engorda el APK. Resuelto en la Fase 0 (`65fd0bc`). | `app/build.gradle.kts`; `grep @Inject` = 0 | 0 |
 | 20 | C | Accesibilidad no auditada: 28 `contentDescription = null` frente a 16 con texto; sin pasada de TalkBack; textos 100 % en código (0 `stringResource`, `strings.xml` de 4 líneas). | métricas del `grep` 2026-09-05 | 6 |
 | 21 | C | La web fija el `appId` por variable de entorno con *fallback* al de Android; el despliegue depende de una copia NTFS local sin script. | `web/src/lib/firebase.ts:17-20`, `web/README.md` | 8 |
-| 22 | D | `CLAUDE.md` desactualizado: declara Room v15 y `MIGRATION_14_15` cuando la base está en v19 (`MIGRATION_18_19`); referencias a Pixel Watch 3; sin mención de multi-hogar, roles v2, web de escritorio ni estados del mes. | `data/local/BudgetDatabase.kt:78`; `CLAUDE.md` §Room | 0 |
-| 23 | D | Sin `README.md` ni `LICENSE` en la raíz; `main` no es público de facto (nombres de la familia en 30 archivos Kotlin; sin base demo; `main == norma`). | listado de raíz; memoria `branch-model` | 0, 9 |
-| 24 | D | Higiene local: cinco volcados `java_pid*.hprof` (unos 3.8 GB) y `sdk.zip` (75 MB) en la carpeta sincronizada de Drive; están ignorados por git pero se replican en la nube. `DESIGN.md` de referencia habla de Roboto Flex cuando la app usa Google Sans Flex. | listado de raíz; `ui_reference/veridian_ledger/DESIGN.md` | 0, 6 |
+| 22 | D | `CLAUDE.md` desactualizado: declaraba Room v15 y `MIGRATION_14_15` cuando la base está en v19 (`MIGRATION_18_19`); sin mención de multi-hogar, roles v2, web de escritorio ni estados del mes. Resuelto en la Fase 0 (`533c9ba`): reescrito completo y verificado contra el código. | `data/local/BudgetDatabase.kt`; `CLAUDE.md` | 0 |
+| 23 | D | Sin `README.md` ni `LICENSE` en la raíz; `main` no es público de facto (nombres de la familia en 30 archivos Kotlin; sin base demo; `main == norma`). Resuelto en la Fase 0 (`b17d397`): `README.md` añadido; por decisión del 2026-09-05 el repositorio es privado, sin `LICENSE`, y la Fase 9 se cancela. | listado de raíz; memoria `branch-model` | 0 |
+| 24 | D | Higiene local: cinco volcados `java_pid*.hprof` (unos 3.8 GB) y `sdk.zip` (75 MB) en la carpeta sincronizada de Drive; están ignorados por git pero se replican en la nube. `DESIGN.md` de referencia habla de Roboto Flex cuando la app usa Google Sans Flex. Resuelto en la Fase 0: movidos a `C:\dev\finance-app-offdrive\` (4.2 GB con `temp_jdk`, `temp_sdk` y `build_log.txt`); `DESIGN.md` marcado como histórico con nota de tokens reales (la reescritura con tokens sigue en 6a). | listado de raíz; `ui_reference/veridian_ledger/DESIGN.md` | 0, 6 |
+| 26 | D | Cero U+2014 es regla invariable, pero el repositorio versiona 1395 ocurrencias en 206 archivos (docs, specs, comentarios Kotlin y textos visibles de la app, p. ej. el encabezado de quincena "1 [raya] 15 SEPT" del dashboard). Detectado en la Fase 0; no se barrió porque exige reescritura frase por frase. Propuesta: los textos visibles y los archivos Kotlin en la Fase 6b (con la extracción a `strings.xml`), la documentación en la Fase 7 junto con la CI que lo verifique. | conteo con `git ls-files` + `grep` del 2026-09-05 | 6, 7 |
 | 25 | B | Preguntas de clasificación de la semilla sin respuesta de Norma (Pau Raúl, Berna/Bernardo, Marco y Omar, Cochecito $8,000, Changan $5,000, deudor "Por identificar" $1,900) y dudas surgidas de los estados de cuenta (CENEVAL, CirculoDerm, ropa universitarios, WIM, Google CR, cargos de Amazon). Regla nueva (2026-09-05): la base inicial no se genera con ninguna duda abierta. | `seed/REPORTE_SEMILLA_2026-07.md:41-47,232`; memoria `auditoria-metodo-beneficiario` | 10 |
 
 ---
 
 ## 3. Mapa de fases y estado
 
-El orden respeta dependencias reales: primero se sanea el terreno, después se cierra la deuda funcional, luego la robustez del sync (de la que dependen reloj y datos), en seguida las capas que se apoyan en ella, y al final calidad, release, puesta en producción con Norma y, opcionalmente, el `main` público. Por decisión de Agustín (2026-09-05), todo lo que involucra a Norma queda al final: no recibe preguntas ni tareas hasta que el software esté terminado y publicado. Sus preguntas (§5.3) se envían al arrancar la Fase 10.
+El orden respeta dependencias reales: primero se sanea el terreno, después se cierra la deuda funcional, luego la robustez del sync (de la que dependen reloj y datos), en seguida las capas que se apoyan en ella, y al final calidad, release y puesta en producción con Norma. La Fase 9 (`main` público) se conserva en la numeración pero quedó cancelada el 2026-09-05: el repositorio es privado. Por decisión de Agustín (2026-09-05), todo lo que involucra a Norma queda al final: no recibe preguntas ni tareas hasta que el software esté terminado y publicado. Sus preguntas (§5.3) se envían al arrancar la Fase 10.
 
 | Fase | Nombre | Depende de | Chats estimados | Estado | Commit de cierre |
 |---|---|---|---|---|---|
-| 0 | Saneamiento del repositorio y de la documentación | ninguna | 1 | pendiente | |
+| 0 | Saneamiento del repositorio y de la documentación | ninguna | 1 | **hecha** (2026-09-05) | `b17d397` (último de contenido; el cierre documental es el commit siguiente, que actualiza esta tabla) |
 | 1 | Cierre de la deuda funcional conocida | 0 | 1 a 2 | pendiente | |
 | 2 | Sync, identidad y reglas a prueba de todo | 1 | 1 a 2 | pendiente | |
 | 3 | Wear OS terminado y verificado en hardware | 2 | 1 | pendiente | |
@@ -89,8 +90,8 @@ El orden respeta dependencias reales: primero se sanea el terreno, después se c
 | 6 | Mejora de UX con `/design` y accesibilidad | 1, 5 | 2 (6a auditoría y diseño; 6b implementación) | pendiente | |
 | 7 | Calidad: pruebas, CI y observabilidad | 2, 5 | 1 | pendiente | |
 | 8 | Release firmado, publicación web y distribución | 3, 4, 6, 7 | 1 | pendiente | |
-| 9 | `main` público (opcional) | 8 | 1 a 2 | pendiente | |
-| 10 | Semilla definitiva desde el Excel 2.5 (2), 100 % clasificada | 8 (y 9 si se hace) + respuestas de Norma | 1 a 2 | pendiente | |
+| 9 | `main` público (opcional) | 8 | 0 | **cancelada** (2026-09-05: repo privado, sin `LICENSE`) | |
+| 10 | Semilla definitiva desde el Excel 2.5 (2), 100 % clasificada | 8 + respuestas de Norma | 1 a 2 | pendiente | |
 | 11 | Puesta en producción con Norma (cutover) | 10 | 1 | pendiente | |
 
 Las fases 3 y 4 pueden correr en paralelo (chats distintos) una vez cerrada la 2. La 5 puede correr en paralelo con la 2. Las fases 10 y 11 son las últimas por decisión explícita; el chat de la Fase 10 adelanta primero el trabajo técnico que no requiere a Norma (diff de hojas, extensión del ETL, cuestionario de conceptos nuevos) y solo después le escribe.
@@ -106,13 +107,15 @@ Las fases 3 y 4 pueden correr en paralelo (chats distintos) una vez cerrada la 2
 **Alcance.**
 1. Verificar en el emulador FinanceFold (config fiel) los tres commits de `develop` que `main` no tiene (motion expresivo, *journeys* sin datos, refinamiento Fold) y hacer *fast-forward* de `main` y `norma`.
 2. Reescribir las secciones desactualizadas de `CLAUDE.md`: Room v19 con la cadena completa de migraciones y su propósito, multi-hogar y roles v2, web de escritorio, estados del mes, ingesta multi-documento, Pixel Watch 4, rutas de navegación reales, y un apartado "Estado real al 2026-09" que apunte a este plan. Corregir `ui_reference/veridian_ledger/DESIGN.md` (Google Sans Flex, tokens reales) o marcarlo como histórico.
-3. Quitar la dependencia de Hilt y el permiso `SYSTEM_ALERT_WINDOW`. Sobre `ACCESS_BACKGROUND_LOCATION`, aplicar la decisión de §7 (propuesta: quitarlo y dejar la ubicación solo en primer plano).
-4. Añadir `README.md` (qué es, cómo se construye, dónde vive la spec) y la `LICENSE` que Agustín decida (§7).
+3. Quitar la dependencia de Hilt y el permiso `SYSTEM_ALERT_WINDOW`. Sobre `ACCESS_BACKGROUND_LOCATION`, aplicar la decisión de §7 (propuesta: quitarlo y dejar la ubicación solo en primer plano). *Ejecutado (2026-09-05):* Hilt retirado (`65fd0bc`); ambos permisos se conservan por decisión de Agustín (Quick Tap se implementa en la Fase 6; el nivel "Persistente" de ubicación sí usa el permiso de segundo plano).
+4. Añadir `README.md` (qué es, cómo se construye, dónde vive la spec) y la `LICENSE` que Agustín decida (§7). *Ejecutado:* `README.md` (`b17d397`); sin `LICENSE`, repositorio privado.
 5. Mover fuera de la carpeta de Drive los `java_pid*.hprof`, `sdk.zip`, `temp_jdk/`, `temp_sdk/` y `build_log.txt` (no son de git, pero se sincronizan). Confirmar que el wrapper local está en Gradle 8.13.
 
 **Fuera de alcance.** Cualquier cambio de comportamiento de la app.
 
 **Criterio de salida.** `main == develop == norma`; `CLAUDE.md` sin afirmaciones falsas (se valida leyendo cada sección contra el código); build en verde; APK debug instalado y arrancando en FinanceFold tras los cambios de manifest y dependencias.
+
+**Registro de cierre (2026-09-05).** Commits en `develop`: `533c9ba` (guía del repo + DESIGN.md histórico), `65fd0bc` (Hilt fuera), `b17d397` (README), más el commit de esta actualización del plan. Historial de `develop` reescrito desde `56f619f` para eliminar los trailers de coautoría (respaldo local en el tag `backup/develop-pre-rewrite-2026-09-05`). Limpieza de Drive hecha; wrapper en 8.13. APK sin Hilt verificado en FinanceFold (config fiel, oscuro): dashboard expandido, validación guiada de la captura, autofoco de búsqueda y back sin crashes.
 
 **Prompt de arranque.**
 ```text
@@ -257,38 +260,44 @@ con fast-forward a main y norma y actualiza la sección 3 del plan.
 
 ### Fase 6. Mejora de UX con `/design` y accesibilidad
 
-**Objetivo.** Elevar la usabilidad de los recorridos reales de Norma con evidencia, usando los artboards de `/design` como herramienta de exploración antes de tocar Compose. El detalle de la herramienta está en §6 de este documento.
+**Objetivo.** Elevar la usabilidad de los recorridos reales de Norma con evidencia, usando los artboards de `/design` como herramienta de exploración antes de tocar Compose, e implementar **Quick Tap** (spec `ESPECIFICACION_UX_HARDWARE_APP.md` §3.3, decisión de Agustín del 2026-09-05), la entrada de captura más rápida del sistema. El detalle de la herramienta está en §6 de este documento.
 
 **Sub-fase 6a. Auditoría y diseño (un chat interactivo, desde la app de escritorio de Claude Code).**
 1. Auditoría heurística de siete recorridos con capturas en FinanceFold (config fiel): capturar un gasto en menos de 10 s; confirmar el PLANNED del día desde la notificación; entender "cuánto me queda" (héroe, reservado, proyectado); importar el estado del mes; corregir un gasto; invitar a un miembro; proponer desde la web. Cada fricción se anota con severidad y evidencia.
 2. Pasada de accesibilidad con TalkBack y *Accessibility Scanner* en el Pixel 10: `contentDescription` faltantes, objetivos táctiles menores de 48 dp, orden de foco, contraste en dinámico oscuro.
 3. Actualizar `ui_reference/veridian_ledger/DESIGN.md` con los tokens reales (Google Sans Flex, `FinanceColors`, `BudgetMotion`, `BudgetShapes`) y publicar un proyecto de sistema de diseño "Presupuesto Familiar" con `/design-sync` (vistas previas HTML de los componentes clave: `KpiCard`, `TransactionRow`, `BudgetRing`, hoja de captura, `FloatingNavBar`, chips de atribución).
 4. Ejecutar `/design` con un brief por recorrido de mayor fricción (máximo cuatro), anclado en la evidencia del punto 1 y en los tokens del punto 3. Guardar la URL del lienzo y la opción elegida en `ui_reference/design_2026-09/DECISIONES.md`.
+5. Brief adicional de **Quick Tap**: panel flotante de captura (spec §3.3 componentes B y C: aspecto de notificación expandida, `surfaceContainerHighest`, radio 28 dp, foco inicial en el monto, categoría, cuenta y beneficiario predichos, cierre automático a los 6 s sin interacción) y la pantalla explicativa previa al permiso "mostrar sobre otras apps".
 
 **Sub-fase 6b. Implementación (un chat).**
-5. Implementar en Compose las opciones elegidas, respetando `BudgetMotion`, `pressScale`, `staggeredEntrance` y `LocalReducedMotion`; actualizar `TutorialSpec` y `TUTORIAL.md` por cada sección que cambie.
-6. Cerrar los hallazgos de accesibilidad; extraer a `strings.xml` como mínimo los textos que TalkBack lee y los mensajes de error (la extracción completa se decide en la Fase 10).
-7. Verificar en FinanceFold y en el Fold real de Norma (captura remota) los recorridos auditados, con tiempos antes y después.
+6. Implementar en Compose las opciones elegidas, respetando `BudgetMotion`, `pressScale`, `staggeredEntrance` y `LocalReducedMotion`; actualizar `TutorialSpec` y `TUTORIAL.md` por cada sección que cambie.
+7. Cerrar los hallazgos de accesibilidad; extraer a `strings.xml` como mínimo los textos que TalkBack lee y los mensajes de error; en esa misma pasada eliminar los U+2014 de los textos visibles y de los archivos Kotlin (hallazgo 26).
+8. **Quick Tap** (spec §3.3, sobre `QuickCaptureActivity`, que ya existe con `CaptureViewModel` real): (a) entrada: `activity-alias` con `LAUNCHER` y etiqueta propia ("Gasto rápido") para que aparezca en Ajustes, Sistema, Gestos, Quick Tap, "Abrir app"; más el shortcut estático `quick_capture` (`res/xml/shortcuts.xml`) y el deep-link `mx.budget://capture?amount=&category=&wallet=&beneficiary=` (§3.5); (b) overlay: `OverlayService` (foreground, tipo `specialUse`) que pinta el panel diseñado en 6a con `TYPE_APPLICATION_OVERLAY`; permisos `SYSTEM_ALERT_WINDOW` (ya declarado; onboarding explicativo y redirección a `ACTION_MANAGE_OVERLAY_PERMISSION`), `FOREGROUND_SERVICE` y `FOREGROUND_SERVICE_SPECIAL_USE`; sin permiso de overlay cae a la hoja completa de `QuickCaptureActivity`; (c) fallback para teléfonos sin Quick Tap: `TileService` de Quick Settings "Capturar gasto" (§3.3 componente D); (d) motion con `BudgetMotion` (entrada `slideInVertically` + fade con resorte, salida al confirmar) y `LocalReducedMotion`; (e) trazas `QuickCapture.coldStart` y `QuickCapture.persistDuration` (§3.6) con metas P95 < 600 ms y P99 < 120 ms medidas en el Pixel 10.
+9. Verificar en FinanceFold y en el Fold real de Norma (captura remota) los recorridos auditados, con tiempos antes y después; Quick Tap se verifica en hardware (Pixel 10 Pro XL y Pixel 9: el gesto no existe en el emulador, donde solo se prueban el intent, el tile y el deep-link).
 
-**Criterio de salida.** Informe de fricciones con estado (resuelta, aceptada, diferida); tiempos de recorrido medidos; cero errores de *Accessibility Scanner* en las pantallas principales; tutorial coherente.
+**Criterio de salida.** Informe de fricciones con estado (resuelta, aceptada, diferida); tiempos de recorrido medidos; cero errores de *Accessibility Scanner* en las pantallas principales; tutorial coherente; Quick Tap operativo de doble golpe a gasto guardado en menos de 2.5 s en el Pixel 10, con fallback por tile verificado.
 
 **Prompt de arranque (6a).**
 ```text
 Sesión interactiva desde Claude Code Desktop (necesaria para /design y /design-sync). Lee CLAUDE.md,
-la Fase 6 y la sección 6 de PLAN_MAESTRO_CIERRE.md, ui_reference/REDESIGN_BRIEF.md y las skills
-emil-design-eng y apple-design del repo. Ejecuta la auditoría de los 7 recorridos con capturas en
-FinanceFold (config fiel), la pasada de accesibilidad, actualiza DESIGN.md con los tokens reales,
-publica el sistema de diseño con /design-sync y corre /design con un brief por recorrido de mayor
-fricción (máximo 4). Registra las opciones elegidas en ui_reference/design_2026-09/DECISIONES.md.
-No implementes todavía. Actualiza la sección 3 del plan.
+la Fase 6 y la sección 6 de PLAN_MAESTRO_CIERRE.md, la sección 3.3 de
+ESPECIFICACION_UX_HARDWARE_APP.md, ui_reference/REDESIGN_BRIEF.md y las skills emil-design-eng y
+apple-design del repo. Ejecuta la auditoría de los 7 recorridos con capturas en FinanceFold (config
+fiel), la pasada de accesibilidad, actualiza DESIGN.md con los tokens reales, publica el sistema de
+diseño con /design-sync y corre /design con un brief por recorrido de mayor fricción (máximo 4)
+más el brief del panel de Quick Tap. Registra las opciones elegidas en
+ui_reference/design_2026-09/DECISIONES.md. No implementes todavía. Actualiza la sección 3 del plan.
 ```
 
 **Prompt de arranque (6b).**
 ```text
-Lee CLAUDE.md, la Fase 6 de PLAN_MAESTRO_CIERRE.md, ui_reference/design_2026-09/DECISIONES.md y
-TUTORIAL.md. Implementa en Compose las opciones elegidas con los tokens de BudgetMotion y verifica
-en FinanceFold (config fiel). Cierra los hallazgos de accesibilidad y actualiza el tutorial. Cierra
-con fast-forward a main y norma y actualiza la sección 3 del plan.
+Lee CLAUDE.md, la Fase 6 de PLAN_MAESTRO_CIERRE.md, la sección 3.3 de
+ESPECIFICACION_UX_HARDWARE_APP.md, ui_reference/design_2026-09/DECISIONES.md y TUTORIAL.md.
+Implementa en Compose las opciones elegidas con los tokens de BudgetMotion y verifica en
+FinanceFold (config fiel). Implementa Quick Tap completo (alias de launcher, shortcut, deep-link,
+overlay con permiso, tile de Quick Settings, trazas) y verifícalo en el Pixel 10 por adb. Cierra los
+hallazgos de accesibilidad, quita los U+2014 de textos visibles y Kotlin, y actualiza el tutorial.
+Cierra con fast-forward a main y norma y actualiza la sección 3 del plan.
 ```
 
 ---
@@ -344,6 +353,8 @@ del plan.
 ---
 
 ### Fase 9. `main` público (opcional)
+
+**CANCELADA el 2026-09-05 por decisión de Agustín:** el repositorio es privado, sin `LICENSE` (todos los derechos reservados) y `main` sigue idéntica a `norma`. Se conserva el texto por si la decisión cambia; ninguna fase depende de ella.
 
 **Objetivo.** Que `main` sea instalable y comprensible por cualquier persona, sin datos ni nombres de la familia.
 
@@ -483,9 +494,9 @@ Consume mucho contexto porque genera varios *artboards* a la vez; la herencia au
 
 ## 7. Decisiones abiertas que corresponden a Agustín
 
-1. **Quick Tap.** Propuesta: descartarlo del alcance (el widget, el reloj y la captura por voz cubren la necesidad) y retirar `SYSTEM_ALERT_WINDOW`.
-2. **Ubicación en segundo plano.** Propuesta: retirar el permiso y conservar solo la ubicación en primer plano al capturar.
-3. **Licencia y `main` público.** Si `main` va a ser público (Fase 10), elegir licencia; si no, `main` se documenta como privado y la Fase 10 se cancela.
+1. **Quick Tap.** Resuelta el 2026-09-05: se implementa (Fase 6, puntos 5 y 8) y `SYSTEM_ALERT_WINDOW` se conserva para su overlay.
+2. **Ubicación en segundo plano.** Resuelta el 2026-09-05: se conservan el permiso y el nivel "Persistente" (la evidencia del hallazgo 14 estaba incompleta: el nivel sí lo usa).
+3. **Licencia y `main` público.** Resuelta el 2026-09-05: repositorio privado, sin `LICENSE`; la Fase 9 queda cancelada y `main` sigue idéntica a `norma`.
 4. **Origen de descarga del modelo Gemma.** Firebase Storage del proyecto (simple, con costo de egreso) o bucket propio.
 5. **Canal de distribución.** APK firmado por Drive (inmediato) o pista interna de Play (requiere cuenta de desarrollador y política de permisos).
 6. **Alcance del *netting*.** Quincena activa por defecto con selector de rango (propuesta) o histórico completo.

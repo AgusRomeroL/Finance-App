@@ -10,7 +10,7 @@ La especificación viva del producto está en cuatro documentos markdown en la r
 
 ## Estado real al 2026-09
 
-El proyecto está en **fase de cierre**. La fuente única de verdad del cierre es **`PLAN_MAESTRO_CIERRE.md`** (raíz): diagnóstico con 25 pendientes con evidencia (§2.2), mapa de 12 fases (0 a 11) con tabla de estado (§3), detalle y prompt de arranque de cada fase (§4), lo que se necesita de Norma (§5) y las decisiones abiertas (§7). **Cada fase se ejecuta en un chat independiente que lee este archivo, la sección de su fase y la tabla de §3, y al terminar deja la tabla actualizada y una memoria del proyecto.**
+El proyecto está en **fase de cierre**. La fuente única de verdad del cierre es **`PLAN_MAESTRO_CIERRE.md`** (raíz): diagnóstico con 26 pendientes con evidencia (§2.2), mapa de 12 fases (0 a 11) con tabla de estado (§3), detalle y prompt de arranque de cada fase (§4), lo que se necesita de Norma (§5) y las decisiones abiertas (§7). **Cada fase se ejecuta en un chat independiente que lee este archivo, la sección de su fase y la tabla de §3, y al terminar deja la tabla actualizada y una memoria del proyecto.**
 
 Reglas invariables del cierre (detalle en el plan §1): rama de trabajo `develop`, al cerrar una fase verificada se hace fast-forward de `develop` a `main` y de `main` a `norma`; autoría única de Agustín Romero López en todo commit, sin trailers ni menciones de IA en commits, código, docs ni producto; cero U+2014 en cualquier texto; toda UI se verifica con la configuración fiel del Fold de Norma (abajo); todo cambio de estado de UI se anima con `BudgetMotion` y respeta `LocalReducedMotion`; todo cambio de esquema Room sube la versión, escribe una `Migration` idempotente y copia el `createSql` del `schemas/N.json`.
 
