@@ -1,6 +1,9 @@
 package mx.budget
 
 import android.app.Application
+import android.app.LocaleManager
+import android.os.Build
+import android.os.LocaleList
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -11,12 +14,14 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import mx.budget.ui.common.AppLocale
 import mx.budget.ai.proactive.BankNotificationParser
 import mx.budget.ai.proactive.BankTemplates
 import mx.budget.ai.proactive.ConceptCanonicalizer
@@ -283,6 +288,8 @@ class BudgetApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        applyAppLocale()
 
         database = Room.databaseBuilder(
             this,
@@ -933,6 +940,33 @@ class BudgetApplication : Application() {
             ExistingPeriodicWorkPolicy.KEEP,
             request,
         )
+    }
+
+    /**
+     * Fija español de México como idioma de la app.
+     *
+     * La app es monolingüe, pero los componentes que leen el idioma del sistema
+     * salían en el del teléfono: el selector de fecha de Material 3 mostraba los
+     * meses y los días en inglés.
+     *
+     * Dos mecanismos complementarios:
+     * - `Locale.setDefault`: cubre cualquier versión de Android y es lo que leen
+     *   el selector de fecha y los formateadores de `java.text`.
+     * - `LocaleManager` (Android 13+): fija el idioma por app a nivel de sistema,
+     *   junto con `res/xml/locales_config.xml`. Solo se escribe si aún no hay uno
+     *   fijado, porque asignarlo recrea la Activity y hacerlo en cada arranque
+     *   dejaría la app en un ciclo de reinicios.
+     */
+    private fun applyAppLocale() {
+        Locale.setDefault(AppLocale)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            runCatching {
+                val manager = getSystemService(LocaleManager::class.java)
+                if (manager != null && manager.applicationLocales.isEmpty) {
+                    manager.applicationLocales = LocaleList(AppLocale)
+                }
+            }
+        }
     }
 
     /**

@@ -117,6 +117,7 @@ import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.capture.toReviewMode
+import mx.budget.ui.common.AppLocale
 import mx.budget.ui.common.AppTopBar
 import mx.budget.ui.common.LocalSessionMemberId
 import mx.budget.ui.common.SearchPill
@@ -137,7 +138,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Date
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -145,7 +145,7 @@ import kotlin.math.roundToInt
 // Formato y utilidades
 // ─────────────────────────────────────────────────────────────────────────────
 
-private val mxnInt: NumberFormat = NumberFormat.getIntegerInstance(Locale("es", "MX"))
+private val mxnInt: NumberFormat = NumberFormat.getIntegerInstance(AppLocale)
 
 /** "24,380" (sin símbolo, sin centavos), para el KPI héroe con "$" y "MXN" aparte. */
 private fun Double.toGrouped(): String = mxnInt.format(this.toLong())
@@ -157,7 +157,7 @@ private val isoDate: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 private val shortMonth = SimpleMonth()
 
 private class SimpleMonth {
-    private val fmt = java.text.SimpleDateFormat("d MMM", Locale("es", "MX"))
+    private val fmt = java.text.SimpleDateFormat("d MMM", AppLocale)
     fun format(epochMillis: Long): String = fmt.format(Date(epochMillis))
 }
 
@@ -180,7 +180,7 @@ private fun parseIso(s: String?): LocalDate? =
 private fun quincenaRange(q: QuincenaEntity?): String {
     val start = parseIso(q?.startDate) ?: return ""
     val end = parseIso(q?.endDate) ?: return ""
-    val mFmt = DateTimeFormatter.ofPattern("MMM", Locale("es", "MX"))
+    val mFmt = DateTimeFormatter.ofPattern("MMM", AppLocale)
     val endMonth = end.format(mFmt).replace(".", "")
     return "${start.dayOfMonth}–${end.dayOfMonth} $endMonth"
 }

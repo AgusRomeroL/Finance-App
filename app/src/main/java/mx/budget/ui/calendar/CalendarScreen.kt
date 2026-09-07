@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import mx.budget.data.local.result.ExpenseWithDetails
+import mx.budget.ui.common.AppLocale
 import mx.budget.ui.common.toMxn
 import mx.budget.ui.dashboard.iconForCategory
 import mx.budget.ui.theme.FinancialTone
@@ -68,15 +69,14 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Date
-import java.util.Locale
 
 private val ZONE: ZoneId = ZoneId.of("America/Mexico_City")
 
-private val dayFmt = java.text.SimpleDateFormat("EEE d MMM", Locale("es", "MX"))
+private val dayFmt = java.text.SimpleDateFormat("EEE d MMM", AppLocale)
 private fun formatDay(epochMillis: Long): String =
     dayFmt.format(Date(epochMillis)).replaceFirstChar { it.uppercase() }
 
-private val selectedDayFmt = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", Locale("es", "MX"))
+private val selectedDayFmt = DateTimeFormatter.ofPattern("EEEE d 'de' MMMM", AppLocale)
 internal fun LocalDate.formatLong(): String =
     format(selectedDayFmt).replaceFirstChar { it.uppercase() }
 

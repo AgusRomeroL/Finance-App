@@ -2,6 +2,7 @@ package mx.budget.ui.ledger
 
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import mx.budget.ui.common.AppLocale
 import mx.budget.ui.common.ScreenHeader
 import mx.budget.ui.common.pressScale
 import mx.budget.ui.common.rememberPressInteractionSource
@@ -51,7 +52,6 @@ import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
-import java.util.Locale
 
 /**
  * Libro Mayor (MVP Fase 3): historial completo paginado por quincena, con
@@ -65,8 +65,8 @@ fun LedgerScreen(
     onOpenDetail: (ExpenseWithDetails) -> Unit,
     tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
 ) {
-    val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
-    val dateFmt = remember { SimpleDateFormat("EEE d MMM", Locale("es", "MX")) }
+    val money = remember { NumberFormat.getCurrencyInstance(AppLocale) }
+    val dateFmt = remember { SimpleDateFormat("EEE d MMM", AppLocale) }
 
     val quincenas by viewModel.quincenas.collectAsState()
     val quincena by viewModel.effectiveQuincena.collectAsState()

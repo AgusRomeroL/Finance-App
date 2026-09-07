@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Idiomas que la app declara soportar. La app es monolingue en espanol de
+    Mexico: los textos estan en codigo, no en recursos, y el formato de fechas
+    y montos asume es-MX. Declararlo permite que el sistema (Android 13+) fije
+    el idioma por app y que los componentes de Material, entre ellos el
+    selector de fecha, se rendericen en espanol aunque el telefono este en otro
+    idioma.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="es-MX" />
+</locale-config>
