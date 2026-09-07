@@ -98,6 +98,26 @@ interface QuincenaDao {
     )
     suspend fun getClosedSnapshots(householdId: String, n: Int): List<QuincenaSnapshot>
 
+    /**
+     * Ultima quincena anterior a [beforeStartDate] que si tiene presupuesto
+     * declarado. La usa el rollover para arrastrar el presupuesto a la quincena
+     * nueva: sin esto nacia con ingreso y gasto proyectados en cero, y el
+     * disponible del dashboard salia en negativo desde el primer dia del mes.
+     *
+     * Solo lectura: NO altera el esquema.
+     */
+    @Query(
+        """
+        SELECT * FROM quincena
+        WHERE household_id = :householdId
+          AND start_date < :beforeStartDate
+          AND (projected_income_mxn > 0 OR projected_expenses_mxn > 0)
+        ORDER BY start_date DESC
+        LIMIT 1
+        """
+    )
+    suspend fun getLatestWithBudget(householdId: String, beforeStartDate: String): QuincenaEntity?
+
     @Query("UPDATE quincena SET status = :status WHERE id = :quincenaId")
     suspend fun updateStatus(quincenaId: String, status: String)
 

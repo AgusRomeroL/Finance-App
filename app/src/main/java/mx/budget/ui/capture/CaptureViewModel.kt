@@ -64,7 +64,7 @@ sealed class CaptureOperationState {
     /** El modal está en reposo, listo para recibir input. */
     object Idle : CaptureOperationState()
 
-    /** Inserción atómica en curso — mostrar CircularProgressIndicator. */
+    /** Inserción atómica en curso: mostrar CircularProgressIndicator. */
     object Loading : CaptureOperationState()
 
     /**
@@ -74,7 +74,7 @@ sealed class CaptureOperationState {
     data class Success(val expenseId: String) : CaptureOperationState()
 
     /**
-     * Error durante el registro — mostrar Snackbar recuperable.
+     * Error durante el registro: mostrar Snackbar recuperable.
      * @param message Descripción del error para mostrar al usuario.
      */
     data class Error(val message: String) : CaptureOperationState()
@@ -159,7 +159,7 @@ class CaptureViewModel(
     /**
      * Member vinculado a la SESIÓN (roles v2, `BudgetApplication.linkedMemberId`):
      * quién es esta persona en el hogar activo. Si existe entre los members
-     * activos, es el **pagador default** al elegir wallet o prellenar — por
+     * activos, es el **pagador default** al elegir wallet o prellenar, por
      * encima del dueño del wallet (un Administrador invitado registra gastos
      * que paga él, no el titular de la cuenta). null = cadena default histórica.
      */
@@ -679,7 +679,7 @@ class CaptureViewModel(
                         // Fase 6 (colaboradores): si el pagador sugerido es UN solo
                         // miembro que NO es adulto pagador (un hijo colaborador, un
                         // tercero), se preactiva el camino "alguien más pagó" +
-                        // reembolsable — el gasto saldrá con external_payer y
+                        // reembolsable: el gasto saldrá con external_payer y
                         // settlement PENDING_REIMBURSEMENT y caerá en "Por
                         // reembolsar". El usuario puede cambiarlo antes de registrar.
                         val soloPayer = bps.keys.singleOrNull()
@@ -731,7 +731,7 @@ class CaptureViewModel(
     private fun incomeMemberOk(memberId: String?): Boolean = memberId != null
 
     /**
-     * `true` si el formulario es válido para registrar (brief C11 — campos mínimos):
+     * `true` si el formulario es válido para registrar (brief C11, campos mínimos):
      * - EXPENSE: importe > 0, wallet y categoría seleccionados; beneficiarios y
      *   pagadores cada uno **sumando exactamente 100%**; y en modo Review, sin
      *   campos "Por decidir" pendientes ([unresolvedFields] vacío).
@@ -782,7 +782,7 @@ class CaptureViewModel(
      *   solo si no hay wallet NI tercero; PAYER solo si la suma ≠ 100 y no hay
      *   tercero. Se añaden además los [unresolvedFields] del modo Review que no
      *   estén ya, ordenados en esa misma secuencia (CONCEPT tras AMOUNT, DATE al
-     *   final — posición de sus secciones en el sheet).
+     *   final: posición de sus secciones en el sheet).
      * - INCOME: AMOUNT → WALLET → PAYER. **Mapeo:** en INCOME no existe la
      *   dimensión PAYER del formulario; `_incomeMemberId == null` (quién genera/
      *   recibe el ingreso, IncomeMemberCard) se reporta como [CaptureField.PAYER]
@@ -916,14 +916,14 @@ class CaptureViewModel(
         val ownerPayer = wallets.value.firstOrNull { it.id == walletId }?.ownerMemberId
             ?.takeIf { id -> members.value.any { it.id == id && it.role == "PAYER_ADULT" } }
             ?: members.value.firstOrNull { it.role == "PAYER_ADULT" }?.id
-        // Pagador default: PRIMERO el member de la sesión (roles v2 — quien opera
+        // Pagador default: PRIMERO el member de la sesión (roles v2, quien opera
         // este dispositivo paga sus capturas); si no hay vínculo, la cadena
         // histórica (dueño del wallet → primer PAYER_ADULT).
         val defaultPayer = sessionPayerOrNull() ?: ownerPayer
         if (_payerShares.value.isEmpty() && defaultPayer != null) {
             _payerShares.value = mapOf(defaultPayer to 100)
         }
-        // Ingreso: solo un Pagador (adulto-cuenta) puede recibir ingreso — dar dinero a
+        // Ingreso: solo un Pagador (adulto-cuenta) puede recibir ingreso: dar dinero a
         // un dependiente es un egreso (mesada/transferencia), no un ingreso. El default
         // es el dueño de la cuenta destino; corrige también una selección no-pagadora.
         val currentIsPayer = members.value.any {
@@ -940,7 +940,7 @@ class CaptureViewModel(
     }
 
     /**
-     * Crea una cuenta desde el propio sheet (F4 — primer arranque sin wallets):
+     * Crea una cuenta desde el propio sheet (F4, primer arranque sin wallets):
      * MISMO camino que `WalletsViewModel.saveWallet` ([WalletRepository.insert],
      * REPLACE + encola sync) y deja la cuenta recién creada seleccionada como
      * fuente vía [onWalletSelected] (siembra también el pagador default).
@@ -1232,7 +1232,7 @@ class CaptureViewModel(
      * Mismo contrato que `QuincenaRollover`: si la fecha cae en la activa se usa
      * esa; si existe otra en Room (histórica/PROVISIONED) se usa; si no, se crea
      * con **id determinista** `q-YYYY-MM-FIRST|SECOND` (día 1-15 = FIRST, 16+ =
-     * SECOND) y status PROVISIONED — convergente entre dispositivos, sin romper
+     * SECOND) y status PROVISIONED, convergente entre dispositivos, sin romper
      * la FK `expense.quincena_id`. Sin [quincenaDao] cae a la activa.
      */
     private suspend fun resolveQuincena(date: LocalDate?): QuincenaEntity {
@@ -1245,36 +1245,10 @@ class CaptureViewModel(
 
         val dao = quincenaDao
             ?: return active ?: throw IllegalStateException("No hay quincena activa para el hogar.")
-        dao.getForDate(householdId, iso)?.let { return it }
-
-        val built = buildQuincena(date)
-        dao.insert(built)
-        return built
-    }
-
-    /**
-     * Builder determinista de quincena — réplica 1:1 de
-     * `QuincenaRollover.buildQuincena` (privado allá): id `q-YYYY-MM-HALF`,
-     * status PROVISIONED (aquí NO se activa: la activa de hoy no cambia).
-     */
-    private fun buildQuincena(date: LocalDate): QuincenaEntity {
-        val year = date.year
-        val month = date.monthValue
-        val first = date.dayOfMonth <= 15
-        val half = if (first) "FIRST" else "SECOND"
-        val start = LocalDate.of(year, month, if (first) 1 else 16)
-        val end = if (first) LocalDate.of(year, month, 15) else start.withDayOfMonth(start.lengthOfMonth())
-        return QuincenaEntity(
-            id = "q-%04d-%02d-%s".format(year, month, half),
-            householdId = householdId,
-            year = year,
-            month = month,
-            half = half,
-            startDate = start.toString(),
-            endDate = end.toString(),
-            label = "${if (first) "Q1" else "Q2"} ${MONTH_NAMES[month - 1]} $year",
-            status = "PROVISIONED",
-        )
+        // Delega en el rollover, unico dueño de la construccion de quincenas: crea
+        // la que cubre la fecha si falta, con id determinista y arrastrando el
+        // presupuesto, sin tocar la ACTIVE de hoy.
+        return mx.budget.data.quincena.QuincenaRollover(dao, householdId).ensureForDate(date)
     }
 
     /**
@@ -1329,10 +1303,5 @@ class CaptureViewModel(
             CaptureField.DATE,
         )
 
-        /** Nombres de mes para el label de quincena (mismo formato que QuincenaRollover). */
-        private val MONTH_NAMES = listOf(
-            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-        )
     }
 }
