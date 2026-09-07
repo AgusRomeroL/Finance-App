@@ -33,7 +33,7 @@ class HouseholdViewModel(
     private val memberRepository: MemberRepository,
     /**
      * Member vinculado a ESTA sesión (roles v2, `BudgetApplication.linkedMemberId`):
-     * se excluye de [UiState.eligibleMembers] — uno no se invita a sí mismo.
+     * se excluye de [UiState.eligibleMembers]: uno no se invita a sí mismo.
      * `null` = identidad aún sin resolver (la pantalla aplica un segundo filtro
      * con `LocalSessionMemberId` como cinturón).
      */
@@ -48,6 +48,16 @@ class HouseholdViewModel(
         val email: String? = null,
         val households: List<MembershipRepository.HouseholdMembership> = emptyList(),
         val activeHouseholdId: String = "",
+        /**
+         * Rol propio en el hogar activo, normalizado (OWNER, PAYER, MEMBER), o
+         * null si la nube todavía no conoce a este usuario. Sale del espejo
+         * `users/{uid}/households`, que es lo que ya carga [households]; la app
+         * no lo exponía y la web sí, y Perfil lo necesita para decirle a quien
+         * usa la app qué puede hacer y qué arriesga.
+         */
+        val myRole: String? = null,
+        /** Nombre del hogar activo según la nube, o null si no lo conoce. */
+        val activeHouseholdName: String? = null,
         val inviteCode: String? = null,
         /**
          * Members ACTIVOS del hogar activo, elegibles para la invitación
@@ -98,7 +108,7 @@ class HouseholdViewModel(
      * - Hogar activo remoto (recién creado/unido, aún sin pull local) → get
      *   puntual de la subcolección Firestore `households/{hid}/members`.
      * Excluye inactivos, los espejo EXTERNAL_* (no son personas invitables) y el
-     * member vinculado a la propia sesión ([sessionMemberId]) — tanto en la
+     * member vinculado a la propia sesión ([sessionMemberId]), tanto en la
      * lista local (Room) como en la remota (Firestore).
      */
     private fun loadEligibleMembers() {
@@ -157,6 +167,12 @@ class HouseholdViewModel(
             email = user?.email,
             households = householdsFlow.value,
             activeHouseholdId = base.activeHouseholdId,
+            myRole = householdsFlow.value
+                .firstOrNull { it.householdId == base.activeHouseholdId }
+                ?.let { MembershipRepository.normalizeRole(it.role) },
+            activeHouseholdName = householdsFlow.value
+                .firstOrNull { it.householdId == base.activeHouseholdId }
+                ?.displayName,
             eligibleMembers = eligibleMembersFlow.value,
         )
     }
@@ -195,7 +211,7 @@ class HouseholdViewModel(
                 }
                 .onFailure {
                     // El colector de `_extra` del init propaga este mensaje al
-                    // uiState — antes se perdía por no llamar recompute().
+                    // uiState; antes se perdía por no llamar recompute().
                     _extra.value = _extra.value.copy(busy = false, message = "No se pudo crear el grupo", messageIsError = true)
                 }
         }
@@ -217,7 +233,7 @@ class HouseholdViewModel(
                         MembershipRepository.ROLE_PAYER
                     _extra.value = _extra.value.copy(
                         busy = false,
-                        message = if (asPayer) "Te uniste como Administrador — reiniciando con el hogar nuevo"
+                        message = if (asPayer) "Te uniste como Administrador, reiniciando con el hogar nuevo"
                         else "Te uniste al grupo",
                         messageIsError = false,
                         joinSuccessCount = _extra.value.joinSuccessCount + 1,
@@ -233,7 +249,7 @@ class HouseholdViewModel(
                 is mx.budget.data.remote.MembershipRepository.JoinResult.AlreadyMember -> {
                     _extra.value = _extra.value.copy(
                         busy = false,
-                        message = "Ya perteneces a este grupo — tu rol no cambió",
+                        message = "Ya perteneces a este grupo; tu rol no cambió",
                     )
                 }
                 mx.budget.data.remote.MembershipRepository.JoinResult.Invalid -> {

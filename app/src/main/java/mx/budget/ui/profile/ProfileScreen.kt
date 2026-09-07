@@ -25,20 +25,25 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.NoAccounts
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +56,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.ui.tutorial.tutorialTarget
+import mx.budget.ui.theme.financeColors
+
+/**
+ * Estado de la sesión tal como Perfil lo cuenta.
+ *
+ * @param linked la sesión está vinculada a una cuenta de Google. En anónimo, una
+ *  reinstalación acuña un uid nuevo y con él se pierde la propiedad del hogar:
+ *  el push queda en PERMISSION_DENIED y hace falta recuperarlo a mano.
+ * @param email correo de la cuenta vinculada, si lo hay.
+ * @param roleLabel rol propio en el hogar activo, ya en español, o null si la
+ *  nube todavía no conoce a este usuario.
+ * @param householdName nombre del hogar activo según la nube.
+ */
+data class IdentityStatus(
+    val linked: Boolean,
+    val email: String? = null,
+    val displayName: String? = null,
+    val roleLabel: String? = null,
+    val householdName: String? = null,
+)
 
 /**
  * Pantalla de Perfil / Ajustes.
@@ -76,6 +101,12 @@ fun ProfileScreen(
     locationLevel: String = "NONE",
     onLocationLevelChange: (String) -> Unit = {},
     onOpenHousehold: (() -> Unit)? = null,
+    /**
+     * Estado de identidad de la sesión. `null` cuando la pantalla se compone sin
+     * el ViewModel de grupos (por ejemplo en una vista previa).
+     */
+    identity: IdentityStatus? = null,
+    onLinkGoogle: (() -> Unit)? = null,
     onManageMembers: (() -> Unit)? = null,
     onManageCategories: (() -> Unit)? = null,
     onManageIncome: (() -> Unit)? = null,
@@ -167,7 +198,15 @@ fun ProfileScreen(
             Spacer(Modifier.height(20.dp))
         }
 
-        // Card de cuenta y grupos (Fase B — multi-tenant).
+        // Estado de identidad (Fase 2). Antes esta pantalla no decía nada de la
+        // sesión: quién eres, qué puedes hacer, ni que seguir en anónimo pone en
+        // riesgo la propiedad del hogar si algún día reinstalas.
+        if (identity != null) {
+            IdentityCard(identity = identity, onLinkGoogle = onLinkGoogle, onOpenHousehold = onOpenHousehold)
+            Spacer(Modifier.height(20.dp))
+        }
+
+        // Card de cuenta y grupos (Fase B, multi-tenant).
         if (onOpenHousehold != null) {
             Column(
                 modifier = Modifier
@@ -291,7 +330,7 @@ fun ProfileScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        if (dynamicColor) "Material You — toma la paleta de tu fondo de pantalla"
+                        if (dynamicColor) "Material You: toma la paleta de tu fondo de pantalla"
                         else "Verde de marca (#016E3E)",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -351,7 +390,7 @@ fun ProfileScreen(
 
         Spacer(Modifier.height(20.dp))
 
-        // Card de automatización — captura desde notificaciones bancarias (Feature D)
+        // Card de automatización: captura desde notificaciones bancarias (Feature D)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -470,7 +509,7 @@ fun ProfileScreen(
                     modifier = Modifier.padding(start = 4.dp, top = 4.dp)
                 )
                 Spacer(Modifier.height(12.dp))
-                // TUTORIAL: PROFILE_STATEMENTS — ver TUTORIAL.md (el tag trae la fila a la
+                // TUTORIAL: PROFILE_STATEMENTS, ver TUTORIAL.md (el tag trae la fila a la
                 // vista con auto-scroll; no-op si controller es null)
                 SettingRow(
                     icon = Icons.Filled.UploadFile,
@@ -487,7 +526,7 @@ fun ProfileScreen(
             Spacer(Modifier.height(20.dp))
         }
 
-        // Card de recordatorios (Fase 4 inc. 2d) — lead global de los avisos de PLANNED.
+        // Card de recordatorios (Fase 4 inc. 2d): lead global de los avisos de PLANNED.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -513,7 +552,7 @@ fun ProfileScreen(
 
         Spacer(Modifier.height(20.dp))
 
-        // Card de espejo a Google Calendar (Fase 6) — opt-in, una vía.
+        // Card de espejo a Google Calendar (Fase 6): opt-in, una vía.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -569,7 +608,7 @@ fun ProfileScreen(
 
         Spacer(Modifier.height(20.dp))
 
-        // Card de ubicación del gasto (Apéndice G.4) — opt-in por nivel.
+        // Card de ubicación del gasto (Apéndice G.4): opt-in por nivel.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -633,9 +672,9 @@ fun ProfileScreen(
 
 /** Subtítulo legible del nivel de ubicación elegido. */
 private fun locationLevelLabel(level: String): String = when (level) {
-    "WHILE_IN_USE" -> "Solo al usar — fija el lugar al capturar o confirmar en la app"
-    "PERSISTENT" -> "Persistente — también en segundo plano (banco/reloj)"
-    else -> "Desactivada — los gastos no guardan ubicación"
+    "WHILE_IN_USE" -> "Solo al usar: fija el lugar al capturar o confirmar en la app"
+    "PERSISTENT" -> "Persistente: también en segundo plano (banco o reloj)"
+    else -> "Desactivada: los gastos no guardan ubicación"
 }
 
 /** Diálogo de selección del nivel de captura de ubicación (§G.4.2). */
@@ -722,6 +761,100 @@ private fun ReminderLeadDialog(current: Int, onSelect: (Int) -> Unit, onDismiss:
             androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cerrar") }
         }
     )
+}
+
+/**
+ * Tarjeta de estado de la sesión. Dice tres cosas y ofrece la única acción que
+ * importa: cómo estás identificado, qué rol tienes en el hogar activo y, si
+ * sigues en anónimo, que reinstalar la app te haría perder la propiedad del hogar.
+ *
+ * El aviso es persistente a propósito: no se puede descartar, porque el daño solo
+ * se manifiesta cuando ya es tarde (uid anónimo nuevo, push en PERMISSION_DENIED,
+ * recuperación a mano con `scripts/admin/grant_owner.py`).
+ */
+@Composable
+private fun IdentityCard(
+    identity: IdentityStatus,
+    onLinkGoogle: (() -> Unit)?,
+    onOpenHousehold: (() -> Unit)?,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(22.dp)
+    ) {
+        Text(
+            "CUENTA",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            letterSpacing = 1.6.sp
+        )
+        Spacer(Modifier.height(14.dp))
+        SettingRow(
+            icon = if (identity.linked) Icons.Filled.VerifiedUser else Icons.Filled.NoAccounts,
+            title = if (identity.linked) "Sesión vinculada a Google" else "Sesión anónima",
+            subtitle = if (identity.linked) {
+                identity.email ?: identity.displayName ?: "Cuenta de Google vinculada"
+            } else {
+                "Vincula tu cuenta de Google para conservar tu hogar"
+            },
+            trailingBadge = null,
+            onClick = if (identity.linked) (onOpenHousehold ?: {}) else (onLinkGoogle ?: onOpenHousehold ?: {}),
+        )
+        Spacer(Modifier.height(10.dp))
+        SettingRow(
+            icon = Icons.Filled.Badge,
+            title = "Tu rol" + (identity.householdName?.let { " en $it" } ?: ""),
+            subtitle = identity.roleLabel
+                ?: "Todavía sin rol en la nube: este hogar solo existe en este dispositivo",
+            trailingBadge = null,
+            onClick = onOpenHousehold ?: {},
+        )
+        if (!identity.linked) {
+            Spacer(Modifier.height(14.dp))
+            val warn = MaterialTheme.financeColors.warning
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(warn.copy(alpha = 0.12f))
+                    .padding(14.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(
+                    Icons.Filled.ErrorOutline,
+                    contentDescription = null,
+                    tint = warn,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        "Si reinstalas la app, pierdes el hogar",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = warn,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Una sesión anónima se identifica solo con este dispositivo. " +
+                            "Al reinstalar se genera otra identidad y el hogar deja de reconocerte: " +
+                            "los cambios dejan de subir a la nube y hay que devolverte el permiso a mano. " +
+                            "Vincular Google conserva la misma identidad.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (onLinkGoogle != null || onOpenHousehold != null) {
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(onClick = onLinkGoogle ?: onOpenHousehold ?: {}) {
+                            Text("Vincular mi cuenta de Google")
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** Fila de ajuste con icono, título, subtítulo y chevron (o badge numérico). */

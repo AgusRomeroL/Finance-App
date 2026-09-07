@@ -85,7 +85,7 @@ object BudgetDestinations {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BudgetNavGraph — Grafo de navegación principal
+// BudgetNavGraph: grafo de navegación principal
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -170,7 +170,7 @@ fun BudgetNavGraph(
     val isTopLevel = currentRoute in topLevelRoutes
     val isExpanded = windowWidthDp >= 600
 
-    // ── Tutorial guiado (coach-marks / spotlight) — ver ui/tutorial/ y TUTORIAL.md ──
+    // ── Tutorial guiado (coach-marks o spotlight); ver ui/tutorial/ y TUTORIAL.md ──
     // El controller se recuerda una sola vez; el overlay (abajo) ejecuta la navegación
     // y apertura de la hoja de captura con callbacks frescos.
     val tutorialController = remember { TutorialController(TutorialSpec.steps, onMarkSeen = onTutorialSeen) }
@@ -224,7 +224,7 @@ fun BudgetNavGraph(
         fadeOut(animationSpec = tween(90))
     }
     // Slide horizontal para drill-down (rutas secundarias): entran empujando desde la
-    // derecha — se sienten como un "push" apropiado para navegación jerárquica.
+    // derecha: se sienten como un "push" apropiado para navegación jerárquica.
     val slideEnter: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.EnterTransition = {
         slideInHorizontally(animationSpec = tween(280)) { it } + fadeIn(tween(280))
     }
@@ -411,6 +411,9 @@ fun BudgetNavGraph(
             popEnterTransition = slideEnter, popExitTransition = slideExit,
         ) {
             val pendingReviewCount by dashboardViewModel.pendingReviewCount.collectAsState()
+            // Estado de identidad (Fase 2): sale del mismo ViewModel de grupos que ya
+            // conoce la sesion y el rol propio, para no duplicar el acceso a Firestore.
+            val householdState = householdViewModel?.uiState?.collectAsState()?.value
             ProfileScreen(
                 dynamicColor = dynamicColor,
                 onDynamicColorChange = onDynamicColorChange,
@@ -430,6 +433,22 @@ fun BudgetNavGraph(
                 onOpenHousehold = if (householdViewModel != null) {
                     { onNavigate(BudgetDestinations.HOUSEHOLD) }
                 } else null,
+                identity = householdState?.let { st ->
+                    mx.budget.ui.profile.IdentityStatus(
+                        linked = st.isLinked,
+                        email = st.email,
+                        displayName = st.displayName,
+                        roleLabel = st.myRole?.let { role ->
+                            when (role) {
+                                mx.budget.data.remote.MembershipRepository.ROLE_OWNER -> "Dueño"
+                                mx.budget.data.remote.MembershipRepository.ROLE_PAYER -> "Administrador"
+                                else -> "Colaborador"
+                            }
+                        },
+                        householdName = st.activeHouseholdName,
+                    )
+                },
+                onLinkGoogle = householdViewModel?.let { vm -> { vm.signInWithGoogle() } },
                 onManageMembers = if (membersMasterViewModel != null) {
                     { onNavigate(BudgetDestinations.MASTERS_MEMBERS) }
                 } else null,
@@ -581,7 +600,7 @@ fun BudgetNavGraph(
         onRequestCloseCapture = {
             tutorialCaptureOpen = false
             // El sheet real vive hoisted aquí (captureMode); bajar la señal no basta
-            // para cerrarlo. Se cierra SOLO si el tour sigue corriendo — fuera del
+            // para cerrarlo. Se cierra SOLO si el tour sigue corriendo; fuera del
             // tutorial no debemos descartar una hoja que el usuario abrió a mano.
             if (tutorialController.isRunning) captureMode = null
         },
