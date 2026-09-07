@@ -8,6 +8,7 @@ import mx.budget.BudgetApplication
 import mx.budget.ai.proactive.ProactiveSuggestionEngine
 import mx.budget.core.wear.WearPaths
 import mx.budget.data.local.entity.ExpenseEntity
+import mx.budget.data.quincena.quincenaFigures
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -51,8 +52,31 @@ object WearSnapshotBuilder {
             app.database.quincenaDao().getActive(householdId)
         }.getOrNull()
 
-        val balance = quincena?.let { it.projectedIncomeMxn - it.actualExpensesMxn } ?: 0.0
-        val budgetTotal = quincena?.projectedIncomeMxn ?: 0.0
+        // Cifras con la MISMA convencion que el dashboard (`QuincenaFigures`):
+        // ingreso = el mayor entre proyectado y recibido, gasto = solo POSTED,
+        // reserva = lo planeado prorrateado por cadencia, disponible = la resta.
+        // Antes se calculaba aqui a mano como `projectedIncome - actualExpenses`,
+        // y esa columna desnormalizada de la quincena NO la mantiene nadie: llega
+        // siempre en cero, asi que el reloj mostraba el ingreso proyectado tal
+        // cual y su "Disponible" no se movia por mucho que se gastara. La Fase 1
+        // unifico dashboard, resumen de Analiticas y asistente; el reloj se quedo
+        // fuera y este era el ultimo sitio con la cuenta vieja.
+        val figures = quincena?.let { q ->
+            runCatching {
+                quincenaFigures(
+                    quincena = q,
+                    receivedIncome = app.database.incomeSourceDao().observePostedTotal(q.id).first(),
+                    spent = app.database.expenseDao().observePostedTotal(q.id).first(),
+                    reserved = app.database.expenseDao().observeProratedPlannedTotal(q.id).first(),
+                )
+            }.getOrNull()
+        }
+
+        val balance = figures?.available ?: 0.0
+        // Denominador del arco: el ingreso de referencia, coherente con el
+        // "Disponible" de arriba (si entra mas dinero del proyectado, manda lo
+        // recibido, igual que en el dashboard).
+        val budgetTotal = figures?.income ?: 0.0
         val label = quincena?.label ?: "Sin Quincena"
 
         val sinceEpochMs = System.currentTimeMillis() - RECENT_WINDOW_MS

@@ -49,7 +49,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Hub del reloj: cuatro superficies bajo un [SwipeDismissableNavHost] — Estado,
+ * Hub del reloj: cuatro superficies bajo un [SwipeDismissableNavHost]: Estado,
  * Captura, Movimientos y Confirmar pendientes. Todo lee del cache local
  * ([WearCache]); el reloj no consulta Room ni red. Los cargos recomendados NO
  * viven aquí (son el Tile A), por decisión de producto.
@@ -80,7 +80,7 @@ fun WearHub() {
  * Versión reactiva del cache: se incrementa cada vez que el push del teléfono
  * reescribe [WearCache] (SharedPreferences, vía `MobileSyncListenerService`).
  * Úsalo como clave de `remember` para releer los valores y reflejar la cifra EN
- * VIVO — sin esto las pantallas leían el cache una sola vez al componer y se
+ * VIVO. Sin esto las pantallas leían el cache una sola vez al componer y se
  * quedaban en el $0 del arranque aunque el snapshot llegara segundos después.
  * El listener se desregistra al salir de composición (`awaitDispose`).
  */
@@ -153,37 +153,48 @@ private fun EstadoScreen(
             }
             items(members) { m -> MemberBar(m, maxTotal) }
         }
+        // Un chip por fila, no dos en un Row: a lo ancho de una pantalla redonda
+        // los dos juntos no caben y "Movimientos" se cortaba en "Movimiento",
+        // que es una palabra distinta y encima plausible. Apilados entran
+        // completos y el area tactil crece.
         item {
-            Row(
+            CompactChip(
+                onClick = onMovimientos,
+                label = { Text("Movimientos", maxLines = 1) },
+                colors = ChipDefaults.secondaryChipColors(),
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                CompactChip(
-                    onClick = onMovimientos,
-                    label = { Text("Movimientos", maxLines = 1) },
-                    colors = ChipDefaults.secondaryChipColors(),
-                    modifier = Modifier.weight(1f),
-                )
-                CompactChip(
-                    onClick = onPendientes,
-                    label = { Text("Pendientes", maxLines = 1) },
-                    colors = ChipDefaults.secondaryChipColors(),
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            )
+        }
+        item {
+            CompactChip(
+                onClick = onPendientes,
+                label = { Text("Pendientes", maxLines = 1) },
+                colors = ChipDefaults.secondaryChipColors(),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            )
         }
     }
 }
 
 @Composable
 private fun MemberBar(m: WearCache.MemberSpend, maxTotal: Double) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+    // Padding horizontal propio: la fila ocupaba todo el ancho y en una pantalla
+    // redonda los extremos caen fuera del circulo, asi que el nombre perdia la
+    // primera letra y el monto la ultima cifra ("$682" se leia "$68"). Un monto
+    // recortado es un dato falso, igual que en el Fold.
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(m.name, style = MaterialTheme.typography.caption1, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(WearCache.money(m.total), style = MaterialTheme.typography.caption1)
+            Text(
+                m.name,
+                style = MaterialTheme.typography.caption1,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Text(WearCache.money(m.total), style = MaterialTheme.typography.caption1, maxLines = 1)
         }
         Box(
             modifier = Modifier
@@ -272,7 +283,7 @@ private fun PendientesScreen() {
         if (sendError) {
             item {
                 Text(
-                    "Sin conexión con el teléfono — reintenta",
+                    "Sin teléfono cerca. Inténtalo de nuevo.",
                     style = MaterialTheme.typography.caption2,
                     color = MaterialTheme.colors.error,
                     textAlign = TextAlign.Center,

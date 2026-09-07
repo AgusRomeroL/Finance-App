@@ -775,7 +775,18 @@ class BudgetApplication : Application() {
      * cancelaría al destruirse la Activity antes de completar la suspensión.
      */
     fun captureNaturalLanguage(rawText: String, source: String) {
-        appScope.launch { bankCaptureManager.ingestText(rawText, source) }
+        appScope.launch {
+            runCatching { bankCaptureManager.ingestText(rawText, source) }
+            // Empuja al reloj DESPUES del ingest. Sin esto, capturar desde el
+            // reloj dejaba sus propias superficies mintiendo: el gasto ya estaba
+            // en la bandeja del telefono y la tile "Pendientes" seguia diciendo
+            // "Todo al dia" hasta el siguiente push, que podia tardar 15 minutos.
+            // Las otras tres entradas del reloj (ingreso, confirmar, descartar)
+            // ya empujaban; esta se habia quedado fuera. Vale para cualquier
+            // origen, porque un pendiente nuevo del widget o de una notificacion
+            // bancaria tambien le interesa al reloj.
+            runCatching { mx.budget.service.WearSnapshotBuilder.push(this@BudgetApplication) }
+        }
     }
 
     /**

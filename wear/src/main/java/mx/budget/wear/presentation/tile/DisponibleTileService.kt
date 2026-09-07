@@ -15,9 +15,14 @@ import com.google.android.horologist.tiles.SuspendingTileService
 import mx.budget.wear.data.WearCache
 
 /**
- * Tile — **Disponible** (héroe). Un arco de borde ([EdgeContentLayout] +
- * [CircularProgressIndicator]) muestra qué fracción del presupuesto de la quincena
- * ya se consumió; al centro, la cifra "Disponible" y la etiqueta de la quincena.
+ * Tile **Disponible** (héroe). Un arco de borde ([EdgeContentLayout] +
+ * [CircularProgressIndicator]) muestra qué fracción del ingreso de la quincena ya
+ * no está disponible, es decir lo pagado más lo reservado para lo que falta por
+ * pagar; al centro, la cifra "Disponible" y la etiqueta de la quincena.
+ *
+ * El numerador sale de restar el "Disponible" al ingreso, y las dos cifras las
+ * calcula el teléfono con la convención única del dashboard
+ * (`QuincenaFigures`), así que el arco y el número cuentan la misma historia.
  * Todo se lee del [WearCache] (SharedPreferences); el reloj no consulta Room ni red.
  */
 class DisponibleTileService : SuspendingTileService() {
@@ -31,7 +36,8 @@ class DisponibleTileService : SuspendingTileService() {
         val budgetTotal = WearCache.budgetTotal(this)
         val label = WearCache.label(this)
 
-        // Fracción del presupuesto consumida (gastado / total), acotada a [0,1].
+        // Fracción del ingreso que ya no está disponible (pagado + reservado),
+        // acotada a [0,1].
         val spent = budgetTotal - balance
         val fraction = (if (budgetTotal > 0.0) spent / budgetTotal else 0.0)
             .coerceIn(0.0, 1.0)
