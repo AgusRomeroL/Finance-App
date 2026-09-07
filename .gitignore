@@ -47,3 +47,7 @@ Copy of presupuesto*.xlsx
 # Temporales de SQLite (los crea cualquier lectura de la semilla)
 *.db-shm
 *.db-wal
+
+# Dependencias de Node (web/ y las pruebas de reglas)
+node_modules/
+package-lock.json

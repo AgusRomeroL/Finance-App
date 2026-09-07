@@ -1,24 +1,32 @@
 rules_version = '2';
 
-// Reglas de seguridad de Firestore — Fase B (multi-tenant).
+// Reglas de seguridad de Firestore: multi-tenant (Fase B) con lectura por
+// coleccion (Fase 2).
 //
 // A partir de la Fase B la app admite VARIOS hogares y colaboradores:
 //   - users/{uid}                         perfil + activeHouseholdId (solo el dueño del uid)
 //   - users/{uid}/households/{hid}         espejo de mis membresías (solo el dueño del uid)
 //   - households/{hid}                     doc del hogar (name, updatedAt)
-//   - households/{hid}/roles/{uid}         { role: OWNER|COLLABORATOR, ... }
+//   - households/{hid}/roles/{uid}         { role: OWNER|PAYER|MEMBER, ... }
 //   - households/{hid}/invites/{code}      { role, expiresAt, maxUses, uses, createdBy }
 //   - households/{hid}/proposals/{id}      propuestas de colaboradores (propose-then-confirm)
 //   - households/{hid}/{expenses|categories|members|wallets|quincenas|...}  datos del hogar
 //
 // El acceso al hogar se decide por la EXISTENCIA de households/{hid}/roles/{uid}:
-// pertenecer = tener un doc de rol. OWNER lee/escribe todo; COLLABORATOR solo lee
-// y puede crear propuestas.
+// pertenecer = tener un doc de rol. Roles v2: OWNER ("Dueño") y PAYER
+// ("Administrador") leen y escriben todo; MEMBER ("Colaborador", alias legacy
+// COLLABORATOR) lee SOLO members, categories y wallets, y crea propuestas.
+//
+// Fase 2: el ledger dejo de estar cubierto por un comodin de lectura. Cada
+// coleccion declara su criterio y lo que no esta declarado queda cerrado.
 //
 // Antes del despliegue el usuario debe:
 //   1) Habilitar Authentication (proveedores Anónimo + Google) en la consola Firebase.
 //   2) Crear un OAuth 2.0 Web Client y ponerlo en AuthManager.WEB_CLIENT_ID + google-services.json.
-//   3) firebase deploy --only firestore:rules
+//   3) Desplegar con `python scripts/admin/deploy_rules.py`. OJO: el deploy de
+//      hosting NO despliega reglas, y la CLI de Firebase exige un permiso de
+//      serviceusage que el service account no tiene; por eso el script habla
+//      directo con la Firebase Rules API.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -46,7 +54,7 @@ service cloud.firestore {
       return isMember(hid) && roleIn(hid) in ['OWNER', 'PAYER'];
     }
 
-    // ── users/{uid}/** — solo el propio uid ────────────────────────────────
+    // ── users/{uid}/**: solo el propio uid ──────────────────────────────
     match /users/{uid} {
       allow read, write: if isSelf(uid);
       match /{document=**} {
@@ -88,7 +96,7 @@ service cloud.firestore {
           (request.resource.data.role != 'OWNER' &&
             exists(/databases/$(database)/documents/households/$(hid)/invites/$(request.resource.data.inviteCode)) &&
             get(/databases/$(database)/documents/households/$(hid)/invites/$(request.resource.data.inviteCode)).data.role == request.resource.data.role &&
-            // Roles v2: la nominación del invite es inmutable — quien canjea
+            // Roles v2: la nominación del invite es inmutable; quien canjea
             // queda vinculado al member que el dueño eligió, no a uno arbitrario.
             // .get(k, null) en ambos lados: invites legacy y clientes v1 no traen
             // la clave, y leer una clave ausente rompería la regla completa.
@@ -96,7 +104,7 @@ service cloud.firestore {
               get(/databases/$(database)/documents/households/$(hid)/invites/$(request.resource.data.inviteCode)).data.get('linkedMemberId', null))
         );
         // Anti-degradación en servidor (bug del auto-canje): NADIE puede cambiar
-        // su PROPIO role — ni siquiera el dueño (administra los ajenos).
+        // su PROPIO role, ni siquiera el dueño (administra los ajenos).
         allow update: if isOwner(hid) &&
           (memberUid != request.auth.uid ||
             request.resource.data.role == resource.data.role);
@@ -122,22 +130,75 @@ service cloud.firestore {
         allow update, delete: if isOwnerOrPayer(hid);
       }
 
-      // Datos del hogar (expenses, categories, members, wallets, quincenas,
-      // wallet_transfer, income_source, savings_goal, loan, installment_plan y
-      // subcolecciones como attributions): el dueño lee/escribe todo; el
-      // colaborador SOLO lee (no puede tocar el ledger — para eso están las
-      // propuestas).
-      match /{collection}/{docId}/{sub=**} {
+      // ── Datos del hogar, por coleccion (Fase 2) ──────────────────────
+      //
+      // Hasta la Fase 2 aqui habia dos comodines que concedian `read` a cualquier
+      // miembro sobre TODO el hogar. La web ya ocultaba el ledger al Colaborador,
+      // pero era una restriccion de cliente: con el SDK desde la consola del
+      // navegador se podia leer `expenses` entero. Ahora la restriccion vive
+      // donde debe estar.
+      //
+      // LECTURA de cualquier miembro: solo lo que el Colaborador necesita para
+      // proponer un gasto. Es exactamente lo que consume su web (categorias en
+      // Proponer, propuestas en Mis propuestas), mas los miembros y las cuentas
+      // para poder decir a nombre de quien y con que se pago.
+      match /members/{docId} {
         allow read: if isMember(hid);
         allow write: if isOwnerOrPayer(hid);
       }
-      match /{collection}/{docId} {
+      match /categories/{docId} {
         allow read: if isMember(hid);
         allow write: if isOwnerOrPayer(hid);
       }
+      match /wallets/{docId} {
+        allow read: if isMember(hid);
+        allow write: if isOwnerOrPayer(hid);
+      }
+
+      // LECTURA restringida a OWNER y PAYER: el ledger y todo lo que permite
+      // reconstruirlo. Un Colaborador no ve cuanto gasta el hogar, en que, con
+      // quien ni cuanto debe.
+      match /expenses/{docId} {
+        allow read, write: if isOwnerOrPayer(hid);
+        // Las atribuciones cuelgan de cada gasto: mismo criterio que el padre.
+        match /{sub=**} {
+          allow read, write: if isOwnerOrPayer(hid);
+        }
+      }
+      match /quincenas/{docId} {
+        allow read, write: if isOwnerOrPayer(hid);
+      }
+      match /income_source/{docId} {
+        allow read, write: if isOwnerOrPayer(hid);
+      }
+      match /wallet_transfer/{docId} {
+        allow read, write: if isOwnerOrPayer(hid);
+      }
+      match /savings_goal/{docId} {
+        allow read, write: if isOwnerOrPayer(hid);
+      }
+      match /loan/{docId} {
+        allow read, write: if isOwnerOrPayer(hid);
+      }
+      match /installment_plan/{docId} {
+        allow read, write: if isOwnerOrPayer(hid);
+      }
+      match /recurrence_template/{docId} {
+        allow read, write: if isOwnerOrPayer(hid);
+      }
+      // Auditoria de estados de cuenta (Fase 2: deja de ser local-only).
+      match /statement_import/{docId} {
+        allow read, write: if isOwnerOrPayer(hid);
+      }
+
+      // No hay comodin final a proposito: una coleccion nueva bajo el hogar nace
+      // CERRADA (la cierra el `match /{document=**}` del final del archivo) y hay
+      // que declararla aqui con su criterio. Es lo contrario de lo que habia: un
+      // comodin abierto por omision. Al anadir una coleccion al sync, anade
+      // tambien su regla o el push fallara con PERMISSION_DENIED.
     }
 
-    // ── invite_codes/{code} — índice global de códigos OPACOS ──────────────
+    // ── invite_codes/{code}: índice global de códigos OPACOS ──────────────
     // Permite canjear una invitación con SOLO el código de 8 chars, sin exponer
     // el household id en lo que se comparte (antes el código era `{hid}.{code}`
     // y filtraba el id del hogar, p. ej. `default_household`). El doc mapea
