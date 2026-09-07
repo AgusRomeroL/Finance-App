@@ -272,7 +272,11 @@ private fun MemberBar(m: WearCache.MemberSpend, maxTotal: Double) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            Text(WearCache.money(m.total), style = MaterialTheme.typography.caption1, maxLines = 1)
+            // El formateo se cachea por valor: ScalingLazyColumn recompone las
+            // filas al escalarlas durante el desplazamiento, y String.format
+            // asigna en cada pasada.
+            val amountText = remember(m.total) { WearCache.money(m.total) }
+            Text(amountText, style = MaterialTheme.typography.caption1, maxLines = 1)
         }
         Box(
             modifier = Modifier
@@ -311,12 +315,17 @@ private fun MovimientosScreen() {
             }
         } else {
             items(movements) { mv ->
+                // Mismo motivo que en las barras: SimpleDateFormat.format asigna
+                // un Date por llamada, y aqui habria uno por fila y por fotograma.
+                val line = remember(mv) {
+                    "${WearCache.money(mv.amount)} · ${shortDate(mv.occurredAt)}"
+                }
                 Chip(
                     onClick = {},
                     colors = ChipDefaults.secondaryChipColors(),
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(mv.concept, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    secondaryLabel = { Text("${WearCache.money(mv.amount)} · ${shortDate(mv.occurredAt)}") },
+                    secondaryLabel = { Text(line) },
                 )
             }
         }
