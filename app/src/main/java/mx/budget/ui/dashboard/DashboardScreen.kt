@@ -2243,7 +2243,7 @@ internal fun TransactionRow(
     // sin esto sus filas quedaban sin acción (P1 de auditoría runtime).
     onClick: ((ExpenseWithDetails) -> Unit)? = null,
 ) {
-    val tone = if (tx.status == "PLANNED") FinancialTone.NEUTRAL else FinancialTone.EXPENSE
+    val tone = if (tx.status == "PLANNED") FinancialTone.SCHEDULED else FinancialTone.EXPENSE
     val sem = amountSemantic(tone)
     val rowBg = if (alternate) MaterialTheme.colorScheme.surfaceContainerHighest
     else MaterialTheme.colorScheme.surfaceContainer
@@ -2308,7 +2308,7 @@ internal fun TransactionRow(
             Text(
                 "${sem.sign}${tx.amountMxn.toMxn()}",
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                color = if (tone == FinancialTone.NEUTRAL) MaterialTheme.colorScheme.onSurface else sem.color,
+                color = sem.color,
                 maxLines = 1, softWrap = false
             )
         }

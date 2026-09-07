@@ -3,6 +3,7 @@ package mx.budget.ui.theme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -19,7 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 // redundantes para cada tono: color + signo (+/−) + ícono (flecha ↑/↓) +
 // etiqueta textual de accesibilidad. Las pantallas deben usar TODAS, no solo el color.
 
-enum class FinancialTone { INCOME, EXPENSE, WARNING, NEUTRAL }
+enum class FinancialTone { INCOME, EXPENSE, WARNING, SCHEDULED, NEUTRAL }
 
 /**
  * Bundle de señales redundantes para mostrar una cifra financiera.
@@ -28,7 +29,7 @@ enum class FinancialTone { INCOME, EXPENSE, WARNING, NEUTRAL }
  * @property container   Fondo tonal del chip/badge.
  * @property onContainer Texto sobre [container].
  * @property sign        Prefijo de signo: "+", "−" o "" (señal independiente del color).
- * @property icon        Ícono direccional (flecha ↑/↓/alerta), o null para neutral.
+ * @property icon        Ícono direccional (flecha ↑/↓, alerta, reloj), o null para neutral.
  * @property description Etiqueta para `contentDescription` (lectores de pantalla).
  */
 @Immutable
@@ -70,6 +71,17 @@ fun amountSemantic(tone: FinancialTone): AmountSemantic {
             sign = "",
             icon = Icons.Filled.WarningAmber,
             description = "Alerta"
+        )
+        // Cargo planeado que aún no se ejecuta: se lee como gasto (signo y flecha),
+        // pero en tono apagado para que nunca se confunda con un ingreso ni con
+        // dinero ya gastado. La etiqueta "Programado" es la señal no cromática.
+        FinancialTone.SCHEDULED -> AmountSemantic(
+            color = cs.onSurfaceVariant,
+            container = cs.surfaceContainerHighest,
+            onContainer = cs.onSurfaceVariant,
+            sign = "−", // mismo signo menos tipográfico que EXPENSE
+            icon = Icons.Filled.Schedule,
+            description = "Programado"
         )
         FinancialTone.NEUTRAL -> AmountSemantic(
             color = cs.onSurface,

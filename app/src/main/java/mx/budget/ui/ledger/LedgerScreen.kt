@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,10 +40,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mx.budget.data.local.result.ExpenseWithDetails
-import mx.budget.ui.theme.financeColors
+import mx.budget.ui.theme.FinancialTone
+import mx.budget.ui.theme.amountSemantic
 import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
 import java.text.NumberFormat
@@ -196,6 +200,8 @@ private fun LedgerRow(
     modifier: Modifier = Modifier,
 ) {
     val interaction = rememberPressInteractionSource()
+    val planned = row.status == "PLANNED"
+    val sem = amountSemantic(if (planned) FinancialTone.SCHEDULED else FinancialTone.EXPENSE)
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -230,13 +236,21 @@ private fun LedgerRow(
                 )
             }
             Spacer(Modifier.width(10.dp))
-            Text(
-                "−" + money.format(row.amountMxn),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = if (row.status == "PLANNED") MaterialTheme.colorScheme.onSurfaceVariant
-                else MaterialTheme.financeColors.expense,
-                maxLines = 1,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.semantics { contentDescription = sem.description },
+            ) {
+                sem.icon?.takeIf { planned }?.let {
+                    Icon(it, null, tint = sem.color, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                }
+                Text(
+                    sem.sign + money.format(row.amountMxn),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = sem.color,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

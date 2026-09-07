@@ -47,6 +47,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -56,6 +58,8 @@ import kotlinx.coroutines.launch
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.ui.common.toMxn
 import mx.budget.ui.dashboard.iconForCategory
+import mx.budget.ui.theme.FinancialTone
+import mx.budget.ui.theme.amountSemantic
 import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
 import java.time.Instant
@@ -279,6 +283,7 @@ private fun PlannedCard(
     onPostpone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val sem = amountSemantic(FinancialTone.SCHEDULED)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -317,11 +322,20 @@ private fun PlannedCard(
                 )
             }
             Spacer(Modifier.width(8.dp))
-            Text(
-                item.amountMxn.toMxn(),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.semantics { contentDescription = sem.description },
+            ) {
+                sem.icon?.let {
+                    Icon(it, null, tint = sem.color, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                }
+                Text(
+                    sem.sign + item.amountMxn.toMxn(),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = sem.color,
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))
