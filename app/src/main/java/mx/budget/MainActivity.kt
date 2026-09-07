@@ -29,6 +29,7 @@ import mx.budget.data.recurrence.RecurrenceMaterializer
 import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.RecurrenceRepository
+import mx.budget.data.repository.TransferRepository
 import mx.budget.data.repository.WalletRepository
 import mx.budget.data.local.dao.AttributionReviewDao
 import mx.budget.data.local.dao.ExpenseDao
@@ -182,6 +183,7 @@ class MainActivity : ComponentActivity() {
             app.quincenaRepository,
             app.categoryRepository,
             app.walletRepository,
+            app.transferRepository,
             app.householdId
         ))[mx.budget.ui.ledger.LedgerViewModel::class.java]
     }
@@ -375,7 +377,7 @@ class MainActivity : ComponentActivity() {
                 // Surface raíz: pinta colorScheme.background bajo TODO el NavHost.
                 // Sin él, las pantallas que no traen Scaffold/Surface propio
                 // (Analíticas, Libro Mayor) dibujan texto del tema sobre la
-                // ventana del sistema — ilegible en dark mode.
+                // ventana del sistema, ilegible en dark mode.
                 androidx.compose.material3.Surface(
                     modifier = androidx.compose.ui.Modifier.fillMaxSize(),
                     color = androidx.compose.material3.MaterialTheme.colorScheme.background,
@@ -479,7 +481,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Factory del checklist "Estados del mes" (Tarea 4 — alimentación mensual). */
+/** Factory del checklist "Estados del mes" (Tarea 4, alimentación mensual). */
 class StatementsChecklistViewModelFactory(
     private val app: BudgetApplication,
 ) : ViewModelProvider.Factory {
@@ -508,7 +510,7 @@ class StatementImportViewModelFactory(
     }
 }
 
-/** Factory para HouseholdViewModel (Fase B — cuenta y grupos). */
+/** Factory para HouseholdViewModel (Fase B, cuenta y grupos). */
 class HouseholdViewModelFactory(
     private val authManager: mx.budget.data.remote.AuthManager,
     private val membershipRepository: mx.budget.data.remote.MembershipRepository,
@@ -768,7 +770,7 @@ class WalletsViewModelFactory(
     }
 }
 
-/** Factory para MemberBalancesViewModel ("Cuentas entre miembros" — deudas explícitas). */
+/** Factory para MemberBalancesViewModel ("Cuentas entre miembros", deudas explícitas). */
 class MemberBalancesViewModelFactory(
     private val expenseRepository: ExpenseRepository,
     private val loanRepository: mx.budget.data.repository.LoanRepository,
@@ -883,6 +885,7 @@ class LedgerViewModelFactory(
     private val quincenaRepository: QuincenaRepository,
     private val categoryRepository: CategoryRepository,
     private val walletRepository: WalletRepository,
+    private val transferRepository: TransferRepository,
     private val householdId: String,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -892,6 +895,7 @@ class LedgerViewModelFactory(
             quincenaRepository = quincenaRepository,
             categoryRepository = categoryRepository,
             walletRepository = walletRepository,
+            transferRepository = transferRepository,
             householdId = householdId,
         ) as T
     }

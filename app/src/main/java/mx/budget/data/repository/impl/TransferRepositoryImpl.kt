@@ -29,6 +29,13 @@ class TransferRepositoryImpl(
     override fun observeTransfers(householdId: String): Flow<List<TransferWithNames>> =
         transferDao.observeWithNames(householdId)
 
+    override fun observeTransfersInRange(
+        householdId: String,
+        startMs: Long,
+        endMs: Long,
+    ): Flow<List<TransferWithNames>> =
+        transferDao.observeWithNamesInRange(householdId, startMs, endMs)
+
     override suspend fun recordTransfer(transfer: WalletTransferEntity) {
         db.withTransaction {
             transferDao.insert(transfer.copy(updatedAt = System.currentTimeMillis()))

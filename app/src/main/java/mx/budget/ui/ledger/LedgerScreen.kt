@@ -4,6 +4,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import mx.budget.ui.common.AppLocale
 import mx.budget.ui.common.ScreenHeader
+import mx.budget.ui.common.TransferRow
 import mx.budget.ui.common.pressScale
 import mx.budget.ui.common.rememberPressInteractionSource
 import mx.budget.ui.common.staggeredEntrance
@@ -57,6 +58,11 @@ import java.text.SimpleDateFormat
  * Libro Mayor (MVP Fase 3): historial completo paginado por quincena, con
  * chips de filtro (categoría / wallet) y detalle al tocar una fila (el sheet
  * de detalle reusa la Fase 1: ver, editar y borrar desde aquí).
+ *
+ * Lista gastos Y transferencias entre cuentas. Una transferencia no consume
+ * presupuesto, pero si mueve saldos, y hasta ahora era invisible en el
+ * historial: el usuario veía bajar una cuenta sin ningún movimiento que lo
+ * explicara. El total en cambio sigue sumando solo gastos ejecutados.
  */
 @Composable
 fun LedgerScreen(
@@ -76,8 +82,9 @@ fun LedgerScreen(
     val walletFilter by viewModel.walletFilter.collectAsState()
     val rawRows by viewModel.rows.collectAsState()
     // Tutorial: durante el tour muestra 4 movimientos DEMO (nunca tocan Room). Ver TUTORIAL.md.
-    val rows = if (tutorialController?.demoActive == true)
-        mx.budget.ui.tutorial.TutorialDemoData.ledgerRows else rawRows
+    val rows: List<LedgerItem> = if (tutorialController?.demoActive == true)
+        mx.budget.ui.tutorial.TutorialDemoData.ledgerRows.map(LedgerItem::Expense) else rawRows
+    val expenseRows = remember(rows) { rows.filterIsInstance<LedgerItem.Expense>().map { it.row } }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         // Header: back + título + navegación de quincena (patrón del Dashboard).
@@ -113,8 +120,8 @@ fun LedgerScreen(
 
         // Chips de filtro: categorías con gasto + wallets.
         // TUTORIAL: LED_FILTERS, ver TUTORIAL.md
-        val visibleCategories = remember(rows, categories, categoryFilter) {
-            val usedCategoryIds = rows.map { it.categoryId }.toSet()
+        val visibleCategories = remember(expenseRows, categories, categoryFilter) {
+            val usedCategoryIds = expenseRows.map { it.categoryId }.toSet()
             categories.filter {
                 it.id in usedCategoryIds || it.id == categoryFilter
             }
@@ -146,10 +153,14 @@ fun LedgerScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Total visible (con filtros aplicados): solo POSTED.
-        val totalVisible = remember(rows) { rows.filter { it.status == "POSTED" }.sumOf { it.amountMxn } }
+        // Total visible (con filtros aplicados): solo gastos POSTED. Ni lo planeado
+        // ni las transferencias suman aqui, y la etiqueta lo dice para que la cifra
+        // no se lea como el total de los renglones listados.
+        val totalVisible = remember(expenseRows) {
+            expenseRows.filter { it.status == "POSTED" }.sumOf { it.amountMxn }
+        }
         Text(
-            "${rows.size} movimientos · ${money.format(totalVisible)}",
+            "${rows.size} movimientos · ${money.format(totalVisible)} gastado",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 24.dp),
@@ -168,22 +179,41 @@ fun LedgerScreen(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                itemsIndexed(rows, key = { _, it -> it.expenseId }) { index, row ->
+                itemsIndexed(rows, key = { _, it -> it.key }) { index, item ->
                     // TUTORIAL: LED_ROWS, ver TUTORIAL.md (ancla = la PRIMERA fila, no la
                     // lista completa: el spotlight de todo el LazyColumn quedaba sobredimensionado).
-                    LedgerRow(
-                        row = row,
-                        money = money,
-                        dateFmt = dateFmt,
-                        onClick = { onOpenDetail(row) },
-                        modifier = Modifier
-                            .staggeredEntrance(index)
-                            .then(
-                                if (index == 0)
-                                    Modifier.tutorialTarget(TutorialKey.LED_ROWS, tutorialController)
-                                else Modifier
-                            ),
-                    )
+                    val rowModifier = Modifier
+                        .staggeredEntrance(index)
+                        .then(
+                            if (index == 0)
+                                Modifier.tutorialTarget(TutorialKey.LED_ROWS, tutorialController)
+                            else Modifier
+                        )
+                    when (item) {
+                        is LedgerItem.Expense -> LedgerRow(
+                            row = item.row,
+                            money = money,
+                            dateFmt = dateFmt,
+                            onClick = { onOpenDetail(item.row) },
+                            modifier = rowModifier,
+                        )
+                        is LedgerItem.Transfer -> {
+                            val t = item.row
+                            val subtitle = buildString {
+                                append(dateFmt.format(t.occurredAt))
+                                append(" · Transferencia")
+                                t.note?.takeIf { it.isNotBlank() }?.let { append(" · "); append(it) }
+                            }
+                            TransferRow(
+                                fromName = t.fromName,
+                                toName = t.toName,
+                                amountText = money.format(t.amountMxn),
+                                subtitle = subtitle,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                modifier = rowModifier,
+                            )
+                        }
+                    }
                 }
             }
         }

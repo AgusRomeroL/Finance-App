@@ -15,6 +15,16 @@ interface TransferRepository {
     fun observeTransfers(householdId: String): Flow<List<TransferWithNames>>
 
     /**
+     * Transferencias del hogar ocurridas entre [startMs] y [endMs] (epoch millis).
+     * El Libro Mayor la usa para acotarlas a la quincena que muestra.
+     */
+    fun observeTransfersInRange(
+        householdId: String,
+        startMs: Long,
+        endMs: Long,
+    ): Flow<List<TransferWithNames>>
+
+    /**
      * Registra una transferencia y mueve el saldo: el origen "saca" (líquido baja
      * / crédito sube deuda) y el destino "recibe" (líquido sube / crédito baja
      * deuda). Para pago de tarjeta, destino = la tarjeta de crédito.

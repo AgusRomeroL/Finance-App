@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -20,7 +21,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 // redundantes para cada tono: color + signo (+/−) + ícono (flecha ↑/↓) +
 // etiqueta textual de accesibilidad. Las pantallas deben usar TODAS, no solo el color.
 
-enum class FinancialTone { INCOME, EXPENSE, WARNING, SCHEDULED, NEUTRAL }
+enum class FinancialTone { INCOME, EXPENSE, WARNING, SCHEDULED, TRANSFER, NEUTRAL }
 
 /**
  * Bundle de señales redundantes para mostrar una cifra financiera.
@@ -82,6 +83,17 @@ fun amountSemantic(tone: FinancialTone): AmountSemantic {
             sign = "−", // mismo signo menos tipográfico que EXPENSE
             icon = Icons.Filled.Schedule,
             description = "Programado"
+        )
+        // Movimiento entre cuentas del hogar: no entra ni sale dinero del
+        // presupuesto, solo cambia de sitio. Sin signo, porque no es ni ingreso
+        // ni gasto; la flecha doble y la etiqueta "Transferencia" son la senal.
+        FinancialTone.TRANSFER -> AmountSemantic(
+            color = cs.onSurface,
+            container = cs.surfaceContainerHighest,
+            onContainer = cs.onSurface,
+            sign = "",
+            icon = Icons.Filled.SwapHoriz,
+            description = "Transferencia"
         )
         FinancialTone.NEUTRAL -> AmountSemantic(
             color = cs.onSurface,

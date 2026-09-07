@@ -47,4 +47,36 @@ interface WalletTransferDao {
         """
     )
     fun observeWithNames(householdId: String): Flow<List<TransferWithNames>>
+
+    /**
+     * Igual que [observeWithNames] pero acotada a un rango de `occurred_at`
+     * (epoch millis, ambos extremos incluidos).
+     *
+     * `wallet_transfer` no tiene `quincena_id` (una transferencia no pertenece a
+     * ninguna quincena: no consume presupuesto), asi que el Libro Mayor, que
+     * pagina por quincena, tiene que acotar por las fechas de esa quincena.
+     */
+    @Query(
+        """
+        SELECT
+            t.id AS id,
+            t.amount_mxn AS amountMxn,
+            t.occurred_at AS occurredAt,
+            t.note AS note,
+            src.display_name AS fromName,
+            dst.display_name AS toName,
+            dst.kind AS toKind
+        FROM wallet_transfer t
+        INNER JOIN payment_method src ON src.id = t.from_payment_method_id
+        INNER JOIN payment_method dst ON dst.id = t.to_payment_method_id
+        WHERE t.household_id = :householdId
+          AND t.occurred_at BETWEEN :startMs AND :endMs
+        ORDER BY t.occurred_at DESC
+        """
+    )
+    fun observeWithNamesInRange(
+        householdId: String,
+        startMs: Long,
+        endMs: Long,
+    ): Flow<List<TransferWithNames>>
 }

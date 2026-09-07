@@ -227,8 +227,9 @@ object TutorialSpec {
             key = TutorialKey.LED_ROWS,
             route = BudgetDestinations.LEDGER,
             title = "Cada movimiento, editable",
-            body = "Toca cualquier fila para ver el detalle y editar o borrar el gasto. Aquí termina " +
-                "el recorrido: ¡ya puedes explorar por tu cuenta!",
+            body = "Toca una fila de gasto para ver el detalle y editar o borrar. Aquí también " +
+                "aparecen las transferencias entre cuentas. Con esto termina el recorrido: " +
+                "¡ya puedes explorar por tu cuenta!",
         ),
     )
 }

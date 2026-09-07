@@ -24,6 +24,12 @@ class TransferRepositoryFirestore(
     override fun observeTransfers(householdId: String): Flow<List<TransferWithNames>> =
         flowOf(emptyList())
 
+    override fun observeTransfersInRange(
+        householdId: String,
+        startMs: Long,
+        endMs: Long,
+    ): Flow<List<TransferWithNames>> = flowOf(emptyList())
+
     override suspend fun recordTransfer(transfer: WalletTransferEntity) {
         collection(transfer.householdId).document(transfer.id)
             .set(transfer, SetOptions.merge()).await()

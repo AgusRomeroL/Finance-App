@@ -15,10 +15,37 @@ import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
+import mx.budget.data.local.result.TransferWithNames
 import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.QuincenaRepository
+import mx.budget.data.repository.TransferRepository
 import mx.budget.data.repository.WalletRepository
+import java.time.LocalDate
+import java.time.ZoneId
+
+/**
+ * Un renglon del Libro Mayor. El historial no son solo gastos: mover dinero
+ * entre cuentas tambien es un movimiento del hogar, y antes era invisible aqui
+ * pese a cambiar los saldos.
+ */
+sealed interface LedgerItem {
+    /** Fecha del movimiento en epoch millis, para ordenar la lista mezclada. */
+    val occurredAt: Long
+
+    /** Clave estable para la lista perezosa. */
+    val key: String
+
+    data class Expense(val row: ExpenseWithDetails) : LedgerItem {
+        override val occurredAt: Long get() = row.occurredAt
+        override val key: String get() = "ex_" + row.expenseId
+    }
+
+    data class Transfer(val row: TransferWithNames) : LedgerItem {
+        override val occurredAt: Long get() = row.occurredAt
+        override val key: String get() = "tr_" + row.id
+    }
+}
 
 /**
  * ViewModel del Libro Mayor (MVP Fase 3): historial completo paginado POR
@@ -31,7 +58,9 @@ class LedgerViewModel(
     quincenaRepository: QuincenaRepository,
     categoryRepository: CategoryRepository,
     walletRepository: WalletRepository,
+    private val transferRepository: TransferRepository,
     private val householdId: String,
+    private val zone: ZoneId = ZoneId.of("America/Mexico_City"),
 ) : ViewModel() {
 
     /** Todas las quincenas (selector de página). */
@@ -65,21 +94,50 @@ class LedgerViewModel(
                 ?: all.maxByOrNull { it.startDate }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** Movimientos de la quincena efectiva con filtros aplicados. */
-    val rows: StateFlow<List<ExpenseWithDetails>> =
+    /**
+     * Movimientos de la quincena efectiva con filtros aplicados: gastos y
+     * transferencias mezclados y ordenados por fecha descendente.
+     *
+     * Las transferencias no tienen categoria, asi que un filtro de categoria
+     * activo las deja fuera. El filtro de cuenta si les aplica, por cualquiera
+     * de sus dos extremos.
+     */
+    val rows: StateFlow<List<LedgerItem>> =
         combine(
             effectiveQuincena.flatMapLatest { q ->
                 if (q == null) flowOf(emptyList())
                 else expenseRepository.observeWithDetails(q.id)
             },
+            effectiveQuincena.flatMapLatest { q ->
+                if (q == null) flowOf(emptyList()) else {
+                    val (start, end) = q.rangeMillis()
+                    transferRepository.observeTransfersInRange(householdId, start, end)
+                }
+            },
             _categoryFilter,
             _walletFilter,
-        ) { list, cat, walletName ->
-            list.filter { row ->
+        ) { expenses, transfers, cat, walletName ->
+            val visibleExpenses = expenses.filter { row ->
                 (cat == null || row.categoryId == cat) &&
                     (walletName == null || row.paymentMethodName == walletName)
-            }
+            }.map(LedgerItem::Expense)
+            val visibleTransfers = if (cat != null) emptyList() else transfers.filter { t ->
+                walletName == null || t.fromName == walletName || t.toName == walletName
+            }.map(LedgerItem::Transfer)
+            (visibleExpenses + visibleTransfers).sortedByDescending { it.occurredAt }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Rango de la quincena en epoch millis. Las fechas de la quincena son ISO y
+     * `occurred_at` es epoch, asi que hay que convertir en la zona del hogar; el
+     * final es el ultimo milisegundo del dia de cierre.
+     */
+    private fun QuincenaEntity.rangeMillis(): Pair<Long, Long> {
+        val start = LocalDate.parse(startDate).atStartOfDay(zone).toInstant().toEpochMilli()
+        val end = LocalDate.parse(endDate).plusDays(1)
+            .atStartOfDay(zone).toInstant().toEpochMilli() - 1
+        return start to end
+    }
 
     fun selectQuincena(id: String?) { _selectedQuincenaId.value = id }
 

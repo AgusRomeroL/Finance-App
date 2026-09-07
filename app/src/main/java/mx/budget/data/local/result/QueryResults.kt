@@ -5,7 +5,7 @@ package mx.budget.data.local.result
  *
  * Room no puede mapear directamente JOINs a entidades con FK,
  * así que usamos data classes planas como contenedores de resultado.
- * Estos NO son entidades — son proyecciones de lectura.
+ * Estos NO son entidades: son proyecciones de lectura.
  */
 
 /**

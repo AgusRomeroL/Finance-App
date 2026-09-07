@@ -1,4 +1,4 @@
-# TUTORIAL.md — Tutorial guiado (coach-marks / spotlight)
+# TUTORIAL.md: tutorial guiado (coach-marks / spotlight)
 
 Guía para humanos y **agentes de IA** que mantengan el tutorial de uso de la app. Si tocas la
 UI de una sección que el tour resalta, **actualiza también el tutorial** (ver la regla al final).
@@ -20,10 +20,10 @@ Analíticas → Libro Mayor).
 
 | Archivo | Rol |
 |---|---|
-| `TutorialKey.kt` | `enum TutorialKey` — **fuente única** de identidad de cada sección resaltable. |
+| `TutorialKey.kt` | `enum TutorialKey`, la **fuente única** de identidad de cada sección resaltable. |
 | `TutorialSpec.kt` | `TutorialStep` + `TutorialSpec.steps` (lista ordenada = **orden del tour**). |
 | `TutorialController.kt` | Estado (`isRunning`, `index`), registro de bounds, `start/next/prev/skip`. |
-| `TutorialTarget.kt` | `Modifier.tutorialTarget(key, controller?, scrollTo?)` — registra bounds; no-op si controller es null. |
+| `TutorialTarget.kt` | `Modifier.tutorialTarget(key, controller?, scrollTo?)`: registra bounds; no-op si controller es null. |
 | `TutorialOverlay.kt` | Canvas scrim + recorte del spotlight + globo + orquestación (navegar / abrir hoja). |
 
 ### Modelo de **dos overlays** (importante)
@@ -32,10 +32,10 @@ pintado en la ventana principal no puede dibujar sobre la hoja y `boundsInWindow
 de la hoja es relativo a **su** ventana. Por eso hay dos instancias de `TutorialOverlay` que
 comparten el **mismo** `TutorialController`:
 
-1. **Principal** (`orchestrate = true`) — envuelve `MainShell { NavHost }` en `BudgetNavGraph`.
+1. **Principal** (`orchestrate = true`): envuelve `MainShell { NavHost }` en `BudgetNavGraph`.
    Cubre todas las pantallas normales y es quien **navega** entre rutas y **abre/cierra** la hoja.
    Filtro: `{ !it.requiresCaptureSheet }`.
-2. **Dentro de la hoja** (`orchestrate = false`) — hijo del contenido del `CaptureBottomSheet`,
+2. **Dentro de la hoja** (`orchestrate = false`): hijo del contenido del `CaptureBottomSheet`,
    con `Modifier.matchParentSize()`. Dibuja el spotlight de los pasos de captura en el espacio de
    coordenadas de la propia hoja. Filtro: `{ it.requiresCaptureSheet }`.
 
@@ -43,22 +43,22 @@ Cada overlay convierte bounds-en-ventana → locales restando el `positionInWind
 raíz, así que cada uno queda alineado dentro de su ventana.
 
 ### Trigger y cableado
-- `data/settings/SettingsRepository.kt` — `has_seen_tutorial` (key + Flow + setter).
-- `BudgetApplication.kt` — `initialHasSeenTutorial` (lectura síncrona al arrancar).
-- `MainActivity.kt` — colecta el flag y pasa `startTutorial = !hasSeenTutorial` + `onTutorialSeen`.
-- `BudgetNavGraph.kt` — `remember { TutorialController(...) }`, overlay principal, `LaunchedEffect`
+- `data/settings/SettingsRepository.kt`: `has_seen_tutorial` (key + Flow + setter).
+- `BudgetApplication.kt`: `initialHasSeenTutorial` (lectura síncrona al arrancar).
+- `MainActivity.kt`: colecta el flag y pasa `startTutorial = !hasSeenTutorial` + `onTutorialSeen`.
+- `BudgetNavGraph.kt`: `remember { TutorialController(...) }`, overlay principal, `LaunchedEffect`
   de primera vez (latch cuando `currentRoute == DASHBOARD`, `start(firstRun = true)`), señal
   `tutorialCaptureOpen` hacia el Dashboard, `onShowTutorial = { controller.start(firstRun = false) }`
   a `ProfileScreen`, y los dos `AlertDialog` (aviso/invitación, ver abajo).
-- `ui/dashboard/DashboardScreen.kt` — `LaunchedEffect(tutorialCaptureOpen)` **abre** la hoja
+- `ui/dashboard/DashboardScreen.kt`: `LaunchedEffect(tutorialCaptureOpen)` **abre** la hoja
   (`onOpenCapture`); el **cierre** lo hace `BudgetNavGraph` en `onRequestCloseCapture`
   (`captureMode = null`, gated a `tutorialController.isRunning` para no descartar una hoja
   abierta a mano fuera del tour).
 
-### Datos de demostración (modo demo — solo en pantalla, cero DB)
+### Datos de demostración (modo demo, solo en pantalla y cero DB)
 Mientras el tour corre (`controller.demoActive == true`), las pantallas sustituyen su estado real
 por un dataset canned de `ui/tutorial/TutorialDemoData.kt`, **sin tocar Room ni el sync**. Al
-terminar el tour el flag baja y todo vuelve a los flujos reales — cero residuos. El patrón de
+terminar el tour el flag baja y todo vuelve a los flujos reales, sin residuos. El patrón de
 inyección es uniforme: tras cada `collectAsState()`, `val x = if (demoActive) TutorialDemoData.x else rawX`.
 - **Dashboard** (`DashboardScreen.kt`): `uiState`, `proactiveSuggestions`, `bankCaptures`,
   `members`, `singleMember=false`.
@@ -68,7 +68,7 @@ inyección es uniforme: tras cada `collectAsState()`, `val x = if (demoActive) T
 - **Libro Mayor** (`LedgerScreen.kt`): `rows` (4 movimientos).
 - **Analíticas** (`AnalyticsScreen.kt`): `quincena`, `spendByCategory`, `postedIncome`,
   `topConcepts`, KPIs; los secundarios (trend/deuda/interés) se dejan reales y degradan a hints.
-- **Cuentas** — sin demo (los wallets sembrados ya existen; son estructurales, no scoped a quincena).
+- **Cuentas**: sin demo (los wallets sembrados ya existen; son estructurales, no scoped a quincena).
 `TutorialDemoData` usa tipos exactos (`DashboardUiState.Success`, `ExpenseWithDetails` denormalizado,
 `SpendByMember`, `SpendByCategory`, `TopConcept`, `MemberEntity`, `CategoryEntity`, `QuincenaEntity`,
 `ProactiveSuggestion`, `PendingCaptureEntity`) con datos coherentes entre pantallas.
@@ -99,12 +99,12 @@ por igual.
   spotlight**. **Nunca crashea ni bloquea** el tour.
 - Un tag que use una `TutorialKey` inexistente **no compila** (el enum es la fuente única).
 - En debug, `TutorialController.finish()` loguea (`Log.w("Tutorial", ...)`) las claves de
-  `TutorialSpec` que nunca resolvieron bounds — pista de que una sección cambió sin actualizar el tour.
+  `TutorialSpec` que nunca resolvieron bounds, pista de que una sección cambió sin actualizar el tour.
 
 ## Tabla de mapeo autoritativa
 
 Cada paso del tour ↔ su `TutorialKey` ↔ la pantalla (ruta) ↔ el composable objetivo ↔ archivo.
-Los tags llevan el comentario `// TUTORIAL: <KEY> — ver TUTORIAL.md` en el código (grep-able).
+Los tags llevan el comentario `// TUTORIAL: <KEY>, ver TUTORIAL.md` en el código (grep-able).
 
 | TutorialKey | Pantalla (route) | Composable objetivo | Archivo |
 |---|---|---|---|
@@ -126,11 +126,11 @@ Los tags llevan el comentario `// TUTORIAL: <KEY> — ver TUTORIAL.md` en el có
 | `ANA_SUMMARY` | analytics | `SmartSummaryCard` | `ui/analytics/AnalyticsScreen.kt` |
 | `ANA_KPI_ROW` | analytics | fila de KPIs (Ahorro/Por cobrar/MSI) | `ui/analytics/AnalyticsScreen.kt` |
 | `ANA_WIDGETS` | analytics | primer `WidgetCard` (gráficas) | `ui/analytics/AnalyticsScreen.kt` |
-| `ANA_ASK_FAB` | analytics | FAB "Preguntar" — lo usan DOS pasos: asistente y "Atajos que aprenden" (pills dinámicos) | `ui/analytics/AnalyticsScreen.kt` |
+| `ANA_ASK_FAB` | analytics | FAB "Preguntar", lo usan DOS pasos: asistente y "Atajos que aprenden" (pills dinámicos) | `ui/analytics/AnalyticsScreen.kt` |
 | `PROFILE_STATEMENTS` | profile | `SettingRow` "Importar estado de cuenta" (con tag; el auto-scroll del target baja hasta la fila) | `ui/profile/ProfileScreen.kt` |
-| `ANA_LEDGER_ENTRY` | analytics | `IconButton` "Libro Mayor" del header — paso de transición: va DESPUÉS de Perfil y ANTES del bloque LED_* (orden del guion) | `ui/analytics/AnalyticsScreen.kt` |
+| `ANA_LEDGER_ENTRY` | analytics | `IconButton` "Libro Mayor" del header, paso de transición: va DESPUÉS de Perfil y ANTES del bloque LED_* (orden del guion) | `ui/analytics/AnalyticsScreen.kt` |
 | `LED_FILTERS` | ledger | fila de FilterChips | `ui/ledger/LedgerScreen.kt` |
-| `LED_ROWS` | ledger | **primera** `LedgerRow` de la lista (patrón `index == 0`) | `ui/ledger/LedgerScreen.kt` |
+| `LED_ROWS` | ledger | **primer** renglón de la lista (patrón `index == 0`). Fuera del tour ese renglón puede ser una transferencia; durante el tour siempre es un gasto de demo | `ui/ledger/LedgerScreen.kt` |
 
 > Nota: `DASH_MEMBER_BARS` solo existe en el layout expandido (Fold interno). En compacto degrada
 > a globo centrado (comportamiento intencional).
@@ -139,18 +139,18 @@ Los tags llevan el comentario `// TUTORIAL: <KEY> — ver TUTORIAL.md` en el có
 
 Cuando **añadas, renombres o borres** una sección de la app que el tutorial resalta:
 
-1. **Enum** — actualiza `TutorialKey` (`TutorialKey.kt`). Es la fuente única; renombrar aquí
+1. **Enum**: actualiza `TutorialKey` (`TutorialKey.kt`). Es la fuente única; renombrar aquí
    fuerza a arreglar todos los usos (no compila si no).
-2. **Tag** — actualiza el `Modifier.tutorialTarget(TutorialKey.X, tutorialController)` (busca el
+2. **Tag**: actualiza el `Modifier.tutorialTarget(TutorialKey.X, tutorialController)` (busca el
    comentario `// TUTORIAL: X`). Si la sección se movió a otro composable, mueve el tag.
-3. **Guion** — actualiza/reordena la entrada en `TutorialSpec.steps` (`TutorialSpec.kt`): título,
+3. **Guion**: actualiza o reordena la entrada en `TutorialSpec.steps` (`TutorialSpec.kt`): título,
    cuerpo, `route`, `requiresCaptureSheet`. El orden de la lista es el orden del tour.
-4. **Esta tabla** — mantén sincronizada la fila correspondiente.
+4. **Esta tabla**: mantén sincronizada la fila correspondiente.
 
 Para **añadir** una sección nueva al tour: (a) agrega una `TutorialKey`, (b) tag el composable con
 `Modifier.tutorialTarget(...)` (hilando `tutorialController` como parámetro de la pantalla, tal
 como ya lo hacen las pantallas existentes; el modifier es no-op si el controller es null), (c)
 agrega un `TutorialStep` en el lugar del guion donde deba aparecer, (d) añade la fila a esta tabla.
 
-Si borras una sección y olvidas el paso, el tour **no se rompe** (globo centrado) — pero el log de
+Si borras una sección y olvidas el paso, el tour **no se rompe** (globo centrado), pero el log de
 debug lo delatará. Aun así, mantener esta tabla al día es la fuente de verdad para el mantenimiento.

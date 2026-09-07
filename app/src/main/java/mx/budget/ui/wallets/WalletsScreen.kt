@@ -11,6 +11,8 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import mx.budget.ui.common.KpiCard
 import mx.budget.ui.common.ScreenHeader
+import mx.budget.ui.common.AppLocale
+import mx.budget.ui.common.TransferRow
 import mx.budget.ui.common.pressScale
 import mx.budget.ui.common.rememberPressInteractionSource
 import mx.budget.ui.common.toMxn
@@ -86,11 +88,10 @@ import mx.budget.ui.theme.financeColors
 import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
 import java.util.Date
-import java.util.Locale
 
 // ── Helpers locales (el formato de montos vive en ui/common/MoneyFormat.kt) ──
 
-private val dayFmt = java.text.SimpleDateFormat("EEE d MMM", Locale("es", "MX"))
+private val dayFmt = java.text.SimpleDateFormat("EEE d MMM", AppLocale)
 private fun formatDay(epochMillis: Long): String =
     dayFmt.format(Date(epochMillis)).replaceFirstChar { it.uppercase() }
 
@@ -185,7 +186,7 @@ fun WalletsScreen(
     var loanDraft by remember { mutableStateOf<mx.budget.data.local.entity.LoanEntity?>(null) }
     var planSheetOpen by remember { mutableStateOf(false) }
     var planDraft by remember { mutableStateOf<mx.budget.data.local.entity.InstallmentPlanEntity?>(null) }
-    val moneyFmt = remember { java.text.NumberFormat.getCurrencyInstance(java.util.Locale("es", "MX")) }
+    val moneyFmt = remember { java.text.NumberFormat.getCurrencyInstance(AppLocale) }
     val memberNames = remember(members) { members.associate { it.id to it.displayName } }
     val walletNames = remember(entities) { entities.associate { it.id to it.displayName } }
     val balanceSections: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
@@ -205,7 +206,7 @@ fun WalletsScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         floatingActionButton = {
-            // TUTORIAL: WAL_FAB — ver TUTORIAL.md
+            // TUTORIAL: WAL_FAB, ver TUTORIAL.md
             ExtendedFloatingActionButton(
                 onClick = { formInitial = null; showForm = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
@@ -485,7 +486,7 @@ private fun Header(
         }
         Spacer(Modifier.width(14.dp))
         ScreenHeader(eyebrow = "Cuentas", title = "Saldos", modifier = Modifier.weight(1f))
-        // TUTORIAL: WAL_HEADER — ver TUTORIAL.md
+        // TUTORIAL: WAL_HEADER, ver TUTORIAL.md
         Row(
             modifier = Modifier.tutorialTarget(TutorialKey.WAL_HEADER, tutorialController),
             verticalAlignment = Alignment.CenterVertically,
@@ -565,7 +566,7 @@ private fun WalletList(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item(key = "kpis") {
-            // TUTORIAL: WAL_LIST — ver TUTORIAL.md. Ancla = la fila de KPIs: SIEMPRE
+            // TUTORIAL: WAL_LIST, ver TUTORIAL.md. Ancla = la fila de KPIs: SIEMPRE
             // está compuesta al tope (una tarjeta de cuenta bajo el pliegue ni se
             // compone en LazyColumn y el spotlight jamás resolvía).
             Box(Modifier.tutorialTarget(TutorialKey.WAL_LIST, tutorialController)) {
@@ -626,8 +627,16 @@ private fun WalletList(
                 SectionHeader("Transferencias")
             }
             items(transfers, key = { it.id }) { t ->
+                val subtitle = buildString {
+                    append(formatDay(t.occurredAt))
+                    if (!isLiquid(t.toKind)) append(" · Pago de tarjeta")
+                    t.note?.takeIf { it.isNotBlank() }?.let { append(" · "); append(it) }
+                }
                 TransferRow(
-                    transfer = t,
+                    fromName = t.fromName,
+                    toName = t.toName,
+                    amountText = t.amountMxn.toMxn(),
+                    subtitle = subtitle,
                     onLongClick = { onTransferLongPress(t) },
                     modifier = Modifier.animateItem(
                         fadeInSpec = spring(stiffness = 380f),
@@ -971,79 +980,6 @@ private fun MovementRow(item: ExpenseWithDetails) {
         Spacer(Modifier.width(8.dp))
         Text(
             item.amountMxn.toMxn(),
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-        )
-    }
-}
-
-/**
- * Fila de una transferencia en el historial (RF-41). Muestra origen → destino,
- * fecha, nota y (si el destino es crédito) la etiqueta "Pago de tarjeta".
- * Long-press dispara la confirmación de borrado.
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun TransferRow(
-    transfer: TransferWithNames,
-    onLongClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val credit = !isLiquid(transfer.toKind)
-    val interaction = rememberPressInteractionSource()
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .pressScale(interactionSource = interaction)
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .combinedClickable(
-                interactionSource = interaction,
-                indication = LocalIndication.current,
-                onClick = {},
-                onLongClick = onLongClick,
-            )
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Filled.SwapHoriz,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        Spacer(Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                "${transfer.fromName} → ${transfer.toName}",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-            )
-            val subtitle = buildString {
-                append(formatDay(transfer.occurredAt))
-                if (credit) append(" · Pago de tarjeta")
-                transfer.note?.takeIf { it.isNotBlank() }?.let { append(" · "); append(it) }
-            }
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            transfer.amountMxn.toMxn(),
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
