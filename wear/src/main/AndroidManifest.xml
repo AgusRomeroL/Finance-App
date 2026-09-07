@@ -45,6 +45,21 @@
                     android:host="*"
                     android:pathPrefix="/budget" />
             </intent-filter>
+            <!--
+              Filtro aparte para CAPABILITY_CHANGED: su "path" no es un path del
+              Data Layer sino el nombre de la capability, asi que no cabe bajo el
+              pathPrefix de arriba. Con esto el sistema despierta el servicio
+              cuando el telefono con la app entra o sale del alcance, y el reloj
+              se entera de la desconexion sin sondear.
+              Tiene que coincidir con WearPaths.CAPABILITY_PHONE_APP.
+            -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CAPABILITY_CHANGED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:path="/budget_phone_app" />
+            </intent-filter>
         </service>
 
         <!-- Actividad ligera de captura (monto+tipo+voz), lanzada desde el Tile B. -->
@@ -53,7 +68,7 @@
             android:exported="true"
             android:theme="@style/Theme.BudgetWear" />
 
-        <!-- Tile A — Recomendados (ProtoLayout). -->
+        <!-- Tile A: Recomendados (ProtoLayout). -->
         <service
             android:name=".presentation.tile.SuggestionsTileService"
             android:exported="true"
@@ -67,7 +82,7 @@
                 android:resource="@drawable/ic_wear_launcher" />
         </service>
 
-        <!-- Tile B — Captura (ProtoLayout). -->
+        <!-- Tile B: Captura (ProtoLayout). -->
         <service
             android:name=".presentation.tile.QuickEntryTileService"
             android:exported="true"
@@ -81,7 +96,7 @@
                 android:resource="@drawable/ic_wear_launcher" />
         </service>
 
-        <!-- Tile — Disponible (arco héroe, ProtoLayout EdgeContentLayout). -->
+        <!-- Tile Disponible (arco héroe, ProtoLayout EdgeContentLayout). -->
         <service
             android:name=".presentation.tile.DisponibleTileService"
             android:exported="true"
@@ -95,7 +110,7 @@
                 android:resource="@drawable/ic_wear_launcher" />
         </service>
 
-        <!-- Tile — Próximos pagos (PLANNED, ProtoLayout). -->
+        <!-- Tile Próximos pagos (PLANNED, ProtoLayout). -->
         <service
             android:name=".presentation.tile.UpcomingPaymentsTileService"
             android:exported="true"
@@ -109,7 +124,7 @@
                 android:resource="@drawable/ic_wear_launcher" />
         </service>
 
-        <!-- Tile — Gasto por miembro (mini-barras, ProtoLayout). -->
+        <!-- Tile Gasto por miembro (mini-barras, ProtoLayout). -->
         <service
             android:name=".presentation.tile.MemberSpendTileService"
             android:exported="true"
@@ -123,7 +138,7 @@
                 android:resource="@drawable/ic_wear_launcher" />
         </service>
 
-        <!-- Tile — Pendientes por confirmar (ProtoLayout, abre el hub). -->
+        <!-- Tile Pendientes por confirmar (ProtoLayout, abre el hub). -->
         <service
             android:name=".presentation.tile.PendingConfirmTileService"
             android:exported="true"

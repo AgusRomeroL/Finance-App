@@ -17,7 +17,7 @@ import com.google.android.horologist.tiles.SuspendingTileService
 import mx.budget.wear.data.WearCache
 
 /**
- * Tile — **Gasto por miembro** (rol BENEFICIARY). Mini-barras horizontales con el
+ * Tile **Gasto por miembro** (rol BENEFICIARY). Mini-barras horizontales con el
  * ancho proporcional al total de cada miembro (normalizado al mayor). Lee del
  * [WearCache]; sin Room ni red en el reloj.
  */
@@ -27,7 +27,7 @@ class MemberSpendTileService : SuspendingTileService() {
         requestParams: RequestBuilders.TileRequest,
     ): TileBuilders.Tile {
         val deviceParams = requestParams.deviceConfiguration
-        val members = WearCache.memberSpend(this).take(MAX_ROWS)
+        val members = WearCache.memberSpend(this).take(TileStatus.rowsFor(this, MAX_ROWS))
         val maxTotal = members.maxOfOrNull { it.total }?.takeIf { it > 0.0 } ?: 1.0
 
         val header = Text.Builder(this, "GASTO POR MIEMBRO")
@@ -57,6 +57,7 @@ class MemberSpendTileService : SuspendingTileService() {
 
         val layout: LayoutElement = PrimaryLayout.Builder(deviceParams)
             .setContent(column.build())
+            .apply { TileStatus.element(this@MemberSpendTileService)?.let { setSecondaryLabelTextContent(it) } }
             .build()
 
         return TileBuilders.Tile.Builder()

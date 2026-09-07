@@ -34,6 +34,11 @@ class DisponibleTileService : SuspendingTileService() {
 
         val balance = WearCache.balance(this)
         val budgetTotal = WearCache.budgetTotal(this)
+        val hasData = WearCache.hasData(this)
+        // El pie de estado sustituye a la etiqueta de quincena cuando hay algo
+        // que advertir: presentar un dato viejo con el mismo aspecto que uno
+        // fresco es la forma silenciosa de mentir.
+        val statusLabel = TileStatus.element(this)
         val label = WearCache.label(this)
 
         // Fracción del ingreso que ya no está disponible (pagado + reservado),
@@ -51,9 +56,17 @@ class DisponibleTileService : SuspendingTileService() {
             .setCircularProgressIndicatorColors(ProgressIndicatorColors(arcColor, COLOR_TRACK))
             .build()
 
-        val amount = Text.Builder(this, WearCache.money(balance))
+        val amount = Text.Builder(this, if (hasData) WearCache.money(balance) else "$--")
             .setTypography(Typography.TYPOGRAPHY_DISPLAY2)
-            .setColor(argb(if (balance < 0.0) COLOR_ERROR else COLOR_ON_SURFACE))
+            .setColor(
+                argb(
+                    when {
+                        !hasData -> COLOR_MUTED
+                        balance < 0.0 -> COLOR_ERROR
+                        else -> COLOR_ON_SURFACE
+                    }
+                )
+            )
             .setMaxLines(1)
             .build()
 
@@ -72,7 +85,7 @@ class DisponibleTileService : SuspendingTileService() {
             .setEdgeContent(arc)
             .setPrimaryLabelTextContent(heading)
             .setContent(amount)
-            .setSecondaryLabelTextContent(caption)
+            .setSecondaryLabelTextContent(statusLabel ?: caption)
             .build()
 
         return TileBuilders.Tile.Builder()

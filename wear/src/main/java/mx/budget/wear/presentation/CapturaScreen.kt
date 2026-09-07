@@ -147,11 +147,14 @@ fun CapturaScreen(
                 ),
             ) {
                 Text(
-                    text = "Sin conexión con el teléfono — reintenta con ✓",
+                    text = "Sin teléfono cerca. Se enviará al reconectar.",
                     style = MaterialTheme.typography.caption2,
                     color = MaterialTheme.colors.error,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
+                    // Con el ancho completo el circulo se come la primera y la
+                    // ultima letra de cada linea, y el aviso queda ilegible justo
+                    // cuando mas importa entenderlo.
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 )
             }
 

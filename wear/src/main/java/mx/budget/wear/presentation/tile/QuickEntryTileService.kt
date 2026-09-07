@@ -20,7 +20,7 @@ import com.google.android.horologist.tiles.SuspendingTileService
 import mx.budget.wear.presentation.CapturaActivity
 
 /**
- * Tile B — **Captura**. Dos accesos (Gasto, Ingreso) que lanzan la
+ * Tile B, **Captura**. Dos accesos (Gasto, Ingreso) que lanzan la
  * [CapturaActivity] ligera pasando el modo por extra. Un tile no admite texto
  * libre NI scroll, así que el teclado/voz (incluido el dictado) viven en la
  * actividad; el tile es solo el disparo glanceable. ProtoLayout (estable, sin

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Capability del Data Layer que declara el teléfono. El reloj la consulta
+      (CapabilityClient, FILTER_REACHABLE) para saber si hay un teléfono con ESTA
+      app alcanzable, que es justo la condición bajo la que sus envíos pueden
+      llegar. Preguntar por nodos conectados no sirve: responde que sí aunque la
+      app del teléfono esté desinstalada.
+
+      El nombre tiene que coincidir con WearPaths.CAPABILITY_PHONE_APP.
+    -->
+    <string-array name="android_wear_capabilities">
+        <item>budget_phone_app</item>
+    </string-array>
+</resources>

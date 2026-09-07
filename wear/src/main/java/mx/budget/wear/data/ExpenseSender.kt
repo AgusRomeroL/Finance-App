@@ -16,7 +16,7 @@ class ExpenseSender(private val context: Context) {
     private val nodeClient = Wearable.getNodeClient(context)
 
     suspend fun sendQuickExpense(amount: Double, concept: String): Result<Unit> =
-        send(WearPaths.PATH_NEW_EXPENSE, "$amount|$concept")
+        sendQueued(WearPaths.PATH_NEW_EXPENSE, "$amount|$concept")
 
     /**
      * Confirma un cargo recomendado (Tile A) reusando el camino de gasto rápido:
@@ -27,7 +27,7 @@ class ExpenseSender(private val context: Context) {
 
     /** Ingreso manual (monto|etiqueta). El teléfono lo inserta PLANNED. */
     suspend fun sendIncome(amount: Double, label: String): Result<Unit> =
-        send(WearPaths.PATH_NEW_INCOME, "$amount|$label")
+        sendQueued(WearPaths.PATH_NEW_INCOME, "$amount|$label")
 
     /** Confirma una captura de la bandeja desde el reloj (payload = id). */
     suspend fun confirmPending(id: String): Result<Unit> =
@@ -39,11 +39,11 @@ class ExpenseSender(private val context: Context) {
 
     /**
      * Envía una frase en lenguaje natural dictada en el reloj (§G.3). El reloj NO
-     * corre el LLM: el teléfono recibe el texto crudo y lo parsea/enriquece, dejando
+     * corre el LLM: el teléfono recibe el texto crudo, lo parsea y lo enriquece, dejando
      * la propuesta en la bandeja (propose-then-confirm).
      */
     suspend fun sendNaturalLanguage(text: String): Result<Unit> =
-        send(WearPaths.PATH_NEW_NL, text)
+        sendQueued(WearPaths.PATH_NEW_NL, text)
 
     /**
      * Pide al teléfono un snapshot fresco (pull-on-open del espejo en vivo, §G.3.3).
@@ -54,16 +54,35 @@ class ExpenseSender(private val context: Context) {
     suspend fun requestSync(): Result<Unit> =
         send(WearPaths.PATH_REQUEST_SYNC, "")
 
+    /**
+     * Envio de captura: si no sale, se guarda en [Outbox] para reintentarlo al
+     * volver el telefono. Sigue devolviendo el fallo, porque la pantalla tiene
+     * que decir la verdad ("se enviara al reconectar" y no un exito falso).
+     */
+    private suspend fun sendQueued(path: String, payload: String): Result<Unit> =
+        send(path, payload).onFailure { Outbox.enqueue(context, path, payload) }
+
+    /** Reintento desde la cola. NO reencola: de eso se ocupa [Outbox.drain]. */
+    internal suspend fun sendRaw(path: String, payload: String): Result<Unit> =
+        send(path, payload)
+
     private suspend fun send(path: String, payload: String): Result<Unit> {
         return try {
             // Localiza el nodo conectado primario (El Teléfono)
             val nodes = nodeClient.connectedNodes.await()
             val targetNode = nodes.firstOrNull { it.isNearby } ?: nodes.firstOrNull()
-                ?: return Result.failure(Exception("Teléfono no conectado"))
+            if (targetNode == null) {
+                PhoneLink.setReachable(context, false)
+                return Result.failure(Exception("Teléfono no conectado"))
+            }
 
             messageClient.sendMessage(targetNode.id, path, payload.toByteArray()).await()
+            // Un envio que llega es la mejor prueba de que hay telefono, mejor
+            // que cualquier sonda: se aprovecha para refrescar el estado.
+            PhoneLink.setReachable(context, true)
             Result.success(Unit)
         } catch (e: Exception) {
+            PhoneLink.setReachable(context, false)
             Result.failure(e)
         }
     }

@@ -16,7 +16,7 @@ import com.google.android.horologist.tiles.SuspendingTileService
 import mx.budget.wear.data.WearCache
 
 /**
- * Tile — **Próximos pagos**. Lista los siguientes gastos PLANNED (concepto + monto
+ * Tile **Próximos pagos**. Lista los siguientes gastos PLANNED (concepto + monto
  * + vencimiento relativo). Lee del [WearCache]; sin Room ni red en el reloj.
  */
 class UpcomingPaymentsTileService : SuspendingTileService() {
@@ -25,7 +25,10 @@ class UpcomingPaymentsTileService : SuspendingTileService() {
         requestParams: RequestBuilders.TileRequest,
     ): TileBuilders.Tile {
         val deviceParams = requestParams.deviceConfiguration
-        val upcoming = WearCache.upcoming(this).take(MAX_ROWS)
+        val statusLabel = TileStatus.element(this)
+        // Una fila menos cuando hay pie: el secondaryLabel consume alto y sin
+        // esto la última se recortaba a media línea.
+        val upcoming = WearCache.upcoming(this).take(TileStatus.rowsFor(this, MAX_ROWS))
 
         val header = Text.Builder(this, "PRÓXIMOS PAGOS")
             .setTypography(Typography.TYPOGRAPHY_CAPTION2)
@@ -56,6 +59,7 @@ class UpcomingPaymentsTileService : SuspendingTileService() {
 
         val layout: LayoutElement = PrimaryLayout.Builder(deviceParams)
             .setContent(column.build())
+            .apply { statusLabel?.let { setSecondaryLabelTextContent(it) } }
             .build()
 
         return TileBuilders.Tile.Builder()

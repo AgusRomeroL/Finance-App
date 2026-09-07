@@ -20,7 +20,7 @@ import com.google.android.horologist.tiles.SuspendingTileService
 import mx.budget.wear.data.WearCache
 
 /**
- * Tile — **Pendientes**. Cuenta cuántas capturas quedan por confirmar en la bandeja
+ * Tile **Pendientes**. Cuenta cuántas capturas quedan por confirmar en la bandeja
  * y ofrece un chip que abre el hub del reloj ([mx.budget.wear.MainActivity]) para
  * revisarlas. Lee del [WearCache]; sin Room ni red en el reloj.
  */
@@ -72,6 +72,9 @@ class PendingConfirmTileService : SuspendingTileService() {
         if (count > 0) {
             builder.setPrimaryChipContent(reviewChip(deviceParams))
         }
+        // Pie de estado: "Todo al día" con el teléfono ausente no significa que
+        // no haya pendientes, solo que el reloj no sabe. Hay que decirlo.
+        TileStatus.element(this)?.let { builder.setSecondaryLabelTextContent(it) }
         val layout: LayoutElement = builder.build()
 
         return TileBuilders.Tile.Builder()

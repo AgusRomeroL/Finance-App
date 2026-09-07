@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +43,11 @@ import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import mx.budget.wear.data.ExpenseSender
+import mx.budget.wear.data.Outbox
+import mx.budget.wear.data.PhoneLink
+import mx.budget.wear.data.SyncStatus
 import mx.budget.wear.data.WearCache
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -88,10 +93,17 @@ fun WearHub() {
 private fun cacheVersion(context: Context): Int {
     val version by produceState(initialValue = 0, context) {
         val prefs = context.getSharedPreferences(WearCache.PREFS, Context.MODE_PRIVATE)
-        // Reacciona SOLO a la clave de versión (escrita LAST por el listener del push),
-        // no a cada una de las ~8 claves del snapshot → un push = una recomposición.
+        // Se reacciona a tres claves y no a las ocho del snapshot: la de la
+        // versión (escrita LAST por el listener del push, así que un push equivale
+        // a una sola recomposición), la del enlace con el teléfono y la de la cola
+        // de envío. Las tres cambian lo que se ve; las demás viajan con la primera.
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == WearCache.K_CACHE_VERSION) value++
+            if (key == WearCache.K_CACHE_VERSION ||
+                key == PhoneLink.K_PHONE_REACHABLE ||
+                key == Outbox.K_OUTBOX
+            ) {
+                value++
+            }
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         awaitDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
@@ -107,10 +119,33 @@ private fun EstadoScreen(
 ) {
     val context = LocalContext.current
     val version = cacheVersion(context)
+    val scope = rememberCoroutineScope()
+
+    // El estado ANTIGUO no lo anuncia nadie: el dato envejece en silencio, sin
+    // que cambie ninguna preferencia. Un tic por minuto mientras el hub está a
+    // la vista basta, y al salir de composición se acaba solo.
+    var tick by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000)
+            tick++
+        }
+    }
+
+    // Sonda de arranque: en el primer uso todavía no ha llegado ningún evento
+    // de capability, así que el enlace se consulta una vez al abrir.
+    LaunchedEffect(Unit) {
+        PhoneLink.setReachable(context, PhoneLink.probe(context))
+    }
+
     val balance = remember(version) { WearCache.balance(context) }
+    val hasData = remember(version) { WearCache.hasData(context) }
     val label = remember(version) { WearCache.label(context) }
     val members = remember(version) { WearCache.memberSpend(context) }
     val maxTotal = remember(members) { members.maxOfOrNull { it.total }?.takeIf { it > 0 } ?: 1.0 }
+    val status = remember(version, tick) { SyncStatus.current(context) }
+    val statusLabel = remember(version, tick) { SyncStatus.shortLabel(context) }
+    val queued = remember(version) { Outbox.size(context) }
 
     ScalingLazyColumn(
         state = rememberScalingLazyListState(),
@@ -124,14 +159,39 @@ private fun EstadoScreen(
                 textAlign = TextAlign.Center,
             )
         }
+        // Línea de estado: solo aparece cuando hay algo que decir. Con todo en
+        // orden no ocupa ni un pixel, que es el caso casi siempre.
+        if (statusLabel.isNotEmpty()) {
+            item {
+                Text(
+                    text = statusLabel,
+                    style = MaterialTheme.typography.caption3,
+                    color = if (status == SyncStatus.DESCONECTADO) {
+                        MaterialTheme.colors.error
+                    } else {
+                        MaterialTheme.colors.onSurfaceVariant
+                    },
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                )
+            }
+        }
         item {
             Text("DISPONIBLE", style = MaterialTheme.typography.caption2, textAlign = TextAlign.Center)
         }
         item {
             Text(
-                text = WearCache.money(balance),
+                // Sin snapshot no se pinta "$0": ese cero es el valor por defecto
+                // de la preferencia, no un saldo, y confundir "no sé" con "no
+                // queda nada" es la peor confusión posible en una app de dinero.
+                text = if (hasData) WearCache.money(balance) else "$--",
                 style = MaterialTheme.typography.display2,
-                color = MaterialTheme.colors.primary,
+                color = if (hasData) {
+                    MaterialTheme.colors.primary
+                } else {
+                    MaterialTheme.colors.onSurfaceVariant
+                },
                 textAlign = TextAlign.Center,
             )
         }
@@ -141,6 +201,24 @@ private fun EstadoScreen(
                 colors = ButtonDefaults.primaryButtonColors(),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             ) { Text("Registrar") }
+        }
+        // Cola de envío: lo que se capturó sin teléfono a la vista. Un toque
+        // fuerza el reintento, aunque también se drena sola al abrir el hub y en
+        // cuanto el teléfono vuelve a estar cerca.
+        if (queued > 0) {
+            item {
+                CompactChip(
+                    onClick = { scope.launch { Outbox.drain(context, ExpenseSender(context)) } },
+                    label = {
+                        Text(
+                            if (queued == 1) "1 por enviar" else "$queued por enviar",
+                            maxLines = 1,
+                        )
+                    },
+                    colors = ChipDefaults.secondaryChipColors(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                )
+            }
         }
         if (members.isNotEmpty()) {
             item {
@@ -287,7 +365,9 @@ private fun PendientesScreen() {
                     style = MaterialTheme.typography.caption2,
                     color = MaterialTheme.colors.error,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    // Padding horizontal: sin el, el circulo recorta la primera y
+                    // la ultima letra de cada linea del aviso.
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
                 )
             }
         }

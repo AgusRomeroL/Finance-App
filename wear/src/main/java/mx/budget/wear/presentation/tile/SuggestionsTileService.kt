@@ -20,7 +20,7 @@ import mx.budget.wear.data.ExpenseSender
 import mx.budget.wear.data.WearCache
 
 /**
- * Tile A — **Recomendados**. Muestra el cargo sugerido más relevante (concepto +
+ * Tile A, **Recomendados**. Muestra el cargo sugerido más relevante (concepto +
  * monto típico + razón) con un botón "Confirmar" que lo manda a la bandeja del
  * teléfono (propose-then-confirm) reusando el camino de gasto rápido.
  *
@@ -126,7 +126,7 @@ class SuggestionsTileService : SuspendingTileService() {
                     .build()
             )
             .addContent(
-                Text.Builder(this, "Sin conexión con el teléfono — reintenta")
+                Text.Builder(this, "Sin teléfono cerca. Se enviará al reconectar.")
                     .setTypography(Typography.TYPOGRAPHY_CAPTION2)
                     .setColor(argb(COLOR_MUTED))
                     .setMaxLines(3)

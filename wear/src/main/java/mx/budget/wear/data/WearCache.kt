@@ -7,7 +7,7 @@ import java.util.Locale
 /**
  * Cache local del reloj (SharedPreferences), poblado por [MobileSyncListenerService]
  * desde el push del teléfono. **Única fuente de datos del reloj**: ni Room, ni red,
- * ni LLM — todo llega ya cocinado del teléfono y aquí solo se lee/parsea.
+ * ni LLM: todo llega ya cocinado del teléfono y aquí solo se lee y se parsea.
  *
  * Los payloads de lista viajan como JSON string (los serializa `WearSnapshotBuilder`
  * en el teléfono) y se parsean con `org.json` (incluido en Android, sin deps). Lo
@@ -26,6 +26,38 @@ object WearCache {
     const val K_MEMBER_SPEND = "member_spend_json" // JSON array
     const val K_UPCOMING = "upcoming_json"        // JSON array
     const val K_CACHE_VERSION = "cache_version"   // Long
+
+    /**
+     * Instante de LLEGADA del ultimo snapshot, medido con el reloj DEL RELOJ.
+     *
+     * A proposito no se reutiliza [K_CACHE_VERSION] para esto, aunque su valor
+     * sea un `currentTimeMillis`: esa marca la pone el TELEFONO, y restarla del
+     * `currentTimeMillis` del reloj mezcla dos relojes distintos. Un reloj
+     * adelantado marcaria todo como viejo y uno atrasado no marcaria nada nunca,
+     * y las dos formas de fallar son silenciosas. Anotando la llegada aqui, la
+     * edad es una resta dentro de una sola base de tiempo.
+     *
+     * (Tampoco vale `elapsedRealtime`, que seria inmune incluso a que el usuario
+     * cambie la hora: se reinicia al reiniciar el reloj, asi que tras un reboot
+     * todo snapshot pareceria recien llegado.)
+     */
+    const val K_RECEIVED_AT = "received_at"       // Long
+
+    /**
+     * A partir de aqui el dato se considera viejo y las superficies lo dicen.
+     *
+     * La cadencia nominal es alta (el telefono empuja en cada cambio del
+     * dashboard y el worker periodico cada ~15 min), asi que media hora parece
+     * defendible. No lo es: con el telefono en doze nocturno WorkManager difiere
+     * el trabajo periodico, y un hueco de cuatro a ocho horas de madrugada es
+     * normal, no un fallo. Un umbral corto gritaria "ANTIGUO" cada manana sobre
+     * un numero correcto, y una alarma que suena todos los dias deja de leerse.
+     *
+     * El caso urgente (telefono ausente) ya lo cubre [PhoneLink], que es
+     * inmediato. Esto es el respaldo para el caso raro: conectado pero mudo.
+     * Seis horas son veinticuatro ciclos nominales perdidos: sin ambiguedad.
+     */
+    const val STALE_AFTER_MS = 6L * 60 * 60 * 1000
 
     // ── Modelos planos que consume la UI del reloj ──────────────────────────────
 
@@ -60,6 +92,27 @@ object WearCache {
     fun budgetTotal(context: Context): Double = prefs(context).getFloat(K_BUDGET_TOTAL, 0f).toDouble()
 
     fun cacheVersion(context: Context): Long = prefs(context).getLong(K_CACHE_VERSION, 0L)
+
+    /** Cuando llego el ultimo snapshot, en el reloj del reloj. Cero si ninguno. */
+    fun receivedAt(context: Context): Long = prefs(context).getLong(K_RECEIVED_AT, 0L)
+
+    /**
+     * Si alguna vez llego un snapshot. Sin esto, un cache vacio y un presupuesto
+     * realmente agotado se pintaban los dos como "$0", que es la peor confusion
+     * posible en una app de dinero.
+     */
+    fun hasData(context: Context): Boolean = receivedAt(context) > 0L
+
+    /** Edad del snapshot. [Long.MAX_VALUE] si nunca llego ninguno. */
+    fun snapshotAgeMs(context: Context): Long {
+        val at = receivedAt(context)
+        if (at <= 0L) return Long.MAX_VALUE
+        // coerceAtLeast(0): si el usuario atrasa la hora del reloj, la resta sale
+        // negativa. Cero (recien llegado) es mejor mentira que una edad absurda.
+        return (System.currentTimeMillis() - at).coerceAtLeast(0L)
+    }
+
+    fun isStale(context: Context): Boolean = snapshotAgeMs(context) >= STALE_AFTER_MS
 
     fun label(context: Context): String =
         prefs(context).getString(K_LABEL, "Sin sincronizar") ?: "Sin sincronizar"
@@ -118,6 +171,23 @@ object WearCache {
 
     // ── Formato ─────────────────────────────────────────────────────────────────
 
-    /** "$1,234" — pesos sin decimales, con separador de miles. */
+    /** "$1,234": pesos sin decimales, con separador de miles. */
     fun money(amount: Double): String = "$" + String.format(Locale.US, "%,.0f", amount)
+
+    /**
+     * "$8.1k", "$26k", "-$1.2k". El SHORT_TEXT de una complication da unos siete
+     * caracteres, y [money] produce "$123,456", que son ocho y se recorta.
+     */
+    fun moneyCompact(amount: Double): String {
+        val abs = kotlin.math.abs(amount)
+        val sign = if (amount < 0) "-" else ""
+        val body = when {
+            abs < 1_000 -> String.format(Locale.US, "%.0f", abs)
+            abs < 10_000 ->
+                String.format(Locale.US, "%.1f", abs / 1_000).removeSuffix(".0") + "k"
+            abs < 1_000_000 -> String.format(Locale.US, "%.0f", abs / 1_000) + "k"
+            else -> String.format(Locale.US, "%.1f", abs / 1_000_000).removeSuffix(".0") + "M"
+        }
+        return "$sign$" + body
+    }
 }

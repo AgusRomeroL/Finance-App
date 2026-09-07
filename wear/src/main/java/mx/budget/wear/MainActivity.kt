@@ -7,6 +7,8 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.horologist.compose.layout.AppScaffold
 import kotlinx.coroutines.launch
 import mx.budget.wear.data.ExpenseSender
+import mx.budget.wear.data.Outbox
+import mx.budget.wear.data.PhoneLink
 import mx.budget.wear.presentation.WearHub
 
 /**
@@ -19,8 +21,8 @@ import mx.budget.wear.presentation.WearHub
  * snapshot fresco ([ExpenseSender.requestSync]). Sin esto, al abrir la app antes de
  * que el teléfono hubiera empujado (su primer arranque emparejado) el cache está
  * vacío y "Disponible" queda en $0. Con el pull, el teléfono re-empuja, el
- * [mx.budget.wear.data.MobileSyncListenerService] repuebla el cache y la UI —que
- * ahora observa `SharedPreferences`— refleja la cifra real en vivo.
+ * [mx.budget.wear.data.MobileSyncListenerService] repuebla el cache y la UI,
+ * que ahora observa `SharedPreferences`, refleja la cifra real en vivo.
  */
 class MainActivity : ComponentActivity() {
 
@@ -37,6 +39,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        lifecycleScope.launch { runCatching { expenseSender.requestSync() } }
+        lifecycleScope.launch {
+            // El resultado del pull ES la sonda de conexión: un requestSync que
+            // falla significa que no hay teléfono alcanzable. Antes se tragaba en
+            // un runCatching y la pantalla enseñaba un $0 sin explicar nada.
+            val ok = runCatching { expenseSender.requestSync() }.getOrNull()?.isSuccess == true
+            PhoneLink.setReachable(applicationContext, ok)
+            // Y si volvió el teléfono, se vacía lo que se capturó sin él.
+            if (ok) runCatching { Outbox.drain(applicationContext, expenseSender) }
+        }
     }
 }

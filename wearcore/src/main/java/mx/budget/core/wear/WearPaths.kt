@@ -25,7 +25,7 @@ object WearPaths {
 
     /**
      * El reloj pide al móvil un snapshot fresco (pull-on-open del espejo en vivo,
-     * §G.3.3). Payload vacío. El móvil responde re-empujando [PATH_BUDGET_SYNC] —
+     * §G.3.3). Payload vacío. El móvil responde re-empujando [PATH_BUDGET_SYNC]:
      * así el reloj no depende de que el dashboard del teléfono esté abierto para
      * ver la cifra "Disponible" real en su primer arranque.
      */
@@ -37,7 +37,7 @@ object WearPaths {
 
     /**
      * Solo cache-busting del DataItem (el Data Layer deduplica payloads idénticos;
-     * este timestamp garantiza que cada push sea "distinto"). El reloj NO la lee —
+     * este timestamp garantiza que cada push sea "distinto"). El reloj NO la lee;
      * para reaccionar a un push usa [KEY_CACHE_VERSION].
      */
     const val KEY_TIMESTAMP = "key_timestamp"
@@ -68,4 +68,17 @@ object WearPaths {
 
     /** Próximos pagos PLANNED: JSON array de `{concept, amount, dueDate}`. */
     const val KEY_UPCOMING_JSON = "upcoming_json"
+
+    // ---- Capabilities ----
+    /**
+     * Capability que declara el teléfono en `app/src/main/res/values/wear.xml`
+     * (string-array `android_wear_capabilities`). El reloj la consulta para
+     * distinguir "hay un teléfono con ESTA app" de "hay un nodo conectado":
+     * `NodeClient` responde que sí aunque la app del teléfono esté desinstalada,
+     * y con eso el reloj diría que está todo bien mientras nada le contesta.
+     *
+     * El nombre tiene que coincidir EXACTO con el item de ese XML; un recurso de
+     * Android no puede leer esta constante, así que la pareja se mantiene a mano.
+     */
+    const val CAPABILITY_PHONE_APP = "budget_phone_app"
 }
