@@ -24,6 +24,7 @@ import mx.budget.data.local.dao.LoanDao
 import mx.budget.data.local.dao.PaymentMethodDao
 import mx.budget.data.local.dao.RecurrenceTemplateDao
 import mx.budget.data.local.dao.SavingsGoalDao
+import mx.budget.data.local.dao.StatementImportDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.dao.WalletTransferDao
 import mx.budget.data.remote.CategoryRepositoryFirestore
@@ -31,6 +32,7 @@ import mx.budget.data.remote.HouseholdRepositoryFirestore
 import mx.budget.data.remote.LoanRepositoryFirestore
 import mx.budget.data.remote.MemberRepositoryFirestore
 import mx.budget.data.remote.RecurrenceRepositoryFirestore
+import mx.budget.data.remote.StatementRepositoryFirestore
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.InstallmentRepository
@@ -105,6 +107,10 @@ class SyncManager(
     // y una edición del hogar no salía nunca del dispositivo).
     private val householdDao: HouseholdDao? = null,
     private val remoteHouseholdRepository: HouseholdRepositoryFirestore? = null,
+    // Fase 2: la auditoría de estados de cuenta deja de ser local-only para que el
+    // checklist mensual converja entre los dispositivos del hogar.
+    private val statementImportDao: StatementImportDao? = null,
+    private val remoteStatementRepository: StatementRepositoryFirestore? = null,
 ) {
 
     private val mutex = Mutex()
@@ -329,6 +335,21 @@ class SyncManager(
                                 remoteInstallmentRepository.insert(plan)
                                 syncQueueDao.delete(row.id)
                             }
+                        }
+
+                        row.entityType == "STATEMENT" && row.operation == "UPSERT" -> {
+                            val statement = statementImportDao?.getById(row.entityId)
+                            if (statement == null || remoteStatementRepository == null) {
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteStatementRepository.insert(statement)
+                                syncQueueDao.delete(row.id)
+                            }
+                        }
+
+                        row.entityType == "STATEMENT" && row.operation == "DELETE" -> {
+                            remoteStatementRepository?.deleteById(row.entityId)
+                            syncQueueDao.delete(row.id)
                         }
 
                         row.entityType == "HOUSEHOLD" && row.operation == "UPSERT" -> {

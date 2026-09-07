@@ -545,6 +545,10 @@ class BudgetApplication : Application() {
         // Hogar (Fase 2): push del documento raíz; antes las ediciones del hogar
         // eran local-only y no salían nunca del dispositivo.
         val remoteHouseholdRepository = mx.budget.data.remote.HouseholdRepositoryFirestore(firestore)
+        // Estados de cuenta (Fase 2): la auditoria deja de ser local-only para que el
+        // checklist mensual converja entre dispositivos.
+        val remoteStatementRepository =
+            mx.budget.data.remote.StatementRepositoryFirestore(firestore, householdId)
 
         // Arranca el drenado del outbox (por conectividad + intento inicial).
         syncManager = SyncManager(
@@ -573,7 +577,9 @@ class BudgetApplication : Application() {
             recurrenceTemplateDao = database.recurrenceTemplateDao(),
             remoteRecurrenceRepository = remoteRecurrenceRepository,
             householdDao = database.householdDao(),
-            remoteHouseholdRepository = remoteHouseholdRepository
+            remoteHouseholdRepository = remoteHouseholdRepository,
+            statementImportDao = database.statementImportDao(),
+            remoteStatementRepository = remoteStatementRepository
         )
 
         // Dirección PULL (Firestore → Room). Comparte `appScope` y la misma
@@ -620,7 +626,20 @@ class BudgetApplication : Application() {
                     memberDao = database.memberDao(),
                     quincenaDao = database.quincenaDao(),
                     statementImportDao = database.statementImportDao(),
+                    syncQueueDao = database.syncQueueDao(),
                 ).seedOnce()
+            }
+            // Ancla del saldo (Fase 2, v21): se alinea UNA vez, ya con todos los
+            // inicializadores terminados. Antes de este punto el saldo todavia se
+            // mueve con gastos y transferencias de fecha historica, asi que anclar
+            // en la migracion dejaba el ancla por delante de ellos y la app
+            // arrancaba avisando de una divergencia inexistente.
+            runCatching {
+                if (!settingsRepository.isBalanceAnchorAligned()) {
+                    database.paymentMethodDao()
+                        .alignAnchorsToCurrent(householdId, System.currentTimeMillis())
+                    settingsRepository.setBalanceAnchorAligned(true)
+                }
             }
             remotePullSync.start()
             syncManager.drain()

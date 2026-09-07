@@ -56,6 +56,8 @@ class StatementSeedInitializer(
     private val memberDao: MemberDao,
     private val quincenaDao: QuincenaDao,
     private val statementImportDao: StatementImportDao,
+    /** Para encolar el push de los estados sembrados (Fase 2). */
+    private val syncQueueDao: mx.budget.data.local.dao.SyncQueueDao? = null,
 ) {
     private val zone = ZoneId.of("America/Mexico_City")
 
@@ -293,8 +295,10 @@ class StatementSeedInitializer(
                     payloadJson = "{\"seed\":\"v2\"}",
                     createdAt = now,
                     appliedAt = now,
+                    updatedAt = now,
                 )
             )
+            enqueueStatement(stmtId, now)
         }
 
         // (6) reconcileFinal: saldos absolutos + metadatos + marcador de ciclo (verde).
@@ -340,8 +344,10 @@ class StatementSeedInitializer(
                             payloadJson = "{}",
                             createdAt = now,
                             appliedAt = now,
+                            updatedAt = now,
                         )
                     )
+                    enqueueStatement(det("seedcycle2:${w.id}"), now)
                 }
             }
         }
@@ -398,6 +404,21 @@ class StatementSeedInitializer(
     companion object {
         private const val ASSET = "seed_statements.json"
     }
+    /**
+     * Encola el push del estado sembrado. Los ids son deterministas, así que los
+     * dos dispositivos escriben el MISMO documento y el sembrado no duplica nada.
+     */
+    private suspend fun enqueueStatement(id: String, now: Long) {
+        syncQueueDao?.enqueue(
+            mx.budget.data.local.entity.SyncQueueEntity(
+                entityType = "STATEMENT",
+                entityId = id,
+                operation = "UPSERT",
+                createdAt = now,
+            )
+        )
+    }
+
 }
 
 // Helpers org.json para nullables.

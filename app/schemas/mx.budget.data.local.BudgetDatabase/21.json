@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 21,
-    "identityHash": "599f6d12b478a3797c0ac4b20d72477b",
+    "identityHash": "08a7a6682a76fef09474314d2fa2c082",
     "entities": [
       {
         "tableName": "household",
@@ -2226,7 +2226,7 @@
       },
       {
         "tableName": "statement_import",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `household_id` TEXT NOT NULL, `wallet_id` TEXT, `emisor` TEXT, `last4` TEXT, `periodo_inicio` TEXT, `periodo_fin` TEXT, `fecha_corte` TEXT, `fecha_limite_pago` TEXT, `saldo_total` REAL, `pago_minimo` REAL, `pago_no_intereses` REAL, `tasa_anual` REAL, `payload_json` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `applied_at` INTEGER, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `household_id` TEXT NOT NULL, `wallet_id` TEXT, `emisor` TEXT, `last4` TEXT, `periodo_inicio` TEXT, `periodo_fin` TEXT, `fecha_corte` TEXT, `fecha_limite_pago` TEXT, `saldo_total` REAL, `pago_minimo` REAL, `pago_no_intereses` REAL, `tasa_anual` REAL, `payload_json` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `applied_at` INTEGER, `updated_at` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -2311,6 +2311,13 @@
             "fieldPath": "appliedAt",
             "columnName": "applied_at",
             "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -2483,7 +2490,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '599f6d12b478a3797c0ac4b20d72477b')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '08a7a6682a76fef09474314d2fa2c082')"
     ]
   }
 }

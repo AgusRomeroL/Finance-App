@@ -16,6 +16,14 @@ interface StatementImportDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(row: StatementImportEntity)
 
+    /** Alias semántico para el pull (escritura por DAO directo, anti-eco). */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(row: StatementImportEntity)
+
+    /** Borrado por id usado EXCLUSIVAMENTE por el pull (lápida o removal remoto). */
+    @Query("DELETE FROM statement_import WHERE id = :id")
+    suspend fun deleteById(id: String)
+
     /** Historial de imports del hogar, más recientes primero. */
     @Query("SELECT * FROM statement_import WHERE household_id = :householdId ORDER BY created_at DESC")
     fun observeAll(householdId: String): Flow<List<StatementImportEntity>>
@@ -24,7 +32,10 @@ interface StatementImportDao {
     suspend fun getById(id: String): StatementImportEntity?
 
     /** Marca la fila como reconciliada (vincula el wallet elegido y el instante). */
-    @Query("UPDATE statement_import SET applied_at = :appliedAt, wallet_id = :walletId WHERE id = :id")
+    @Query(
+        "UPDATE statement_import SET applied_at = :appliedAt, wallet_id = :walletId, " +
+            "updated_at = :appliedAt WHERE id = :id"
+    )
     suspend fun markApplied(id: String, walletId: String?, appliedAt: Long)
 
     /** Borra las filas sintéticas del sembrado v1 (payload vacío y sin fecha límite). */

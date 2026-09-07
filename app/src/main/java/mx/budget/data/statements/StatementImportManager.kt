@@ -742,8 +742,20 @@ class StatementImportManager(
             payloadJson = rawJson,
             createdAt = now,
             appliedAt = now,
+            updatedAt = now,
         )
         statementImportDao.insert(row)
+        // Fase 2: el estado entra al sync para que el checklist mensual sea el
+        // mismo en los dos dispositivos. El payload crudo NO viaja (ver
+        // StatementRepositoryFirestore).
+        db.syncQueueDao().enqueue(
+            mx.budget.data.local.entity.SyncQueueEntity(
+                entityType = "STATEMENT",
+                entityId = importId,
+                operation = "UPSERT",
+                createdAt = now,
+            )
+        )
         return ReconcileResult(msiTouched, importId)
     }
 

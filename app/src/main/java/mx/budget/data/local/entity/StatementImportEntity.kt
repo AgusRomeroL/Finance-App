@@ -13,10 +13,20 @@ import androidx.room.PrimaryKey
  * los datos que el LLM extrajo (más el `payloadJson` crudo) para trazabilidad, y
  * marca [appliedAt] cuando el usuario confirma la reconciliación.
  *
- * **No participa en el sync** (local-only, sin `updated_at`): es un rastro de la
- * importación en ESTE dispositivo, no un dato del hogar que otros necesiten. La
- * reconciliación en sí (corte/límite del wallet, planes MSI) SÍ se sincroniza a
- * través de los repos existentes (`WalletRepository`, `InstallmentRepository`).
+ * **SÍ participa en el sync desde la Fase 2** (kind `STATEMENT`, LWW por
+ * [updatedAt]). Era local-only por diseño y eso rompía el checklist mensual
+ * "Estados del mes": Agustín y Norma comparten el seguimiento, pero cada
+ * dispositivo llevaba su propia lista y el mismo estado se marcaba dos veces.
+ *
+ * [payloadJson] NO viaja a la nube: el documento remoto lleva solo la cabecera.
+ * El checklist, la tarjeta de deuda y el recordatorio de pago se alimentan de
+ * `wallet_id`, `applied_at`, `periodo_fin`, `fecha_corte`, `fecha_limite_pago` y
+ * los importes; el texto crudo que devolvió el LLM se queda en el dispositivo que
+ * importó el PDF, que es el único que puede reabrir esa revisión. Al llegar por el
+ * pull el campo se rellena con `"{}"`.
+ *
+ * `statement_line` sigue siendo local-only: es el detalle de trabajo del cotejo,
+ * no estado compartido.
  *
  * Sin FK a `payment_method`: la fila puede persistir aunque el wallet se borre, y
  * el import se registra antes de que el usuario elija el wallet definitivo.
@@ -85,4 +95,8 @@ data class StatementImportEntity(
     /** Epoch millis en que se aplicó la reconciliación (null = solo importado). */
     @ColumnInfo(name = "applied_at")
     val appliedAt: Long? = null,
+
+    /** Última modificación local (epoch millis) para LWW del sync (v20 a v21). */
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0,
 )

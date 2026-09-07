@@ -134,8 +134,12 @@ abstract class BudgetDatabase : RoomDatabase() {
          * el camino, así que saltarse el ALTER cuando la columna ya existe produce
          * exactamente el mismo identityHash.
          */
-        private fun SupportSQLiteDatabase.hasColumn(table: String, column: String): Boolean =
-            query("PRAGMA table_info(`$table`)").use { c ->
+        private fun SupportSQLiteDatabase.addColumnIfMissing(
+            table: String,
+            column: String,
+            ddl: String,
+        ) {
+            val exists = query("PRAGMA table_info(`$table`)").use { c ->
                 val nameIdx = c.getColumnIndexOrThrow("name")
                 var found = false
                 while (c.moveToNext()) {
@@ -143,15 +147,7 @@ abstract class BudgetDatabase : RoomDatabase() {
                 }
                 found
             }
-
-        private fun SupportSQLiteDatabase.addColumnIfMissing(
-            table: String,
-            column: String,
-            ddl: String,
-        ) {
-            if (!hasColumn(table, column)) {
-                execSQL("ALTER TABLE `$table` ADD COLUMN `$column` $ddl")
-            }
+            if (!exists) execSQL("ALTER TABLE `$table` ADD COLUMN `$column` $ddl")
         }
 
         /**
@@ -541,7 +537,8 @@ abstract class BudgetDatabase : RoomDatabase() {
         }
 
         /**
-         * v20 -> v21: **ancla explicita del saldo de la cuenta**.
+         * v20 -> v21: **ancla explicita del saldo de la cuenta** y **statement_import
+         * al contrato de sync**.
          *
          * `current_balance_mxn` se mantiene por deltas locales pero viaja a
          * Firestore como snapshot con LWW, asi que dos dispositivos pueden
@@ -553,28 +550,32 @@ abstract class BudgetDatabase : RoomDatabase() {
          * calculable (`PaymentMethodDao.observeDerivedBalances`) y la diferencia
          * contra el guardado es exactamente la deriva.
          *
-         * Paso de datos, solo cuando la columna faltaba: iguala el ancla al saldo
-         * actual y la fecha al momento de la migracion. Asi todo dispositivo
-         * arranca convergido y los gastos historicos de la semilla (anteriores a
-         * este instante) quedan fuera del calculo, que es la semantica que el
-         * saldo ya tenia de facto: del saldo declarado hacia adelante. El paso va
-         * guardado por la comprobacion de existencia porque, a diferencia del
-         * ALTER, no es idempotente.
+         * La migracion NO fija el ancla: solo anade la columna. Igualarla aqui al
+         * saldo actual no sirve, porque los inicializadores de la app corren
+         * DESPUES de la cadena de migraciones y mueven los saldos con movimientos
+         * de fecha historica: el ancla quedaria por delante de ellos y una
+         * instalacion limpia arrancaria avisando de una divergencia inexistente.
+         * La alineacion vive en `BudgetApplication`, ya con el sembrado terminado,
+         * y es one-shot por bandera de DataStore
+         * (`PaymentMethodDao.alignAnchorsToCurrent`).
+         *
+         * `statement_import.updated_at` mete la auditoria de estados de cuenta en
+         * el sync bidireccional. Era local-only por diseno y por eso el checklist
+         * mensual "Estados del mes" no convergia entre dispositivos: cada uno
+         * llevaba su propia lista y el mismo estado se marcaba dos veces.
          */
         val MIGRATION_20_21 = object : Migration(20, 21) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                val hadAnchor = db.hasColumn("payment_method", "balance_anchor_at")
                 db.addColumnIfMissing(
                     "payment_method",
                     "balance_anchor_at",
                     "INTEGER NOT NULL DEFAULT 0"
                 )
-                if (!hadAnchor) {
-                    db.execSQL(
-                        "UPDATE `payment_method` SET `opening_balance_mxn` = `current_balance_mxn`, " +
-                            "`balance_anchor_at` = " + System.currentTimeMillis()
-                    )
-                }
+                db.addColumnIfMissing(
+                    "statement_import",
+                    "updated_at",
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
             }
         }
     }

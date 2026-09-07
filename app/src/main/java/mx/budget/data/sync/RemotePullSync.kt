@@ -79,6 +79,7 @@ class RemotePullSync(
     private val loanDao = db.loanDao()
     private val installmentPlanDao = db.installmentPlanDao()
     private val recurrenceTemplateDao = db.recurrenceTemplateDao()
+    private val statementImportDao = db.statementImportDao()
     private val pendingCaptureDao = db.pendingCaptureDao()
 
     private val listeners = mutableListOf<ListenerRegistration>()
@@ -273,6 +274,21 @@ class RemotePullSync(
             },
             onRemoved = { recurrenceTemplateDao.deleteById(it) },
             localUpdatedAt = { recurrenceTemplateDao.getById(it)?.updatedAt },
+        )
+
+        // statement_import (Fase 2): la auditoria de estados de cuenta converge
+        // para que el checklist mensual "Estados del mes" sea el mismo en los dos
+        // dispositivos. El doc remoto no trae payload_json (ver el mapper).
+        listeners += register(
+            "statement_import",
+            { it.toStatementImportEntity() },
+            apply = { statementImportDao.upsert(it) },
+            shouldApply = { remote ->
+                val local = statementImportDao.getById(remote.id)
+                local == null || remote.updatedAt > local.updatedAt
+            },
+            onRemoved = { statementImportDao.deleteById(it) },
+            localUpdatedAt = { statementImportDao.getById(it)?.updatedAt },
         )
 
         // proposals (Fase B): gastos que un COLABORADOR propone desde la web o su

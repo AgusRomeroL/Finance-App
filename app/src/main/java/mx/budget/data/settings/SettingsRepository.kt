@@ -33,6 +33,7 @@ class SettingsRepository(private val context: Context) {
     private val statementSeedDoneKey = booleanPreferencesKey("statement_seed_done")
     private val statementSeedV2DoneKey = booleanPreferencesKey("statement_seed_v2_done")
     private val templateCuration202607DoneKey = booleanPreferencesKey("template_curation_2026_07_done")
+    private val balanceAnchorAlignedKey = booleanPreferencesKey("balance_anchor_aligned")
     private val bankCaptureEnabledKey = booleanPreferencesKey("bank_capture_enabled")
     private val reminderLeadDaysKey = intPreferencesKey("reminder_lead_days")
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
@@ -82,6 +83,20 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[statementSeedDoneKey] = done }
     }
 
+    /**
+     * Alineación one-shot del ancla del saldo (Fase 2, v21). La migración no puede
+     * fijar el ancla porque el sembrado de la app corre DESPUÉS y mueve los saldos
+     * con movimientos de fecha histórica: el ancla quedaría por delante de ellos y
+     * la app arrancaría avisando de una divergencia que no existe. Esto se ejecuta
+     * cuando todos los inicializadores ya terminaron.
+     */
+    suspend fun isBalanceAnchorAligned(): Boolean =
+        context.dataStore.data.first()[balanceAnchorAlignedKey] ?: false
+
+    suspend fun setBalanceAnchorAligned(done: Boolean) {
+        context.dataStore.edit { prefs -> prefs[balanceAnchorAlignedKey] = done }
+    }
+
     /** Sembrado histórico v2 (compras clasificadas + intereses + planes + transferencias). */
     suspend fun isStatementSeedV2Done(): Boolean =
         context.dataStore.data.first()[statementSeedV2DoneKey] ?: false
@@ -118,7 +133,7 @@ class SettingsRepository(private val context: Context) {
 
     /**
      * `true` cuando el usuario ya vio (o saltó) el **tutorial guiado** de uso de la app
-     * (coach-marks / spotlight — ver `ui/tutorial/` y `TUTORIAL.md`). Independiente del
+     * (coach-marks o spotlight; ver `ui/tutorial/` y `TUTORIAL.md`). Independiente del
      * onboarding de alta de datos (`needsOnboarding`): el tour arranca la primera vez
      * incluso en instalaciones sembradas y se marca al terminar o saltar. Se puede
      * relanzar desde Perfil sin resetear este flag.

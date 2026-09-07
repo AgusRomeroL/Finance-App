@@ -152,6 +152,25 @@ interface PaymentMethodDao {
     suspend fun updateBalance(paymentMethodId: String, newBalance: Double, now: Long = System.currentTimeMillis())
 
     /**
+     * Alineacion one-shot del ancla (Fase 2): iguala el saldo declarado al
+     * guardado y estampa la fecha, en todas las cuentas del hogar.
+     *
+     * Va aqui y no en la migracion porque el sembrado de la app corre DESPUES de
+     * la cadena de migraciones y mueve los saldos con movimientos de fecha
+     * historica: el ancla quedaria por delante de ellos y una instalacion limpia
+     * arrancaria avisando de una divergencia que no existe.
+     */
+    @Query(
+        """
+        UPDATE payment_method
+        SET opening_balance_mxn = current_balance_mxn,
+            balance_anchor_at   = :now
+        WHERE household_id = :householdId
+        """
+    )
+    suspend fun alignAnchorsToCurrent(householdId: String, now: Long)
+
+    /**
      * Escritura ABSOLUTA del saldo que ademas RE-ANCLA: fija el saldo guardado,
      * lo copia al saldo declarado y mueve la fecha del ancla a [now].
      *

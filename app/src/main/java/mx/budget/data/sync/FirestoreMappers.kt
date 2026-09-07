@@ -13,6 +13,7 @@ import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
 import mx.budget.data.local.entity.SavingsGoalEntity
+import mx.budget.data.local.entity.StatementImportEntity
 import mx.budget.data.local.entity.WalletTransferEntity
 
 /**
@@ -49,7 +50,7 @@ private fun DocumentSnapshot.bool(camel: String, snake: String): Boolean? =
 /**
  * Lápida (tombstone) de borrado remoto: epoch ms en que el doc fue
  * soft-deleteado, o 0 si el doc está vivo. Con fallback dual camel/snake como
- * el resto de los campos. IMPORTANTE: se lee ANTES de mapear a entidad —
+ * el resto de los campos. IMPORTANTE: se lee ANTES de mapear a entidad,
  * un doc lápida viene con el resto de campos limpiados, así que el mapper
  * normal devolvería null (faltan campos obligatorios) y el borrado se
  * perdería si se mapeara primero.
@@ -117,6 +118,34 @@ fun DocumentSnapshot.toHouseholdEntity(): HouseholdEntity? {
         timezone = str("timezone", "timezone") ?: "America/Mexico_City",
         quincenaAnchor = str("quincenaAnchor", "quincena_anchor") ?: "CALENDAR",
         createdAt = lng("createdAt", "created_at") ?: 0L,
+        updatedAt = lng("updatedAt", "updated_at") ?: 0L,
+    )
+}
+
+/**
+ * Auditoría de estados de cuenta. El documento remoto NO trae `payload_json` (el
+ * texto crudo del LLM se queda en el dispositivo que importó el PDF), así que la
+ * fila local nace con `"{}"`: es un marcador de "importado", suficiente para el
+ * checklist mensual, la tarjeta de deuda y el recordatorio de pago.
+ */
+fun DocumentSnapshot.toStatementImportEntity(): StatementImportEntity? {
+    return StatementImportEntity(
+        id = id.ifBlank { str("id", "id") ?: return null },
+        householdId = str("householdId", "household_id") ?: return null,
+        walletId = str("walletId", "wallet_id"),
+        emisor = str("emisor", "emisor"),
+        last4 = str("last4", "last4"),
+        periodoInicio = str("periodoInicio", "periodo_inicio"),
+        periodoFin = str("periodoFin", "periodo_fin"),
+        fechaCorte = str("fechaCorte", "fecha_corte"),
+        fechaLimitePago = str("fechaLimitePago", "fecha_limite_pago"),
+        saldoTotal = dbl("saldoTotal", "saldo_total"),
+        pagoMinimo = dbl("pagoMinimo", "pago_minimo"),
+        pagoNoIntereses = dbl("pagoNoIntereses", "pago_no_intereses"),
+        tasaAnual = dbl("tasaAnual", "tasa_anual"),
+        payloadJson = str("payloadJson", "payload_json") ?: "{}",
+        createdAt = lng("createdAt", "created_at") ?: 0L,
+        appliedAt = lng("appliedAt", "applied_at"),
         updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }
