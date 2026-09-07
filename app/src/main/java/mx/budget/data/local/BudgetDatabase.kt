@@ -75,7 +75,7 @@ import mx.budget.data.local.entity.WalletTransferEntity
         StatementImportEntity::class,
         StatementLineEntity::class
     ],
-    version = 19,
+    version = 20,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -107,7 +107,7 @@ abstract class BudgetDatabase : RoomDatabase() {
 
     abstract fun incomeSourceDao(): IncomeSourceDao
 
-    // MVP Fase 3 — DAOs sobre tablas existentes desde v1 (añadir un @Dao NO
+    // MVP Fase 3: DAOs sobre tablas existentes desde v1 (añadir un @Dao NO
     // cambia el esquema ni exige migración).
     abstract fun analyticsDao(): AnalyticsDao
 
@@ -232,7 +232,7 @@ abstract class BudgetDatabase : RoomDatabase() {
          */
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // CREATE TABLE — reemplazar por el createSql EXACTO de schemas/6.json.
+                // CREATE TABLE: reemplazar por el createSql EXACTO de schemas/6.json.
                 db.execSQL("CREATE TABLE IF NOT EXISTS `pending_capture` (`id` TEXT NOT NULL, `source` TEXT NOT NULL, `amount_mxn` REAL NOT NULL, `concept` TEXT NOT NULL, `occurred_at` INTEGER NOT NULL, `suggested_wallet_id` TEXT, `suggested_category_id` TEXT, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `bank_id` TEXT, `bank_name` TEXT, `bank_package` TEXT, `last4` TEXT, `raw_text` TEXT, `recurrence_id` TEXT, `latitude` REAL, `longitude` REAL, `place_label` TEXT, `location_source` TEXT, PRIMARY KEY(`id`))")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_pending_capture_status` ON `pending_capture` (`status`)")
                 db.execSQL(
@@ -267,7 +267,7 @@ abstract class BudgetDatabase : RoomDatabase() {
 
         /**
          * v7 → v8: **saldo inicial (ancla) del wallet**. Añade
-         * `payment_method.opening_balance_mxn` — el punto de partida que el usuario
+         * `payment_method.opening_balance_mxn`, el punto de partida que el usuario
          * declara al alta/edición, base de `saldo = inicial + Σ ingresos − Σ gastos`.
          *
          * Columna nueva por `ALTER TABLE ADD COLUMN` con `NOT NULL DEFAULT 0` (los 13
@@ -362,10 +362,10 @@ abstract class BudgetDatabase : RoomDatabase() {
          * entidades para que el identityHash de `app/schemas/13.json` valide:
          *
          * - `pending_capture.enrich_status` (`NOT NULL DEFAULT 'READY'`): estado
-         *   del enriquecimiento async de la captura por voz/NL — la tarjeta nace
+         *   del enriquecimiento async de la captura por voz/NL: la tarjeta nace
          *   inmediata como `ENRICHING` (acciones bloqueadas) y pasa a `READY`.
          * - `income_source.color_hex` (nullable): color de identidad visual.
-         * - `category.updated_at` (`NOT NULL DEFAULT 0`): LWW del sync — la app
+         * - `category.updated_at` (`NOT NULL DEFAULT 0`): LWW del sync: la app
          *   ahora escribe categorías localmente (alta inline en captura, edición
          *   de color), así que el pull debe gatearse como expense/payment_method.
          */
@@ -385,13 +385,13 @@ abstract class BudgetDatabase : RoomDatabase() {
          *
          * - `expense.settlement_status` (`NOT NULL DEFAULT 'NONE'`): NONE |
          *   PENDING_REIMBURSEMENT | ABSORBED | REIMBURSED.
-         * - `expense.external_payer_member_id` (nullable, index — sin FK, mismo
+         * - `expense.external_payer_member_id` (nullable, index, sin FK, mismo
          *   criterio que sync_queue): tercero que desembolsó.
          * - `updated_at` (`NOT NULL DEFAULT 0`) en `member`, `quincena` y
          *   `household`: LWW del sync (antes solo-pull con REPLACE).
          *
          * `pending_capture.source` admite ahora `'REMOTE'` (propuestas de
-         * colaboradores) sin cambio de esquema — es texto libre.
+         * colaboradores) sin cambio de esquema: es texto libre.
          */
         val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -405,7 +405,7 @@ abstract class BudgetDatabase : RoomDatabase() {
         }
 
         /**
-         * v14 → v15: **Fase C, paquete C1** — importación de estados de cuenta
+         * v14 → v15: **Fase C, paquete C1**: importación de estados de cuenta
          * bancarios con LLM cloud. Crea la tabla LOCAL-ONLY `statement_import`
          * (auditoría de cada import) + índice por hogar. Sin FK (mismo criterio que
          * `sync_queue` / `pending_capture`): el import se registra antes de elegir
@@ -423,7 +423,7 @@ abstract class BudgetDatabase : RoomDatabase() {
         }
 
         /**
-         * v15 → v16: **Fase 5 — pre-match de estados de cuenta sin duplicar**.
+         * v15 → v16: **Fase 5, pre-match de estados de cuenta sin duplicar**.
          * Crea la tabla LOCAL-ONLY `statement_line` (una fila por movimiento del
          * estado importado, con su resultado de conciliación contra `expense`) +
          * índice UNIQUE `(wallet_id, line_fingerprint)` que hace idempotente el
@@ -507,13 +507,32 @@ abstract class BudgetDatabase : RoomDatabase() {
          * CRUD de plantillas vive también en la web) y entra al contrato LWW
          * estándar: se añade `updated_at` (`NOT NULL DEFAULT 0`, coincidente con
          * el `@ColumnInfo(defaultValue = "0")` de la entidad para que el
-         * identityHash de `app/schemas/19.json` valide — mismo patrón que
+         * identityHash de `app/schemas/19.json` valide, mismo patrón que
          * v10→v11/v11→v12). `addColumnIfMissing` por consistencia con
          * v16→v17/v17→v18 (DBs de ramas divergentes).
          */
         val MIGRATION_18_19 = object : Migration(18, 19) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.addColumnIfMissing("recurrence_template", "updated_at", "INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v19 -> v20: **normaliza el estado de los planes MSI terminados**.
+         *
+         * El ETL escribia `PAID` y el runtime siempre uso `PAID_OFF`
+         * ([mx.budget.core.model.InstallmentStatus]). Un plan con `PAID` quedaba
+         * invisible en toda la app, porque cada consulta filtra por `ACTIVE`, y
+         * habria reventado el converter, que hace `valueOf`. La semilla vigente
+         * no tiene ningun plan terminado, asi que el defecto estaba latente.
+         *
+         * Es la primera migracion de datos del proyecto: no toca el esquema, solo
+         * reescribe valores. Idempotente por construccion, porque el `WHERE`
+         * deja de encontrar filas en cuanto corre una vez.
+         */
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("UPDATE `installment_plan` SET `status` = 'PAID_OFF' WHERE `status` = 'PAID'")
             }
         }
     }

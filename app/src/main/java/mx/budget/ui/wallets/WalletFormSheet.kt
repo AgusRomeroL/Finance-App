@@ -40,6 +40,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.ui.common.sanitizeAmountInput
+import mx.budget.ui.common.toAmountInput
+import mx.budget.ui.common.toAmountOrNull
 import mx.budget.ui.common.LocalSessionMemberId
 import mx.budget.ui.common.youLabel
 import java.util.UUID
@@ -57,19 +60,16 @@ private val KIND_OPTIONS = listOf(
 
 private val CREDIT_KINDS = setOf("CREDIT_CARD", "DEPARTMENT_STORE_CARD", "BNPL_INSTALLMENT")
 
-private fun String.toDoubleOrNullClean(): Double? =
-    filter { it.isDigit() || it == '.' }.toDoubleOrNull()
-
 private fun String.toIntOrNullClean(): Int? =
     filter { it.isDigit() }.toIntOrNull()
 
 /**
- * Alta/edición de un wallet (Fase 1 — ancla del saldo). `initial = null` = nuevo.
+ * Alta/edición de un wallet (Fase 1, ancla del saldo). `initial = null` = nuevo.
  * Captura el **saldo inicial** declarado por el usuario (en crédito = deuda actual)
  * y, para tipos de crédito, límite/corte/pago/APR. Sigue el patrón de
  * `CaptureBottomSheet`/`NewPlannedSheet` (ModalBottomSheet acotado a 640dp).
  *
- * **Efectivo a hijos — "billete $500" (Fase B, B3).** Un sub-wallet `kind=CASH` con
+ * **Efectivo a hijos, "billete $500" (Fase B, B3).** Un sub-wallet `kind=CASH` con
  * dueño (owner_member_id) modela el efectivo que un hijo trae encima ("Efectivo
  * David"). El flujo NO requiere esquema nuevo, se apoya en lo existente:
  *  1. Al entregar el billete: una **transferencia** (wallet_transfer, RF-41) de una
@@ -97,11 +97,11 @@ fun WalletFormSheet(
     var kind by rememberSaveable { mutableStateOf(initial?.kind ?: "DEBIT_ACCOUNT") }
     var ownerId by rememberSaveable { mutableStateOf(initial?.ownerMemberId) }
     var opening by rememberSaveable {
-        mutableStateOf(initial?.openingBalanceMxn?.takeIf { it != 0.0 }?.toLong()?.toString() ?: "")
+        mutableStateOf(initial?.openingBalanceMxn?.takeIf { it != 0.0 }?.toAmountInput() ?: "")
     }
     var issuer by rememberSaveable { mutableStateOf(initial?.issuer ?: "") }
     var last4 by rememberSaveable { mutableStateOf(initial?.last4 ?: "") }
-    var limit by rememberSaveable { mutableStateOf(initial?.creditLimitMxn?.toLong()?.toString() ?: "") }
+    var limit by rememberSaveable { mutableStateOf(initial?.creditLimitMxn?.toAmountInput() ?: "") }
     var cutoff by rememberSaveable { mutableStateOf(initial?.cutoffDay?.toString() ?: "") }
     var due by rememberSaveable { mutableStateOf(initial?.dueDay?.toString() ?: "") }
     var apr by rememberSaveable { mutableStateOf(initial?.interestApr?.toString() ?: "") }
@@ -186,7 +186,7 @@ fun WalletFormSheet(
 
             OutlinedTextField(
                 value = opening,
-                onValueChange = { opening = it.filter { c -> c.isDigit() || c == '.' } },
+                onValueChange = { opening = sanitizeAmountInput(it) },
                 label = { Text(if (isCredit) "Deuda actual (MXN)" else "Saldo inicial (MXN)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
@@ -196,7 +196,7 @@ fun WalletFormSheet(
             if (isCredit) {
                 OutlinedTextField(
                     value = limit,
-                    onValueChange = { limit = it.filter { c -> c.isDigit() || c == '.' } },
+                    onValueChange = { limit = sanitizeAmountInput(it) },
                     label = { Text("Límite de crédito (MXN)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
@@ -239,7 +239,9 @@ fun WalletFormSheet(
                 }
                 OutlinedTextField(
                     value = apr,
-                    onValueChange = { apr = it.filter { c -> c.isDigit() || c == '.' } },
+                    onValueChange = { new -> apr = new.filter { c -> c.isDigit() || c == '.' }.let { t ->
+                            val d = t.indexOf('.'); if (d < 0) t else t.substring(0, d + 1) + t.substring(d + 1).replace(".", "")
+                        } },
                     label = { Text("Tasa anual % (APR)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
@@ -252,7 +254,7 @@ fun WalletFormSheet(
                 TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancelar") }
                 Button(
                     onClick = {
-                        val openingVal = opening.toDoubleOrNullClean() ?: 0.0
+                        val openingVal = opening.toAmountOrNull() ?: 0.0
                         onSave(
                             PaymentMethodEntity(
                                 id = initial?.id ?: UUID.randomUUID().toString(),
@@ -263,12 +265,12 @@ fun WalletFormSheet(
                                 last4 = if (isCredit) last4.ifBlank { null } else null,
                                 cutoffDay = if (isCredit) cutoff.toIntOrNullClean() else null,
                                 dueDay = if (isCredit) due.toIntOrNullClean() else null,
-                                creditLimitMxn = if (isCredit) limit.toDoubleOrNullClean() else null,
+                                creditLimitMxn = if (isCredit) limit.toAmountOrNull() else null,
                                 // Fase 1: el saldo mostrado lee current_balance_mxn, así que
                                 // current arranca = saldo inicial declarado. La Fase 2 lo derivará.
                                 currentBalanceMxn = openingVal,
                                 openingBalanceMxn = openingVal,
-                                interestApr = if (isCredit) apr.toDoubleOrNullClean() else null,
+                                interestApr = if (isCredit) apr.toAmountOrNull() else null,
                                 ownerMemberId = ownerId,
                                 isActive = true,
                             )

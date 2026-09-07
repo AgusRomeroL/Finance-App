@@ -1,4 +1,4 @@
-# Semilla original (golden) — base de datos del Excel
+# Semilla original (golden): base de datos del Excel
 
 Este directorio guarda la **copia inmutable** de la base de datos original: el Excel
 real de 33 hojas (ene-2025 → jun-2026) convertido a SQLite por el ETL. Es la fuente
@@ -6,13 +6,13 @@ de verdad histórica del hogar (793 gastos sembrados). **No la edites a mano.**
 
 ## Archivos
 
-- `budget_database.golden.db` — la DB original, congelada. Schema **v1**, `PRAGMA user_version = 1`.
-- `budget_database.golden.db.sha256` — su checksum, para detectar cualquier deriva.
+- `budget_database.golden.db`: la DB original, congelada. Schema **v1**, `PRAGMA user_version = 1`.
+- `budget_database.golden.db.sha256`: su checksum, para detectar cualquier deriva.
 
 ## Invariante
 
-El asset que **se embarca** en la app —
-`app/src/main/assets/budget_database.db` — debe ser **idéntico** a este golden,
+El asset que **se embarca** en la app,
+`app/src/main/assets/budget_database.db`, debe ser **idéntico** a este golden,
 salvo que regeneres la semilla a propósito (ver abajo). Así, por más cambios que
 hagamos en el código (migraciones Room en runtime, pruebas, manipulación en el
 emulador), la versión final de la app siempre arranca con los datos originales.
@@ -54,3 +54,9 @@ printf '%s  budget_database.golden.db\n' \
 ```
 Commitea el golden, su `.sha256` y el asset juntos, con un mensaje que explique
 por qué cambió la semilla.
+
+## Regeneraciones deliberadas
+
+| Fecha | Motivo | Checksum resultante |
+|---|---|---|
+| 2026-09-06 | Fase 1 del cierre. Se corrigio el ETL, que escribia `PAID` donde el runtime lee `PAID_OFF`, y se regenero desde `Copy of presupuesto 2.5 (1).xlsx` con `BUDGET_TODAY=2026-07-07`. El estado MSI no cambio en los datos (los dos planes siguen `ACTIVE`), pero la regeneracion si alineo el golden con el ETL actual: desaparecen las cuatro plantillas de consumo variable (Walmart, Comida Gatas, Benji, y Normita, David y Agus) que el ETL dejo de generar y que la app ya pausaba al arrancar en `TemplateCurationInitializer`, y se reescriben las marcas de generacion `created_at` y `closed_at`. El resto del contenido es identico fila por fila. | `f1c541e3...` |

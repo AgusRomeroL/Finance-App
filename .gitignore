@@ -43,3 +43,7 @@ scripts/etl/__pycache__/
 Estados de Cuenta/
 Copy of presupuesto 2.5 (2).xlsx
 Copy of presupuesto*.xlsx
+
+# Temporales de SQLite (los crea cualquier lectura de la semilla)
+*.db-shm
+*.db-wal

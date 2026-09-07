@@ -2358,7 +2358,9 @@ class EtlPipeline:
             installment_amount = amounts[len(amounts) // 2]  # mediana
             principal = round(installment_amount * total, 2)
             current = min(len(rows), total)  # pagos ya ocurridos (todos POSTED)
-            status = "PAID" if current >= total else "ACTIVE"
+            # PAID_OFF es el valor que usa el runtime (InstallmentStatus); escribir
+            # "PAID" dejaba el plan invisible para la app y reventaba el converter.
+            status = "PAID_OFF" if current >= total else "ACTIVE"
             start_date = datetime.fromtimestamp(
                 rows[0][1] / 1000, tz=timezone.utc
             ).date().isoformat()

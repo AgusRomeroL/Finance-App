@@ -12,6 +12,9 @@ import androidx.compose.foundation.clickable
 import mx.budget.ui.common.KpiCard
 import mx.budget.ui.common.ScreenHeader
 import mx.budget.ui.common.AppLocale
+import mx.budget.ui.common.sanitizeAmountInput
+import mx.budget.ui.common.toAmountInput
+import mx.budget.ui.common.toAmountOrNull
 import mx.budget.ui.common.TransferRow
 import mx.budget.ui.common.pressScale
 import mx.budget.ui.common.rememberPressInteractionSource
@@ -94,19 +97,6 @@ import java.util.Date
 private val dayFmt = java.text.SimpleDateFormat("EEE d MMM", AppLocale)
 private fun formatDay(epochMillis: Long): String =
     dayFmt.format(Date(epochMillis)).replaceFirstChar { it.uppercase() }
-
-/**
- * Limpia la entrada de un monto: conserva dígitos, un solo punto decimal y hasta
- * 2 decimales. Evita entradas malformadas ("1.2.3") que rompían el parseo.
- */
-private fun sanitizeAmountInput(raw: String): String {
-    val filtered = raw.filter { it.isDigit() || it == '.' }
-    val dot = filtered.indexOf('.')
-    if (dot < 0) return filtered
-    val intPart = filtered.substring(0, dot)
-    val decPart = filtered.substring(dot + 1).filter { it.isDigit() }.take(2)
-    return "$intPart.$decPart"
-}
 
 /** Kinds líquidos: el saldo es disponible, no deuda. */
 private val LIQUID_KINDS = setOf("DEBIT_ACCOUNT", "CASH", "DIGITAL_WALLET", "EMPLOYER_SAVINGS_FUND")
@@ -1044,7 +1034,7 @@ private fun ReconcileDialog(
     onDismiss: () -> Unit,
 ) {
     val credit = !isLiquid(wallet.kind)
-    var text by remember { mutableStateOf(wallet.balance.toLong().toString()) }
+    var text by remember { mutableStateOf(wallet.balance.toAmountInput()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Conciliar saldo") },
@@ -1067,8 +1057,8 @@ private fun ReconcileDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { text.toDoubleOrNull()?.let(onConfirm) },
-                enabled = text.toDoubleOrNull() != null,
+                onClick = { text.toAmountOrNull()?.let(onConfirm) },
+                enabled = text.toAmountOrNull() != null,
             ) { Text("Conciliar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
