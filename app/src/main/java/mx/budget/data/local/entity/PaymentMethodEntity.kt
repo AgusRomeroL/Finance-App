@@ -72,22 +72,46 @@ data class PaymentMethodEntity(
     val creditLimitMxn: Double? = null,
 
     /**
-     * Saldo actual calculado.
-     * - Para débito/efectivo: saldo disponible (disminuye con gastos).
-     * - Para crédito: deuda pendiente (aumenta con gastos).
-     * Se actualiza via trigger SQL en cada INSERT de expense POSTED.
+     * Saldo guardado y mantenido. En débito, efectivo, digital y ahorro es el
+     * dinero disponible; en crédito, departamental y BNPL es la deuda.
+     *
+     * NO hay triggers SQL (el comentario que lo afirmaba era falso): lo mueven
+     * los repos con `adjustBalance` en cada gasto, ingreso o transferencia, y lo
+     * fijan de golpe con `updateBalance` la conciliación manual y la aplicación
+     * de un estado de cuenta.
+     *
+     * Se mantiene por deltas locales pero viaja a Firestore como snapshot con
+     * LWW, así que puede derivar entre dispositivos. La deriva no se previene:
+     * se hace visible comparando contra [openingBalanceMxn] más los movimientos
+     * posteriores a [balanceAnchorAt] (ver `PaymentMethodDao.observeDerivedBalances`).
      */
     @ColumnInfo(name = "current_balance_mxn")
     val currentBalanceMxn: Double = 0.0,
 
     /**
-     * Saldo inicial (ancla) declarado por el usuario al dar de alta/editar el
-     * wallet. Es el punto de partida de la identidad contable
-     * `saldo = saldo_inicial + Σ ingresos − Σ gastos`. En débito/efectivo es el
-     * dinero disponible hoy; en crédito es la deuda actual. Migración v7→v8.
+     * Saldo declarado en el ancla: el punto de partida de la identidad contable
+     * `saldo = saldo_inicial + Σ entradas − Σ salidas`, contando solo los
+     * movimientos posteriores a [balanceAnchorAt]. Migración v7 a v8.
+     *
+     * Hasta la Fase 2 era un campo muerto: nadie lo usaba para calcular nada y
+     * el formulario de la cuenta lo copiaba encima del saldo actual en cada
+     * edición, de modo que renombrar una tarjeta le reseteaba el saldo.
      */
     @ColumnInfo(name = "opening_balance_mxn", defaultValue = "0")
     val openingBalanceMxn: Double = 0.0,
+
+    /**
+     * Instante (epoch millis) hasta el cual los movimientos ya están contenidos
+     * en [openingBalanceMxn]. Todo gasto, ingreso o transferencia posterior es lo
+     * que separa el saldo declarado del saldo actual. Migración v20 a v21.
+     *
+     * Lo re-estampa cada escritura absoluta del saldo (alta de la cuenta,
+     * conciliación manual, aplicación de un estado de cuenta): tras cualquiera de
+     * ellas el saldo derivado vuelve a coincidir con el guardado por construcción.
+     * En 0 significa "sin ancla declarada" y el saldo derivado no se compara.
+     */
+    @ColumnInfo(name = "balance_anchor_at", defaultValue = "0")
+    val balanceAnchorAt: Long = 0,
 
     /** Tasa de interés anual si aplica. */
     @ColumnInfo(name = "interest_apr")

@@ -165,6 +165,7 @@ fun DocumentSnapshot.toPaymentMethodEntity(): PaymentMethodEntity? {
         creditLimitMxn = dbl("creditLimitMxn", "credit_limit_mxn"),
         currentBalanceMxn = dbl("currentBalanceMxn", "current_balance_mxn") ?: 0.0,
         openingBalanceMxn = dbl("openingBalanceMxn", "opening_balance_mxn") ?: 0.0,
+        balanceAnchorAt = lng("balanceAnchorAt", "balance_anchor_at") ?: 0L,
         interestApr = dbl("interestApr", "interest_apr"),
         ownerMemberId = str("ownerMemberId", "owner_member_id"),
         isActive = bool("isActive", "is_active") ?: true,

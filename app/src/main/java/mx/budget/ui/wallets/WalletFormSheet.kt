@@ -255,6 +255,14 @@ fun WalletFormSheet(
                 Button(
                     onClick = {
                         val openingVal = opening.toAmountOrNull() ?: 0.0
+                        // ¿El usuario tocó el saldo inicial? Solo entonces se re-ancla.
+                        // Antes esta pantalla copiaba SIEMPRE el saldo inicial encima
+                        // del saldo actual, así que renombrar una tarjeta o corregirle
+                        // el límite le borraba de un plumazo todo lo gastado desde el
+                        // alta. En una edición que no toca el saldo, el guardado y el
+                        // ancla se conservan tal cual.
+                        val reanchored = initial == null || openingVal != (initial.openingBalanceMxn)
+                        val now = System.currentTimeMillis()
                         onSave(
                             PaymentMethodEntity(
                                 id = initial?.id ?: UUID.randomUUID().toString(),
@@ -266,10 +274,9 @@ fun WalletFormSheet(
                                 cutoffDay = if (isCredit) cutoff.toIntOrNullClean() else null,
                                 dueDay = if (isCredit) due.toIntOrNullClean() else null,
                                 creditLimitMxn = if (isCredit) limit.toAmountOrNull() else null,
-                                // Fase 1: el saldo mostrado lee current_balance_mxn, así que
-                                // current arranca = saldo inicial declarado. La Fase 2 lo derivará.
-                                currentBalanceMxn = openingVal,
+                                currentBalanceMxn = if (reanchored) openingVal else initial.currentBalanceMxn,
                                 openingBalanceMxn = openingVal,
+                                balanceAnchorAt = if (reanchored) now else initial.balanceAnchorAt,
                                 interestApr = if (isCredit) apr.toAmountOrNull() else null,
                                 ownerMemberId = ownerId,
                                 isActive = true,

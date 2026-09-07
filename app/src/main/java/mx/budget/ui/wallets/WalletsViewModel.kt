@@ -19,6 +19,7 @@ import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.WalletTransferEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.TransferWithNames
+import mx.budget.data.local.result.WalletBalanceDrift
 import mx.budget.data.local.result.WalletBalanceInfo
 import mx.budget.data.local.entity.InstallmentPlanEntity
 import mx.budget.data.local.entity.LoanEntity
@@ -63,7 +64,7 @@ class WalletsViewModel(
     private val quincenaRepository: QuincenaRepository,
     private val expenseDao: ExpenseDao,
     private val householdId: String,
-    // MVP Fase 3 — hoja de balance (opcionales para no romper llamadas previas).
+    // MVP Fase 3: hoja de balance (opcionales para no romper llamadas previas).
     private val savingsRepository: SavingsRepository? = null,
     private val loanRepository: LoanRepository? = null,
     private val installmentRepository: InstallmentRepository? = null,
@@ -131,6 +132,21 @@ class WalletsViewModel(
             }.sortedByDescending { it.saldo }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * Divergencia por cuenta: saldo guardado frente al que se deduce de los
+     * movimientos desde el ancla. Solo se exponen las cuentas que de verdad
+     * divergen, para que la pantalla no tenga que filtrar nada.
+     *
+     * Existe porque el saldo se mantiene por deltas locales pero se sincroniza
+     * como snapshot con LWW: dos dispositivos con la MISMA lista de gastos
+     * pueden acabar mostrando saldos distintos. La deriva no se previene; se
+     * hace visible y se corrige en un toque desde la conciliación.
+     */
+    val drifts: StateFlow<Map<String, WalletBalanceDrift>> =
+        walletRepository.observeDerivedBalances(householdId)
+            .map { list -> list.filter { it.hasDrift }.associateBy { it.paymentMethodId } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     /** Líquido disponible: suma de saldos de wallets de tipo líquido. */
     val liquidTotal: StateFlow<Double> =
         balances
@@ -175,10 +191,10 @@ class WalletsViewModel(
     }
 
     /**
-     * Conciliación manual (RF-42): re-ancla el saldo al valor real del estado de
-     * cuenta. Es la válvula de corrección del modelo guardado+mantenido (Fase 2),
-     * que puede derivar al editar/borrar gastos. Fija `current_balance_mxn` absoluto
-     * (en crédito = deuda real) y encola sync.
+     * Conciliación manual (RF-42): fija el saldo real y RE-ANCLA (el saldo pasa a
+     * ser el declarado y la fecha del ancla se mueve a ahora), así que tras
+     * llamarla el saldo derivado vuelve a coincidir por construcción y el aviso
+     * de divergencia desaparece. Encola el push del wallet.
      */
     fun reconcileWallet(paymentMethodId: String, newBalance: Double) {
         viewModelScope.launch { walletRepository.reconcileBalance(paymentMethodId, newBalance) }

@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Storefront
@@ -87,6 +88,7 @@ import mx.budget.data.local.result.WalletBalanceInfo
 import mx.budget.ui.dashboard.iconForCategory
 import mx.budget.ui.theme.FinancialTone
 import mx.budget.ui.theme.amountSemantic
+import mx.budget.ui.theme.BudgetMotion
 import mx.budget.ui.theme.financeColors
 import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
@@ -140,6 +142,7 @@ fun WalletsScreen(
     onOpenMemberBalances: (() -> Unit)? = null,
 ) {
     val balances by viewModel.balances.collectAsState()
+    val drifts by viewModel.drifts.collectAsState()
     val revolvingDebt by viewModel.revolvingDebt.collectAsState()
     val liquidTotal by viewModel.liquidTotal.collectAsState()
     val selected by viewModel.selected.collectAsState()
@@ -228,6 +231,7 @@ fun WalletsScreen(
                 Row(modifier = Modifier.fillMaxSize()) {
                     WalletList(
                         balances = balances,
+                        drifts = drifts,
                         liquidTotal = liquidTotal,
                         revolvingDebt = revolvingDebt,
                         selectedId = selected?.paymentMethodId,
@@ -253,6 +257,7 @@ fun WalletsScreen(
             } else {
                 WalletList(
                     balances = balances,
+                    drifts = drifts,
                     liquidTotal = liquidTotal,
                     revolvingDebt = revolvingDebt,
                     selectedId = null,
@@ -288,6 +293,7 @@ fun WalletsScreen(
     if (showReconcile && toReconcile != null) {
         ReconcileDialog(
             wallet = toReconcile,
+            drift = drifts[toReconcile.paymentMethodId],
             onConfirm = { newBalance ->
                 viewModel.reconcileWallet(toReconcile.paymentMethodId, newBalance)
                 showReconcile = false
@@ -525,6 +531,7 @@ private fun Header(
 @Composable
 private fun WalletList(
     balances: List<WalletBalanceInfo>,
+    drifts: Map<String, mx.budget.data.local.result.WalletBalanceDrift>,
     liquidTotal: Double,
     revolvingDebt: Double,
     selectedId: String?,
@@ -604,6 +611,7 @@ private fun WalletList(
             items(items, key = { it.paymentMethodId }) { w ->
                 WalletCard(
                     wallet = w,
+                    drift = drifts[w.paymentMethodId],
                     selected = w.paymentMethodId == selectedId,
                     onClick = { onSelect(w.paymentMethodId) },
                     onLongClick = { onEdit(w.paymentMethodId) },
@@ -744,6 +752,7 @@ private fun SectionHeader(label: String) {
 @Composable
 private fun WalletCard(
     wallet: WalletBalanceInfo,
+    drift: mx.budget.data.local.result.WalletBalanceDrift?,
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -822,6 +831,39 @@ private fun WalletCard(
                     color = sem.color,
                     maxLines = 1,
                 )
+            }
+        }
+
+        // Divergencia: el saldo guardado ya no cuadra con los movimientos desde el
+        // saldo declarado. Pasa cuando dos dispositivos editan a la vez (el saldo
+        // se mantiene por deltas pero se sincroniza como snapshot con LWW) o al
+        // editar un gasto anterior al ancla. Se dice cuanto y se ofrece arreglarlo
+        // desde "Conciliar saldo".
+        AnimatedVisibility(
+            visible = drift != null,
+            enter = fadeIn(BudgetMotion.standard()),
+            exit = fadeOut(BudgetMotion.standard()),
+        ) {
+            if (drift != null) {
+                val warn = MaterialTheme.financeColors.warning
+                Column {
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(
+                            Icons.Filled.ErrorOutline,
+                            contentDescription = null,
+                            tint = warn,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "Revisar saldo: los movimientos dan " +
+                                drift.derivedBalance.toMxn() + ". Concilia para corregirlo.",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = warn,
+                        )
+                    }
+                }
             }
         }
 
@@ -1064,10 +1106,16 @@ private fun HeaderAction(icon: ImageVector, description: String, onClick: () -> 
 /**
  * Conciliación manual (RF-42): fija el saldo real del wallet. En crédito pide la
  * deuda real. Reusa el patrón de `EditAmountDialog` del calendario.
+ *
+ * Cuando hay [drift] la conciliación deja de ser a ciegas: se dice cuánto y hacia
+ * dónde difiere el saldo guardado de lo que suman los movimientos, y un botón
+ * rellena el campo con el saldo calculado. Confirmar re-ancla, así que el aviso
+ * desaparece en vez de reaparecer al instante.
  */
 @Composable
 private fun ReconcileDialog(
     wallet: WalletBalanceInfo,
+    drift: mx.budget.data.local.result.WalletBalanceDrift?,
     onConfirm: (Double) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1098,6 +1146,24 @@ private fun ReconcileDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                 )
+                if (drift != null) {
+                    Spacer(Modifier.height(12.dp))
+                    val warn = MaterialTheme.financeColors.warning
+                    val sobra = drift.delta > 0
+                    Text(
+                        "El saldo guardado es " + drift.storedBalance.toMxn() +
+                            ", pero los movimientos registrados desde el saldo declarado dan " +
+                            drift.derivedBalance.toMxn() + ": " +
+                            (if (sobra) "sobran " else "faltan ") +
+                            kotlin.math.abs(drift.delta).toMxn() + ".",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = warn,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    TextButton(onClick = { text = drift.derivedBalance.toAmountInput() }) {
+                        Text("Usar el saldo calculado")
+                    }
+                }
             }
         },
         confirmButton = {

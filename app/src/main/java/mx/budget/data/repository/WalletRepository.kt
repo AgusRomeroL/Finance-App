@@ -45,4 +45,11 @@ interface WalletRepository {
      * Registra la diferencia como ajuste en el log de auditoría.
      */
     suspend fun reconcileBalance(paymentMethodId: String, newBalance: Double)
+
+    /**
+     * Saldo guardado frente al saldo que se deduce de los movimientos desde el
+     * ancla, por cuenta activa. Alimenta el aviso de divergencia de Cuentas y el
+     * valor sugerido de la conciliación asistida.
+     */
+    fun observeDerivedBalances(householdId: String): kotlinx.coroutines.flow.Flow<List<mx.budget.data.local.result.WalletBalanceDrift>>
 }

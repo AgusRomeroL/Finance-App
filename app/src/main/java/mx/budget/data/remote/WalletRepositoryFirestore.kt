@@ -118,8 +118,30 @@ class WalletRepositoryFirestore(
         insert(paymentMethod)
     }
 
+    /**
+     * No-op: la divergencia se calcula sobre Room, que es la fuente de verdad.
+     * El lado nube no tiene el historial completo de movimientos.
+     */
+    override fun observeDerivedBalances(
+        householdId: String
+    ): kotlinx.coroutines.flow.Flow<List<mx.budget.data.local.result.WalletBalanceDrift>> =
+        kotlinx.coroutines.flow.flowOf(emptyList())
+
+    /**
+     * Conciliación directa en la nube. Estampa `updatedAt` y re-ancla igual que
+     * la ruta Room: sin `updatedAt` el documento nunca ganaba el gate LWW del
+     * pull y la corrección no llegaba a ningún dispositivo.
+     */
     override suspend fun reconcileBalance(paymentMethodId: String, newBalance: Double) {
         val matches = firestore.collectionGroup("wallets").whereEqualTo("id", paymentMethodId).get().await()
-        matches.documents.firstOrNull()?.reference?.update("currentBalanceMxn", newBalance)?.await()
+        val now = System.currentTimeMillis()
+        matches.documents.firstOrNull()?.reference?.update(
+            mapOf(
+                "currentBalanceMxn" to newBalance,
+                "openingBalanceMxn" to newBalance,
+                "balanceAnchorAt" to now,
+                "updatedAt" to now,
+            )
+        )?.await()
     }
 }

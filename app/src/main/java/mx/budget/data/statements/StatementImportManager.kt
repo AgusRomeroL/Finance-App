@@ -835,7 +835,12 @@ class StatementImportManager(
         cutoffDay = dayOfMonth(statement.fechaCorte) ?: wallet.cutoffDay,
         dueDay = dayOfMonth(statement.fechaLimitePago) ?: wallet.dueDay,
         // El saldo al corte es la deuda actual del crédito → reconcilia el saldo.
+        // Es una escritura ABSOLUTA, así que también re-ancla: el saldo del estado
+        // pasa a ser el declarado y solo cuentan los movimientos posteriores. Sin
+        // esto el aviso de divergencia saltaba justo después de aplicar un estado.
         currentBalanceMxn = statement.saldoTotal ?: wallet.currentBalanceMxn,
+        openingBalanceMxn = statement.saldoTotal ?: wallet.openingBalanceMxn,
+        balanceAnchorAt = if (statement.saldoTotal != null) System.currentTimeMillis() else wallet.balanceAnchorAt,
         interestApr = statement.tasaAnual ?: wallet.interestApr,
     )
 

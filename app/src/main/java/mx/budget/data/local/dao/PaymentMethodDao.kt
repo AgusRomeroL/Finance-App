@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 import mx.budget.data.local.entity.PaymentMethodEntity
+import mx.budget.data.local.result.WalletBalanceDrift
 import mx.budget.data.local.result.WalletBalanceInfo
 
 @Dao
@@ -42,6 +43,71 @@ interface PaymentMethodDao {
 
     @Query("SELECT current_balance_mxn FROM payment_method WHERE id = :paymentMethodId")
     fun observeBalance(paymentMethodId: String): Flow<Double?>
+
+    /**
+     * Saldo GUARDADO frente al saldo DERIVADO de los movimientos, por cuenta.
+     *
+     * El guardado se mueve por deltas locales y viaja como snapshot con LWW, asi
+     * que puede quedar en un numero que ya no cuadra con la lista de gastos: es
+     * la deriva multi-dispositivo. El derivado es `opening_balance_mxn` mas los
+     * movimientos POSTERIORES a `balance_anchor_at`, o sea funcion pura del
+     * estado de Room; dos dispositivos que ya convergieron en los movimientos
+     * calculan el mismo numero y detectan la misma diferencia.
+     *
+     * El signo sale de la misma regla que usan los repos al mover el saldo: una
+     * entrada sube el saldo liquido y baja la deuda revolvente. Por eso el
+     * multiplicador es -1 en credito, departamental y BNPL, y +1 en el resto.
+     *
+     * Se excluye la cartera virtual EXTERNAL ("Pagado por terceros"): sus gastos
+     * NO mueven ningun saldo real (`ExpenseRepositoryImpl.applyToWallet` sale
+     * antes), asi que compararla daria una divergencia permanente y falsa.
+     *
+     * Los ingresos se filtran por `created_at` porque `income_source` no tiene
+     * fecha de ocurrencia; es una aproximacion aceptable porque el ingreso se
+     * captura dentro de su propia quincena. Gastos y transferencias si usan
+     * `occurred_at`, que es lo que el usuario entiende por "despues del saldo
+     * que declare".
+     *
+     * Anadir un @Query no cambia el esquema ni el identityHash.
+     */
+    @Query(
+        """
+        SELECT
+            pm.id                  AS paymentMethodId,
+            pm.current_balance_mxn AS storedBalance,
+            pm.balance_anchor_at   AS anchorAt,
+            pm.opening_balance_mxn + (
+                CASE WHEN pm.kind IN ('CREDIT_CARD', 'DEPARTMENT_STORE_CARD', 'BNPL_INSTALLMENT')
+                     THEN -1.0 ELSE 1.0 END
+            ) * (
+                COALESCE((
+                    SELECT SUM(i.amount_mxn) FROM income_source i
+                    WHERE i.payment_method_id = pm.id AND i.status = 'POSTED'
+                      AND i.created_at > pm.balance_anchor_at
+                ), 0.0)
+                + COALESCE((
+                    SELECT SUM(t.amount_mxn) FROM wallet_transfer t
+                    WHERE t.to_payment_method_id = pm.id
+                      AND t.occurred_at > pm.balance_anchor_at
+                ), 0.0)
+                - COALESCE((
+                    SELECT SUM(e.amount_mxn) FROM expense e
+                    WHERE e.payment_method_id = pm.id AND e.status = 'POSTED'
+                      AND e.occurred_at > pm.balance_anchor_at
+                ), 0.0)
+                - COALESCE((
+                    SELECT SUM(t.amount_mxn) FROM wallet_transfer t
+                    WHERE t.from_payment_method_id = pm.id
+                      AND t.occurred_at > pm.balance_anchor_at
+                ), 0.0)
+            )                      AS derivedBalance
+        FROM payment_method pm
+        WHERE pm.household_id = :householdId
+          AND pm.is_active = 1
+          AND pm.kind <> 'EXTERNAL'
+        """
+    )
+    fun observeDerivedBalances(householdId: String): Flow<List<WalletBalanceDrift>>
 
     @Query(
         """
@@ -84,6 +150,32 @@ interface PaymentMethodDao {
 
     @Query("UPDATE payment_method SET current_balance_mxn = :newBalance, updated_at = :now WHERE id = :paymentMethodId")
     suspend fun updateBalance(paymentMethodId: String, newBalance: Double, now: Long = System.currentTimeMillis())
+
+    /**
+     * Escritura ABSOLUTA del saldo que ademas RE-ANCLA: fija el saldo guardado,
+     * lo copia al saldo declarado y mueve la fecha del ancla a [now].
+     *
+     * Es lo que convierte la conciliacion en una correccion de verdad: tras
+     * llamarla el saldo derivado ([observeDerivedBalances]) vuelve a coincidir
+     * con el guardado por construccion, porque ya no queda ningun movimiento
+     * posterior al ancla. La usan la conciliacion manual de Cuentas y la
+     * aplicacion de un estado de cuenta.
+     */
+    @Query(
+        """
+        UPDATE payment_method
+        SET current_balance_mxn = :newBalance,
+            opening_balance_mxn = :newBalance,
+            balance_anchor_at   = :now,
+            updated_at          = :now
+        WHERE id = :paymentMethodId
+        """
+    )
+    suspend fun reanchorBalance(
+        paymentMethodId: String,
+        newBalance: Double,
+        now: Long = System.currentTimeMillis(),
+    )
 
     /**
      * Ajuste relativo y atómico del saldo (Fase 2: saldo guardado+mantenido).

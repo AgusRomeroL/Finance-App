@@ -7,6 +7,7 @@ import mx.budget.data.local.dao.PaymentMethodDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.SyncQueueEntity
+import mx.budget.data.local.result.WalletBalanceDrift
 import mx.budget.data.local.result.WalletBalanceInfo
 import mx.budget.data.repository.WalletRepository
 
@@ -36,6 +37,9 @@ class WalletRepositoryImpl(
     override fun observeTotalRevolvingDebt(householdId: String): Flow<Double> =
         dao.observeTotalRevolvingDebt(householdId)
 
+    override fun observeDerivedBalances(householdId: String): Flow<List<WalletBalanceDrift>> =
+        dao.observeDerivedBalances(householdId)
+
     override suspend fun getById(id: String): PaymentMethodEntity? =
         dao.getById(id)
 
@@ -50,7 +54,16 @@ class WalletRepositoryImpl(
 
     override suspend fun insert(paymentMethod: PaymentMethodEntity) {
         db.withTransaction {
-            dao.insert(paymentMethod.copy(updatedAt = System.currentTimeMillis()))
+            val now = System.currentTimeMillis()
+            // Alta de la cuenta: el saldo declarado es el ancla, así que la fecha
+            // se estampa aquí. Si quien llama ya trajo un ancla (por ejemplo el
+            // pull de una copia de seguridad), se respeta.
+            dao.insert(
+                paymentMethod.copy(
+                    updatedAt = now,
+                    balanceAnchorAt = if (paymentMethod.balanceAnchorAt > 0) paymentMethod.balanceAnchorAt else now,
+                )
+            )
             enqueueSync(paymentMethod.id)
         }
     }
@@ -65,9 +78,14 @@ class WalletRepositoryImpl(
         }
     }
 
+    /**
+     * Conciliación manual: fija el saldo Y re-ancla. Antes solo escribía el saldo
+     * guardado, así que la diferencia contra los movimientos seguía ahí y el
+     * aviso de divergencia habría reaparecido de inmediato.
+     */
     override suspend fun reconcileBalance(paymentMethodId: String, newBalance: Double) {
         db.withTransaction {
-            dao.updateBalance(paymentMethodId, newBalance)
+            dao.reanchorBalance(paymentMethodId, newBalance)
             enqueueSync(paymentMethodId)
         }
     }
