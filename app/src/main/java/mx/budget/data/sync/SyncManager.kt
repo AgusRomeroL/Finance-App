@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.withLock
 import mx.budget.data.local.dao.CategoryDao
 import mx.budget.data.local.dao.ExpenseAttributionDao
 import mx.budget.data.local.dao.ExpenseDao
+import mx.budget.data.local.dao.HouseholdDao
 import mx.budget.data.local.dao.MemberDao
 import mx.budget.data.local.dao.IncomeSourceDao
 import mx.budget.data.local.dao.InstallmentPlanDao
@@ -25,6 +26,7 @@ import mx.budget.data.local.dao.RecurrenceTemplateDao
 import mx.budget.data.local.dao.SavingsGoalDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.dao.WalletTransferDao
+import mx.budget.data.remote.HouseholdRepositoryFirestore
 import mx.budget.data.remote.LoanRepositoryFirestore
 import mx.budget.data.remote.RecurrenceRepositoryFirestore
 import mx.budget.data.repository.CategoryRepository
@@ -49,9 +51,9 @@ import mx.budget.data.repository.WalletRepository
  *   `sync_queue`; `drain()` la empuja al repo Firestore correspondiente.
  * - **Pull ([RemotePullSync]):** snapshot listeners sobre las subcolecciones
  *   de Firestore reflejan los cambios remotos en Room. **Anti-eco:** el pull
- *   escribe vía DAO directo (`upsert`), NUNCA por los repos — pasar por los
+ *   escribe vía DAO directo (`upsert`), NUNCA por los repos; pasar por los
  *   repos volvería a encolar en el outbox y crearía un bucle push↔pull.
- * - **Conflictos:** last-write-wins por `updated_at` — el pull solo aplica un
+ * - **Conflictos:** last-write-wins por `updated_at`: el pull solo aplica un
  *   doc remoto si su timestamp supera al local (seeds/legados con 0 nunca
  *   pisan ediciones locales).
  * - **Deletes (lápidas):** los DELETE del outbox NO borran el doc remoto: lo
@@ -75,7 +77,7 @@ class SyncManager(
     private val remoteTransferRepository: TransferRepository,
     private val incomeSourceDao: IncomeSourceDao,
     private val remoteIncomeRepository: IncomeRepository,
-    // MVP Fase 3.5 — hoja de balance (opcionales para compatibilidad).
+    // MVP Fase 3.5: hoja de balance (opcionales para compatibilidad).
     private val savingsGoalDao: SavingsGoalDao? = null,
     private val remoteSavingsRepository: SavingsRepository? = null,
     private val loanDao: LoanDao? = null,
@@ -83,16 +85,20 @@ class SyncManager(
     private val remoteLoanRepository: LoanRepositoryFirestore? = null,
     private val installmentPlanDao: InstallmentPlanDao? = null,
     private val remoteInstallmentRepository: InstallmentRepository? = null,
-    // v13 — categorías con escritura local (alta inline, color).
+    // v13: categorías con escritura local (alta inline, color).
     private val categoryDao: CategoryDao? = null,
     private val remoteCategoryRepository: CategoryRepository? = null,
-    // v14 — miembros con escritura local (wizard de onboarding, CRUD de maestros).
+    // v14: miembros con escritura local (wizard de onboarding, CRUD de maestros).
     private val memberDao: MemberDao? = null,
     private val remoteMemberRepository: MemberRepository? = null,
-    // v19 — plantillas recurrentes sincronizadas (CRUD también en la web).
+    // v19: plantillas recurrentes sincronizadas (CRUD también en la web).
     private val recurrenceTemplateDao: RecurrenceTemplateDao? = null,
     /** Concreto (no interfaz): expone `deleteById` para drenar `RECURRENCE|DELETE`. */
     private val remoteRecurrenceRepository: RecurrenceRepositoryFirestore? = null,
+    // Fase 2: el documento raíz del hogar también se empuja (antes era local-only
+    // y una edición del hogar no salía nunca del dispositivo).
+    private val householdDao: HouseholdDao? = null,
+    private val remoteHouseholdRepository: HouseholdRepositoryFirestore? = null,
 ) {
 
     private val mutex = Mutex()
@@ -101,7 +107,7 @@ class SyncManager(
      * Reintento diferido tras un corte por conectividad. Sin esto, un hipo de
      * DNS/red durante el drenado del arranque dejaba la cola varada hasta el
      * SIGUIENTE cambio de red o alta local (observeCount solo re-emite cuando
-     * el conteo CAMBIA) — observado en hardware real con Private DNS.
+     * el conteo CAMBIA), observado en hardware real con Private DNS.
      */
     private var retryJob: kotlinx.coroutines.Job? = null
 
@@ -154,11 +160,11 @@ class SyncManager(
      *
      * Manejo de errores en dos clases:
      * - **Error de conectividad** ([isConnectivityError]): corta el drenado
-     *   (`break`) SIN incrementar `attempts` — sin red no tiene caso seguir y
+     *   (`break`) SIN incrementar `attempts`: sin red no tiene caso seguir y
      *   no es culpa de la fila; se reintenta completo al volver la conexión.
      * - **Error por-fila** (p.ej. doc rechazado por las reglas de Firestore):
      *   incrementa `attempts`, loguea en W con entityType/entityId y CONTINÚA
-     *   con la siguiente fila — un mensaje venenoso ya no congela la cola.
+     *   con la siguiente fila; un mensaje venenoso ya no congela la cola.
      *
      * **Dead-letter:** tras [MAX_ATTEMPTS] fallos por-fila, la fila queda como
      * fallida definitiva: `getPending(MAX_ATTEMPTS)` deja de devolverla, así
@@ -190,7 +196,7 @@ class SyncManager(
 
                         row.entityType == "EXPENSE" && row.operation == "DELETE" -> {
                             // Borrado remoto fiable con LÁPIDA (tombstone): la impl
-                            // Firestore ya no borra el doc — lo reemplaza por una
+                            // Firestore ya no borra el doc, lo reemplaza por una
                             // lápida (`deleted_at` + `updated_at`) y borra la
                             // subcolección `attributions` en el mismo batch. Así un
                             // dispositivo offline prolongado cuyo cache ya no ve el
@@ -305,6 +311,16 @@ class SyncManager(
                                 syncQueueDao.delete(row.id)
                             } else {
                                 remoteInstallmentRepository.insert(plan)
+                                syncQueueDao.delete(row.id)
+                            }
+                        }
+
+                        row.entityType == "HOUSEHOLD" && row.operation == "UPSERT" -> {
+                            val household = householdDao?.getById(row.entityId)
+                            if (household == null || remoteHouseholdRepository == null) {
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteHouseholdRepository.insert(household)
                                 syncQueueDao.delete(row.id)
                             }
                         }

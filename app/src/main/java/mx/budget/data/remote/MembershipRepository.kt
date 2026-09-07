@@ -32,7 +32,7 @@ import kotlin.random.Random
  *
  * ── Código de invitación ─────────────────────────────────────────────────────
  * El dueño comparte con el colaborador un código OPACO de 8 chars A-Z0-9
- * (ej. `7QX4K2AB`), sin el household id — así lo compartido no filtra el id del
+ * (ej. `7QX4K2AB`), sin el household id, así lo compartido no filtra el id del
  * hogar (p. ej. `default_household`). El canje resuelve el hogar leyendo la
  * colección global `invite_codes/{code}` y sigue con el invite de la
  * subcolección. Por compatibilidad, los códigos LEGACY con formato
@@ -162,10 +162,21 @@ class MembershipRepository(
      * - espejo `users/{uid}/households/{hid}`
      * - un [MemberEntity] PAYER_ADULT para el dueño en la subcolección `members`
      *   del hogar (para que la app tenga al menos un miembro tras el pull).
+     *
+     * [existingId] fuerza el id del documento en vez de acuñar uno nuevo. Lo usa
+     * el wizard de onboarding, que ya insertó la fila en Room: sin esto el hogar
+     * local y el de la nube eran documentos distintos y el push del kind
+     * HOUSEHOLD subía a un documento huérfano.
+     *
      * @return el household id creado.
      */
-    suspend fun createHousehold(name: String, uid: String, displayName: String): String {
-        val hid = "hh_" + UUID.randomUUID().toString().take(8)
+    suspend fun createHousehold(
+        name: String,
+        uid: String,
+        displayName: String,
+        existingId: String? = null,
+    ): String {
+        val hid = existingId ?: ("hh_" + UUID.randomUUID().toString().take(8))
         val now = System.currentTimeMillis()
 
         // `createdBy` ancla la propiedad: la regla de seguridad solo permite el
@@ -257,10 +268,10 @@ class MembershipRepository(
 
     /**
      * Genera un código de invitación NOMINADA (roles v2): el invite queda ligado
-     * a un [linkedMemberId] concreto del hogar — quien lo canjee ES esa persona
-     * en el presupuesto — y otorga el [role] derivado de ese member (PAYER para
+     * a un [linkedMemberId] concreto del hogar (quien lo canjee ES esa persona
+     * en el presupuesto) y otorga el [role] derivado de ese member (PAYER para
      * adultos-cuenta, MEMBER para el resto). Devuelve SOLO el código OPACO de
-     * 8 chars (ej. `7QX4K2AB`) para compartir — ya no el formato legacy
+     * 8 chars (ej. `7QX4K2AB`) para compartir, ya no el formato legacy
      * `{hid}.{code}`, que exponía el household id.
      *
      * Escribe DOS docs: el invite en la subcolección del hogar (fuente de
@@ -342,10 +353,10 @@ class MembershipRepository(
      * `uses`. Devuelve el household id al que se unió, o null si es inválido.
      *
      * Acepta DOS formatos:
-     *  - OPACO (actual): 8 chars sin punto (`7QX4K2AB`) — el hogar se resuelve
+     *  - OPACO (actual): 8 chars sin punto (`7QX4K2AB`): el hogar se resuelve
      *    leyendo el índice global `invite_codes/{code}` y `uses` se incrementa
      *    en AMBOS docs (subcolección + índice global).
-     *  - LEGACY: `{hid}.{code}` (contiene un punto) — se parsea directo y solo
+     *  - LEGACY: `{hid}.{code}` (contiene un punto): se parsea directo y solo
      *    se incrementa el doc de la subcolección (el índice global no existe
      *    para códigos viejos).
      */
@@ -486,7 +497,7 @@ class MembershipRepository(
     /**
      * Fase 6 (circuito de colaboradores): el titular resuelve una propuesta.
      * Escribe `status` (ACCEPTED | REJECTED), `resolvedAt` y, al aceptar, el
-     * `expenseId` del gasto creado — la web del colaborador lo refleja en
+     * `expenseId` del gasto creado; la web del colaborador lo refleja en
      * "Mis propuestas" y en su saldo "me deben". Best-effort: un fallo de red
      * solo se loguea (el gasto local ya quedó registrado igual).
      */

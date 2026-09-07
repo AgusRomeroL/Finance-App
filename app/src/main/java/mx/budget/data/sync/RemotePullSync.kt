@@ -45,10 +45,10 @@ import mx.budget.data.local.entity.ExpenseAttributionEntity
  * 2. **Lápida (tombstone)**: un doc con `deleted_at > 0` (soft-delete que el
  *    push escribe en vez de borrar el doc). Como el doc SIGUE existiendo,
  *    incluso un dispositivo offline prolongado lo recibe (como ADDED) y borra
- *    localmente — cierra la "resurrección" de la vía 1. Gate LWW: la lápida
+ *    localmente, y cierra la "resurrección" de la vía 1. Gate LWW: la lápida
  *    solo se aplica si max(deleted_at, updated_at) remoto >= updated_at local
  *    (un doc editado localmente DESPUÉS del borrado remoto sobrevive y su
- *    re-push limpia la lápida — ver ExpenseRepositoryFirestore).
+ *    re-push limpia la lápida; ver ExpenseRepositoryFirestore).
  *
  * Ninguna vía ajusta saldos: el saldo del wallet viaja como estado en su
  * propio documento, que llega por su propio listener.
@@ -66,6 +66,7 @@ class RemotePullSync(
     private val householdId: String
 ) {
 
+    private val householdDao = db.householdDao()
     private val expenseDao = db.expenseDao()
     private val attributionDao = db.expenseAttributionDao()
     private val categoryDao = db.categoryDao()
@@ -91,6 +92,42 @@ class RemotePullSync(
      */
     fun start() {
         stop()
+
+        // Documento raíz del hogar. Hasta la Fase 2 el pull solo escuchaba las
+        // subcolecciones y la fila local se resolvía con un `get()` de una sola
+        // vez al arrancar (`BudgetApplication.ensureLocalHousehold`), así que
+        // renombrar el hogar en un dispositivo no llegaba nunca al otro.
+        // Anti-eco: escribe por DAO directo, jamás por un repo.
+        listeners += household().addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.w(TAG, "Listener del hogar falló; se reintentará al reconectar", error)
+                return@addSnapshotListener
+            }
+            val doc = snapshot ?: return@addSnapshotListener
+            if (!doc.exists()) return@addSnapshotListener
+            scope.launch {
+                runCatching {
+                    // Una lápida sobre el hogar NO borra la fila local: arrastraría
+                    // por FK todo el ledger del dispositivo. Se ignora y se loguea;
+                    // salir de un grupo es una operación de membresía, no de datos.
+                    if (doc.tombstoneDeletedAt() > 0L) {
+                        Log.w(TAG, "Hogar $householdId con lápida remota; se ignora en local")
+                        return@runCatching
+                    }
+                    val remote = doc.toHouseholdEntity() ?: return@runCatching
+                    val local = householdDao.getById(remote.id)
+                    if (local == null) {
+                        householdDao.insert(remote)
+                    } else if (remote.updatedAt > local.updatedAt) {
+                        // `createdAt` del doc remoto puede venir en 0 (el alta de
+                        // MembershipRepository no lo escribe): conserva el local.
+                        householdDao.insert(
+                            remote.copy(createdAt = if (remote.createdAt > 0) remote.createdAt else local.createdAt)
+                        )
+                    }
+                }.onFailure { Log.w(TAG, "Fallo al aplicar el doc del hogar", it) }
+            }
+        }
 
         // expenses (+ subcolección de atribuciones por gasto): handler propio.
         listeners += household().collection("expenses")
@@ -213,7 +250,7 @@ class RemotePullSync(
             localUpdatedAt = { installmentPlanDao.getById(it)?.updatedAt },
         )
 
-        // recurrence_template (v19 — ANDROID-TEMPLATES): el CRUD de plantillas
+        // recurrence_template (v19, ANDROID-TEMPLATES): el CRUD de plantillas
         // vive también en la web, así que dejó de ser local-only. LWW por
         // updated_at + removal remoto (duro o por lápida), como savings/loan.
         listeners += register(
@@ -259,10 +296,10 @@ class RemotePullSync(
      *
      * LÁPIDAS: un doc entrante con `deleted_at > 0` NUNCA se upserta. Si la
      * colección tiene [onRemoved], se borra la fila local (gate LWW contra
-     * [localUpdatedAt] si se proporcionó — borrar una fila inexistente es
+     * [localUpdatedAt] si se proporcionó; borrar una fila inexistente es
      * no-op, así que sin timestamp local se borra directo). Si la colección NO
      * tiene flujo de borrado (members, quincenas, categories, wallets: hoy
-     * nadie escribe lápidas ahí), el doc lápida simplemente se ignora — jamás
+     * nadie escribe lápidas ahí), el doc lápida simplemente se ignora: jamás
      * debe pisar la fila local con el doc mínimo de la lápida.
      */
     private fun <T : Any> register(
@@ -320,12 +357,12 @@ class RemotePullSync(
      * colección padre NO incluye las subcolecciones, leemos las atribuciones
      * con un `get()` adicional por gasto, y aplicamos
      * upsert(expense) + deleteByExpenseId + insertAll(attribs) en una
-     * transacción — solo si el doc remoto gana el LWW.
+     * transacción, solo si el doc remoto gana el LWW.
      *
      * REMOVED: borra el gasto por id (las atribuciones caen por FK CASCADE).
      *
      * LÁPIDA (tombstone): un doc con `deleted_at > 0` también se trata como
-     * borrado — se chequea ANTES de mapear porque el doc lápida viene con los
+     * borrado, y se chequea ANTES de mapear porque el doc lápida viene con los
      * campos limpiados (no mapeable). Gate LWW: solo se aplica si
      * max(deleted_at, updated_at) remoto >= updated_at local; así una edición
      * local POSTERIOR al borrado remoto sobrevive y su re-push (que limpia la
@@ -449,7 +486,7 @@ class RemotePullSync(
 
             // Fase 6 (colaboradores): el proposer pagó con SU dinero. Se resuelve su
             // miembro vinculado (roles/{uid}.linkedMemberId) y se sugiere como PAYER
-            // al 100% — el Review lo preactiva como tercero + reembolsable, y al
+            // al 100%: el Review lo preactiva como tercero + reembolsable, y al
             // aceptar el gasto cae en "Por reembolsar" a favor del colaborador.
             val proposerUid = doc.getString("proposedByUid")
             val payerJson = proposerUid?.let { uid ->

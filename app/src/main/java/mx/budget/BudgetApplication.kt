@@ -541,6 +541,9 @@ class BudgetApplication : Application() {
         val remoteMemberRepository = mx.budget.data.remote.MemberRepositoryFirestore(firestore)
         // Plantillas recurrentes (v19): push del CRUD local (también editable en la web).
         val remoteRecurrenceRepository = mx.budget.data.remote.RecurrenceRepositoryFirestore(firestore, householdId)
+        // Hogar (Fase 2): push del documento raíz; antes las ediciones del hogar
+        // eran local-only y no salían nunca del dispositivo.
+        val remoteHouseholdRepository = mx.budget.data.remote.HouseholdRepositoryFirestore(firestore)
 
         // Arranca el drenado del outbox (por conectividad + intento inicial).
         syncManager = SyncManager(
@@ -567,7 +570,9 @@ class BudgetApplication : Application() {
             memberDao = database.memberDao(),
             remoteMemberRepository = remoteMemberRepository,
             recurrenceTemplateDao = database.recurrenceTemplateDao(),
-            remoteRecurrenceRepository = remoteRecurrenceRepository
+            remoteRecurrenceRepository = remoteRecurrenceRepository,
+            householdDao = database.householdDao(),
+            remoteHouseholdRepository = remoteHouseholdRepository
         )
 
         // Dirección PULL (Firestore → Room). Comparte `appScope` y la misma
@@ -849,7 +854,19 @@ class BudgetApplication : Application() {
      * no-op: el hogar vive local (Room) y se subirá cuando vincule la cuenta desde
      * Perfil (`linkGoogleAccount` reclama el hogar activo). Best-effort.
      */
-    suspend fun registerOnboardingHouseholdInCloud(name: String) {
+    suspend fun registerOnboardingHouseholdInCloud(hid: String, name: String) {
+        // El push del kind HOUSEHOLD se encola siempre, incluso en anónimo: la
+        // fila queda en el outbox y sube en cuanto haya sesión con permisos.
+        runCatching {
+            database.syncQueueDao().enqueue(
+                mx.budget.data.local.entity.SyncQueueEntity(
+                    entityType = "HOUSEHOLD",
+                    entityId = hid,
+                    operation = "UPSERT",
+                    createdAt = System.currentTimeMillis(),
+                )
+            )
+        }
         val user = authManager.getCurrentUser() ?: return
         if (user.isAnonymous) return
         runCatching {
@@ -857,6 +874,9 @@ class BudgetApplication : Application() {
                 name = name,
                 uid = user.uid,
                 displayName = user.displayName ?: user.email ?: "Yo",
+                // Mismo id que la fila de Room: el hogar del wizard y el de la
+                // nube son el MISMO documento.
+                existingId = hid,
             )
         }
     }

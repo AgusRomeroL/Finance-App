@@ -42,8 +42,8 @@ class OnboardingViewModel(
     private val categoryRepository: CategoryRepository,
     private val quincenaRepository: QuincenaRepository,
     private val quincenaDao: mx.budget.data.local.dao.QuincenaDao,
-    /** Registra el hogar en la nube si hay usuario Google (opcional). */
-    private val onCreateCloudHousehold: (suspend (name: String) -> Unit)? = null,
+    /** Registra el hogar en la nube y encola su push (opcional). */
+    private val onCreateCloudHousehold: (suspend (hid: String, name: String) -> Unit)? = null,
 ) : ViewModel() {
 
     // ── Modelos de captura en memoria (aún no persistidos) ──────────────────────
@@ -171,8 +171,9 @@ class OnboardingViewModel(
                 updatedAt = now,
             )
         )
-        // Nube (opcional): registra el hogar si hay usuario Google.
-        runCatching { onCreateCloudHousehold?.invoke(state.householdName.ifBlank { "Mi hogar" }) }
+        // Nube (opcional): encola el push del hogar y, si ya hay usuario Google,
+        // crea el documento remoto CON ESTE MISMO id.
+        runCatching { onCreateCloudHousehold?.invoke(hid, state.householdName.ifBlank { "Mi hogar" }) }
 
         // 2) Miembros.
         val members = state.members.map { d ->

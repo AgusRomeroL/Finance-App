@@ -4,6 +4,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
+import mx.budget.data.local.entity.HouseholdEntity
 import mx.budget.data.local.entity.IncomeSourceEntity
 import mx.budget.data.local.entity.InstallmentPlanEntity
 import mx.budget.data.local.entity.LoanEntity
@@ -99,6 +100,24 @@ fun DocumentSnapshot.toExpenseAttributionEntity(expenseId: String): ExpenseAttri
         role = str("role", "role") ?: return null,
         shareBps = int("shareBps", "share_bps") ?: return null,
         shareAmountMxn = dbl("shareAmountMxn", "share_amount_mxn") ?: return null,
+    )
+}
+
+/**
+ * Documento raíz del hogar. `name` es el único campo que el alta remota
+ * (`MembershipRepository.createHousehold`) garantiza, así que el resto cae a
+ * los valores por defecto de la entidad Room; el push del kind HOUSEHOLD los
+ * corrige en cuanto el dispositivo dueño sube el espejo completo.
+ */
+fun DocumentSnapshot.toHouseholdEntity(): HouseholdEntity? {
+    return HouseholdEntity(
+        id = id.ifBlank { str("id", "id") ?: return null },
+        name = str("name", "name") ?: return null,
+        currency = str("currency", "currency") ?: "MXN",
+        timezone = str("timezone", "timezone") ?: "America/Mexico_City",
+        quincenaAnchor = str("quincenaAnchor", "quincena_anchor") ?: "CALENDAR",
+        createdAt = lng("createdAt", "created_at") ?: 0L,
+        updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }
 

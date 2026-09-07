@@ -552,7 +552,7 @@ class OnboardingViewModelFactory(
             categoryRepository = app.categoryRepository,
             quincenaRepository = app.quincenaRepository,
             quincenaDao = app.database.quincenaDao(),
-            onCreateCloudHousehold = { name -> app.registerOnboardingHouseholdInCloud(name) },
+            onCreateCloudHousehold = { hid, name -> app.registerOnboardingHouseholdInCloud(hid, name) },
         ) as T
     }
 }
