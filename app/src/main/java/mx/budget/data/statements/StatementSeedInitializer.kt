@@ -145,6 +145,7 @@ class StatementSeedInitializer(
                         creditLimitMxn = o.optDoubleOrNull("creditLimitMxn"),
                         currentBalanceMxn = o.optDouble("openingBalanceMxn", 0.0),
                         openingBalanceMxn = o.optDouble("openingBalanceMxn", 0.0),
+                        balanceAnchorAt = now,
                         interestApr = o.optDoubleOrNull("interestApr"),
                         ownerMemberId = o.optStringOrNull("owner")?.let { keyToMember[it] },
                         updatedAt = now,
@@ -308,7 +309,13 @@ class StatementSeedInitializer(
                         cutoffDay = o.optIntOrNull("cutoffDay") ?: w.cutoffDay,
                         dueDay = o.optIntOrNull("dueDay") ?: w.dueDay,
                         creditLimitMxn = o.optDoubleOrNull("limiteMxn") ?: w.creditLimitMxn,
+                        // Escritura ABSOLUTA del saldo, así que también re-ancla. Sin
+                        // esto una instalación limpia nacía divergente: la migración a
+                        // v21 igualaba el ancla al saldo del asset y este sembrado lo
+                        // sustituía después, dejando el declarado en el valor viejo.
                         currentBalanceMxn = o.optDoubleOrNull("saldo") ?: w.currentBalanceMxn,
+                        openingBalanceMxn = o.optDoubleOrNull("saldo") ?: w.openingBalanceMxn,
+                        balanceAnchorAt = if (o.optDoubleOrNull("saldo") != null) now else w.balanceAnchorAt,
                         interestApr = o.optDoubleOrNull("tasa") ?: w.interestApr,
                         updatedAt = now,
                     )
