@@ -12,7 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Redundancia no-cromática (brief §2.1 + C9/C11) — OBLIGATORIA
+// Redundancia no-cromática (brief §2.1 + C9/C11): OBLIGATORIA
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // ~8% de los hombres tiene deficiencia rojo-verde. El significado financiero

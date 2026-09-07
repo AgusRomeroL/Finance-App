@@ -29,7 +29,7 @@ import java.util.UUID
  * POSTED) en esa quincena (`ExpenseDao.countForTemplateInQuincena`). Así puede
  * correr en cada arranque / activación de quincena sin duplicar.
  *
- * **Invariante — ids DETERMINISTAS (convergencia multi-dispositivo):** el gasto
+ * **Invariante de ids DETERMINISTAS (convergencia multi-dispositivo):** el gasto
  * materializado y sus atribuciones usan `UUID.nameUUIDFromBytes` sobre una clave
  * estable (`recur:{templateId}:{quincenaId}:{fecha}`), igual que sus gemelos
  * [mx.budget.data.installments.InstallmentMaterializer] y
@@ -99,7 +99,7 @@ class RecurrenceMaterializer(
         members: List<mx.budget.data.local.entity.MemberEntity>,
     ): Boolean {
         // Reembolso recurrente: si un tercero paga por adelantado, el gasto NO toca
-        // un wallet real — se ancla al wallet externo (saldo neutro) y el pago se
+        // un wallet real: se ancla al wallet externo (saldo neutro) y el pago se
         // atribuye 100% al tercero, con settlement_status pendiente.
         val externalPayerId = template.defaultExternalPayerMemberId
 
@@ -120,7 +120,7 @@ class RecurrenceMaterializer(
 
         // Cinturón extra al guard countForTemplateInQuincena: si el mismo PLANNED ya
         // llegó por pull de otro dispositivo (mismo id determinista) entre el check y
-        // este punto, no lo pisamos — insert es REPLACE y re-escribirlo degradaría un
+        // este punto, no lo pisamos: insert es REPLACE y re-escribirlo degradaría un
         // gasto ya confirmado/editado remotamente además de re-encolar push.
         if (expenseDao.getById(expenseId) != null) return false
 
@@ -258,7 +258,7 @@ class RecurrenceMaterializer(
     ): List<ExpenseAttributionEntity> = bps.map { (memberId, share) ->
         ExpenseAttributionEntity(
             // Determinista por (gasto, rol, miembro): mismo invariante que el id del
-            // gasto — todos los dispositivos generan la misma fila y el sync converge.
+            // gasto: todos los dispositivos generan la misma fila y el sync converge.
             id = det("recurattr:$expenseId:$role:$memberId"),
             expenseId = expenseId,
             memberId = memberId,

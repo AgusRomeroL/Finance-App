@@ -53,7 +53,7 @@ interface ExpenseDao {
 
     /**
      * Movimientos cargados a un wallet (método de pago), ordenados por fecha
-     * descendente — alimenta el detalle de la pantalla Wallets ("ver movimientos").
+     * descendente: alimenta el detalle de la pantalla Wallets ("ver movimientos").
      * Mismas columnas/JOINs que [observeWithDetails], filtrando por payment_method.
      */
     @Query(
@@ -176,7 +176,7 @@ interface ExpenseDao {
 
     /**
      * Gastos `PLANNED` del hogar con detalles (categoría/wallet/quincena),
-     * ordenados por fecha ascendente — timeline del calendario (Apéndice G.2,
+     * ordenados por fecha ascendente: timeline del calendario (Apéndice G.2,
      * Fase 4). Mismas columnas/JOINs que [observeWithDetails], pero a nivel
      * household y filtrando solo lo planeado (no ejecutado).
      */
@@ -218,7 +218,7 @@ interface ExpenseDao {
      * con detalles (categoría/wallet/quincena) para abrir el detalle al tocarlos.
      * Mismas columnas/JOINs que [observeWithDetails], a nivel household.
      *
-     * @Query NUEVO de solo lectura — NO altera el esquema (excepción autorizada del
+     * @Query NUEVO de solo lectura: NO altera el esquema (excepción autorizada del
      * paquete B3 para la sección "Por reembolsar" del dashboard).
      */
     @Query(
@@ -257,7 +257,7 @@ interface ExpenseDao {
      * `amount_mxn` de los gastos `PENDING_REIMBURSEMENT` por `external_payer_member_id`.
      * Alimenta los chips agrupados de "Por reembolsar" (cuánto se debe a cada quién).
      *
-     * @Query NUEVO de solo lectura — NO altera el esquema.
+     * @Query NUEVO de solo lectura: NO altera el esquema.
      */
     @Query(
         """
@@ -281,7 +281,7 @@ interface ExpenseDao {
      * (deudas explícitas por pagar). A diferencia de [observePendingReimbursements],
      * expone el pagador para agrupar por miembro y desglosar la deuda por concepto.
      *
-     * @Query NUEVO de solo lectura — NO altera el esquema.
+     * @Query NUEVO de solo lectura: NO altera el esquema.
      */
     @Query(
         """
@@ -306,7 +306,7 @@ interface ExpenseDao {
      * Marca un gasto adelantado por un tercero como **reembolsado**
      * (`settlement_status = 'REIMBURSED'`): el hogar ya le repuso el dinero al que
      * lo adelantó. NO mueve saldos de wallet (la reposición ocurre en efectivo/fuera
-     * del ledger) — a diferencia de [mx.budget.data.repository.ExpenseRepository.reimburseFrom],
+     * del ledger), a diferencia de [mx.budget.data.repository.ExpenseRepository.reimburseFrom],
      * que reasigna el gasto a un wallet real. Gate `PENDING_REIMBURSEMENT` para no
      * pisar otros estados. Sube `updated_at` para el LWW del sync.
      */
@@ -351,7 +351,7 @@ interface ExpenseDao {
     suspend fun countForTemplateInQuincena(templateId: String, quincenaId: String): Int
 
     /**
-     * Todos los gastos del hogar — usado por el pipeline de canonicalización
+     * Todos los gastos del hogar, usado por el pipeline de canonicalización
      * retroactiva (Apéndice F.3.4) para recalcular `concept_canonical` en lote.
      */
     @Query("SELECT * FROM expense WHERE household_id = :householdId")
@@ -390,7 +390,7 @@ interface ExpenseDao {
 
     /**
      * Próximos gastos PLANNED del hogar con vencimiento en/ tras `nowMs`, ordenados
-     * por fecha ascendente — alimenta el snapshot del reloj (tile "Próximos pagos").
+     * por fecha ascendente: alimenta el snapshot del reloj (tile "Próximos pagos").
      * Añadir un método @Dao no cambia el esquema.
      */
     @Query(
@@ -399,7 +399,7 @@ interface ExpenseDao {
     )
     suspend fun getUpcomingPlanned(hh: String, nowMs: Long, limit: Int): List<ExpenseEntity>
 
-    /** Gasto (cualquier status) de una cuota MSI concreta — dedupe del materializador. */
+    /** Gasto (cualquier status) de una cuota MSI concreta: dedupe del materializador. */
     @Query(
         "SELECT * FROM expense WHERE household_id = :householdId AND installment_plan_id = :planId " +
             "AND installment_number = :number LIMIT 1"
@@ -409,7 +409,7 @@ interface ExpenseDao {
     /**
      * Ids de categoría usados más recientemente en gastos POSTED del hogar,
      * ordenados por último uso (v13, A0). Alimenta las "recientes" reales de
-     * la hoja de captura — antes eran un top-5 estático por `sort_order`.
+     * la hoja de captura; antes eran un top-5 estático por `sort_order`.
      */
     @Query(
         """

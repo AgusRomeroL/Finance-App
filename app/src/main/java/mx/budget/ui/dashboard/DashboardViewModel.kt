@@ -44,7 +44,7 @@ import mx.budget.data.repository.QuincenaRepository
  * de carga y error sin múltiples StateFlows desacoplados.
  */
 sealed class DashboardUiState {
-    /** Pantalla cargando — primer frame después de crear el ViewModel. */
+    /** Pantalla cargando: primer frame después de crear el ViewModel. */
     object Loading : DashboardUiState()
 
     /**
@@ -52,7 +52,7 @@ sealed class DashboardUiState {
      *
      * @param quincena    Quincena activa actual (null solo al inicio del hogar).
      * @param transactions Lista de gastos con detalles de JOIN para el LedgerPane.
-     * @param postedTotal  Total ejecutado (POSTED) en la quincena — KPI principal.
+     * @param postedTotal  Total ejecutado (POSTED) en la quincena: KPI principal.
      * @param plannedTotal Total presupuestado (PLANNED) pendiente.
      * @param balance      Balance disponible = projectedIncome - postedTotal.
      * @param memberDistribution Gasto por miembro BENEFICIARY para el gráfico de barras.
@@ -71,9 +71,9 @@ sealed class DashboardUiState {
         val balance: Double,
         /** Ingreso real recibido (income_source POSTED) de la quincena, en vivo. */
         val actualIncome: Double = 0.0,
-        /** Gasto por miembro BENEFICIARY (quién consume) — toggle "Beneficiario". */
+        /** Gasto por miembro BENEFICIARY (quién consume), toggle "Beneficiario". */
         val beneficiaryDistribution: List<SpendByMember>,
-        /** Gasto por miembro PAYER (quién paga) — toggle "Pagador". */
+        /** Gasto por miembro PAYER (quién paga), toggle "Pagador". */
         val payerDistribution: List<SpendByMember>,
         /** Hay una quincena más antigua a la que navegar (chevron ‹). */
         val canViewOlder: Boolean = false,
@@ -285,7 +285,7 @@ class DashboardViewModel(
 
     // ── Filtros por grupo de categoría (pills) ──────────────────────────────────
 
-    /** Grupos top-level (parentId==null) — alimentan los pills de filtro. */
+    /** Grupos top-level (parentId==null): alimentan los pills de filtro. */
     val groups: StateFlow<List<CategoryEntity>> = categoryDao
         .observeRootCategories(householdId)
         .catch { emit(emptyList()) }

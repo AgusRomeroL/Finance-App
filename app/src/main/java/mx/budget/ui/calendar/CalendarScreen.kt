@@ -125,7 +125,7 @@ fun CalendarScreen(
     val visible = remember(planned, selected) {
         selected?.let { sel -> planned.filter { epochToLocalDate(it.occurredAt) == sel } } ?: planned
     }
-    // Monto reservado (PLANNED) de lo que se está mostrando — respeta el filtro por día (G.2.4).
+    // Monto reservado (PLANNED) de lo que se está mostrando: respeta el filtro por día (G.2.4).
     val plannedSum = remember(visible) { visible.sumOf { it.amountMxn } }
 
     editing?.let { item ->
@@ -143,7 +143,7 @@ fun CalendarScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            // TUTORIAL: CAL_FAB — ver TUTORIAL.md
+            // TUTORIAL: CAL_FAB, ver TUTORIAL.md
             FloatingActionButton(
                 onClick = {
                     newPlannedViewModel.start(selected ?: today)
@@ -176,12 +176,12 @@ fun CalendarScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 // bottom: pill de navegación (~112dp) + FAB de pago manual encima
-                // (~72dp) — con 120dp el FAB tapaba el monto de la última tarjeta.
+                // (~72dp); con 120dp el FAB tapaba el monto de la última tarjeta.
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 200.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item(key = "month") {
-                    // TUTORIAL: CAL_MONTH_GRID — ver TUTORIAL.md
+                    // TUTORIAL: CAL_MONTH_GRID, ver TUTORIAL.md
                     Column(modifier = Modifier.tutorialTarget(TutorialKey.CAL_MONTH_GRID, tutorialController)) {
                         MonthCalendar(
                             month = month,
@@ -201,7 +201,7 @@ fun CalendarScreen(
                     item(key = "empty") { EmptyRow(filtered = selected != null) }
                 } else {
                     itemsIndexed(visible, key = { _, it -> it.expenseId }) { index, item ->
-                        // TUTORIAL: CAL_PLANNED — ver TUTORIAL.md (primera tarjeta como ancla)
+                        // TUTORIAL: CAL_PLANNED, ver TUTORIAL.md (primera tarjeta como ancla)
                         PlannedCard(
                             item = item,
                             onConfirm = { viewModel.confirm(item.expenseId) },

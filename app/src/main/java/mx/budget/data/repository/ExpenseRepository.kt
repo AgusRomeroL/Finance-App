@@ -32,10 +32,10 @@ interface ExpenseRepository {
      */
     fun searchWithDetails(householdId: String, query: String): Flow<List<ExpenseWithDetails>>
 
-    /** Total ejecutado (POSTED) en una quincena — KPI principal. */
+    /** Total ejecutado (POSTED) en una quincena: KPI principal. */
     fun observePostedTotal(quincenaId: String): Flow<Double>
 
-    /** Total planeado (PLANNED) pendiente — indicador "falta gastar". */
+    /** Total planeado (PLANNED) pendiente: indicador "falta gastar". */
     fun observePlannedTotal(quincenaId: String): Flow<Double>
 
     /**
@@ -89,7 +89,7 @@ interface ExpenseRepository {
     /**
      * Marca un gasto adelantado por un tercero como **reembolsado**
      * (`settlement_status = 'REIMBURSED'`): el hogar ya le repuso el dinero. NO
-     * mueve saldos de wallet — la reposición ocurre fuera del ledger (efectivo/
+     * mueve saldos de wallet: la reposición ocurre fuera del ledger (efectivo/
      * transferencia manual). Difiere de [reimburseFrom], que reasigna el gasto a
      * un wallet real y sí ajusta ese saldo. Encola push de sync (LWW). No-op si el
      * gasto no está `PENDING_REIMBURSEMENT`.

@@ -54,7 +54,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 /**
- * Libro Mayor (MVP Fase 3) — historial completo paginado por quincena, con
+ * Libro Mayor (MVP Fase 3): historial completo paginado por quincena, con
  * chips de filtro (categoría / wallet) y detalle al tocar una fila (el sheet
  * de detalle reusa la Fase 1: ver, editar y borrar desde aquí).
  */
@@ -83,7 +83,7 @@ fun LedgerScreen(
         // Header: back + título + navegación de quincena (patrón del Dashboard).
         // statusBarsPadding es imprescindible: sin él, con la app edge-to-edge los
         // chevrones de quincena caían DENTRO del área tappable del status bar y el
-        // sistema se comía los taps (navegación inusable) — P1 de auditoría runtime.
+        // sistema se comía los taps (navegación inusable), P1 de auditoría runtime.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -112,7 +112,7 @@ fun LedgerScreen(
         }
 
         // Chips de filtro: categorías con gasto + wallets.
-        // TUTORIAL: LED_FILTERS — ver TUTORIAL.md
+        // TUTORIAL: LED_FILTERS, ver TUTORIAL.md
         val visibleCategories = remember(rows, categories, categoryFilter) {
             val usedCategoryIds = rows.map { it.categoryId }.toSet()
             categories.filter {
@@ -146,7 +146,7 @@ fun LedgerScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Total visible (con filtros aplicados) — solo POSTED.
+        // Total visible (con filtros aplicados): solo POSTED.
         val totalVisible = remember(rows) { rows.filter { it.status == "POSTED" }.sumOf { it.amountMxn } }
         Text(
             "${rows.size} movimientos · ${money.format(totalVisible)}",
@@ -169,7 +169,7 @@ fun LedgerScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 itemsIndexed(rows, key = { _, it -> it.expenseId }) { index, row ->
-                    // TUTORIAL: LED_ROWS — ver TUTORIAL.md (ancla = la PRIMERA fila, no la
+                    // TUTORIAL: LED_ROWS, ver TUTORIAL.md (ancla = la PRIMERA fila, no la
                     // lista completa: el spotlight de todo el LazyColumn quedaba sobredimensionado).
                     LedgerRow(
                         row = row,

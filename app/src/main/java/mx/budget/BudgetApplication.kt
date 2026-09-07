@@ -60,7 +60,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.tasks.await
 
 /**
- * Aplicación base — contenedor manual de dependencias (sin Hilt).
+ * Aplicación base: contenedor manual de dependencias (sin Hilt).
  *
  * Arquitectura offline-first: los repositorios PÚBLICOS apuntan a las
  * implementaciones Room (fuente de verdad). Las implementaciones Firestore
@@ -258,7 +258,7 @@ class BudgetApplication : Application() {
     /**
      * Marca el tutorial como visto TAMBIÉN en el snapshot de proceso: en una
      * recreación de la Activity, `collectAsState(initial = ...)` usa este valor
-     * antes de que el Flow de DataStore emita — sin esto el tour se
+     * antes de que el Flow de DataStore emita; sin esto el tour se
      * re-auto-arrancaba con proceso caliente (bug de QA 2026-07-10).
      */
     fun markTutorialSeenInProcess() {
@@ -318,7 +318,7 @@ class BudgetApplication : Application() {
         initialDynamicColor = runBlocking { settingsRepository.dynamicColor.first() }
         initialHasSeenTutorial = runBlocking { settingsRepository.hasSeenTutorial.first() }
 
-        // Resolución del household activo (Fase B — multi-tenant):
+        // Resolución del household activo (Fase B, multi-tenant):
         // 1) si el usuario eligió un hogar activo (DataStore), se usa ese;
         // 2) si no, el fallback histórico: el único hogar sembrado (getSingleId),
         //    y en última instancia el literal "default_household".
@@ -362,7 +362,7 @@ class BudgetApplication : Application() {
             db = database
         )
         // v19 (ANDROID-TEMPLATES): las plantillas recurrentes también se
-        // sincronizan (CRUD en la web) — el repo estampa updated_at y encola
+        // sincronizan (CRUD en la web): el repo estampa updated_at y encola
         // RECURRENCE en el outbox.
         recurrenceRepository = RecurrenceRepositoryImpl(
             dao = database.recurrenceTemplateDao(),
@@ -515,7 +515,7 @@ class BudgetApplication : Application() {
             householdId = householdId,
         )
 
-        // Lado nube (Firestore) — usado únicamente por el SyncManager para push.
+        // Lado nube (Firestore), usado únicamente por el SyncManager para push.
         val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
         this.firestore = firestore
         authManager = mx.budget.data.remote.AuthManager(this)
@@ -703,7 +703,7 @@ class BudgetApplication : Application() {
 
         // Fallback para roles legados sin vínculo (hogares reclamados/sembrados):
         // si el nombre de pila de la cuenta coincide de forma ÚNICA con un member
-        // activo del hogar, se adopta y se PERSISTE en roles/{uid} — así la app
+        // activo del hogar, se adopta y se PERSISTE en roles/{uid}: así la app
         // sabe quién "eres tú" ("(Tú)" en las listas, exclusión del selector de
         // invitación, pagador default) sin pedir nada al usuario.
         if (resolved == null) {
@@ -763,7 +763,7 @@ class BudgetApplication : Application() {
      * persiste como hogar activo.
      *
      * **Qué queda REACTIVO sin reiniciar la app:** la dirección PULL (Firestore →
-     * Room) — se paran los listeners viejos y se arranca un [RemotePullSync] nuevo
+     * Room): se paran los listeners viejos y se arranca un [RemotePullSync] nuevo
      * apuntado al hogar nuevo; y el DRAIN del push, que reintenta el outbox.
      *
      * **Qué requiere REINICIO de la app:** `app.householdId` es un valor leído por
@@ -777,7 +777,7 @@ class BudgetApplication : Application() {
         if (newHouseholdId == householdId) return
         householdId = newHouseholdId
         // Identidad de sesión (roles v2): el member vinculado era del hogar
-        // anterior — se invalida ya (propiedad y caché) y se re-resuelve contra
+        // anterior: se invalida ya (propiedad y caché) y se re-resuelve contra
         // roles/{uid} del hogar nuevo. La Activity se recrea tras el switch, así
         // que los ViewModels nuevos leerán el valor fresco (o null mientras tanto).
         linkedMemberId = null
@@ -789,7 +789,7 @@ class BudgetApplication : Application() {
             settingsRepository.setActiveHouseholdId(newHouseholdId)
             // CRÍTICO: garantiza la fila del hogar en Room ANTES de re-anclar el
             // pull. Sin ella, member/wallet/expense (FK a household) truenan con
-            // FOREIGN KEY constraint failed — tanto el pull de las subcolecciones
+            // FOREIGN KEY constraint failed, tanto el pull de las subcolecciones
             // como cualquier alta local (agregar un miembro crasheaba la app).
             runCatching { ensureLocalHousehold(newHouseholdId) }
             // Re-ancla el PULL al nuevo hogar (stop viejo → new(hid).start()).
@@ -937,7 +937,7 @@ class BudgetApplication : Application() {
 
     /**
      * Rollover + materialización al arrancar (idempotente): primero garantiza
-     * que exista la quincena ACTIVE de HOY (la semilla termina en jun-2026 —
+     * que exista la quincena ACTIVE de HOY (la semilla termina en jun-2026;
      * sin esto la app queda "SIN QUINCENA ACTIVA" desde jul-2026) y luego crea
      * los PLANNED faltantes de esa quincena.
      */

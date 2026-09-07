@@ -259,7 +259,7 @@ class ExpenseRepositoryFirestore(
         // UN batch atómico (contrato con el pull: el gasto nunca se ve sin sus
         // atribuciones ya escritas). Además LIMPIA la lápida (`deleted_at`):
         // un UPSERT posterior a un borrado remoto "resucita" legítimamente el
-        // doc (la edición local ganó el LWW por updated_at) — sin esta
+        // doc (la edición local ganó el LWW por updated_at); sin esta
         // limpieza el doc quedaría zombi (campos vivos + lápida) y todos los
         // pulls lo seguirían tratando como borrado.
         val batch = firestore.batch()
@@ -320,7 +320,7 @@ class ExpenseRepositoryFirestore(
         }
         val batch = firestore.batch()
         attribs.documents.forEach { batch.delete(it.reference) }
-        // set SIN merge: limpia el resto de campos — la lápida queda chica y
+        // set SIN merge: limpia el resto de campos: la lápida queda chica y
         // fuera de las queries por status/quincena.
         batch.set(ref, tombstone)
         batch.commit().await()

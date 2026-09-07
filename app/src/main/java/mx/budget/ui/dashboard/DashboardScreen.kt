@@ -147,10 +147,10 @@ import kotlin.math.roundToInt
 
 private val mxnInt: NumberFormat = NumberFormat.getIntegerInstance(Locale("es", "MX"))
 
-/** "24,380" (sin símbolo, sin centavos) — para el KPI héroe con "$" y "MXN" aparte. */
+/** "24,380" (sin símbolo, sin centavos), para el KPI héroe con "$" y "MXN" aparte. */
 private fun Double.toGrouped(): String = mxnInt.format(this.toLong())
 
-/** "$24,380" — para montos en línea. */
+/** "$24,380", para montos en línea. */
 private fun Double.toMxn(): String = "$" + this.toGrouped()
 
 private val isoDate: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
@@ -176,13 +176,13 @@ private val LocalExpenseRowClick =
 private fun parseIso(s: String?): LocalDate? =
     runCatching { LocalDate.parse(s, isoDate) }.getOrNull()
 
-/** Rango "16 — 30 jun" a partir de las fechas ISO de la quincena. */
+/** Rango "16–30 jun" a partir de las fechas ISO de la quincena. */
 private fun quincenaRange(q: QuincenaEntity?): String {
     val start = parseIso(q?.startDate) ?: return ""
     val end = parseIso(q?.endDate) ?: return ""
     val mFmt = DateTimeFormatter.ofPattern("MMM", Locale("es", "MX"))
     val endMonth = end.format(mFmt).replace(".", "")
-    return "${start.dayOfMonth} — ${end.dayOfMonth} $endMonth"
+    return "${start.dayOfMonth}–${end.dayOfMonth} $endMonth"
 }
 
 /** Estado calculado del progreso de la quincena (día actual, fracción, días restantes). */
@@ -231,7 +231,7 @@ internal val navItems = listOf(
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DashboardScreen — punto de entrada adaptativo
+// DashboardScreen: punto de entrada adaptativo
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -324,7 +324,7 @@ fun DashboardScreen(
         onOpenSheet = { showFilterSheet = true }
     )
 
-    // [Registrar] de una sugerencia proactiva (Feature C): NUNCA inserta directo —
+    // [Registrar] de una sugerencia proactiva (Feature C): NUNCA inserta directo:
     // abre la hoja en Review pre-llenado con lo que sabe (concepto + categoría) y
     // marca "Por decidir" lo que falta (monto, atribución, wallet) para que el usuario
     // lo complete. Patrón central del paquete A4.
@@ -489,7 +489,7 @@ private fun ExpandedDashboard(
                     }
                     // La PÁGINA entera scrollea (no los tiles por dentro): con
                     // sugerencias ocupando alto, el hero y transacciones quedaban
-                    // recortados con scrolls internos propios — ahora ambos paneles
+                    // recortados con scrolls internos propios; ahora ambos paneles
                     // crecen a su altura natural y se recorren completos hacia abajo.
                     Column(
                         modifier = Modifier
@@ -517,7 +517,7 @@ private fun ExpandedDashboard(
                         )
                         if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestions.isNotEmpty())) {
                             Spacer(Modifier.height(18.dp))
-                            // TUTORIAL: DASH_SUGGESTIONS — ver TUTORIAL.md
+                            // TUTORIAL: DASH_SUGGESTIONS, ver TUTORIAL.md
                             Box(Modifier.tutorialTarget(TutorialKey.DASH_SUGGESTIONS, tutorialController)) {
                                 SuggestionsSection(
                                     bankCaptures = bankCaptures,
@@ -599,7 +599,7 @@ private fun BentoPanes(
     }
     // Layout custom: mide el hero (health) a su altura NATURAL → H, y fuerza el
     // handle y el panel de transacciones a exactamente H. Así el tile de
-    // transacciones nunca supera al hero — su altura la determina el hero — y el
+    // transacciones nunca supera al hero (su altura la determina el hero) y el
     // excedente de filas scrollea DENTRO del tile (LazyColumn acotada). Determinista
     // (la altura del hero no depende de transacciones), sin lag de un frame.
     Layout(
@@ -754,7 +754,7 @@ private fun CompactDashboard(
                         }
                         if (state.viewingActive && (bankCaptures.isNotEmpty() || proactiveSuggestions.isNotEmpty())) {
                             item {
-                                // TUTORIAL: DASH_SUGGESTIONS — ver TUTORIAL.md
+                                // TUTORIAL: DASH_SUGGESTIONS, ver TUTORIAL.md
                                 Box(Modifier.tutorialTarget(TutorialKey.DASH_SUGGESTIONS, tutorialController)) {
                                     SuggestionsSection(
                                         bankCaptures = bankCaptures,
@@ -777,7 +777,7 @@ private fun CompactDashboard(
                                 }
                             }
                         }
-                        // TUTORIAL: DASH_HERO_KPI — ver TUTORIAL.md
+                        // TUTORIAL: DASH_HERO_KPI, ver TUTORIAL.md
                         item {
                             Box(Modifier.tutorialTarget(TutorialKey.DASH_HERO_KPI, tutorialController)) {
                                 HeroRingSection(state = state)
@@ -853,7 +853,7 @@ private fun CompactDashboard(
 
 /**
  * Tarjeta "Primeros pasos" (journey guiado): con el hogar vacío, ofrece el
- * SIGUIENTE paso natural — sin cuentas → crear la primera; con cuentas pero sin
+ * SIGUIENTE paso natural: sin cuentas → crear la primera; con cuentas pero sin
  * gastos → registrar el primero. Se oculta sola cuando ya hay ambos (con resorte).
  */
 @Composable
@@ -913,7 +913,7 @@ private fun FirstStepsCard(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     if (needsWallet) "Crea tu primera cuenta para empezar a capturar"
-                    else "Ya tienes cuentas — registra tu primer gasto",
+                    else "Ya tienes cuentas, registra tu primer gasto",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -971,7 +971,7 @@ internal fun NavigationRailCustom(
         Spacer(Modifier.height(18.dp))
 
         // FAB de captura (equivalente al "+" del pill flotante en compacto).
-        // TUTORIAL: DASH_ACTION_BAR — ver TUTORIAL.md (no-op si controller es null)
+        // TUTORIAL: DASH_ACTION_BAR, ver TUTORIAL.md (no-op si controller es null)
         Box(
             modifier = Modifier
                 .size(48.dp)
@@ -1147,7 +1147,7 @@ private fun DashboardHeader(
     }
 }
 
-/** Navegador de quincenas: ‹ etiqueta › — ‹ va a la más antigua, › a la más reciente. */
+/** Navegador de quincenas: ‹ etiqueta ›: ‹ va a la más antigua, › a la más reciente. */
 @Composable
 private fun QuincenaNavChip(
     label: String,
@@ -1281,7 +1281,7 @@ private fun MainHealthPane(
             .padding(36.dp)
     ) {
         // Paridad teléfono/Fold: el mismo hero de anillo + tiles del layout compacto.
-        // TUTORIAL: DASH_HERO_KPI — ver TUTORIAL.md
+        // TUTORIAL: DASH_HERO_KPI, ver TUTORIAL.md
         Column(Modifier.tutorialTarget(TutorialKey.DASH_HERO_KPI, tutorialController)) {
             HeroRingContent(state = state)
         }
@@ -1291,7 +1291,7 @@ private fun MainHealthPane(
             Spacer(Modifier.height(24.dp))
             // Sin weight(1f): dentro de una Column scrollable el contenido fluye a su alto
             // natural (weight exigiría alto acotado y colapsaría la sección).
-            // TUTORIAL: DASH_MEMBER_BARS — ver TUTORIAL.md
+            // TUTORIAL: DASH_MEMBER_BARS, ver TUTORIAL.md
             Box(Modifier.tutorialTarget(TutorialKey.DASH_MEMBER_BARS, tutorialController)) {
                 MemberDistributionSection(
                     beneficiary = state.beneficiaryDistribution,
@@ -1384,7 +1384,7 @@ private fun ReserveSegment(label: String, selected: Boolean, onClick: () -> Unit
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sugerencias inteligentes — carrusel (Features C + D)
+// Sugerencias inteligentes: carrusel (Features C + D)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Un ítem de sugerencia: captura bancaria (D) o sugerencia proactiva (C). */
@@ -1791,7 +1791,7 @@ private fun RitmoCard(
     val ui = when {
         !hasPlan -> RitmoUi(
             FinancialTone.NEUTRAL, Icons.AutoMirrored.Filled.TrendingFlat,
-            "sin plan de gasto", " esta quincena — captura para ver tu ritmo", "Aún ")
+            "sin plan de gasto", " esta quincena, captura para ver tu ritmo", "Aún ")
         overIncome -> RitmoUi(
             FinancialTone.EXPENSE, Icons.Filled.WarningAmber,
             "más de lo que entró", " esta quincena", "Gastaste ")
@@ -1800,13 +1800,13 @@ private fun RitmoCard(
             "al ritmo", " del gasto previsto", "Vas ")
         below && pct >= 15 -> RitmoUi(
             FinancialTone.INCOME, Icons.Filled.Savings,
-            "$pct % por debajo", " del plan — buen colchón", "Vas ")
+            "$pct % por debajo", " del plan, buen colchón", "Vas ")
         below -> RitmoUi(
             FinancialTone.INCOME, Icons.AutoMirrored.Filled.TrendingDown,
             "$pct % por debajo", " del gasto previsto", "Vas ")
         pct >= 15 -> RitmoUi(
             FinancialTone.WARNING, Icons.AutoMirrored.Filled.TrendingUp,
-            "$pct % por encima", " del plan — conviene frenar", "Vas ")
+            "$pct % por encima", " del plan, conviene frenar", "Vas ")
         else -> RitmoUi(
             FinancialTone.WARNING, Icons.AutoMirrored.Filled.TrendingUp,
             "$pct % por encima", " del gasto previsto", "Vas ")
@@ -2013,7 +2013,7 @@ private fun MemberDistributionSection(
                     modifier = Modifier.weight(1f),
                     maxLines = 2, overflow = TextOverflow.Ellipsis
                 )
-                // CTA real (era un Row estático sin acción — P1 de auditoría): abre
+                // CTA real (era un Row estático sin acción, P1 de auditoría): abre
                 // las cuentas entre miembros.
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -2320,7 +2320,7 @@ internal fun TransactionRow(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Hero del dashboard (compacto) — anillo de progreso + tiles de colores, al estilo
+ * Hero del dashboard (compacto): anillo de progreso + tiles de colores, al estilo
  * del dashboard "Today" de Fitbit/Health. El anillo muestra la fracción del ingreso
  * ya gastada; el número "Disponible" y los tiles Ingreso/Gasto/Reservado quedan al
  * costado. Reemplaza la tarjeta de número gigante anterior.
@@ -2341,7 +2341,7 @@ private fun HeroRingSection(state: DashboardUiState.Success) {
 /**
  * Contenido del hero de anillo SIN tarjeta propia, para reutilizarlo tanto en el
  * layout compacto ([HeroRingSection], que le pone la tarjeta) como en el panel del
- * Fold ([MainHealthPane], ya dentro de su tarjeta) — sin anidar tarjetas y con
+ * Fold ([MainHealthPane], ya dentro de su tarjeta), sin anidar tarjetas y con
  * PARIDAD del hero entre teléfono y Fold.
  */
 @Composable
@@ -2499,8 +2499,8 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
 
 /**
  * Tile de estadística de color (Ingreso / Gasto / Reservado). Redundancia
- * no-cromática obligatoria (CLAUDE.md): ícono + signo + etiqueta, nunca solo color
- * — vía [amountSemantic].
+ * no-cromática obligatoria (CLAUDE.md): ícono + signo + etiqueta, nunca solo color,
+ * vía [amountSemantic].
  */
 @Composable
 private fun StatTile(tone: FinancialTone, label: String, amount: Double) {
