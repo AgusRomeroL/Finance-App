@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -7,6 +9,18 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+// Firma de release (Fase 8). La llave nunca entra al repo: sus rutas y alias
+// viven en secrets.local.properties, que ya esta gitignorado. Mientras ese
+// archivo no exista no se registra ninguna signingConfig y assembleRelease
+// produce un APK sin firmar, asi que esto compila hoy sin keystore. El reloj lee
+// el MISMO archivo de la raiz: misma llave en los dos APK, que es lo que exige
+// el emparejamiento companion.
+val secretsFile = rootProject.file("secrets.local.properties")
+val secrets = Properties().apply {
+    if (secretsFile.exists()) secretsFile.inputStream().use { load(it) }
+}
+val hasReleaseKeystore = secretsFile.exists() && secrets.getProperty("storeFile") != null
+
 android {
     namespace = "mx.budget"
     compileSdk = 36
@@ -15,14 +29,45 @@ android {
         applicationId = "mx.budget"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // Fuente unica en gradle.properties (budget.versionCode / versionName),
+        // compartida con :wear. providers.gradleProperty y no project.property
+        // porque es la forma compatible con la configuration cache.
+        versionCode = providers.gradleProperty("budget.versionCode").get().toInt()
+        versionName = providers.gradleProperty("budget.versionName").get()
     }
-    
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = rootProject.file(secrets.getProperty("storeFile"))
+                storePassword = secrets.getProperty("storePassword")
+                keyAlias = secrets.getProperty("keyAlias")
+                keyPassword = secrets.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // La reduccion de codigo es de la Fase 8 y necesita reglas de
+            // ProGuard verificadas para Room, Firestore, ProtoLayout y las libs
+            // de IA. Activarla sin ellas rompe reflexion y serializacion en
+            // silencio, asi que aqui queda el hueco y no la trampa.
+            isMinifyEnabled = false
+            // findByName y no getByName: sin keystore devuelve null y el release
+            // sale sin firmar, en vez de tumbar la configuracion del proyecto.
+            signingConfig = signingConfigs.findByName("release")
+        }
+        // OJO Fase 8: si algun dia se pone applicationIdSuffix en debug, hay que
+        // ponerlo TAMBIEN en :wear. El reloj y el telefono comparten
+        // applicationId por requisito del emparejamiento, y sufijar solo uno
+        // rompe el companion sin ningun mensaje de error.
+    }
+
     buildFeatures {
         compose = true
     }
-    
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
