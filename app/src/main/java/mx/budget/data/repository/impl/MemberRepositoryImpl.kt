@@ -55,14 +55,23 @@ class MemberRepositoryImpl(
         enqueueSync(member.id)
     }
 
-    override suspend fun delete(member: MemberEntity) = dao.delete(member)
+    /**
+     * Borrado local + `MEMBER|DELETE` en el outbox. Sin el encolado el documento
+     * remoto seguía vivo y el pull lo reinsertaba en el siguiente arranque.
+     */
+    override suspend fun delete(member: MemberEntity) = db.withTransaction {
+        dao.delete(member)
+        enqueue(member.id, "DELETE")
+    }
 
-    private suspend fun enqueueSync(memberId: String) {
+    private suspend fun enqueueSync(memberId: String) = enqueue(memberId, "UPSERT")
+
+    private suspend fun enqueue(memberId: String, operation: String) {
         syncQueueDao.enqueue(
             SyncQueueEntity(
                 entityType = "MEMBER",
                 entityId = memberId,
-                operation = "UPSERT",
+                operation = operation,
                 createdAt = System.currentTimeMillis()
             )
         )

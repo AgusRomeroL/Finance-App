@@ -26,12 +26,12 @@ import mx.budget.data.local.dao.RecurrenceTemplateDao
 import mx.budget.data.local.dao.SavingsGoalDao
 import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.dao.WalletTransferDao
+import mx.budget.data.remote.CategoryRepositoryFirestore
 import mx.budget.data.remote.HouseholdRepositoryFirestore
 import mx.budget.data.remote.LoanRepositoryFirestore
+import mx.budget.data.remote.MemberRepositoryFirestore
 import mx.budget.data.remote.RecurrenceRepositoryFirestore
-import mx.budget.data.repository.CategoryRepository
 import mx.budget.data.repository.ExpenseRepository
-import mx.budget.data.repository.MemberRepository
 import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.InstallmentRepository
 import mx.budget.data.repository.SavingsRepository
@@ -59,7 +59,11 @@ import mx.budget.data.repository.WalletRepository
  * - **Deletes (lápidas):** los DELETE del outbox NO borran el doc remoto: lo
  *   reemplazan por una lápida (`deleted_at` + `updated_at`). El dato local sí
  *   se borra de verdad; lo que persiste es la lápida en Firestore, para que
- *   un dispositivo offline prolongado no resucite el doc al reconectar.
+ *   un dispositivo offline prolongado no resucite el doc al reconectar. Desde la
+ *   Fase 2 la escriben todos los repos con borrado real (gasto, transferencia,
+ *   préstamo, plantilla, categoría y miembro); cuenta, ingreso, meta y plan MSI
+ *   no tienen borrado en ninguna superficie (app ni web), así que solo LEEN
+ *   lápidas en el pull por si algún día las escribe un script de administración.
  *
  * @param remoteExpenseRepository implementación Firestore del
  *  [ExpenseRepository] (el "lado nube"), NO la implementación Room.
@@ -87,10 +91,12 @@ class SyncManager(
     private val remoteInstallmentRepository: InstallmentRepository? = null,
     // v13: categorías con escritura local (alta inline, color).
     private val categoryDao: CategoryDao? = null,
-    private val remoteCategoryRepository: CategoryRepository? = null,
+    /** Concreto (no interfaz): expone `deleteById` para drenar `CATEGORY|DELETE`. */
+    private val remoteCategoryRepository: CategoryRepositoryFirestore? = null,
     // v14: miembros con escritura local (wizard de onboarding, CRUD de maestros).
     private val memberDao: MemberDao? = null,
-    private val remoteMemberRepository: MemberRepository? = null,
+    /** Concreto (no interfaz): expone `deleteById` para drenar `MEMBER|DELETE`. */
+    private val remoteMemberRepository: MemberRepositoryFirestore? = null,
     // v19: plantillas recurrentes sincronizadas (CRUD también en la web).
     private val recurrenceTemplateDao: RecurrenceTemplateDao? = null,
     /** Concreto (no interfaz): expone `deleteById` para drenar `RECURRENCE|DELETE`. */
@@ -278,6 +284,11 @@ class SyncManager(
                             }
                         }
 
+                        row.entityType == "CATEGORY" && row.operation == "DELETE" -> {
+                            remoteCategoryRepository?.deleteById(row.entityId)
+                            syncQueueDao.delete(row.id)
+                        }
+
                         row.entityType == "MEMBER" && row.operation == "UPSERT" -> {
                             val member = memberDao?.getById(row.entityId)
                             if (member == null || remoteMemberRepository == null) {
@@ -286,6 +297,11 @@ class SyncManager(
                                 remoteMemberRepository.insert(member)
                                 syncQueueDao.delete(row.id)
                             }
+                        }
+
+                        row.entityType == "MEMBER" && row.operation == "DELETE" -> {
+                            remoteMemberRepository?.deleteById(row.entityId)
+                            syncQueueDao.delete(row.id)
                         }
 
                         row.entityType == "RECURRENCE" && row.operation == "UPSERT" -> {

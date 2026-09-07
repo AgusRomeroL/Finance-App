@@ -9,8 +9,16 @@ import kotlinx.coroutines.tasks.await
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.repository.MemberRepository
 
+/**
+ * Lado nube (Firestore) del [MemberRepository]. Solo lo usa el SyncManager para
+ * empujar miembros; las lecturas de la app siempre salen de Room.
+ *
+ * [householdId] es el hogar activo del contenedor: [deleteById] lo necesita
+ * porque, al drenar un `MEMBER|DELETE`, la fila local ya no existe.
+ */
 class MemberRepositoryFirestore(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val householdId: String,
 ) : MemberRepository {
 
     private fun getCollection(householdId: String) =
@@ -77,7 +85,14 @@ class MemberRepositoryFirestore(
         insert(member)
     }
 
+    /** Lápida, no borrado duro. Ver [writeTombstone]. */
     override suspend fun delete(member: MemberEntity) {
-        getCollection(member.householdId).document(member.id).delete().await()
+        getCollection(member.householdId).document(member.id)
+            .writeTombstone(member.id, member.householdId)
+    }
+
+    /** Borrado remoto por id (drenado de `MEMBER|DELETE` del outbox). */
+    suspend fun deleteById(memberId: String) {
+        getCollection(householdId).document(memberId).writeTombstone(memberId, householdId)
     }
 }

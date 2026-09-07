@@ -70,14 +70,23 @@ class CategoryRepositoryImpl(
         enqueueSync(category.id)
     }
 
-    override suspend fun delete(category: CategoryEntity) = dao.delete(category)
+    /**
+     * Borrado local + `CATEGORY|DELETE` en el outbox. Sin el encolado el documento
+     * remoto seguía vivo y el pull lo reinsertaba en el siguiente arranque.
+     */
+    override suspend fun delete(category: CategoryEntity) = db.withTransaction {
+        dao.delete(category)
+        enqueue(category.id, "DELETE")
+    }
 
-    private suspend fun enqueueSync(categoryId: String) {
+    private suspend fun enqueueSync(categoryId: String) = enqueue(categoryId, "UPSERT")
+
+    private suspend fun enqueue(categoryId: String, operation: String) {
         syncQueueDao.enqueue(
             SyncQueueEntity(
                 entityType = "CATEGORY",
                 entityId = categoryId,
-                operation = "UPSERT",
+                operation = operation,
                 createdAt = System.currentTimeMillis()
             )
         )

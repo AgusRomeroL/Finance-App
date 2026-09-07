@@ -69,4 +69,8 @@ interface MemberDao {
 
     @Delete
     suspend fun delete(member: MemberEntity)
+
+    /** Borrado por id usado EXCLUSIVAMENTE por el pull (lápida o removal remoto). */
+    @Query("DELETE FROM member WHERE id = :id")
+    suspend fun deleteById(id: String)
 }

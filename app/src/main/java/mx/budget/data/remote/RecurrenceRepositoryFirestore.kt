@@ -1,6 +1,5 @@
 package mx.budget.data.remote
 
-import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -9,7 +8,7 @@ import mx.budget.data.local.entity.RecurrenceTemplateEntity
 import mx.budget.data.repository.RecurrenceRepository
 
 /**
- * Lado nube (Firestore) del [RecurrenceRepository] — paquete ANDROID-TEMPLATES:
+ * Lado nube (Firestore) del [RecurrenceRepository], paquete ANDROID-TEMPLATES:
  * solo lo usa el SyncManager para empujar plantillas recurrentes. Subcolección
  * `households/{hh}/recurrence_template` (doc id = id de la plantilla; campos
  * camelCase serializados de [RecurrenceTemplateEntity], incluido `updatedAt`).
@@ -76,37 +75,18 @@ class RecurrenceRepositoryFirestore(
     override suspend fun update(template: RecurrenceTemplateEntity) = insert(template)
 
     override suspend fun delete(template: RecurrenceTemplateEntity) {
-        writeTombstone(collection(template.householdId).document(template.id), template.id)
+        collection(template.householdId).document(template.id).writeTombstone(template.id, template.householdId)
     }
 
     /** Borrado remoto por id (drenado de `RECURRENCE|DELETE` del outbox). */
     suspend fun deleteById(templateId: String) {
-        writeTombstone(collection(householdId).document(templateId), templateId)
+        collection(householdId).document(templateId).writeTombstone(templateId, householdId)
     }
 
-    /** Pausa/reanuda: no-op remoto — el push del UPSERT (doc completo con el
+    /** Pausa/reanuda: no-op remoto; el push del UPSERT (doc completo con el
      *  nuevo `isActive`) lo hace [insert] al drenar el outbox. */
     override suspend fun pause(templateId: String) = Unit
 
     override suspend fun resume(templateId: String) = Unit
 
-    /**
-     * LÁPIDA (tombstone): en vez de borrar el doc (cuyo REMOVED puede perderse
-     * para un dispositivo offline prolongado, que "resucitaría" la plantilla),
-     * se reemplaza por una lápida mínima con `deletedAt`; los pulls la tratan
-     * como borrado (set SIN merge limpia el resto de campos). Mismo patrón que
-     * [LoanRepositoryFirestore]; se incluye `householdId` para que la web pueda
-     * filtrar lápidas sin depender de la ruta.
-     */
-    private suspend fun writeTombstone(ref: DocumentReference, id: String) {
-        val now = System.currentTimeMillis()
-        ref.set(
-            mapOf(
-                "id" to id,
-                "householdId" to householdId,
-                "deletedAt" to now,
-                "updatedAt" to now,
-            )
-        ).await()
-    }
 }

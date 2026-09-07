@@ -151,4 +151,8 @@ interface QuincenaDao {
 
     @Update
     suspend fun update(quincena: QuincenaEntity)
+
+    /** Borrado por id usado EXCLUSIVAMENTE por el pull (lápida o removal remoto). */
+    @Query("DELETE FROM quincena WHERE id = :id")
+    suspend fun deleteById(id: String)
 }

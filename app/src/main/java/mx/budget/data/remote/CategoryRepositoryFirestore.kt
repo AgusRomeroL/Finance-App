@@ -10,8 +10,17 @@ import kotlinx.coroutines.tasks.await
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.repository.CategoryRepository
 
+/**
+ * Lado nube (Firestore) del [CategoryRepository]. Solo lo usa el SyncManager
+ * para empujar categorías; las lecturas de la app siempre salen de Room.
+ *
+ * [householdId] es el hogar activo del contenedor: [deleteById] lo necesita
+ * porque, al drenar un `CATEGORY|DELETE`, la fila local ya no existe y el
+ * SyncManager solo conoce el id.
+ */
 class CategoryRepositoryFirestore(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val householdId: String,
 ) : CategoryRepository {
 
     private fun getCollection(householdId: String) = 
@@ -99,7 +108,18 @@ class CategoryRepositoryFirestore(
         // intencionalmente vacío
     }
 
+    /**
+     * Lápida, no borrado duro: las categorías por defecto tienen id determinista
+     * (`DefaultCategoryCatalog`), así que un dispositivo que las re-siembra tras
+     * un borrado remoto las resucitaba. Ver [writeTombstone].
+     */
     override suspend fun delete(category: CategoryEntity) {
-        getCollection(category.householdId).document(category.id).delete().await()
+        getCollection(category.householdId).document(category.id)
+            .writeTombstone(category.id, category.householdId)
+    }
+
+    /** Borrado remoto por id (drenado de `CATEGORY|DELETE` del outbox). */
+    suspend fun deleteById(categoryId: String) {
+        getCollection(householdId).document(categoryId).writeTombstone(categoryId, householdId)
     }
 }

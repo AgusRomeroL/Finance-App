@@ -86,7 +86,7 @@ interface PaymentMethodDao {
     suspend fun updateBalance(paymentMethodId: String, newBalance: Double, now: Long = System.currentTimeMillis())
 
     /**
-     * Ajuste relativo y atómico del saldo (Fase 2 — saldo guardado+mantenido).
+     * Ajuste relativo y atómico del saldo (Fase 2: saldo guardado+mantenido).
      * Lo invoca [mx.budget.data.repository.impl.ExpenseRepositoryImpl] al postear,
      * editar, borrar o confirmar un gasto: el saldo parte del ancla declarada y se
      * mueve con cada gasto POSTED nuevo (los 793 sembrados no lo tocan).
@@ -110,4 +110,8 @@ interface PaymentMethodDao {
 
     @Update
     suspend fun update(paymentMethod: PaymentMethodEntity)
+
+    /** Borrado por id usado EXCLUSIVAMENTE por el pull (lápida o removal remoto). */
+    @Query("DELETE FROM payment_method WHERE id = :id")
+    suspend fun deleteById(id: String)
 }

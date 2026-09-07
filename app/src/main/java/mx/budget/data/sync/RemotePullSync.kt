@@ -142,7 +142,9 @@ class RemotePullSync(
 
         // members / quincenas: desde v14 la app los escribe localmente (wizard de
         // onboarding, CRUD de maestros) → LWW por updated_at. Seed/legados (0)
-        // nunca pisan una edición local.
+        // nunca pisan una edición local. Desde la Fase 2 también honran el
+        // borrado remoto (lápida o REMOVED duro); antes lo ignoraban en silencio
+        // y una fila borrada en otro dispositivo vivía aquí para siempre.
         listeners += register(
             "members",
             { it.toMemberEntity() },
@@ -151,6 +153,8 @@ class RemotePullSync(
                 val local = memberDao.getById(remote.id)
                 local == null || remote.updatedAt > local.updatedAt
             },
+            onRemoved = { memberDao.deleteById(it) },
+            localUpdatedAt = { memberDao.getById(it)?.updatedAt },
         )
         listeners += register(
             "quincenas",
@@ -160,6 +164,8 @@ class RemotePullSync(
                 val local = quincenaDao.getById(remote.id)
                 local == null || remote.updatedAt > local.updatedAt
             },
+            onRemoved = { quincenaDao.deleteById(it) },
+            localUpdatedAt = { quincenaDao.getById(it)?.updatedAt },
         )
 
         // categories: desde v13 la app las escribe localmente (alta inline en
@@ -173,9 +179,11 @@ class RemotePullSync(
                 val local = categoryDao.getById(remote.id)
                 local == null || remote.updatedAt > local.updatedAt
             },
+            onRemoved = { categoryDao.deleteById(it) },
+            localUpdatedAt = { categoryDao.getById(it)?.updatedAt },
         )
 
-        // wallets → payment_method: LWW por updated_at.
+        // wallets → payment_method: LWW por updated_at + borrado remoto.
         listeners += register(
             "wallets",
             { it.toPaymentMethodEntity() },
@@ -184,6 +192,8 @@ class RemotePullSync(
                 val local = paymentMethodDao.getById(remote.id)
                 local == null || remote.updatedAt > local.updatedAt
             },
+            onRemoved = { paymentMethodDao.deleteById(it) },
+            localUpdatedAt = { paymentMethodDao.getById(it)?.updatedAt },
         )
 
         // wallet_transfer (RF-41): LWW + removal remoto (duro o por lápida).
@@ -298,9 +308,13 @@ class RemotePullSync(
      * colección tiene [onRemoved], se borra la fila local (gate LWW contra
      * [localUpdatedAt] si se proporcionó; borrar una fila inexistente es
      * no-op, así que sin timestamp local se borra directo). Si la colección NO
-     * tiene flujo de borrado (members, quincenas, categories, wallets: hoy
-     * nadie escribe lápidas ahí), el doc lápida simplemente se ignora: jamás
-     * debe pisar la fila local con el doc mínimo de la lápida.
+     * tiene [onRemoved], el doc lápida simplemente se ignora: jamás debe pisar
+     * la fila local con el doc mínimo de la lápida.
+     *
+     * Desde la Fase 2 TODAS las colecciones planas tienen [onRemoved]. Aun así el
+     * borrado local puede fallar por una FK `NO ACTION` (borrar una categoría con
+     * gastos, una cuenta con transferencias): el `catch` por-cambio lo registra y
+     * el resto del snapshot sigue aplicándose.
      */
     private fun <T : Any> register(
         label: String,

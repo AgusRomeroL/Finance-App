@@ -1,6 +1,5 @@
 package mx.budget.data.remote
 
-import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.flow.Flow
@@ -10,7 +9,7 @@ import mx.budget.data.local.entity.LoanEntity
 import mx.budget.data.repository.LoanRepository
 
 /**
- * Lado nube (Firestore) del [LoanRepository] — MVP Fase 3.5: solo lo usa el
+ * Lado nube (Firestore) del [LoanRepository]. MVP Fase 3.5: solo lo usa el
  * SyncManager para empujar préstamos. Subcolección `households/{hh}/loan`.
  * Lecturas no-op (la app SIEMPRE lee de Room; el pull lo hace RemotePullSync).
  *
@@ -41,26 +40,12 @@ class LoanRepositoryFirestore(
     override suspend fun update(loan: LoanEntity) = insert(loan)
 
     override suspend fun delete(loan: LoanEntity) {
-        writeTombstone(collection(loan.householdId).document(loan.id), loan.id)
+        collection(loan.householdId).document(loan.id).writeTombstone(loan.id, loan.householdId)
     }
 
     /** Borrado remoto por id (drenado de `LOAN|DELETE` del outbox). */
     suspend fun deleteById(loanId: String) {
-        writeTombstone(collection(householdId).document(loanId), loanId)
-    }
-
-    /**
-     * LÁPIDA (tombstone): en vez de borrar el doc (cuyo REMOVED puede perderse
-     * para un dispositivo offline prolongado, que "resucitaría" el préstamo),
-     * se reemplaza por una lápida mínima con `deletedAt`; los pulls la tratan
-     * como borrado (set SIN merge limpia el resto de campos). Decisión
-     * consciente: para loans el borrado GANA sobre una edición offline
-     * concurrente (un abono re-pusheado tras el borrado converge a borrado en
-     * todos los dispositivos vía el gate LWW >= del pull).
-     */
-    private suspend fun writeTombstone(ref: DocumentReference, id: String) {
-        val now = System.currentTimeMillis()
-        ref.set(mapOf("id" to id, "deletedAt" to now, "updatedAt" to now)).await()
+        collection(householdId).document(loanId).writeTombstone(loanId, householdId)
     }
 
     override suspend fun applyPayment(loanId: String, paymentMxn: Double) {

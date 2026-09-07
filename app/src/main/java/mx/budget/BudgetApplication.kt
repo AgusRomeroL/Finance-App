@@ -536,9 +536,9 @@ class BudgetApplication : Application() {
         val remoteLoanRepository = mx.budget.data.remote.LoanRepositoryFirestore(firestore, householdId)
         val remoteInstallmentRepository = mx.budget.data.remote.InstallmentRepositoryFirestore(firestore)
         // Categorías (v13): push de altas/ediciones locales (color, alta inline).
-        val remoteCategoryRepository = mx.budget.data.remote.CategoryRepositoryFirestore(firestore)
+        val remoteCategoryRepository = mx.budget.data.remote.CategoryRepositoryFirestore(firestore, householdId)
         // Miembros (v14): push de altas/ediciones locales (wizard, CRUD de maestros).
-        val remoteMemberRepository = mx.budget.data.remote.MemberRepositoryFirestore(firestore)
+        val remoteMemberRepository = mx.budget.data.remote.MemberRepositoryFirestore(firestore, householdId)
         // Plantillas recurrentes (v19): push del CRUD local (también editable en la web).
         val remoteRecurrenceRepository = mx.budget.data.remote.RecurrenceRepositoryFirestore(firestore, householdId)
         // Hogar (Fase 2): push del documento raíz; antes las ediciones del hogar
