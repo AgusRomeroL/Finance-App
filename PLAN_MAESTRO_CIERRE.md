@@ -84,7 +84,7 @@ El orden respeta dependencias reales: primero se sanea el terreno, después se c
 | 0 | Saneamiento del repositorio y de la documentación | ninguna | 1 | **hecha** (2026-09-05) | `b17d397` (último de contenido; el cierre documental es el commit siguiente, que actualiza esta tabla) |
 | 1 | Cierre de la deuda funcional conocida | 0 | 1 a 2 | **hecha** (2026-09-07) | `5c428b0` (último de contenido; el cierre documental es el commit siguiente, que actualiza esta tabla) |
 | 2 | Sync, identidad y reglas a prueba de todo | 1 | 1 a 2 | **hecha** (2026-09-07) | `ca02f6a` (ultimo de contenido; el cierre documental es el commit siguiente, que actualiza esta tabla) |
-| 3 | Wear OS terminado y verificado en hardware | 2 | 1 | pendiente | |
+| 3 | Wear OS terminado y verificado | 2 | 1 | **hecha** (2026-09-07) | `731a2e4` (último de contenido; el cierre documental es el commit siguiente, que actualiza esta tabla) |
 | 4 | IA on-device terminada (provisión del modelo, latencia, chat) | 2 | 1 | pendiente | |
 | 5 | Ciclo de quincena, exportación y respaldo | 1 | 1 | pendiente | |
 | 6 | Mejora de UX con `/design` y accesibilidad | 1, 5 | 2 (6a auditoría y diseño; 6b implementación) | pendiente | |
@@ -208,6 +208,19 @@ fast-forward a main y norma y actualiza la sección 3 del plan.
 **Fuera de alcance.** *Ongoing Activity* (sin valor claro para este hogar).
 
 **Criterio de salida.** Capturas de cada flujo en el emulador del reloj; *complications* instalables en una carátula; sin *jank* medible. Lo que el emparejamiento emulador-emulador no permita verificar queda anotado como pendiente explícito, con lo que haría falta para cerrarlo.
+
+**Registro de cierre (2026-09-07).** Commits en `develop`: `c44df23` (el snapshot y el hub dejan de mentir), `49f245c` (una sola versión para teléfono y reloj), `1b46388` (conexión, frescura y cola visibles), `0aee89c` (las dos *complications*), `731a2e4` (el formateo sale del camino de recomposición), más el commit de esta actualización.
+
+**Cómo se resolvió el emparejamiento.** El intento emulador-emulador de julio no falló por la técnica: `FinanceFold` es imagen `google_apis` **sin Play Store**, así que no puede instalar la app companion "Wear OS" y no puede emparejarse con nada. La ruta que sí funciona, y con la que se verificó todo, es el emulador `FinanceWatch` emparejado con el **Pixel 7 real**: companion instalada desde Play Store en el teléfono (su cuenta de Google ya estaba presente, no pidió contraseña), `adb -s <pixel7> forward tcp:5601 tcp:5601`, y "Pair with emulator" en el menú de la companion. Agustín autorizó de forma explícita instalar la app y aceptar los términos de Google en su teléfono.
+
+**Lo que la verificación destapó.** El "Disponible" del reloj nunca se movía: el snapshot lo calculaba con la columna desnormalizada `actual_expenses_mxn`, que no mantiene nadie y llega siempre en cero, así que el reloj mostraba el ingreso proyectado tal cual. La Fase 1 unificó dashboard, resumen de Analíticas y asistente en `QuincenaFigures`; el reloj se había quedado fuera y era el último sitio con la cuenta vieja. Además, una captura hecha desde el reloj no refrescaba las superficies del propio reloj (`captureNaturalLanguage` era la única de las cuatro entradas que no empujaba snapshot), el chip "Movimientos" se cortaba en "Movimiento" y las barras por miembro perdían la primera letra y la última cifra contra el borde circular.
+
+**Flujos verificados, con captura:** hub con la cifra real de la quincena; espejo en vivo del teléfono al reloj sin tocar el reloj (el arreglo del 2026-07-07, que nunca se había comprobado de punta a punta); captura de gasto desde el reloj a la bandeja `pending_capture`; ingreso desde el reloj; confirmar y descartar un pendiente; refresco de las seis *tiles*; y el dictado, con el teclado del `RecognizerIntent` sustituyendo al micrófono, que el emulador no tiene, de modo que queda probada toda la cadena menos el paso acústico.
+
+**Pendientes explícitos, que no se dan por buenos:**
+1. **El renderizado de las dos *complications* sobre una carátula no se pudo verificar.** El editor de las carátulas que trae Wear OS 5 solo permitió llegar a las páginas de color y notificaciones, y los huecos de complication los dibuja la propia carátula sin exponer ningún nodo de accesibilidad, así que `adb` no puede seleccionarlos; el botón de editar abre el editor de forma intermitente. Lo que sí está comprobado: el sistema registra los dos servicios con su acción y su permiso (`dumpsys package`), y el módulo compila e instala. Para cerrarlo hace falta una carátula con huecos editables (el Pixel Watch 4 real, o una carátula de ejemplo instalada a mano) y elegir "Presupuesto" en el hueco.
+2. **Las cifras de fluidez no se extrapolan al Pixel Watch 4.** El AVD `FinanceWatch` renderiza por software (`hw.gpu.enabled=no`), con 512 MB de RAM y heap de 64 MB, y los percentiles de GPU muestran que el renderizado domina la medida. Sirven para cazar una regresión gruesa y nada más.
+3. **El micrófono del reloj** no se probó, por lo dicho arriba.
 
 **Prompt de arranque.**
 ```text
