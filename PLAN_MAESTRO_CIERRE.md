@@ -26,7 +26,7 @@ Este documento es la fuente única de verdad del cierre. Cada fase la ejecuta un
 - Rama de trabajo `develop`. Al cerrar una fase verificada se hace *fast-forward* de `develop` a `main`, y `norma` se iguala a `main` (siguen idénticas; la Fase 9, que las habría separado, quedó cancelada).
 - Autoría única de Agustín Romero López en todo commit; sin trailers ni menciones de IA en commits, código, docs ni producto.
 - Cero U+2014 en cualquier texto.
-- Toda UI se verifica con la configuración fiel del Fold de Norma (`wm size 2076x2152`, `wm density 408`, `font_scale 1.30`, `font_weight_adjustment 300`, modo oscuro) y, cuando la fase lo exija, en hardware real (Pixel 10 Pro XL y Pixel 9 de Agustín, Pixel Watch 4).
+- Toda UI se verifica con la configuración fiel del Fold de Norma (`wm size 2076x2152`, `wm density 408`, `font_scale 1.30`, `font_weight_adjustment 300`, modo oscuro) y, cuando la fase lo exija, en hardware real. **Inventario al 2026-09-07:** el Pixel 9 ya no existe; queda el **Pixel 7**, de uso libre, y el **Pixel 10 Pro XL**, que se reserva para lo que de verdad lo necesite (AICore solo funciona ahí). Los emuladores son `FinanceFold` para el teléfono y `FinanceWatch` para el reloj. Detalle en la guía del repo, sección "Dispositivos para verificar".
 - Todo cambio de estado de UI se anima con los tokens de `BudgetMotion` y respeta `LocalReducedMotion` (principio transversal de `CLAUDE.md`).
 - Cualquier cambio de esquema Room sube la versión, escribe una `Migration` idempotente y copia el `createSql` del `schemas/N.json`; nunca `fallbackToDestructiveMigration`.
 
@@ -61,7 +61,7 @@ Severidad: **B** bloquea la entrega; **F** funcionalidad incompleta o defecto co
 | 13 | F | Sin exportación ni respaldo visible: RF-34 (reporte PDF/XLSX), RF-91 (XLSX con el layout del Excel), RF-92 (CSV) no existen; el comentario de Perfil lo deja como "se añadirá". Sin cierre manual de quincena (RF-32). | `ui/profile/ProfileScreen.kt:59`; `grep` de export/closeQuincena vacío | 5 |
 | 14 | F | Quick Tap (spec §3.3, "estrella del sistema") no existe; el permiso `SYSTEM_ALERT_WINDOW` está declarado y solo lo consumirá su overlay. Decisión 2026-09-05: Quick Tap SÍ se implementa (Fase 6) y el permiso se conserva. Corrección de la evidencia: `ACCESS_BACKGROUND_LOCATION` sí tiene uso real (nivel "Persistente" de Perfil; `MainActivity` lo solicita y `BankCaptureManager` lo aprovecha al ingerir notificaciones en segundo plano); se conserva por decisión del mismo día. Ambos permisos exigirán justificación si algún día se publica en Play (Fase 8). | `AndroidManifest.xml`; `data/location/LocationProvider.kt`; `ui/capture/QuickCaptureActivity.kt` (ya existe, con `CaptureViewModel` real) | 6 |
 | 15 | F | Wear: sin *complications* (spec §4.3) ni *Ongoing Activity*; la sincronización Data Layer solo se ha verificado parcialmente en hardware; la app del reloj no tiene versionado ni firma compartidos con el teléfono. | `wear/src` sin `Complication`; memoria `wear-redesign` | 3 |
-| 16 | F | Chat IA: respuesta genérica en texto libre; latencia de ~54 s por análisis abierto en Pixel 9 (CPU) sin gestión de expectativas en UI. | memoria `mvp-integral-fases` (J5-LLM) | 4 |
+| 16 | F | Chat IA: respuesta genérica en texto libre; latencia de ~54 s por análisis abierto medida en su día en un Pixel 9 (CPU) sin gestión de expectativas en UI. Ese aparato ya no existe: hay que volver a medir en el Pixel 7. | memoria `mvp-integral-fases` (J5-LLM) | 4 |
 | 17 | C | Pruebas: un solo test JVM (`NaturalLanguageCaptureParserTest`); ninguna prueba de la cadena de migraciones 1→19 sobre el asset real; sin pruebas de reglas Firestore; sin CI. La *golden suite* de IA de la spec no existe. | `app/src/test` (1 archivo); sin `androidTest`; sin `.github/` | 7 |
 | 18 | C | Sin observabilidad de fallos en producción (no hay Crashlytics ni registro local exportable). | `app/build.gradle.kts` sin crashlytics | 7 |
 | 19 | C | Dependencia muerta de Hilt (cero anotaciones) que alarga KSP y engorda el APK. Resuelto en la Fase 0 (`65fd0bc`). | `app/build.gradle.kts`; `grep @Inject` = 0 | 0 |
@@ -194,12 +194,12 @@ fast-forward a main y norma y actualiza la sección 3 del plan.
 
 ---
 
-### Fase 3. Wear OS terminado y verificado en hardware
+### Fase 3. Wear OS terminado y verificado
 
 **Objetivo.** Que el reloj sea una superficie completa y confiable, no un cascarón que compila.
 
 **Alcance.**
-1. Ejecutar la receta de verificación E2E en el Pixel Watch 4 emparejado con el Pixel 10: hub con "Disponible" real, captura desde el reloj a la bandeja, confirmar y descartar pendientes, ingreso desde el reloj, refresco de los seis *tiles*, dictado por voz.
+1. Ejecutar la receta de verificación E2E **en los emuladores** (`FinanceWatch` emparejado con `FinanceFold`): hub con "Disponible" real, captura desde el reloj a la bandeja, confirmar y descartar pendientes, ingreso desde el reloj, refresco de los seis *tiles*, dictado por voz. El emparejamiento emulador-emulador se intentó sin éxito de forma headless en julio de 2026; hay que volver a intentarlo (`adb forward tcp:5601 tcp:5601` con la companion de Wear OS) y, si el Data Layer sigue sin poder verificarse así, decirlo con todas sus letras en vez de dar por buena la parte que no se probó. El reloj real está emparejado con el Pixel 10, que se reserva para lo que exige el LLM local.
 2. Dos *complications* según la spec §4.3: "Disponible" (`RANGED_VALUE` con `SHORT_TEXT`) y "Próximo pago" (`SHORT_TEXT`), alimentadas desde `WearCache`.
 3. Latencia y frescura: medir con `dumpsys gfxinfo`; corregir todo *jank* del hub y de los *tiles*.
 4. Versionado y firma compartidos con el teléfono (mismo `versionCode` y misma llave, requisito del emparejamiento companion); preparar el `build.gradle.kts` del reloj para la Fase 8.
@@ -207,15 +207,15 @@ fast-forward a main y norma y actualiza la sección 3 del plan.
 
 **Fuera de alcance.** *Ongoing Activity* (sin valor claro para este hogar).
 
-**Criterio de salida.** Video o capturas de cada flujo en el reloj real; *complications* instalables en una carátula; sin *jank* medible.
+**Criterio de salida.** Capturas de cada flujo en el emulador del reloj; *complications* instalables en una carátula; sin *jank* medible. Lo que el emparejamiento emulador-emulador no permita verificar queda anotado como pendiente explícito, con lo que haría falta para cerrarlo.
 
 **Prompt de arranque.**
 ```text
-Lee CLAUDE.md, la Fase 3 de PLAN_MAESTRO_CIERRE.md y la memoria finance-app-wear-redesign. El
-usuario tiene un Pixel 10 Pro XL y un Pixel Watch 4 reales conectados por adb; pídele confirmación
-de conectividad antes de empezar. Ejecuta la receta E2E, implementa las dos complications y el
-versionado compartido, y corrige todo lo que falle. Documenta los resultados por flujo. Cierra con
-fast-forward a main y norma y actualiza la sección 3 del plan.
+Lee CLAUDE.md, la Fase 3 de PLAN_MAESTRO_CIERRE.md y la memoria finance-app-wear-redesign. La
+verificacion va en los emuladores FinanceWatch y FinanceFold, no en hardware. Ejecuta la receta E2E,
+implementa las dos complications y el versionado compartido, y corrige todo lo que falle. Documenta
+los resultados por flujo y di con claridad que no pudiste verificar. Cierra con fast-forward a main
+y norma y actualiza la seccion 3 del plan.
 ```
 
 ---
@@ -228,17 +228,18 @@ fast-forward a main y norma y actualiza la sección 3 del plan.
 1. Provisión del modelo: descarga in-app del `.litertlm` desde un origen controlado por Agustín (§7: Firebase Storage del proyecto con regla de autenticado, o bucket propio), con `WorkManager` (solo Wi-Fi, con carga, reanudable por `Range`, verificación SHA-256), progreso y control en Perfil → "Asistente IA", y borrado del modelo. Elegir la variante (E2B frente a E4B) con base en la RAM del Fold y la latencia medida.
 2. Gestión de latencia: indicador de progreso honesto, cancelación, *streaming* de tokens si la API lo permite, y precálculo nocturno del *digest* determinista para que el análisis abierto arranque caliente.
 3. Chat en texto libre: cerrar la ruta genérica (clasificación → intent → respuesta anclada) con mensajes de límite claros cuando la pregunta no cabe en el catálogo.
-4. Verificar las tres rutas del `HybridLlm` (AICore en Pixel 10, LiteRT-LM en Pixel 9, fallback SQL en emulador) tras los cambios.
+4. Verificar las tres rutas del `HybridLlm` tras los cambios: AICore en el Pixel 10, LiteRT-LM en el **Pixel 7** (el Pixel 9 ya no existe; el 7 es Tensor G2, así que no tiene AICore y cae a la ruta local, aunque más lento) y fallback SQL en el emulador. La latencia de ~54 s medida en su día en un Pixel 9 hay que volver a medirla, no darla por buena.
 5. Dejar los casos de la *golden suite* (pregunta → intent esperado) como datos JSON en `assets/ai/golden/`; la Fase 7 los convierte en pruebas.
 
-**Criterio de salida.** Instalación fresca en Pixel 9 sin `adb push`: el modelo se descarga desde la app y el análisis abierto responde con el badge "Análisis IA"; el Pixel 10 responde por AICore; el emulador degrada a chips sin error.
+**Criterio de salida.** Instalación fresca en el Pixel 7 sin `adb push`: el modelo se descarga desde la app y el análisis abierto responde con el badge "Análisis IA"; el Pixel 10 responde por AICore; el emulador degrada a chips sin error. Aviso: el aparato objetivo es el Fold de Norma (Tensor G4) y ya no hay ningún equivalente disponible, así que la variante del modelo y la latencia se eligen con el Pixel 7 como cota superior de tiempo y se revisan en el cutover.
 
 **Prompt de arranque.**
 ```text
 Lee CLAUDE.md (capa de IA), ADENDA_IA_PROACTIVA.md §F.8.4, la Fase 4 de PLAN_MAESTRO_CIERRE.md y las
 memorias de IA. Antes de implementar la descarga, confirma con el usuario el origen del modelo
-(decisión 4 de la sección 7). Implementa los 5 puntos en develop y verifica en Pixel 9 y Pixel 10
-reales. Cierra con fast-forward a main y norma y actualiza la sección 3 del plan.
+(decision 4 de la seccion 7). Implementa los 5 puntos en develop. Esta es la fase que SI justifica
+usar el Pixel 10 Pro XL, porque AICore solo funciona ahi; la ruta LiteRT-LM se verifica en el Pixel 7
+(el Pixel 9 ya no existe). Cierra con fast-forward a main y norma y actualiza la seccion 3 del plan.
 ```
 
 ---
@@ -343,7 +344,7 @@ fast-forward a main y norma y actualiza la sección 3 del plan.
 2. `buildTypes.release` en app y reloj: `isMinifyEnabled`, `isShrinkResources`, `proguard-rules.pro` con reglas para Room, Firestore, OkHttp, kotlinx.serialization, pdfbox-android, ML Kit y LiteRT-LM; esquema de `versionCode` compartido (fecha + secuencia) y `versionName` semántico.
 3. Registrar el SHA-1 de *release* en Firebase, regenerar `google-services.json`, y verificar Google Sign-In con el build firmado.
 4. Verificar la compatibilidad de páginas de 16 KB de las bibliotecas nativas (`zipalign -c -P 16`) y, si hace falta, subir las dependencias que la incumplan.
-5. *Smoke test* completo del build de *release* (todos los flujos de §2.1) en Pixel 9, Pixel 10 y Watch 4: la reducción de código suele romper reflexión y serialización.
+5. *Smoke test* completo del build de *release* (todos los flujos de §2.1) en el Pixel 7, el Pixel 10 y el reloj: la reducción de código suele romper reflexión y serialización.
 6. Web: `VITE_FIREBASE_APP_ID` definitivo, script de despliegue reproducible desde una copia NTFS (`scripts/web/deploy.ps1`), y verificación de la PWA instalada.
 7. Canal de distribución según la decisión 5 de §7 (APK firmado compartido por Drive, o pista interna de Play).
 
