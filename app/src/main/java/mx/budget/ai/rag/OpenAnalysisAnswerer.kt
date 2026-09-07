@@ -8,8 +8,12 @@ import mx.budget.ai.service.OnDeviceLlm
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.SpendByCategory
 import mx.budget.data.repository.AnalyticsRepository
+import mx.budget.data.quincena.QuincenaFigures
+import mx.budget.data.quincena.quincenaFigures
 import mx.budget.data.repository.ExpenseRepository
+import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.InstallmentRepository
+import mx.budget.ui.common.AppLocale
 import mx.budget.data.repository.QuincenaRepository
 import java.io.InputStreamReader
 import java.text.NumberFormat
@@ -30,7 +34,7 @@ import kotlin.math.abs
  *    del contexto (prompt en `assets/ai/open_analysis_prompt.es.txt`). Si la
  *    salida viene vacía o rota, cae al modo determinista.
  *  - **Sin LLM (emulador)**: genera un insight determinista con plantillas en
- *    español — top 3 desviaciones presupuesto-vs-real de la quincena activa +
+ *    español: top 3 desviaciones presupuesto-vs-real de la quincena activa +
  *    el dato más inusual disponible (categoría con mayor crecimiento vs su
  *    promedio histórico).
  *
@@ -42,6 +46,7 @@ class OpenAnalysisAnswerer(
     private val quincenaRepository: QuincenaRepository,
     private val analyticsRepository: AnalyticsRepository,
     private val expenseRepository: ExpenseRepository,
+    private val incomeRepository: IncomeRepository,
     private val installmentRepository: InstallmentRepository,
 ) {
 
@@ -60,7 +65,7 @@ class OpenAnalysisAnswerer(
     private val promptTemplate: String by lazy { loadAsset("ai/open_analysis_prompt.es.txt") }
 
     private val money: NumberFormat =
-        NumberFormat.getCurrencyInstance(Locale("es", "MX")).apply { maximumFractionDigits = 0 }
+        NumberFormat.getCurrencyInstance(AppLocale).apply { maximumFractionDigits = 0 }
 
     suspend fun answer(question: String, householdId: String, useLlm: Boolean): Answer =
         withContext(Dispatchers.IO) {
@@ -77,6 +82,22 @@ class OpenAnalysisAnswerer(
                 )
             }.getOrDefault(emptyList())
 
+            // Cifras con la MISMA convencion del dashboard: el asistente contradecia
+            // a la pantalla principal porque partia de columnas desnormalizadas que
+            // no se mantienen.
+            val figures = runCatching {
+                quincenaFigures(
+                    quincena = quincena,
+                    receivedIncome = incomeRepository.observePostedTotal(quincena.id).first(),
+                    spent = expenseRepository.observePostedTotal(quincena.id).first(),
+                    reserved = expenseRepository.observeProratedPlannedTotal(quincena.id).first(),
+                    projectedExpensesFallback = spendByCategory.sumOf { it.projected },
+                )
+            }.getOrElse {
+                quincenaFigures(quincena, 0.0, spendByCategory.sumOf { it.actual }, 0.0,
+                    spendByCategory.sumOf { it.projected })
+            }
+
             if (useLlm && promptTemplate.isNotBlank()) {
                 val digest = buildDigest(quincena, spendByCategory, historicalAvg, householdId)
                 val prompt = assemble(digest, PromptSanitizer.sanitize(question))
@@ -85,7 +106,9 @@ class OpenAnalysisAnswerer(
                 // LLM roto/vacío → nunca dejar al usuario sin respuesta.
             }
 
-            Answer.Deterministic(deterministicInsight(quincena, spendByCategory, historicalAvg))
+            Answer.Deterministic(
+                deterministicInsight(quincena, figures, spendByCategory, historicalAvg)
+            )
         }
 
     // ── Digest para el LLM ───────────────────────────────────────────────
@@ -147,7 +170,7 @@ class OpenAnalysisAnswerer(
 
     /**
      * Post-proceso defensivo de la salida del LLM: quita fences/etiquetas y
-     * descarta salidas que parezcan JSON (el modelo confundió el contrato) —
+     * descarta salidas que parezcan JSON (el modelo confundió el contrato):
      * en ese caso se cae al insight determinista.
      */
     private fun cleanLlmText(raw: String): String {
@@ -169,23 +192,34 @@ class OpenAnalysisAnswerer(
      */
     private fun deterministicInsight(
         quincena: QuincenaEntity,
+        figures: QuincenaFigures,
         byCategory: List<SpendByCategory>,
         historicalAvg: List<SpendByCategory>,
     ): String = buildString {
-        // Los agregados de la quincena pueden venir en 0 (p. ej. quincena
-        // creada por el rollover): en ese caso se totaliza desde las categorías.
-        val actualTotal = quincena.actualExpensesMxn
-            .takeIf { it > 0 } ?: byCategory.sumOf { it.actual }
-        val projectedTotal = quincena.projectedExpensesMxn
-            .takeIf { it > 0 } ?: byCategory.sumOf { it.projected }
-        val pct = if (projectedTotal > 0) (actualTotal / projectedTotal * 100).toInt() else 0
-        // Etiquetado explícito POSTED vs proyectado: al inicio de una quincena el
-        // gasto ejecutado es ~$0 y sin la aclaración la cifra parece contradecir
-        // el "Reservado" del dashboard (que descuenta lo PLANNED).
+        // Las tres cifras del dashboard, con sus mismas etiquetas: pagado,
+        // reservado y disponible. Antes esto decia solo "ya pagados" contra el
+        // proyectado, y al inicio de una quincena parecia contradecir al
+        // "Reservado" de la pantalla principal.
         append(
             "Esto es lo que veo en ${quincena.label}: llevan " +
-                "${money.format(actualTotal)} ya pagados (no incluye lo planeado " +
-                "por pagar) de ${money.format(projectedTotal)} proyectados ($pct %)."
+                "${money.format(figures.spent)} ya pagados de " +
+                "${money.format(figures.projectedExpenses)} proyectados " +
+                "(${figures.executionPct} %)."
+        )
+        if (figures.reserved > 0) {
+            append(
+                " Ademas hay ${money.format(figures.reserved)} reservados para los " +
+                    "cargos planeados que faltan por pagar."
+            )
+        }
+        append(
+            if (figures.available >= 0) {
+                " Con el ingreso de ${money.format(figures.income)} quedan " +
+                    "${money.format(figures.available)} disponibles."
+            } else {
+                " Con el ingreso de ${money.format(figures.income)} van " +
+                    "${money.format(-figures.available)} por encima de lo disponible."
+            }
         )
 
         val deviations = byCategory
@@ -199,10 +233,10 @@ class OpenAnalysisAnswerer(
                 append(
                     if (diff >= 0) {
                         "\n· ${c.categoryName}: ${money.format(c.actual)} de " +
-                            "${money.format(c.projected)} — excedida por ${money.format(diff)}"
+                            "${money.format(c.projected)}, excedida por ${money.format(diff)}"
                     } else {
                         "\n· ${c.categoryName}: ${money.format(c.actual)} de " +
-                            "${money.format(c.projected)} — quedan ${money.format(-diff)}"
+                            "${money.format(c.projected)}, quedan ${money.format(-diff)}"
                     }
                 )
             }

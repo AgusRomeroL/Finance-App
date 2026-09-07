@@ -72,7 +72,7 @@ import java.util.Locale
  * Chat del asistente reactivo (MVP Fase 4 + paquete A1), hospedado como bottom
  * sheet desde Analíticas. Con LLM disponible la pregunta libre corre el
  * pipeline RAG completo; sin LLM (emulador) la misma caja usa la heurística
- * determinista + la ruta OPEN_ANALYSIS local — el chat siempre responde algo
+ * determinista + la ruta OPEN_ANALYSIS local: el chat siempre responde algo
  * con datos reales.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,7 +87,7 @@ fun AiChatSheet(
     val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
     val listState = rememberLazyListState()
 
-    // Cada apertura del sheet reintenta el sondeo si aún no está disponible —
+    // Cada apertura del sheet reintenta el sondeo si aún no está disponible:
     // cubre el caso de un `Unavailable` previo que ya podría haberse resuelto
     // (p. ej. el modelo se empujó por adb después de arrancar la app).
     LaunchedEffect(Unit) {
@@ -122,13 +122,13 @@ fun AiChatSheet(
             )
             Text(
                 if (llmAvailable) "Pregunta libre (LLM on-device) o usa un atajo."
-                else "Sin LLM en este dispositivo — respuestas deterministas con tus datos.",
+                else "Sin LLM en este dispositivo: respuestas deterministas con tus datos.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(10.dp))
 
-            // Historial — cada mensaje nuevo aparece con resorte M3.
+            // Historial: cada mensaje nuevo aparece con resorte M3.
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -173,7 +173,7 @@ fun AiChatSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            // Atajos — pills completos (mismo lenguaje visual que los filtros
+            // Atajos: pills completos (mismo lenguaje visual que los filtros
             // del dashboard), en una sola fila horizontal desplazable.
             // DINÁMICOS (Fase 3): los genera SuggestedQuestionEngine desde el
             // estado real (sobregasto, deuda, cercanía al límite) con rotación;
@@ -224,7 +224,7 @@ fun AiChatSheet(
                 }
             }
 
-            // Pregunta libre — siempre disponible: con LLM corre el RAG; sin
+            // Pregunta libre, siempre disponible: con LLM corre el RAG; sin
             // LLM cae a la heurística determinista + análisis local.
             Spacer(Modifier.height(10.dp))
             var input by remember { mutableStateOf("") }
@@ -394,7 +394,7 @@ private fun ChatBubble(msg: ChatMessage, money: NumberFormat, modifier: Modifier
 private fun formatResult(result: DispatchResult, money: NumberFormat): String = when (result) {
     is DispatchResult.CategoryRemaining ->
         "${result.category.displayName}: gastado ${money.format(result.actual)} de " +
-            "${money.format(result.projected)} presupuestados — quedan ${money.format(result.remaining)}."
+            "${money.format(result.projected)} presupuestados, quedan ${money.format(result.remaining)}."
 
     is DispatchResult.TopCategories -> buildString {
         append("Donde más se gasta esta quincena:")
@@ -421,7 +421,7 @@ private fun formatResult(result: DispatchResult, money: NumberFormat): String = 
     is DispatchResult.InstallmentStatus ->
         result.summary?.let {
             "${it.displayName}: cuota ${it.currentInstallment} de ${it.totalInstallments} " +
-                "(${money.format(it.installmentAmountMxn)} c/u) — restan ${money.format(it.remainingMxn)}."
+                "(${money.format(it.installmentAmountMxn)} c/u), restan ${money.format(it.remainingMxn)}."
         } ?: "${result.plan.displayName}: sin resumen activo (¿ya liquidado?)."
 
     is DispatchResult.SavingsProjection ->
@@ -440,10 +440,22 @@ private fun formatResult(result: DispatchResult, money: NumberFormat): String = 
         }
 
     is DispatchResult.QuincenaSummary -> with(result.summary) {
-        // Ingreso en AMBAS formas: recibido (POSTED en vivo) y proyectado.
-        "$label — ingreso ${money.format(actualIncomeMxn)} recibido de " +
-            "${money.format(projectedIncomeMxn)} proyectado, gasto ${money.format(actualExpensesMxn)}; " +
-            "diferencia ${money.format(savingsMxn)}."
+        // Misma convencion que el dashboard: ingreso en sus dos formas, gasto
+        // ejecutado, reserva prorrateada y el disponible que resulta de restarlas.
+        val income = maxOf(projectedIncomeMxn, actualIncomeMxn)
+        val available = income - actualExpensesMxn - result.reservedMxn
+        buildString {
+            append("$label: ingreso ${money.format(actualIncomeMxn)} recibido de ")
+            append("${money.format(projectedIncomeMxn)} proyectado, gasto ")
+            append("${money.format(actualExpensesMxn)}")
+            if (result.reservedMxn > 0) {
+                append(", reservado ${money.format(result.reservedMxn)}")
+            }
+            append(
+                if (available >= 0) "; disponible ${money.format(available)}."
+                else "; van ${money.format(-available)} por encima de lo disponible."
+            )
+        }
     }
 
     // Ruta OPEN_ANALYSIS: el texto ya viene redactado (LLM o plantillas).

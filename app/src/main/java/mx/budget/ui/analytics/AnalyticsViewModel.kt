@@ -73,7 +73,7 @@ class AnalyticsViewModel(
     /**
      * Distribución del gasto por MIEMBRO (rol BENEFICIARY = quién consume) para el
      * [MemberPeriod] seleccionado. Reutiliza la agregación de atribuciones
-     * (`share_amount_mxn` sobre gastos POSTED, `display_name` por JOIN — sin mapeo
+     * (`share_amount_mxn` sobre gastos POSTED, `display_name` por JOIN, sin mapeo
      * manual member_id→nombre): para HISTORICO/ANUAL/MENSUAL usa un rango de fechas
      * del hogar (`observeSpendByMemberRange`), y para QUINCENAL el rango
      * `start_date..end_date` de la quincena activa. Alimenta la dona "Distribución
@@ -121,13 +121,32 @@ class AnalyticsViewModel(
     }
 
     /**
-     * Ingreso RECIBIDO (POSTED) en vivo de la quincena activa — como el dashboard.
+     * Ingreso RECIBIDO (POSTED) en vivo de la quincena activa, como en el dashboard.
      * Las columnas agregadas de quincena (`actualIncomeMxn`) no se mantienen y
      * llegan en 0; se usa esto para el ingreso "recibido" junto al proyectado.
      */
     val postedIncome: StateFlow<Double> =
         activeQuincena.flatMapLatest { q ->
             if (q == null) flowOf(0.0) else incomeRepository.observePostedTotal(q.id)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0.0)
+
+    /**
+     * Gasto EJECUTADO (POSTED) en vivo de la quincena activa, igual que el
+     * dashboard. La columna `actual_expenses_mxn` de la quincena no se mantiene.
+     */
+    val postedExpenses: StateFlow<Double> =
+        activeQuincena.flatMapLatest { q ->
+            if (q == null) flowOf(0.0) else expenseRepository.observePostedTotal(q.id)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0.0)
+
+    /**
+     * Reserva prorrateada por cadencia de la quincena activa: lo que de las
+     * obligaciones planeadas toca a esta mitad del mes. Es lo que el dashboard
+     * descuenta en "Disponible".
+     */
+    val reservedPlanned: StateFlow<Double> =
+        activeQuincena.flatMapLatest { q ->
+            if (q == null) flowOf(0.0) else expenseRepository.observeProratedPlannedTotal(q.id)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0.0)
 
     /** Tendencia: últimas quincenas cerradas (ingreso/gasto real). */

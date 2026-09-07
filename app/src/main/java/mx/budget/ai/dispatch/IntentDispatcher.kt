@@ -29,7 +29,7 @@ import java.util.Locale
  * MVP Fase 4: los 10 handlers consultan los repositorios Room reales
  * (determinista, sin LLM en esta capa). [resolverProvider] entrega un
  * [AliasResolver] fresco (miembros/categorías/wallets/planes actuales) en cada
- * dispatch — así los alias siempre reflejan el estado vivo de la DB.
+ * dispatch, así los alias siempre reflejan el estado vivo de la DB.
  */
 class IntentDispatcher(
     private val resolverProvider: suspend () -> AliasResolver,
@@ -62,7 +62,7 @@ class IntentDispatcher(
      * Despacha la salida CRUDA del LLM. Tres niveles de tolerancia:
      *  1. Decode estricto del JSON reparado.
      *  2. Parseo manual laxo (intent en minúsculas/con espacios, args sueltos).
-     *  3. Fallback heurístico sobre [originalQuestion] (sin LLM) — el chat
+     *  3. Fallback heurístico sobre [originalQuestion] (sin LLM): el chat
      *     siempre intenta responder con datos reales antes de rendirse.
      */
     suspend fun dispatch(rawResponse: String, originalQuestion: String? = null): DispatchResult {
@@ -115,7 +115,7 @@ class IntentDispatcher(
 
     /**
      * Despacha una respuesta YA estructurada (la usan los chips deterministas
-     * de la UI cuando no hay LLM disponible — bypass del parseo).
+     * de la UI cuando no hay LLM disponible, bypass del parseo).
      */
     suspend fun dispatch(response: AssistantResponse): DispatchResult {
         val resolver = resolverProvider()
@@ -258,11 +258,12 @@ class IntentDispatcher(
 
             AssistantResponse.Intent.SUMMARIZE_QUINCENA -> {
                 // Los "ejecutados" se leen EN VIVO del ledger (igual que el dashboard),
-                // no de las columnas agregadas de la quincena — que no se mantienen y
+                // no de las columnas agregadas de la quincena, que no se mantienen y
                 // llegaban en 0, haciendo que el resumen reportara "$0 gastado" con el
                 // KPI mostrando el gasto real.
                 val actualExpenses = expenseRepository.observePostedTotal(quincena.id).first()
                 val actualIncome = incomeRepository.observePostedTotal(quincena.id).first()
+                val reserved = expenseRepository.observeProratedPlannedTotal(quincena.id).first()
                 DispatchResult.QuincenaSummary(
                     QuincenaSnapshot(
                         quincenaId = quincena.id,
@@ -274,7 +275,8 @@ class IntentDispatcher(
                         actualIncomeMxn = actualIncome,
                         actualExpensesMxn = actualExpenses,
                         savingsMxn = actualIncome - actualExpenses,
-                    )
+                    ),
+                    reservedMxn = reserved,
                 )
             }
 

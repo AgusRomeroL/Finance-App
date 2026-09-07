@@ -861,6 +861,7 @@ class AiAssistantViewModelFactory(
             quincenaRepository = app.quincenaRepository,
             analyticsRepository = app.analyticsRepository,
             expenseRepository = app.expenseRepository,
+            incomeRepository = app.incomeRepository,
             installmentRepository = app.installmentRepository,
         )
         return mx.budget.ai.AiAssistantViewModel(

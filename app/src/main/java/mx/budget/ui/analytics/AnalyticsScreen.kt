@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mx.budget.data.local.entity.QuincenaEntity
+import mx.budget.data.quincena.quincenaFigures
 import mx.budget.data.local.result.QuincenaSnapshot
 import mx.budget.data.local.result.SpendByCategory
 import mx.budget.ui.common.KpiCard
@@ -66,10 +67,10 @@ import java.util.Locale
 import kotlin.math.min
 
 /**
- * Pantalla Analíticas — hub dinámico de widgets (rediseño jul-2026).
+ * Pantalla Analíticas: hub dinámico de widgets (rediseño jul-2026).
  *
  * Deja de ser un "reporte plano" de secciones: cada bloque es una tarjeta
- * (widget) con su propia visualización — resumen inteligente arriba, dona de
+ * (widget) con su propia visualización: resumen inteligente arriba, dona de
  * distribución del gasto, flujo ingreso/gasto, tendencia, presupuesto por
  * categoría (expandible), top conceptos, deuda e intereses. El asistente LLM
  * vive en el FAB "Preguntar" (AiChatSheet).
@@ -93,6 +94,8 @@ fun AnalyticsScreen(
     val rawByCategory by viewModel.spendByCategory.collectAsState()
     val byMember by viewModel.spendByMember.collectAsState()
     val rawPostedIncome by viewModel.postedIncome.collectAsState()
+    val rawPostedExpenses by viewModel.postedExpenses.collectAsState()
+    val rawReservedPlanned by viewModel.reservedPlanned.collectAsState()
     val trend by viewModel.trend.collectAsState()
     val rawTopConcepts by viewModel.topConcepts.collectAsState()
     val debt by viewModel.debtConcentration.collectAsState()
@@ -108,6 +111,10 @@ fun AnalyticsScreen(
     val quincena = if (demo) D.quincena else rawQuincena
     val byCategory = if (demo) D.spendByCategory else rawByCategory
     val postedIncome = if (demo) D.postedIncome else rawPostedIncome
+    // En el tour no hay flujos reales: el gasto ejecutado del demo se totaliza
+    // desde sus categorias y no hay reserva prorrateada que mostrar.
+    val postedExpenses = if (demo) D.spendByCategory.sumOf { it.actual } else rawPostedExpenses
+    val reservedPlanned = if (demo) 0.0 else rawReservedPlanned
     val topConcepts = if (demo) D.topConcepts else rawTopConcepts
     val totalSavings = if (demo) D.totalSavings else rawTotalSavings
     val totalCommitment = if (demo) D.totalCommitment else rawTotalCommitment
@@ -132,7 +139,7 @@ fun AnalyticsScreen(
                         modifier = Modifier.weight(1f),
                     )
                     onOpenLedger?.let {
-                        // TUTORIAL: ANA_LEDGER_ENTRY — ver TUTORIAL.md
+                        // TUTORIAL: ANA_LEDGER_ENTRY, ver TUTORIAL.md
                         IconButton(
                             onClick = it,
                             modifier = Modifier.tutorialTarget(
@@ -151,12 +158,14 @@ fun AnalyticsScreen(
 
             // ── Widget: resumen inteligente ───────────────────────────────────
             item {
-                // TUTORIAL: ANA_SUMMARY — ver TUTORIAL.md
+                // TUTORIAL: ANA_SUMMARY, ver TUTORIAL.md
                 Box(Modifier.tutorialTarget(TutorialKey.ANA_SUMMARY, tutorialController)) {
                     SmartSummaryCard(
                         quincena = quincena,
                         byCategory = byCategory,
                         postedIncome = postedIncome,
+                        postedExpenses = postedExpenses,
+                        reservedPlanned = reservedPlanned,
                         money = money,
                         onAsk = if (aiViewModel != null) ({ chatOpen = true }) else null,
                     )
@@ -165,7 +174,7 @@ fun AnalyticsScreen(
 
             // ── Widget: KPIs de hoja de balance ───────────────────────────────
             item {
-                // TUTORIAL: ANA_KPI_ROW — ver TUTORIAL.md
+                // TUTORIAL: ANA_KPI_ROW, ver TUTORIAL.md
                 Row(
                     modifier = Modifier.tutorialTarget(TutorialKey.ANA_KPI_ROW, tutorialController),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -193,7 +202,7 @@ fun AnalyticsScreen(
                 val totalProjected = byCategory.sumOf { it.projected }
                 val totalActual = byCategory.sumOf { it.actual }
                 if (totalProjected > 0) {
-                    // TUTORIAL: ANA_WIDGETS — ver TUTORIAL.md
+                    // TUTORIAL: ANA_WIDGETS, ver TUTORIAL.md
                     Box(Modifier.tutorialTarget(TutorialKey.ANA_WIDGETS, tutorialController)) {
                         WidgetCard(title = "Salud del presupuesto") {
                             BudgetGauge(
@@ -359,7 +368,7 @@ fun AnalyticsScreen(
             // ── Widget: intereses pagados ─────────────────────────────────────
             item {
                 WidgetCard(title = "Intereses pagados (90 días)") {
-                    if (interest.isEmpty()) EmptyHint("Sin intereses detectados — buena señal.")
+                    if (interest.isEmpty()) EmptyHint("Sin intereses detectados, buena señal.")
                     else Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         interest.forEach { w ->
                             Row(
@@ -387,9 +396,9 @@ fun AnalyticsScreen(
             }
         }
 
-        // FAB del asistente — chat determinista + LLM si hay.
+        // FAB del asistente: chat determinista + LLM si hay.
         if (aiViewModel != null) {
-            // TUTORIAL: ANA_ASK_FAB — ver TUTORIAL.md
+            // TUTORIAL: ANA_ASK_FAB, ver TUTORIAL.md
             androidx.compose.material3.ExtendedFloatingActionButton(
                 onClick = { chatOpen = true },
                 icon = { Icon(Icons.Filled.AutoAwesome, contentDescription = null) },
@@ -463,6 +472,8 @@ private fun SmartSummaryCard(
     quincena: QuincenaEntity?,
     byCategory: List<SpendByCategory>,
     postedIncome: Double,
+    postedExpenses: Double,
+    reservedPlanned: Double,
     money: NumberFormat,
     onAsk: (() -> Unit)?,
 ) {
@@ -488,7 +499,9 @@ private fun SmartSummaryCard(
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                buildSmartSummary(quincena, byCategory, postedIncome, money),
+                buildSmartSummary(
+                    quincena, byCategory, postedIncome, postedExpenses, reservedPlanned, money,
+                ),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
@@ -510,29 +523,37 @@ private fun buildSmartSummary(
     quincena: QuincenaEntity?,
     byCategory: List<SpendByCategory>,
     postedIncome: Double,
+    postedExpenses: Double,
+    reservedPlanned: Double,
     money: NumberFormat,
 ): String {
     if (quincena == null) return "Sin quincena activa."
     val sb = StringBuilder()
 
-    // El actual de la quincena es un campo desnormalizado que puede ir detrás
-    // del agregado real por categoría — usa el mayor de los dos.
-    val actualExpenses = maxOf(quincena.actualExpensesMxn, byCategory.sumOf { it.actual })
-    // Ingreso mostrado en AMBAS formas: recibido (POSTED en vivo) y proyectado
-    // (lo esperado de la quincena). El "disponible" se ancla al proyectado, que es
-    // el número accionable; el recibido aclara cuánto ha entrado realmente.
-    val projectedIncome = quincena.projectedIncomeMxn
-    val availableProjected = projectedIncome - actualExpenses
+    // Misma convencion que el dashboard, en un solo sitio, para que las dos
+    // pantallas no cuenten historias distintas del mismo dia.
+    val f = quincenaFigures(
+        quincena = quincena,
+        receivedIncome = postedIncome,
+        spent = postedExpenses,
+        reserved = reservedPlanned,
+        projectedExpensesFallback = byCategory.sumOf { it.projected },
+    )
     sb.append(
-        "Llevas ${money.format(actualExpenses)} gastados. " +
-            "Ingreso: ${money.format(postedIncome)} recibido de ${money.format(projectedIncome)} proyectado. " +
-            if (availableProjected >= 0) "Con lo proyectado te quedan ${money.format(availableProjected)}."
-            else "Con lo proyectado hay un déficit de ${money.format(-availableProjected)}."
+        "Llevas ${money.format(f.spent)} pagados. " +
+            "Ingreso: ${money.format(f.receivedIncome)} recibido de " +
+            "${money.format(f.projectedIncome)} proyectado. "
+    )
+    if (f.reserved > 0) {
+        sb.append("Tienes ${money.format(f.reserved)} reservados para lo que falta por pagar. ")
+    }
+    sb.append(
+        if (f.available >= 0) "Disponible: ${money.format(f.available)}."
+        else "Vas ${money.format(-f.available)} por encima de lo disponible."
     )
 
-    if (quincena.projectedExpensesMxn > 0) {
-        val pct = (actualExpenses / quincena.projectedExpensesMxn * 100).toInt()
-        sb.append(" Vas al $pct % del gasto proyectado.")
+    if (f.projectedExpenses > 0) {
+        sb.append(" Vas al ${f.executionPct} % del gasto proyectado.")
     }
 
     val top = byCategory.filter { it.actual > 0 }.maxByOrNull { it.actual }
@@ -873,7 +894,7 @@ private fun BudgetGauge(totalActual: Double, totalProjected: Double, money: Numb
  * Doble serie de líneas (ingreso + gasto) sobre las quincenas cerradas, en
  * Compose puro (Canvas + Path). Área tenue bajo la línea de gasto, puntos en
  * cada vértice y crecimiento animado desde la base. La brecha entre ambas
- * líneas es el ahorro/déficit — legible de un vistazo, más rico que las barras.
+ * líneas es el ahorro o el déficit, legible de un vistazo, más rico que las barras.
  */
 @Composable
 private fun IncomeExpenseLineChart(trend: List<QuincenaSnapshot>, money: NumberFormat) {

@@ -30,7 +30,7 @@ sealed class DispatchResult {
         val share: Double
     ) : DispatchResult()
 
-    /** "¿En qué gasto más?" — categorías con más gasto real en la quincena activa. */
+    /** "¿En qué gasto más?": categorías con más gasto real en la quincena activa. */
     data class TopCategories(
         val categories: List<SpendByCategory>,
         val totalMxn: Double
@@ -75,7 +75,13 @@ sealed class DispatchResult {
     ) : DispatchResult()
 
     data class QuincenaSummary(
-        val summary: QuincenaSnapshot
+        val summary: QuincenaSnapshot,
+        /**
+         * Reserva prorrateada por cadencia de la quincena: lo que de los cargos
+         * planeados toca a esta mitad del mes. Es lo que el dashboard descuenta
+         * en "Disponible", asi que sin ella el chat daba otra cifra distinta.
+         */
+        val reservedMxn: Double = 0.0,
     ) : DispatchResult()
 
     /**

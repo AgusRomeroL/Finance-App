@@ -19,7 +19,7 @@ import java.time.ZoneId
  * REGLA DE ORO: **solo vive en pantalla, NUNCA se escribe en Room ni sube al sync.** Cada screen,
  * cuando `tutorialController?.demoActive == true`, sustituye su estado real por estos valores justo
  * tras el `collectAsState()`. Al terminar el tour el flag baja y las pantallas vuelven a los flujos
- * reales — cero residuos, cero riesgo para la Wallet real.
+ * reales: cero residuos y cero riesgo para la Wallet real.
  *
  * `ExpenseWithDetails` es denormalizado (trae nombre/color/wallet inline), así que se renderiza sin
  * necesidad de filas reales. Los datos son coherentes entre pantallas (mismos miembros y montos).
@@ -133,6 +133,9 @@ object TutorialDemoData {
         transactions = transactions,
         postedTotal = 8450.0,
         plannedTotal = 9919.0,   // suma de los 3 planeados demo
+        // Reserva prorrateada del demo: Renta y Colegiatura son mensuales (la
+        // mitad toca a esta quincena) y Netflix es quincenal (entera).
+        proratedPlannedTotal = 6500.0 * 0.5 + 3200.0 * 0.5 + 219.0,
         balance = 25000.0 - 8450.0,
         actualIncome = 25000.0,
         beneficiaryDistribution = beneficiaryDistribution,
