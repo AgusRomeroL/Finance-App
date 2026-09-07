@@ -141,6 +141,40 @@ interface ExpenseDao {
     fun observePlannedTotal(quincenaId: String): Flow<Double>
 
     /**
+     * Total planeado **prorrateado por cadencia** de la quincena.
+     *
+     * `observePlannedTotal` suma el compromiso completo, y por eso "Disponible"
+     * salia en negativo: una obligacion mensual se materializa entera en una sola
+     * mitad del mes, aunque cubra las dos. Aqui cada cargo planeado pesa lo que
+     * de verdad corresponde a esta quincena:
+     *
+     * - `QUINCENAL_FIRST` / `QUINCENAL_SECOND` / `QUINCENAL_EVERY`: 1.0, el monto
+     *   vence dentro de esta mitad.
+     * - `MONTHLY_SPECIFIC_HALF`: 0.5, se reparte entre las dos mitades del mes.
+     * - `BIMONTHLY`: 0.25, se reparte entre las cuatro mitades de dos meses.
+     * - Sin plantilla (cargo suelto o cuota MSI) y `CUSTOM_CRON`: 1.0, sin
+     *   informacion de reparto se reserva completo.
+     *
+     * Alimenta el neto del anillo del dashboard; la tarjeta "Reservado" sigue
+     * usando [observePlannedTotal], donde si interesa el compromiso entero.
+     */
+    @Query(
+        """
+        SELECT COALESCE(SUM(
+            e.amount_mxn * CASE rt.cadence
+                WHEN 'MONTHLY_SPECIFIC_HALF' THEN 0.5
+                WHEN 'BIMONTHLY' THEN 0.25
+                ELSE 1.0
+            END
+        ), 0.0)
+        FROM expense e
+        LEFT JOIN recurrence_template rt ON rt.id = e.recurrence_template_id
+        WHERE e.quincena_id = :quincenaId AND e.status = 'PLANNED'
+        """
+    )
+    fun observeProratedPlannedTotal(quincenaId: String): Flow<Double>
+
+    /**
      * Gastos `PLANNED` del hogar con detalles (categoría/wallet/quincena),
      * ordenados por fecha ascendente — timeline del calendario (Apéndice G.2,
      * Fase 4). Mismas columnas/JOINs que [observeWithDetails], pero a nivel

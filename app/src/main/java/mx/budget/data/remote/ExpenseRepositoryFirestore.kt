@@ -101,6 +101,13 @@ class ExpenseRepositoryFirestore(
         awaitClose { listener.remove() }
     }
 
+    /**
+     * Firestore no guarda la cadencia junto al gasto, asi que aqui no hay prorrateo
+     * posible: devuelve el total crudo. No afecta al dashboard, que lee de Room.
+     */
+    override fun observeProratedPlannedTotal(quincenaId: String): Flow<Double> =
+        observePlannedTotal(quincenaId)
+
     override fun observeSpendByMember(quincenaId: String): Flow<List<SpendByMember>> = callbackFlow {
         val listener = firestore.collectionGroup("expenses")
             .whereEqualTo("quincenaId", quincenaId)

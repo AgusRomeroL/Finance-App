@@ -46,6 +46,9 @@ class ExpenseRepositoryImpl(
     override fun observePlannedTotal(quincenaId: String): Flow<Double> =
         dao.observePlannedTotal(quincenaId)
 
+    override fun observeProratedPlannedTotal(quincenaId: String): Flow<Double> =
+        dao.observeProratedPlannedTotal(quincenaId)
+
     override fun observeSpendByMember(quincenaId: String): Flow<List<SpendByMember>> =
         attributionDao.observeSpendByMember(quincenaId, "BENEFICIARY")
 

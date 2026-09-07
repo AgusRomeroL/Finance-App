@@ -38,6 +38,13 @@ interface ExpenseRepository {
     /** Total planeado (PLANNED) pendiente — indicador "falta gastar". */
     fun observePlannedTotal(quincenaId: String): Flow<Double>
 
+    /**
+     * Total planeado prorrateado por la cadencia de su plantilla: lo que de esa
+     * obligacion corresponde de verdad a esta quincena. Alimenta el neto del
+     * anillo del dashboard.
+     */
+    fun observeProratedPlannedTotal(quincenaId: String): Flow<Double>
+
     /** Gasto por miembro (BENEFICIARY = quién consume) en la quincena activa. */
     fun observeSpendByMember(quincenaId: String): Flow<List<SpendByMember>>
 

@@ -62,6 +62,12 @@ sealed class DashboardUiState {
         val transactions: List<ExpenseWithDetails>,
         val postedTotal: Double,
         val plannedTotal: Double,
+        /**
+         * Planeado prorrateado por cadencia: lo que de las obligaciones toca de
+         * verdad a esta quincena. Es lo que reserva "Disponible"; [plannedTotal]
+         * se sigue mostrando entero en la tarjeta "Reservado".
+         */
+        val proratedPlannedTotal: Double = 0.0,
         val balance: Double,
         /** Ingreso real recibido (income_source POSTED) de la quincena, en vivo. */
         val actualIncome: Double = 0.0,
@@ -395,7 +401,13 @@ class DashboardViewModel(
                     // se refleje en "Disponible para gastar" sin doble conteo del budget.
                     incomeRepository.observePostedTotal(quincena.id)
                 ) { success, incomePosted ->
-                    success.copy(actualIncome = incomePosted) as DashboardUiState
+                    success.copy(actualIncome = incomePosted)
+                }.combine(
+                    // Reserva prorrateada por cadencia: evita que una obligacion
+                    // mensual entera hunda el "Disponible" de una sola quincena.
+                    expenseRepository.observeProratedPlannedTotal(quincena.id)
+                ) { success, prorated ->
+                    success.copy(proratedPlannedTotal = prorated) as DashboardUiState
                 }
             }
         }

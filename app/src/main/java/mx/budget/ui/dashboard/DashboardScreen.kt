@@ -2350,14 +2350,18 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
     val income = maxOf(q?.projectedIncomeMxn ?: 0.0, state.actualIncome)
     val spent = state.postedTotal
     val planned = state.plannedTotal
+    // Reserva prorrateada por cadencia: una obligacion mensual solo pesa la mitad
+    // en esta quincena. Sin esto, "Disponible" salia en negativo el dia 1 del mes.
+    // La tarjeta "Reservado" sigue mostrando el compromiso entero.
+    val reserved = state.proratedPlannedTotal
     val hasPlanned = planned > 0.0
     val gross = income - spent
-    val net = gross - planned           // budget-aware: reserva lo PLANNED (G.2.4)
+    val net = gross - reserved          // budget-aware: reserva lo PLANNED (G.2.4)
     var showNet by rememberSaveable { mutableStateOf(true) }
     val shown = if (hasPlanned && showNet) net else gross
     val animatedShown by animateFloatAsState(
         targetValue = shown.toFloat(),
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        animationSpec = BudgetMotion.standard(),
         label = "heroAmountCompact",
     )
     val progress = remember(q?.id) { computeProgress(q) }
@@ -2445,7 +2449,7 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
         // Motion expresivo: la barra de avance crece con resorte.
         val animatedProgressFraction by animateFloatAsState(
             targetValue = progress.fraction,
-            animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+            animationSpec = BudgetMotion.standard(),
             label = "collapsedQuincenaFraction"
         )
         Box(
