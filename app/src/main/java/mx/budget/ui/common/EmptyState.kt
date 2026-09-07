@@ -12,6 +12,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -25,7 +26,7 @@ import mx.budget.ui.theme.BudgetMotion
 
 /**
  * Empty state reutilizable: icono + título + cuerpo opcional + CTA opcional que
- * lleva al usuario al SIGUIENTE PASO natural (journey guiado — el usuario nunca
+ * lleva al usuario al SIGUIENTE PASO natural (journey guiado: el usuario nunca
  * debe adivinar qué hacer frente a una pantalla vacía).
  *
  * Entrada con fade+scale de resorte ([BudgetMotion]); respeta [LocalReducedMotion].
@@ -39,6 +40,9 @@ fun EmptyState(
     body: String? = null,
     ctaLabel: String? = null,
     onCta: (() -> Unit)? = null,
+    /** Accion secundaria opcional, bajo la principal (por ejemplo, un atajo). */
+    secondaryLabel: String? = null,
+    onSecondary: (() -> Unit)? = null,
     compact: Boolean = false,
 ) {
     val reduced = LocalReducedMotion.current
@@ -89,6 +93,12 @@ fun EmptyState(
                     interactionSource = interaction,
                     modifier = Modifier.pressScale(interactionSource = interaction),
                 ) { Text(ctaLabel) }
+            }
+            if (secondaryLabel != null && onSecondary != null) {
+                Spacer(Modifier.height(4.dp))
+                TextButton(onClick = onSecondary) {
+                    Text(secondaryLabel, textAlign = TextAlign.Center)
+                }
             }
         }
     }

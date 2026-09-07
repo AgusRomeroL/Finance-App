@@ -244,6 +244,7 @@ fun WalletsScreen(
                         onOpenMemberBalances = onOpenMemberBalances,
                         cardDebts = cardDebts,
                         onCreateFirst = { formInitial = null; showForm = true },
+                        onSeedSuggested = viewModel::seedSuggestedWallets,
                         modifier = Modifier.weight(0.62f).fillMaxHeight(),
                     )
                     DetailPane(
@@ -270,6 +271,7 @@ fun WalletsScreen(
                     onOpenMemberBalances = onOpenMemberBalances,
                     cardDebts = cardDebts,
                     onCreateFirst = { formInitial = null; showForm = true },
+                    onSeedSuggested = viewModel::seedSuggestedWallets,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -544,6 +546,7 @@ private fun WalletList(
     onOpenMemberBalances: (() -> Unit)? = null,
     cardDebts: List<CardDebt> = emptyList(),
     onCreateFirst: (() -> Unit)? = null,
+    onSeedSuggested: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     // Agrupa por sección preservando el orden definido; el resto cae en "Otras".
@@ -600,6 +603,11 @@ private fun WalletList(
                     body = "Las cuentas son la fuente de cada gasto: crea la primera para empezar a capturar.",
                     ctaLabel = "Crear tu primera cuenta",
                     onCta = onCreateFirst,
+                    // Atajo para un grupo recién creado, que nace solo con miembros:
+                    // sin cuentas la captura no puede completarse y el vacío era un
+                    // callejón sin salida si el usuario no sabía por dónde empezar.
+                    secondaryLabel = onSeedSuggested?.let { "Usar cuentas sugeridas: " + mx.budget.data.local.DefaultWalletCatalog.displayNames.joinToString(", ") },
+                    onSecondary = onSeedSuggested,
                 )
             }
         }

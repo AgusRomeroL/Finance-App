@@ -825,6 +825,13 @@ class BudgetApplication : Application() {
             // FOREIGN KEY constraint failed, tanto el pull de las subcolecciones
             // como cualquier alta local (agregar un miembro crasheaba la app).
             runCatching { ensureLocalHousehold(newHouseholdId) }
+            // Catalogo de categorias del hogar nuevo. Hasta la Fase 2 esto solo
+            // ocurria en onCreate, asi que un grupo recien creado o unido se
+            // quedaba sin categorias hasta el siguiente arranque en frio y la
+            // captura moria ahi: no se puede crear una categoria sin grupos.
+            // Va ANTES de arrancar el pull para que el drain suba las altas de
+            // una vez y el pull no escriba a la par.
+            runCatching { categoryRepository.seedDefaultsIfEmpty(newHouseholdId) }
             // Re-ancla el PULL al nuevo hogar (stop viejo → new(hid).start()).
             runCatching { remotePullSync.stop() }
             remotePullSync = RemotePullSync(

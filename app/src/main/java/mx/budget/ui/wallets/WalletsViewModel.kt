@@ -200,6 +200,20 @@ class WalletsViewModel(
         viewModelScope.launch { walletRepository.reconcileBalance(paymentMethodId, newBalance) }
     }
 
+    /**
+     * Alta de las cuentas sugeridas para un hogar que nace vacío (Fase 2). Un
+     * grupo creado o unido solo trae miembros, y sin cuentas la captura no puede
+     * completarse. Se ofrece con un toque desde el vacío de Cuentas; nunca se
+     * siembra sola. Idempotente: los ids son deterministas por hogar.
+     */
+    fun seedSuggestedWallets() {
+        viewModelScope.launch {
+            if (entities.value.isNotEmpty()) return@launch
+            mx.budget.data.local.DefaultWalletCatalog.build(householdId)
+                .forEach { walletRepository.insert(it) }
+        }
+    }
+
     /** Historial de transferencias entre cuentas (RF-41). */
     val transfers: StateFlow<List<TransferWithNames>> =
         transferRepository.observeTransfers(householdId)
