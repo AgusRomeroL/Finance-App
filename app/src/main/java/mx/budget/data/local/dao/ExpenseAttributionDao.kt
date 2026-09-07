@@ -7,7 +7,6 @@ import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.result.AttributionRow
-import mx.budget.data.local.result.NettingAttributionRow
 import mx.budget.data.local.result.SpendByMember
 
 /**
@@ -66,7 +65,7 @@ interface ExpenseAttributionDao {
      * POSTED cuyo `occurred_at` cae en `[startMs, endMs]` (epoch millis). Alimenta
      * la dona "Distribución por miembro" con periodo seleccionable (histórico/
      * anual/mensual/quincenal). Para "histórico" llamar con `startMs=0` y un
-     * `endMs` muy grande (Long.MAX_VALUE). @Query NUEVO de solo lectura — NO altera
+     * `endMs` muy grande (Long.MAX_VALUE). @Query NUEVO de solo lectura: NO altera
      * el esquema.
      */
     @Query(
@@ -121,34 +120,6 @@ interface ExpenseAttributionDao {
     suspend fun findHistoricalByCanonical(canonicalKey: String, role: String): List<AttributionRow>
 
     /**
-     * Filas de atribución (ambos roles) de todos los gastos POSTED del hogar que
-     * aún NO se han liquidado por netting (`settlement_status = 'NONE'`). Cada fila
-     * trae el monto del gasto para poder repartir la deuda B→P proporcionalmente.
-     *
-     * El filtro `= 'NONE'` cumple doble función: excluye los ya liquidados
-     * (`'NETTED'`) y NO toca el flujo "alguien más pagó" (PENDING_REIMBURSEMENT /
-     * REIMBURSED / ABSORBED), que tiene su propia liquidación. Alimenta el cómputo
-     * determinista de "Cuentas entre miembros". @Query NUEVO de solo lectura — NO
-     * altera el esquema.
-     */
-    @Query(
-        """
-        SELECT
-            a.expense_id       AS expenseId,
-            e.amount_mxn       AS amountMxn,
-            a.role             AS role,
-            a.member_id        AS memberId,
-            a.share_amount_mxn AS shareAmountMxn
-        FROM expense_attribution a
-        INNER JOIN expense e ON e.id = a.expense_id
-        WHERE e.household_id = :householdId
-          AND e.status = 'POSTED'
-          AND e.settlement_status = 'NONE'
-        """
-    )
-    fun observeNettingRows(householdId: String): Flow<List<NettingAttributionRow>>
-
-    /**
      * IDs de gastos cuya atribución para [role] es válida (suma 10,000 bps).
      * El complemento de este conjunto son los gastos que necesitan inferencia.
      */
@@ -161,4 +132,48 @@ interface ExpenseAttributionDao {
         """
     )
     suspend fun getValidExpenseIds(role: String): List<String>
+
+    /**
+     * Cuanto puso cada **adulto pagador** en el gasto corriente del hogar entre
+     * [startMs] y [endMs] (epoch millis, ambos extremos incluidos).
+     *
+     * Alimenta el balance entre adultos de "Cuentas entre miembros". Los tres
+     * filtros son deliberados, y cada uno corrige una causa del netting anterior:
+     *
+     * - `m.role = 'PAYER_ADULT'`: los dependientes consumen sin deber nada. El
+     *   calculo anterior los incluia y producia deudas ficticias enormes, del
+     *   orden de medio millon de pesos, por el simple hecho de vivir en casa.
+     * - `e.settlement_status = 'NONE'`: deja fuera lo que ya tiene su propio
+     *   mecanismo de liquidacion (reembolsos pendientes, absorbidos y repuestos),
+     *   para que ninguna deuda se cuente dos veces entre las secciones.
+     * - el rango de fechas: sin el, la consulta barria los dieciocho meses de
+     *   historia y las cifras crecian sin sentido con cada mes que pasaba.
+     *
+     * @Query NUEVO de solo lectura: NO altera el esquema.
+     */
+    @Query(
+        """
+        SELECT
+            a.member_id                            AS memberId,
+            m.display_name                         AS memberName,
+            COALESCE(SUM(a.share_amount_mxn), 0.0) AS totalMxn,
+            COUNT(DISTINCT a.expense_id)           AS expenseCount
+        FROM expense_attribution a
+        INNER JOIN expense e ON e.id = a.expense_id
+        INNER JOIN member  m ON m.id = a.member_id
+        WHERE e.household_id = :householdId
+          AND a.role = 'PAYER'
+          AND e.status = 'POSTED'
+          AND e.settlement_status = 'NONE'
+          AND m.role = 'PAYER_ADULT'
+          AND e.occurred_at BETWEEN :startMs AND :endMs
+        GROUP BY a.member_id, m.display_name
+        ORDER BY totalMxn DESC
+        """
+    )
+    fun observePaidByAdultInRange(
+        householdId: String,
+        startMs: Long,
+        endMs: Long,
+    ): Flow<List<SpendByMember>>
 }

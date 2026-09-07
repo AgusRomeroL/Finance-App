@@ -5,7 +5,6 @@ import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.result.ExpenseWithDetails
-import mx.budget.data.local.result.NettingAttributionRow
 import mx.budget.data.local.result.PendingReimbursementByPayer
 import mx.budget.data.local.result.PendingReimbursementExpense
 import mx.budget.data.local.result.SpendByMember
@@ -50,6 +49,17 @@ interface ExpenseRepository {
 
     /** Gasto por miembro (PAYER = quién paga) en la quincena activa. */
     fun observePaidByMember(quincenaId: String): Flow<List<SpendByMember>>
+
+    /**
+     * Cuanto puso cada adulto pagador en el gasto corriente del hogar en el rango
+     * [startMs]..[endMs] (epoch millis). Alimenta el balance entre adultos de
+     * "Cuentas entre miembros".
+     */
+    fun observePaidByAdultInRange(
+        householdId: String,
+        startMs: Long,
+        endMs: Long,
+    ): Flow<List<SpendByMember>>
 
     /**
      * Gasto por miembro ([role] = "BENEFICIARY" | "PAYER") agregado por RANGO de
@@ -97,21 +107,6 @@ interface ExpenseRepository {
     suspend fun markReimbursed(expenseId: String)
 
     // ── Cuentas entre miembros (netting) ─────────────────────────────────────────
-
-    /**
-     * Filas de atribución (PAYER + BENEFICIARY, con monto del gasto) de todos los
-     * gastos POSTED aún no liquidados (`settlement_status = 'NONE'`). La pantalla
-     * "Cuentas entre miembros" las agrega para computar cuánto se deben entre sí.
-     */
-    fun observeNettingRows(householdId: String): Flow<List<NettingAttributionRow>>
-
-    /**
-     * Marca los [expenseIds] como liquidados por netting (`settlement_status =
-     * 'NETTED'`) en una sola transacción, encolando el push de cada uno. Solo
-     * afecta gastos actualmente en `'NONE'` (no toca el flujo de terceros). NO
-     * mueve saldos de wallet: el netting solo cancela deudas entre personas.
-     */
-    suspend fun markNetted(expenseIds: List<String>)
 
     // ── Lectura ─────────────────────────────────────────────────
 

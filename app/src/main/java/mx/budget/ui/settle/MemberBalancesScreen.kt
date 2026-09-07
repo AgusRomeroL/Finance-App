@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,13 +49,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import mx.budget.data.local.entity.LoanEntity
+import mx.budget.ui.common.AppLocale
 import mx.budget.ui.common.LocalSessionMemberId
+import mx.budget.ui.common.MemberPeriod
+import mx.budget.ui.common.MemberPeriodPills
 import mx.budget.ui.common.youLabel
+import mx.budget.ui.theme.FinancialTone
+import mx.budget.ui.theme.amountSemantic
 import mx.budget.ui.theme.financeColors
 import java.text.NumberFormat
 import java.time.Instant
@@ -62,7 +70,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val mxn: NumberFormat = NumberFormat.getCurrencyInstance(Locale("es", "MX"))
+private val mxn: NumberFormat = NumberFormat.getCurrencyInstance(AppLocale)
 private fun Double.toMxn(): String = mxn.format(this)
 private val dateFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale("es", "MX"))
 private val zone: ZoneId = ZoneId.of("America/Mexico_City")
@@ -90,6 +98,8 @@ fun MemberBalancesScreen(
     onBack: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
+    val period by viewModel.period.collectAsState()
+    val adultBalance by viewModel.adultBalance.collectAsState()
 
     Scaffold(containerColor = MaterialTheme.colorScheme.surface) { inner ->
         Column(
@@ -114,6 +124,15 @@ fun MemberBalancesScreen(
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item(key = "adult_balance") {
+                    AdultBalanceCard(
+                        balance = adultBalance,
+                        period = period,
+                        onPeriodChange = viewModel::setPeriod,
+                        money = mxn,
+                    )
+                }
+
                 items(state.rows, key = { it.memberId }) { row ->
                     MemberCard(
                         row = row,
@@ -523,5 +542,144 @@ private fun loanScheduleSummary(l: LoanEntity): String? {
     return buildString {
         append(l.paymentCount?.let { "$it pagos $word" } ?: "Pagos $word")
         if (amt != null) append(" de $amt")
+    }
+}
+
+/**
+ * Balance entre adultos del periodo: quien puso de mas y quien de menos.
+ *
+ * Es orientativo, no un cobro. Solo entran los adultos pagadores, el periodo por
+ * defecto es la quincena activa y la referencia es la parte del gasto que le toca
+ * a cada uno segun su ingreso. Sin esas tres cosas, el calculo automatico que se
+ * retiro en su dia producia deudas ficticias de cientos de miles de pesos.
+ */
+@Composable
+private fun AdultBalanceCard(
+    balance: AdultBalance?,
+    period: MemberPeriod,
+    onPeriodChange: (MemberPeriod) -> Unit,
+    money: NumberFormat,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "BALANCE ENTRE ADULTOS",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Quien puso de mas y quien de menos sobre el gasto corriente del " +
+                    "periodo. Es una referencia para ajustar, no un cobro.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            MemberPeriodPills(selected = period, onSelect = onPeriodChange)
+            Spacer(Modifier.height(12.dp))
+
+            when {
+                balance == null -> Text(
+                    "Sin quincena activa para calcular el balance.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                balance.inconsistent -> Text(
+                    "Los datos de este periodo no cuadran: alguna atribucion esta " +
+                        "incompleta. Revisa los movimientos antes de usar esta cifra.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.financeColors.warning,
+                )
+
+                balance.totalShared <= 0.0 -> Text(
+                    "Aun no hay gasto corriente pagado por adultos en este periodo.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                else -> {
+                    balance.rows.forEach { row ->
+                        AdultShareRow(row = row, money = money)
+                        Spacer(Modifier.height(10.dp))
+                    }
+                    val ajuste = balance.significant.filter { it.net < 0 }
+                    Text(
+                        if (ajuste.isEmpty()) {
+                            "Estan a mano: ninguna diferencia pasa de 50 pesos."
+                        } else {
+                            ajuste.joinToString(prefix = "Para emparejar: ") { r ->
+                                r.name + " transfiere " + money.format(-r.net)
+                            }
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (!balance.weightedByIncome) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Se reparte a partes iguales porque falta el ingreso de " +
+                                "algun adulto. Capturalo en Miembros para afinarlo.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.financeColors.warning,
+                        )
+                    }
+                    if (period != MemberPeriod.QUINCENAL) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Fuera de la quincena la diferencia se acumula y crece " +
+                                "sola: sirve para ver la tendencia, no como saldo a " +
+                                "cobrar.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Fila de un adulto: lo que puso, lo que le tocaba y la diferencia. */
+@Composable
+private fun AdultShareRow(row: AdultShare, money: NumberFormat) {
+    val tone = when {
+        row.net > 0 -> FinancialTone.INCOME
+        row.net < 0 -> FinancialTone.EXPENSE
+        else -> FinancialTone.NEUTRAL
+    }
+    val sem = amountSemantic(tone)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                row.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+            )
+            Text(
+                "Puso " + money.format(row.paid) + " de " + money.format(row.fairShare) +
+                    " (" + row.sharePct + " %)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            sem.sign + money.format(kotlin.math.abs(row.net)),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = sem.color,
+            maxLines = 1,
+            modifier = Modifier.semantics {
+                contentDescription = if (row.net >= 0) "Puso de mas" else "Puso de menos"
+            },
+        )
     }
 }

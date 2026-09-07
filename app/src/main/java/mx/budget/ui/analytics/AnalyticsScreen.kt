@@ -55,6 +55,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.quincena.quincenaFigures
+import mx.budget.ui.common.MemberPeriod
+import mx.budget.ui.common.MemberPeriodPills
 import mx.budget.data.local.result.QuincenaSnapshot
 import mx.budget.data.local.result.SpendByCategory
 import mx.budget.ui.common.KpiCard
@@ -697,33 +699,6 @@ private fun SpendDonut(
                     )
                 }
             }
-        }
-    }
-}
-
-/**
- * Pills de periodo para la dona por miembro (Histórico · Anual · Mensual ·
- * Quincenal). Se usa `FlowRow` de `FilterChip` M3 para que reflowen a otra
- * línea con fontScale alto + bold en vez de recortarse. El `FilterChip` ya anima
- * su selección (M3); la dona se recompone sola con el flow del VM.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun MemberPeriodPills(
-    selected: MemberPeriod,
-    onSelect: (MemberPeriod) -> Unit,
-) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        MemberPeriod.entries.forEach { period ->
-            FilterChip(
-                selected = period == selected,
-                onClick = { onSelect(period) },
-                label = { Text(period.label, maxLines = 1) },
-            )
         }
     }
 }

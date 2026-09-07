@@ -12,7 +12,6 @@ import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.SyncQueueEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.MemberSpendByCategory
-import mx.budget.data.local.result.NettingAttributionRow
 import mx.budget.data.local.result.PendingReimbursementByPayer
 import mx.budget.data.local.result.PendingReimbursementExpense
 import mx.budget.data.local.result.SpendByMember
@@ -49,6 +48,13 @@ class ExpenseRepositoryImpl(
     override fun observeProratedPlannedTotal(quincenaId: String): Flow<Double> =
         dao.observeProratedPlannedTotal(quincenaId)
 
+    override fun observePaidByAdultInRange(
+        householdId: String,
+        startMs: Long,
+        endMs: Long,
+    ): Flow<List<SpendByMember>> =
+        attributionDao.observePaidByAdultInRange(householdId, startMs, endMs)
+
     override fun observeSpendByMember(quincenaId: String): Flow<List<SpendByMember>> =
         attributionDao.observeSpendByMember(quincenaId, "BENEFICIARY")
 
@@ -78,22 +84,6 @@ class ExpenseRepositoryImpl(
             // efectivo/fuera del ledger. El estado viaja en el UPSERT del gasto.
             dao.markReimbursed(expenseId, System.currentTimeMillis())
             enqueueSync(expenseId, "UPSERT")
-        }
-    }
-
-    override fun observeNettingRows(householdId: String): Flow<List<NettingAttributionRow>> =
-        attributionDao.observeNettingRows(householdId)
-
-    override suspend fun markNetted(expenseIds: List<String>) {
-        if (expenseIds.isEmpty()) return
-        db.withTransaction {
-            val now = System.currentTimeMillis()
-            expenseIds.forEach { id ->
-                dao.markNetted(id, now)
-                // El estado NETTED viaja en el UPSERT del gasto (FirestoreMappers ya
-                // serializa settlementStatus). No se ajusta ningún saldo de wallet.
-                enqueueSync(id, "UPSERT")
-            }
         }
     }
 

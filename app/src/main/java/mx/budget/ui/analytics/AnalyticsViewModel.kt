@@ -29,6 +29,8 @@ import mx.budget.data.repository.InstallmentRepository
 import mx.budget.data.repository.LoanRepository
 import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.SavingsRepository
+import mx.budget.ui.common.MemberPeriod
+import mx.budget.ui.common.memberPeriodRangeMs
 
 /**
  * ViewModel de la pantalla Analíticas (MVP Fase 3).
@@ -82,43 +84,12 @@ class AnalyticsViewModel(
     val spendByMember: StateFlow<List<SpendByMember>> =
         combine(_memberPeriod, activeQuincena) { period, q -> period to q }
             .flatMapLatest { (period, q) ->
-                val range = memberRangeMs(period, q)
+                val range = memberPeriodRangeMs(period, q)
                 if (range == null) flowOf(emptyList())
                 else expenseRepository.observeSpendByMemberRange(
                     householdId, "BENEFICIARY", range.first, range.second
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /**
-     * Rango [startMs, endMs] (epoch millis, zona México) del [period]. Devuelve
-     * null solo cuando QUINCENAL no tiene quincena activa (dona vacía). HISTORICO
-     * abarca todo (0..Long.MAX_VALUE).
-     */
-    private fun memberRangeMs(period: MemberPeriod, quincena: QuincenaEntity?): Pair<Long, Long>? {
-        val zone = ZoneId.of("America/Mexico_City")
-        fun startMs(d: LocalDate) = d.atStartOfDay(zone).toInstant().toEpochMilli()
-        // Fin exclusivo → inclusivo: primer instante del día siguiente menos 1 ms.
-        fun endMs(exclusiveDay: LocalDate) = startMs(exclusiveDay) - 1
-        return when (period) {
-            MemberPeriod.HISTORICO -> 0L to Long.MAX_VALUE
-            MemberPeriod.ANUAL -> {
-                val today = LocalDate.now(zone)
-                val start = LocalDate.of(today.year, 1, 1)
-                startMs(start) to endMs(start.plusYears(1))
-            }
-            MemberPeriod.MENSUAL -> {
-                val today = LocalDate.now(zone)
-                val start = today.withDayOfMonth(1)
-                startMs(start) to endMs(start.plusMonths(1))
-            }
-            MemberPeriod.QUINCENAL -> {
-                if (quincena == null) return null
-                val start = runCatching { LocalDate.parse(quincena.startDate) }.getOrNull() ?: return null
-                val end = runCatching { LocalDate.parse(quincena.endDate) }.getOrNull() ?: return null
-                startMs(start) to endMs(end.plusDays(1))
-            }
-        }
-    }
 
     /**
      * Ingreso RECIBIDO (POSTED) en vivo de la quincena activa, como en el dashboard.
@@ -197,13 +168,3 @@ class AnalyticsViewModel(
     }
 }
 
-/**
- * Periodo de agregación de la dona "Distribución por miembro" (Analíticas).
- * Cada valor lleva su etiqueta en español para las pills.
- */
-enum class MemberPeriod(val label: String) {
-    HISTORICO("Histórico"),
-    ANUAL("Anual"),
-    MENSUAL("Mensual"),
-    QUINCENAL("Quincenal"),
-}

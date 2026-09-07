@@ -152,6 +152,7 @@ class MainActivity : ComponentActivity() {
             app.expenseRepository,
             app.loanRepository,
             app.memberRepository,
+            app.quincenaRepository,
             app.householdId,
         ))[mx.budget.ui.settle.MemberBalancesViewModel::class.java]
     }
@@ -775,6 +776,7 @@ class MemberBalancesViewModelFactory(
     private val expenseRepository: ExpenseRepository,
     private val loanRepository: mx.budget.data.repository.LoanRepository,
     private val memberRepository: MemberRepository,
+    private val quincenaRepository: QuincenaRepository,
     private val householdId: String,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -783,6 +785,7 @@ class MemberBalancesViewModelFactory(
             expenseRepository = expenseRepository,
             loanRepository = loanRepository,
             memberRepository = memberRepository,
+            quincenaRepository = quincenaRepository,
             householdId = householdId,
         ) as T
     }
