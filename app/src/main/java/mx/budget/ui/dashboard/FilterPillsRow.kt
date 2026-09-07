@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -99,7 +100,7 @@ private fun FilterPill(icon: ImageVector, label: String, selected: Boolean, onCl
     val fg = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = Modifier
-            .height(44.dp)
+            .heightIn(min = 44.dp)
             .clip(CircleShape)
             .background(bg)
             .clickable(onClick = onClick)
@@ -112,7 +113,7 @@ private fun FilterPill(icon: ImageVector, label: String, selected: Boolean, onCl
             label,
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
             color = fg,
-            maxLines = 1, softWrap = false
+            maxLines = 1
         )
     }
 }

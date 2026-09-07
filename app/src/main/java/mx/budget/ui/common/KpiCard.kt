@@ -51,11 +51,12 @@ fun KpiCard(
             maxLines = 2,
         )
         Spacer(Modifier.height(6.dp))
-        Text(
-            valueText ?: amount?.toMxn() ?: "",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+        AutoSizeAmountText(
+            text = valueText ?: amount?.toMxn() ?: "",
+            baseStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            maxFontSp = 22f,
+            minFontSp = 13f,
             color = sem.onContainer,
-            maxLines = 1,
         )
         if (note != null) {
             Spacer(Modifier.height(4.dp))

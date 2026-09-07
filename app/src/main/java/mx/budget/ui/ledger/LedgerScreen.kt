@@ -3,6 +3,7 @@ package mx.budget.ui.ledger
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import mx.budget.ui.common.AppLocale
+import mx.budget.ui.common.AutoSizeAmountText
 import mx.budget.ui.common.ScreenHeader
 import mx.budget.ui.common.TransferRow
 import mx.budget.ui.common.pressScale
@@ -274,11 +275,14 @@ private fun LedgerRow(
                     Icon(it, null, tint = sem.color, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(3.dp))
                 }
-                Text(
-                    sem.sign + money.format(row.amountMxn),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                AutoSizeAmountText(
+                    text = sem.sign + money.format(row.amountMxn),
+                    baseStyle = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                    maxFontSp = 18f,
+                    minFontSp = 12f,
                     color = sem.color,
-                    maxLines = 1,
                 )
             }
         }

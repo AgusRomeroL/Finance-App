@@ -118,6 +118,7 @@ import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.capture.toReviewMode
 import mx.budget.ui.common.AppLocale
+import mx.budget.ui.common.AutoSizeAmountText
 import mx.budget.ui.common.AppTopBar
 import mx.budget.ui.common.LocalSessionMemberId
 import mx.budget.ui.common.SearchPill
@@ -1304,39 +1305,6 @@ private fun MainHealthPane(
 }
 
 /**
- * Cifra de monto con auto-escala: si el texto no cabe a lo ancho (fontScale 1.3 +
- * panel angosto del Fold), baja el tamaño en pasos de 4sp hasta [minFontSp]. El
- * contenido no se dibuja hasta converger para que no parpadee el reintento de medida.
- * Nunca marquee ni elipsis: una cifra financiera cortada es un dato falso.
- */
-@Composable
-private fun AutoSizeAmountText(
-    text: String,
-    baseStyle: TextStyle,
-    maxFontSp: Float,
-    minFontSp: Float,
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
-    var fontSize by remember(text.length) { mutableFloatStateOf(maxFontSp) }
-    var ready by remember(text.length) { mutableStateOf(false) }
-    Text(
-        text,
-        style = baseStyle.copy(fontSize = fontSize.sp),
-        color = color,
-        maxLines = 1, softWrap = false,
-        modifier = modifier.drawWithContent { if (ready) drawContent() },
-        onTextLayout = { result ->
-            if (result.didOverflowWidth && fontSize > minFontSp) {
-                fontSize = (fontSize - 4f).coerceAtLeast(minFontSp)
-            } else {
-                ready = true
-            }
-        }
-    )
-}
-
-/**
  * Segmentado mini para el KPI (G.2.4): "Neto" reserva lo PLANNED del periodo; "Bruto" sólo resta
  * lo ya pagado (POSTED). Redundancia no-cromática: el segmento activo va relleno + en negrita,
  * no depende sólo del color.
@@ -1847,13 +1815,14 @@ private fun RitmoCard(
         }
         Spacer(Modifier.width(10.dp))
         Column(horizontalAlignment = Alignment.End) {
-            Text(
-                if (showPerDay) perDay.toMxn() else available.toMxn(),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
+            AutoSizeAmountText(
+                text = if (showPerDay) perDay.toMxn() else available.toMxn(),
+                baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
+                maxFontSp = 22f,
+                minFontSp = 13f,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1, softWrap = false
             )
-            Eyebrow(if (showPerDay) "Por día" else "Disponible", maxLines = 1)
+            Eyebrow(if (showPerDay) "Por día" else "Disponible", maxLines = 2)
         }
     }
 }
@@ -2520,22 +2489,24 @@ private fun StatTile(tone: FinancialTone, label: String, amount: Double) {
                 Icon(it, contentDescription = s.description, tint = s.onContainer, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(6.dp))
             }
-            Text(
-                label,
-                style = MaterialTheme.typography.labelMedium,
+            // A fontScale 1.3 "Reservado" no cabe en el tile: recortaba a
+            // "Reserva..." y con dos lineas partia la palabra a la mitad. Encoge
+            // hasta caber, que es lo unico que deja el rotulo legible entero.
+            AutoSizeAmountText(
+                text = label,
+                baseStyle = MaterialTheme.typography.labelMedium,
+                maxFontSp = 12f,
+                minFontSp = 8f,
                 color = s.onContainer,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
         Spacer(Modifier.height(2.dp))
-        Text(
-            "${s.sign}${amount.toMxn()}",
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+        AutoSizeAmountText(
+            text = "${s.sign}${amount.toMxn()}",
+            baseStyle = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            maxFontSp = 16f,
+            minFontSp = 11f,
             color = s.onContainer,
-            maxLines = 1,
-            softWrap = false,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
         )
     }
 }

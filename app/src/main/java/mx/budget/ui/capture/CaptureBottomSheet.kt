@@ -3,6 +3,7 @@ package mx.budget.ui.capture
 import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
 import mx.budget.ui.common.LocalReducedMotion
+import mx.budget.ui.common.AutoSizeAmountText
 import mx.budget.ui.common.pressScale
 import mx.budget.ui.common.rememberPressInteractionSource
 import mx.budget.ui.theme.AppShapes
@@ -126,7 +127,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CaptureBottomSheet — rediseño "Architectural Ledger" (frame 03) + paquete A3
+// CaptureBottomSheet: rediseño "Architectural Ledger" (frame 03) + paquete A3
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Hoja acotada a 640dp centrada en pantallas grandes (brief D2), con:
@@ -202,7 +203,7 @@ fun CaptureBottomSheet(
     fun fieldMissing(field: CaptureField): Boolean =
         showMissingHighlights && field in missingFields
 
-    // F3: anclas de scroll por campo — el nudge de validación trae a la vista la
+    // F3: anclas de scroll por campo: el nudge de validación trae a la vista la
     // sección del primer campo faltante.
     val anchors = remember { CaptureField.entries.associateWith { BringIntoViewRequester() } }
     LaunchedEffect(viewModel) {
@@ -244,7 +245,7 @@ fun CaptureBottomSheet(
             )
         }
     ) {
-      // "Materialize" (Kowalski/Apple): el contenido no aparece de golpe — crece
+      // "Materialize" (Kowalski/Apple): el contenido no aparece de golpe, crece
       // de 0.92→1 con fade desde el borde inferior mientras el sheet sube, para que
       // se sienta como un material que llega, no un salto. Sin blur (eso sería el
       // look Apple que evitamos). Respeta reduced-motion.
@@ -271,7 +272,7 @@ fun CaptureBottomSheet(
                     .padding(inner)
                     .imePadding()
             ) {
-                // TUTORIAL: CAP_KIND_TOGGLE — ver TUTORIAL.md
+                // TUTORIAL: CAP_KIND_TOGGLE, ver TUTORIAL.md
                 Box(Modifier.tutorialTarget(TutorialKey.CAP_KIND_TOGGLE, tutorialController)) {
                     CaptureHeader(
                         kind = captureKind,
@@ -281,7 +282,7 @@ fun CaptureBottomSheet(
                     )
                 }
 
-                // Contenido scrollable — weight(1f) (fill) acota el alto del scroll
+                // Contenido scrollable: weight(1f) (fill) acota el alto del scroll
                 // exactamente al espacio entre header y footer, alineando pintura y
                 // área táctil (con fill=false el scroll medía su alto intrínseco y
                 // creaba una zona muerta de touch en la parte baja del sheet).
@@ -291,7 +292,7 @@ fun CaptureBottomSheet(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 24.dp)
                 ) {
-                    // TUTORIAL: CAP_AMOUNT_KEYPAD — ver TUTORIAL.md
+                    // TUTORIAL: CAP_AMOUNT_KEYPAD, ver TUTORIAL.md
                     Box(
                         Modifier
                             .tutorialTarget(TutorialKey.CAP_AMOUNT_KEYPAD, tutorialController)
@@ -338,7 +339,7 @@ fun CaptureBottomSheet(
                                         }
                                     }
                                 }
-                                // TUTORIAL: CAP_CATEGORY — ver TUTORIAL.md
+                                // TUTORIAL: CAP_CATEGORY, ver TUTORIAL.md
                                 Box(
                                     Modifier
                                         .tutorialTarget(TutorialKey.CAP_CATEGORY, tutorialController)
@@ -379,7 +380,7 @@ fun CaptureBottomSheet(
                                 // Atribución visible = solo "Beneficia a". El pagador (casi
                                 // siempre el adulto dueño de la cuenta) se autodefine y vive
                                 // bajo "Más" para overridear/repartir.
-                                // TUTORIAL: CAP_ATTRIBUTION — ver TUTORIAL.md
+                                // TUTORIAL: CAP_ATTRIBUTION, ver TUTORIAL.md
                                 Box(
                                     Modifier
                                         .tutorialTarget(TutorialKey.CAP_ATTRIBUTION, tutorialController)
@@ -531,7 +532,7 @@ fun CaptureBottomSheet(
         }
     }
 
-    // F4: crear cuenta sin salir de la captura — se apila como segundo
+    // F4: crear cuenta sin salir de la captura: se apila como segundo
     // ModalBottomSheet sobre el de captura; el estado de la captura vive en el
     // VM, así que no se pierde. Mismo form de Cuentas (WalletFormSheet).
     if (showWalletForm && viewModel != null) {
@@ -549,7 +550,7 @@ fun CaptureBottomSheet(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Header — título + toggle Gasto/Ingreso funcional
+// Header: título + toggle Gasto/Ingreso funcional
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -592,7 +593,7 @@ private fun CaptureHeader(
                 )
             }
         }
-        // Segmentado Gasto/Ingreso — conmutación real (A3 §2). En Review se
+        // Segmentado Gasto/Ingreso: conmutación real (A3 §2). En Review se
         // oculta: se revisa un gasto, no se cambia de tipo a media revisión.
         if (!isReview) {
             Spacer(Modifier.width(12.dp))
@@ -700,17 +701,28 @@ private fun AmountCard(
                 modifier = Modifier.padding(top = 8.dp)
             )
             Spacer(Modifier.width(4.dp))
-            Text(
-                intPart,
-                style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Light, fontSize = 64.sp, letterSpacing = (-1).sp),
+            // 64sp a fontScale 1.3 son 83sp efectivos: un monto de seis cifras
+            // desbordaba el ancho del panel. Auto-escala en vez de recortar,
+            // porque una cifra cortada es un dato falso.
+            AutoSizeAmountText(
+                text = intPart,
+                baseStyle = MaterialTheme.typography.displayLarge.copy(
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = (-1).sp,
+                ),
+                maxFontSp = 64f,
+                minFontSp = 28f,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
             )
-            Text(
-                decPart,
-                style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Light, fontSize = 64.sp, letterSpacing = (-1).sp),
+            AutoSizeAmountText(
+                text = decPart,
+                baseStyle = MaterialTheme.typography.displayLarge.copy(
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = (-1).sp,
+                ),
+                maxFontSp = 64f,
+                minFontSp = 28f,
                 color = MaterialTheme.colorScheme.outlineVariant,
-                maxLines = 1
             )
         }
         Spacer(Modifier.height(12.dp))
@@ -718,7 +730,7 @@ private fun AmountCard(
             PendingBadge()
             Spacer(Modifier.height(6.dp))
         }
-        // Concepto — junto al monto (no escondido tras "Más"); opcional en gasto,
+        // Concepto: junto al monto (no escondido tras "Más"); opcional en gasto,
         // etiqueta del ingreso en modo INCOME.
         OutlinedTextField(
             value = concept,
@@ -763,7 +775,7 @@ private fun Keypad(onKey: (String) -> Unit) {
             }
         }
         // Última fila: 0 a lo ancho. (La ✓ de confirmar se quitó: duplicaba al botón
-        // "Guardar" del footer y confundía — un solo lugar para registrar.)
+        // "Guardar" del footer y confundía; un solo lugar para registrar.)
         Row(modifier = Modifier.fillMaxWidth()) {
             KeypadKey("0", Modifier.weight(1f)) { onKey("0") }
         }
@@ -969,7 +981,7 @@ private fun CategoryCard(
                 } else {
                     Column {
                         // Paso 2 de la creación: elegir el grupo padre.
-                        CapMicroLabel("Nueva: \"$creating\" — elige el grupo")
+                        CapMicroLabel("Nueva: \"$creating\" , elige el grupo")
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "Elige un grupo · puedes crear y gestionar más en Ajustes",
@@ -1201,7 +1213,9 @@ private fun WalletCard(wallet: PaymentMethodEntity, selected: Boolean, onClick: 
     val interaction = rememberPressInteractionSource()
     Column(
         modifier = Modifier
-            .width(132.dp)
+            // Ancho MINIMO, no fijo: con fontScale 1.3 un nombre de banco largo
+            // se recortaba dentro de una caja que no podia crecer.
+            .widthIn(min = 132.dp)
             .pressScale(interactionSource = interaction)
             .clip(AppShapes.card)
             .background(bg)
@@ -1218,8 +1232,20 @@ private fun WalletCard(wallet: PaymentMethodEntity, selected: Boolean, onClick: 
         }
         Spacer(Modifier.height(6.dp))
         Text(walletKindLabel(wallet.kind).uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = sub, letterSpacing = 1.2.sp, maxLines = 1)
-        Text(wallet.displayName, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium), color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("$" + wallet.currentBalanceMxn.toGrouped(), style = MaterialTheme.typography.bodySmall, color = sub, maxLines = 1)
+        Text(
+            wallet.displayName,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            color = fg,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        AutoSizeAmountText(
+            text = "$" + wallet.currentBalanceMxn.toGrouped(),
+            baseStyle = MaterialTheme.typography.bodySmall,
+            maxFontSp = 12f,
+            minFontSp = 9f,
+            color = sub,
+        )
     }
 }
 
@@ -1255,7 +1281,7 @@ private fun BeneficiaryCard(
                         PendingBadge()
                     }
                     // Sin MissingBadge aquí: esta tarjeta ya tiene su propio aviso
-                    // específico ("Falta asignar", el chip a la derecha) — evita el
+                    // específico ("Falta asignar", el chip a la derecha), evita el
                     // doble aviso reportado. El borde ámbar (missingHighlight) queda.
                 }
                 Spacer(Modifier.height(3.dp))
@@ -1370,7 +1396,7 @@ private fun IncomeDateCard(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fecha compartida (gasto e ingreso) — abre el DatePicker M3
+// Fecha compartida (gasto e ingreso): abre el DatePicker M3
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -1429,7 +1455,7 @@ private fun DateRow(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// "Más" — Pagó (default = adulto dueño de la cuenta) + fecha (DatePicker) + notas
+// "Más": Pagó (default = adulto dueño de la cuenta) + fecha (DatePicker) + notas
 // ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -1556,7 +1582,7 @@ private fun MoreSection(
                     onCreate = onCreateExternalPayer,
                 )
                 Spacer(Modifier.height(18.dp))
-                // Fecha — por defecto hoy; el DatePicker M3 permite cambiarla y la
+                // Fecha: por defecto hoy; el DatePicker M3 permite cambiarla y la
                 // quincena se resuelve determinista según la fecha (A3 §5).
                 DateRow(
                     selectedDate = selectedDate,
@@ -1774,7 +1800,7 @@ private fun CaptureFooter(
                 maxLines = 2, overflow = TextOverflow.Ellipsis
             )
         }
-        // F3: el CTA es SIEMPRE tappable — incompleto no lo apaga (look disabled),
+        // F3: el CTA es SIEMPRE tappable: incompleto no lo apaga (look disabled),
         // lo pinta secondaryContainer; el tap dispara la validación guiada
         // (onRegisterAttempt → resaltados + scroll al primer faltante).
         val ctaBg by animateColorAsState(
@@ -1834,7 +1860,7 @@ private fun AttributionSuggestionChip(
     // Identidad de sesión: la sugerencia inferida también etiqueta "(Tú)".
     val sessionId = LocalSessionMemberId.current
     fun nameOf(id: String): String =
-        members.firstOrNull { it.id == id }?.let { youLabel(it.displayName, it.id, sessionId) } ?: "—"
+        members.firstOrNull { it.id == id }?.let { youLabel(it.displayName, it.id, sessionId) } ?: "sin asignar"
 
     // "Santi" si un solo miembro al 100%; "Santi 60% · Norma 40%" si es repartido.
     fun describe(distribution: Map<String, Int>): String {
