@@ -8,6 +8,8 @@ import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import mx.budget.data.repository.ExpenseRepository
 import org.json.JSONArray
 import org.json.JSONObject
@@ -38,6 +40,13 @@ import java.util.UUID
  *
  * La proyección cadencia→quincena (§G.2.3) es nativa: `RecurrenceCadence` ya se
  * expresa en términos de quincena. `CUSTOM_CRON` queda diferido (devuelve null).
+ *
+ * **Exclusión mutua de proceso:** los ids deterministas hacen converger a los
+ * dispositivos entre sí, pero dentro de un mismo proceso las dos guardas de
+ * idempotencia son comprobar y después escribir, no atómicas. Arranque
+ * (`appScope`) y guardado de plantilla (`viewModelScope`) comparten esta instancia
+ * y pueden solaparse: ambos leen "no existe" y ambos insertan. El [mutex] serializa
+ * la materialización completa, igual que hace `SyncManager` con el drenado.
  */
 class RecurrenceMaterializer(
     private val recurrenceDao: RecurrenceTemplateDao,
@@ -50,14 +59,20 @@ class RecurrenceMaterializer(
     private val zone: ZoneId = ZoneId.of("America/Mexico_City"),
 ) {
 
+    /** Serializa la materialización: las guardas de idempotencia no son atómicas. */
+    private val mutex = Mutex()
+
     /**
      * Crea los PLANNED faltantes de [quincena] desde las plantillas activas.
      * Devuelve cuántos creó. Cada plantilla se aísla: una que falle (FK inválida,
      * splits corruptos) no rompe el lote.
+     *
+     * Serializada por [mutex]: dos llamadas concurrentes (arranque y guardado de
+     * plantilla) duplicaban el mismo PLANNED.
      */
-    suspend fun materialize(quincena: QuincenaEntity): Int {
+    suspend fun materialize(quincena: QuincenaEntity): Int = mutex.withLock {
         val templates = recurrenceDao.getActive(householdId)
-        if (templates.isEmpty()) return 0
+        if (templates.isEmpty()) return@withLock 0
 
         val wallets = paymentMethodDao.getActive(householdId)
         val members = memberDao.getActiveMembers(householdId)
@@ -73,7 +88,7 @@ class RecurrenceMaterializer(
                 .getOrDefault(false)
             if (ok) created++
         }
-        return created
+        return@withLock created
     }
 
     private suspend fun materializeOne(

@@ -617,26 +617,11 @@ class BudgetApplication : Application() {
         // flag se marca tras encolar. Re-ejecutable manualmente desde Perfil.
         scheduleRetroLabelingIfNeeded()
 
-        // Materializa los PLANNED faltantes de la quincena activa (idempotente).
+        // Materializa los PLANNED faltantes de la quincena activa (idempotente):
+        // primero recurrencias y después cuotas MSI, en esa misma corrutina.
         // Trigger de arranque (§G.2 Fase 1); el de "activación de quincena" se
         // engancha cuando exista el rollover automático.
         materializeRecurringForActiveQuincena()
-
-        // Proyección de cuotas MSI restantes como PLANNED en la quincena activa
-        // (estados v2 Fase 4). Idempotente; corre tras el sembrado/recurrencias.
-        appScope.launch {
-            runCatching {
-                mx.budget.data.installments.InstallmentMaterializer(
-                    householdId = householdId,
-                    installmentRepository = installmentRepository,
-                    walletRepository = walletRepository,
-                    quincenaDao = database.quincenaDao(),
-                    expenseDao = database.expenseDao(),
-                    expenseRepository = expenseRepository,
-                    memberDao = database.memberDao(),
-                ).materialize()
-            }
-        }
 
         // Recordatorios de gastos PLANNED (§G.2 Fase 3). Canal + trabajo periódico.
         ReminderNotifier.ensureChannel(this)
@@ -978,6 +963,22 @@ class BudgetApplication : Application() {
                 ).ensureActiveForToday()
             }.getOrNull() ?: quincenaRepository.getActive(householdId) ?: return@launch
             runCatching { recurrenceMaterializer.materialize(active) }
+
+            // Proyección de cuotas MSI restantes como PLANNED (estados v2 Fase 4).
+            // Va DENTRO de esta corrutina, después de las recurrencias: cuando corría
+            // en su propio launch, ambos materializadores resolvían la quincena activa
+            // a la vez y competían por crearla y por poblarla.
+            runCatching {
+                mx.budget.data.installments.InstallmentMaterializer(
+                    householdId = householdId,
+                    installmentRepository = installmentRepository,
+                    walletRepository = walletRepository,
+                    quincenaDao = database.quincenaDao(),
+                    expenseDao = database.expenseDao(),
+                    expenseRepository = expenseRepository,
+                    memberDao = database.memberDao(),
+                ).materialize()
+            }
         }
     }
 
