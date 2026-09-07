@@ -560,7 +560,13 @@ private fun WalletList(
             // está compuesta al tope (una tarjeta de cuenta bajo el pliegue ni se
             // compone en LazyColumn y el spotlight jamás resolvía).
             Box(Modifier.tutorialTarget(TutorialKey.WAL_LIST, tutorialController)) {
-                KpiRow(liquidTotal = liquidTotal, revolvingDebt = revolvingDebt)
+                // El total liquido suma saldos con signo, asi que una cuenta en
+                // sobregiro lo reduce sin dejar rastro: hay que decirlo.
+                KpiRow(
+                    liquidTotal = liquidTotal,
+                    revolvingDebt = revolvingDebt,
+                    overdrawnCount = balances.count { isLiquid(it.kind) && it.balance < 0.0 },
+                )
             }
             Spacer(Modifier.height(6.dp))
         }
@@ -643,12 +649,17 @@ private fun WalletList(
 }
 
 @Composable
-private fun KpiRow(liquidTotal: Double, revolvingDebt: Double) {
+private fun KpiRow(liquidTotal: Double, revolvingDebt: Double, overdrawnCount: Int = 0) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         KpiCard(
             label = "Disponible",
             amount = liquidTotal,
-            tone = FinancialTone.INCOME,
+            tone = if (overdrawnCount > 0) FinancialTone.WARNING else FinancialTone.INCOME,
+            note = when (overdrawnCount) {
+                0 -> null
+                1 -> "1 cuenta en sobregiro"
+                else -> overdrawnCount.toString() + " cuentas en sobregiro"
+            },
             modifier = Modifier.weight(1f),
         )
         KpiCard(
@@ -741,8 +752,15 @@ private fun WalletCard(
     val bg = if (selected) MaterialTheme.colorScheme.secondaryContainer
     else MaterialTheme.colorScheme.surfaceContainer
     val liquid = isLiquid(wallet.kind)
-    // El saldo: líquido = neutral (disponible); crédito/deuda = tono de gasto.
-    val tone = if (liquid) FinancialTone.NEUTRAL else FinancialTone.EXPENSE
+    // Una cuenta liquida en negativo esta sobregirada: pasa al tono de alerta y
+    // lo dice con palabras. Antes se pintaba igual que un saldo sano, y un debito
+    // en menos 112,589 se leia como si no pasara nada.
+    val overdrawn = liquid && wallet.balance < 0.0
+    val tone = when {
+        overdrawn -> FinancialTone.WARNING
+        liquid -> FinancialTone.NEUTRAL
+        else -> FinancialTone.EXPENSE
+    }
     val sem = amountSemantic(tone)
     val interaction = rememberPressInteractionSource()
 
@@ -790,6 +808,21 @@ private fun WalletCard(
                 color = sem.color,
                 maxLines = 1,
             )
+        }
+        if (overdrawn) {
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                sem.icon?.let {
+                    Icon(it, null, tint = sem.color, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(
+                    "Sobregiro",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = sem.color,
+                    maxLines = 1,
+                )
+            }
         }
 
         // Barra de utilización para wallets con límite de crédito.
@@ -898,10 +931,15 @@ private fun MovementsPanel(
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                 )
+                val overdrawn = wallet != null && isLiquid(wallet.kind) && wallet.balance < 0.0
+                val balanceColor =
+                    if (overdrawn) amountSemantic(FinancialTone.WARNING).color
+                    else MaterialTheme.colorScheme.onSurfaceVariant
                 Text(
-                    wallet?.balance?.toMxn() ?: "",
+                    (wallet?.balance?.toMxn() ?: "") + if (overdrawn) " · Sobregiro" else "",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = balanceColor,
+                    maxLines = 2,
                 )
             }
             HeaderAction(Icons.Filled.Balance, "Conciliar saldo", onReconcile)
@@ -1034,6 +1072,8 @@ private fun ReconcileDialog(
     onDismiss: () -> Unit,
 ) {
     val credit = !isLiquid(wallet.kind)
+    // En una cuenta liquida el saldo real puede ser negativo (sobregiro) y el
+    // filtro de entrada borraba el signo, asi que era imposible registrarlo.
     var text by remember { mutableStateOf(wallet.balance.toAmountInput()) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1048,8 +1088,13 @@ private fun ReconcileDialog(
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = text,
-                    onValueChange = { new -> text = sanitizeAmountInput(new) },
+                    onValueChange = { new ->
+                        text = sanitizeAmountInput(new, allowNegative = !credit)
+                    },
                     label = { Text(if (credit) "Deuda real (MXN)" else "Saldo real (MXN)") },
+                    supportingText = if (credit) null else {
+                        { Text("Si la cuenta esta sobregirada, escribe el saldo con signo menos.") }
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                 )

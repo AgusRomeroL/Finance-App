@@ -19,12 +19,14 @@ import mx.budget.ui.theme.amountSemantic
 /**
  * Tarjeta KPI unificada (Cuentas + Analíticas): etiqueta pequeña arriba y
  * monto en `titleLarge.SemiBold` debajo, sobre el contenedor tonal del
- * [FinancialTone] vía [amountSemantic] (container/onContainer — con la
+ * [FinancialTone] vía [amountSemantic] (container/onContainer, con la
  * redundancia no-cromática resuelta por tono, no por color suelto).
  *
  * @param amount    monto a formatear con [toMxn]; se ignora si [valueText] != null.
  * @param valueText texto ya formateado (p. ej. moneda con centavos); tiene
  *                  prioridad sobre [amount].
+ * @param note      aclaracion breve bajo el monto, para cuando la cifra sola
+ *                  engana (p. ej. un total que incluye cuentas en sobregiro).
  */
 @Composable
 fun KpiCard(
@@ -32,6 +34,7 @@ fun KpiCard(
     amount: Double? = null,
     tone: FinancialTone = FinancialTone.NEUTRAL,
     valueText: String? = null,
+    note: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val sem = amountSemantic(tone)
@@ -54,5 +57,14 @@ fun KpiCard(
             color = sem.onContainer,
             maxLines = 1,
         )
+        if (note != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                note,
+                style = MaterialTheme.typography.labelSmall,
+                color = sem.onContainer,
+                maxLines = 2,
+            )
+        }
     }
 }
