@@ -120,9 +120,14 @@ class RemotePullSync(
                     if (local == null) {
                         householdDao.insert(remote)
                     } else if (remote.updatedAt > local.updatedAt) {
+                        // UPDATE, jamás insert: `@Insert(REPLACE)` borra la fila en
+                        // conflicto antes de reinsertarla, y borrar el hogar arrastra
+                        // por CASCADE a sus miembros (o falla por las FK en NO ACTION
+                        // de categorías, cuentas, quincenas y gastos).
+                        //
                         // `createdAt` del doc remoto puede venir en 0 (el alta de
                         // MembershipRepository no lo escribe): conserva el local.
-                        householdDao.insert(
+                        householdDao.update(
                             remote.copy(createdAt = if (remote.createdAt > 0) remote.createdAt else local.createdAt)
                         )
                     }

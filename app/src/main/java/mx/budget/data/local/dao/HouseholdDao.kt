@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import mx.budget.data.local.entity.HouseholdEntity
 
 /**
@@ -42,4 +43,16 @@ interface HouseholdDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(household: HouseholdEntity)
+
+    /**
+     * Edición de una fila que YA existe. Obligatorio usar esto y no [insert] para
+     * actualizar: `@Insert(REPLACE)` se traduce a `INSERT OR REPLACE`, que BORRA
+     * la fila en conflicto antes de insertar la nueva. Al borrar el hogar se
+     * disparan sus claves foráneas: `member` está en CASCADE (se llevaría por
+     * delante a todos los miembros) y `category`, `payment_method`, `quincena` y
+     * `expense` están en NO ACTION (la operación falla con FOREIGN KEY
+     * constraint). Se detectó en la verificación two-device de la Fase 2.
+     */
+    @Update
+    suspend fun update(household: HouseholdEntity)
 }

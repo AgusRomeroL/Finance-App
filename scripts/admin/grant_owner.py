@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Concede rol OWNER de un household a uno o más uids (script de contingencia).
+"""Concede un rol de household a uno o más uids (script de contingencia).
 
 Las reglas solo permiten auto-reclamar OWNER al uid que coincide con
 `household.createdBy`. Cuando ese uid ya no existe (reinstalación con auth
@@ -24,6 +24,7 @@ def main() -> None:
     ap.add_argument("--service-account", required=True)
     ap.add_argument("--uid", action="append", required=True)
     ap.add_argument("--household", default="default_household")
+    ap.add_argument("--role", default="OWNER", choices=["OWNER", "PAYER", "MEMBER"])
     ap.add_argument("--stamp-created-by", default=None)
     args = ap.parse_args()
 
@@ -35,13 +36,13 @@ def main() -> None:
     now = int(time.time() * 1000)
     for uid in args.uid:
         h.collection("roles").document(uid).set(
-            {"role": "OWNER", "grantedBy": "admin-script", "updatedAt": now}, merge=True
+            {"role": args.role, "grantedBy": "admin-script", "updatedAt": now}, merge=True
         )
         # Espejo para que la web liste el hogar del usuario.
         db.collection("users").document(uid).collection("households").document(
             args.household
-        ).set({"role": "OWNER", "updatedAt": now}, merge=True)
-        print(f"OWNER concedido a {uid} en {args.household}")
+        ).set({"role": args.role, "updatedAt": now}, merge=True)
+        print(f"{args.role} concedido a {uid} en {args.household}")
 
     if args.stamp_created_by:
         h.set({"createdBy": args.stamp_created_by, "updatedAt": now}, merge=True)
