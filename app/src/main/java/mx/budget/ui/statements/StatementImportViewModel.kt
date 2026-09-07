@@ -102,7 +102,7 @@ class StatementImportViewModel(
 
     /**
      * Decisión de conciliación por movimiento (Fase 5): `MATCHED` (vinculado a un
-     * gasto existente — no duplica), `NEW` (va a la bandeja de captura) o
+     * gasto existente, no duplica), `NEW` (va a la bandeja de captura) o
      * `IGNORED`. La siembra el pre-match (local + NIM validado) y la ajusta el
      * usuario por movimiento.
      */
@@ -359,10 +359,10 @@ class StatementImportViewModel(
     }
 
     /**
-     * Reconciliación C1 + persistencia de `statement_line` con las decisiones. Con
-     * [walletId] null se degrada a solo auditar/reconciliar saldos y MSI.
+     * Reconciliación C1 y persistencia de `statement_line` con las decisiones.
+     * [walletId] es obligatorio: sin cuenta no hay nada que conciliar.
      */
-    private fun applyReconcile(walletId: String?) {
+    private fun applyReconcile(walletId: String) {
         viewModelScope.launch {
             val resolutions = _draft.value.movimientos.indices.map { i ->
                 val d = _decisions.value[i] ?: MovementDecision("NEW")
@@ -393,14 +393,19 @@ class StatementImportViewModel(
     // ── Continuación hacia el paso "Reescribir movimientos" ─────────────────────
 
     /**
-     * Entra al paso "Reescribir movimientos": construye el plan (agregados +
-     * compras con categorías sugeridas) y pasa a [ImportPhase.RewriteReview]. Sin
-     * wallet elegido cae a la reconciliación C1 clásica (audit-only).
+     * Entra al paso "Reescribir movimientos": construye el plan (agregados y
+     * compras con categorías sugeridas) y pasa a [ImportPhase.RewriteReview].
+     *
+     * Exige cuenta, igual que [apply]. La interfaz solo ofrece este botón con una
+     * cuenta elegida, así que la guarda es defensiva y ya no degrada a la ruta de
+     * solo auditar, que quedaba inalcanzable y encima creaba planes MSI huérfanos,
+     * sin cuenta a la que colgarse.
      */
     fun continueFromPreview() {
-        val walletId = _selectedWalletId.value
-        if (walletId == null) {
-            applyReconcile(null)
+        val walletId = _selectedWalletId.value ?: run {
+            _phase.value = ImportPhase.Error(
+                "Elige la cuenta a la que pertenece el estado antes de continuar."
+            )
             return
         }
         viewModelScope.launch {

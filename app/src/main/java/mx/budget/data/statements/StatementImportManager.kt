@@ -150,7 +150,7 @@ class StatementImportManager(
         val miembros = activeHouseholdMembers().map { it.displayName }
         val categorias = categoryDao.getAll(householdId)
             .filter { it.parentId != null }               // hojas asignables
-            .map { "${it.code} — ${it.displayName}" }
+            .map { "${it.code}: ${it.displayName}" }
         if (miembros.isEmpty() && categorias.isEmpty()) null
         else StatementLlmContext(miembros = miembros, categorias = categorias)
     }.getOrNull()
@@ -160,7 +160,7 @@ class StatementImportManager(
      * del wallet en la ventana del periodo (±7 días). Primero el matching local
      * determinista; los movimientos que quedaron SIN pareja se mandan a NIM como
      * segunda opinión, y cada propuesta del modelo se acepta SOLO si pasa la
-     * validación dura local ([StatementMatcher.validate]) — el LLM propone, la
+     * validación dura local ([StatementMatcher.validate]): el LLM propone, la
      * regla dispone. Nunca lanza: cualquier fallo degrada al resultado local.
      */
     /** Resultado del pre-match + etiquetas legibles de los gastos involucrados. */
@@ -222,7 +222,7 @@ class StatementImportManager(
         val byId = freeCandidates.associateBy { it.id }
         val result = local.toMutableList()
         for (item in nimItems) {
-            // El índice del modelo refiere a la sublista enviada — remapear.
+            // El índice del modelo refiere a la sublista enviada, hay que remapear.
             val movIdx = unmatchedIdx.getOrNull(item.movimiento) ?: continue
             val expense = item.expenseId?.let { byId[it] } ?: continue
             if (expense.id in usedExpenseIds) continue
@@ -262,40 +262,34 @@ class StatementImportManager(
     )
 
     /**
-     * Paso 3 (ruta SIN reescritura — legado C1 / conciliación por pre-match):
+     * Paso 3 (ruta SIN reescritura, legado C1 / conciliación por pre-match):
      * **reconciliación** con los datos (posiblemente editados) del preview.
-     * Solo añade claridad futura; no toca los gastos históricos — el vínculo
+     * Solo añade claridad futura; no toca los gastos históricos: el vínculo
      * movimiento↔gasto vive en `statement_line`, JAMÁS se edita `expense`.
      *
      * @param statement datos finales tras la edición del usuario.
      * @param rawJson JSON crudo original del LLM (auditoría).
-     * @param walletId wallet al que se aplica. Con wallet se hace la conciliación
-     *  por `statement_line` (Fase 5); sin wallet (legado C1) solo audita/reconcilia
-     *  saldos y MSI sin persistir líneas.
+     * @param walletId wallet al que se aplica. Es obligatorio: sin cuenta no hay
+     *  conciliación posible por línea, porque `statement_line.walletId` es NOT NULL,
+     *  ni saldo que reconciliar. La interfaz ya lo exigía; ahora lo garantiza el tipo.
      * @param resolutions decisión final por movimiento (Vinculado/Nuevo/Ignorar).
      */
     suspend fun apply(
         statement: ParsedStatement,
         rawJson: String,
-        walletId: String?,
+        walletId: String,
         resolutions: List<LineResolution> = emptyList(),
     ): ApplyOutcome {
         var outcome = ApplyOutcome(0, 0, 0, 0, 0)
         db.withTransaction {
             val recon = reconcileAndAudit(statement, rawJson, walletId)
-            outcome = if (walletId != null) {
-                persistStatementLines(
-                    statement = statement,
-                    walletId = walletId,
-                    importId = recon.importId,
-                    resolutions = resolutions,
-                    msiTouched = recon.msiTouched,
-                )
-            } else {
-                // Sin wallet no hay conciliación por línea (statement_line.walletId
-                // es NOT NULL): solo se reconcilió saldo/MSI y se auditó.
-                ApplyOutcome(recon.msiTouched, 0, 0, 0, 0)
-            }
+            outcome = persistStatementLines(
+                statement = statement,
+                walletId = walletId,
+                importId = recon.importId,
+                resolutions = resolutions,
+                msiTouched = recon.msiTouched,
+            )
         }
         return outcome
     }
@@ -371,12 +365,12 @@ class StatementImportManager(
      *  2. Inserta las compras confirmadas como gastos POSTED del wallet de la
      *     tarjeta ([ExpenseRepository.insertWithAttributions]) + fila
      *     `attribution_review` PENDING (rol BENEFICIARY) por cada una.
-     *  3. Reconcilia el wallet (saldo/corte/límite/tasa) — el saldo absoluto del
+     *  3. Reconcilia el wallet (saldo/corte/límite/tasa): el saldo absoluto del
      *     estado va AL FINAL para que mande sobre los movimientos del paso 1-2.
      *  4. Upsert de planes MSI + fila de auditoría (idéntico a C1).
      *
      * Todos los pasos 1-2 pasan por los repos públicos: estampan `updated_at` y
-     * encolan `sync_queue` (EXPENSE/TRANSFER/WALLET) — NUNCA DAO directo.
+     * encolan `sync_queue` (EXPENSE/TRANSFER/WALLET), NUNCA DAO directo.
      */
     suspend fun applyWithRewrite(
         statement: ParsedStatement,
@@ -452,7 +446,7 @@ class StatementImportManager(
                         expenseRepository.insertWithAttributions(expense, attributions)
 
                         // Cola de revisión: el reparto equitativo es un default,
-                        // no una verdad — Norma reasigna quién se benefició.
+                        // no una verdad: Norma reasigna quién se benefició.
                         attributionReviewDao.insert(
                             AttributionReviewEntity(
                                 id = UUID.randomUUID().toString(),
@@ -585,7 +579,7 @@ class StatementImportManager(
      * (≥4 chars, sin acentos) con el concepto del estado de cuenta. Los nombres
      * de comercio de los estados ("WAL MART SUPERCENTER") rara vez coinciden
      * literalmente con los conceptos de la app, por eso se cruza por tokens.
-     * `null` si el historial no dice nada — el apply cae a la categoría "otros".
+     * `null` si el historial no dice nada: el apply cae a la categoría "otros".
      */
     private fun suggestCategory(concept: String, history: List<ExpenseEntity>): String? {
         val tokens = tokensOf(concept)
@@ -653,7 +647,7 @@ class StatementImportManager(
 
     /**
      * Quincena que contiene la fecha del cargo; fallback a la ACTIVE. `null`
-     * (gasto omitido) solo si no existe ninguna — la FK `expense.quincena_id`
+     * (gasto omitido) solo si no existe ninguna, porque la FK `expense.quincena_id`
      * jamás debe romperse.
      */
     private suspend fun resolveQuincenaId(occurredAt: Long): String? {
@@ -710,16 +704,13 @@ class StatementImportManager(
     private suspend fun reconcileAndAudit(
         statement: ParsedStatement,
         rawJson: String,
-        walletId: String?,
+        walletId: String,
     ): ReconcileResult {
         var msiTouched = 0
 
-        // (a) Reconcilia el wallet elegido — solo campos que existen en la entidad.
-        if (walletId != null) {
-            val wallet = walletRepository.getById(walletId)
-            if (wallet != null) {
-                walletRepository.update(reconcileWallet(wallet, statement))
-            }
+        // (a) Reconcilia el wallet elegido: solo campos que existen en la entidad.
+        walletRepository.getById(walletId)?.let { wallet ->
+            walletRepository.update(reconcileWallet(wallet, statement))
         }
 
         // (b) Planes MSI: crea/actualiza uno por cada movimiento MSI detectado.
@@ -761,7 +752,7 @@ class StatementImportManager(
      * decisión. El índice UNIQUE (wallet, fingerprint) hace el re-import
      * idempotente: una línea ya conciliada antes NO se duplica ni se vuelve a
      * encolar como Nueva. Los movimientos NEW van a la bandeja `pending_capture`
-     * (propose-then-confirm) — NUNCA se inserta un gasto directo.
+     * (propose-then-confirm): NUNCA se inserta un gasto directo.
      */
     private suspend fun persistStatementLines(
         statement: ParsedStatement,
@@ -856,7 +847,7 @@ class StatementImportManager(
     private suspend fun upsertInstallment(
         mov: StatementMovement,
         statement: ParsedStatement,
-        walletId: String?,
+        walletId: String,
         existing: List<InstallmentPlanEntity>,
     ): Boolean {
         // Plazo: del LLM, o inferido del concepto (caso Klar: "12 MSI"/"a 6 meses").
@@ -875,7 +866,7 @@ class StatementImportManager(
         // "PP####") + mismo plazo + cuota ±1% (tolera redondeos entre cortes).
         val match = existing.firstOrNull { plan ->
             plan.totalInstallments == plazo &&
-                (walletId == null || plan.paymentMethodId == walletId) &&
+                plan.paymentMethodId == walletId &&
                 normalizeMsiConcept(plan.displayName) == normSelf &&
                 (plan.installmentAmountMxn == 0.0 ||
                     kotlin.math.abs(plan.installmentAmountMxn - monto) <= monto * 0.01 + 0.5)
