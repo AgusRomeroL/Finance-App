@@ -1,12 +1,16 @@
 package mx.budget.wear.data
 
+import android.content.ComponentName
 import android.content.Context
 import androidx.wear.tiles.TileService
+import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.WearableListenerService
 import mx.budget.core.wear.WearPaths
+import mx.budget.wear.presentation.complication.DisponibleComplicationService
+import mx.budget.wear.presentation.complication.UpcomingPaymentComplicationService
 import mx.budget.wear.presentation.tile.DisponibleTileService
 import mx.budget.wear.presentation.tile.MemberSpendTileService
 import mx.budget.wear.presentation.tile.PendingConfirmTileService
@@ -73,6 +77,20 @@ class MobileSyncListenerService : WearableListenerService() {
                 updater.requestUpdate(UpcomingPaymentsTileService::class.java)
                 updater.requestUpdate(MemberSpendTileService::class.java)
                 updater.requestUpdate(PendingConfirmTileService::class.java)
+            }
+            // runCatching aparte: que falle el refresco de los tiles no debe
+            // saltarse el de las complications, ni al reves.
+            runCatching {
+                listOf(
+                    DisponibleComplicationService::class.java,
+                    UpcomingPaymentComplicationService::class.java,
+                ).forEach { service ->
+                    // requestUpdateAll: una misma complication puede estar puesta
+                    // en varios huecos y en varias caratulas.
+                    ComplicationDataSourceUpdateRequester
+                        .create(this, ComponentName(this, service))
+                        .requestUpdateAll()
+                }
             }
         }
     }

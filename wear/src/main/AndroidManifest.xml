@@ -152,5 +152,58 @@
                 android:resource="@drawable/ic_wear_launcher" />
         </service>
 
+
+        <!--
+          Complications (spec 4.3). Se declaran con los nombres del paquete de
+          soporte (android.support.wearable.complications.*), que es lo que el
+          sistema sigue mirando aunque la libreria sea androidx.
+
+          Aqui NO va el meta-data PREVIEW de las tiles: la vista previa de una
+          complication sale de getPreviewData(type), que es codigo, no recurso.
+          El icono y la etiqueta si importan, porque son lo que se ve al elegirla
+          en el editor de la caratula.
+
+          El periodo de 1800 s es lo que hace aparecer el aviso de dato viejo: sin
+          refresco propio, la complication solo cambiaria con el push del
+          telefono, que es justo lo que falta cuando el dato envejece. No compite
+          con el push, que sigue siendo el camino rapido.
+
+          SAFE_WATCH_FACES se omite a proposito: no queremos entregar cifras de
+          dinero a caratulas privilegiadas antes de desbloquear.
+        -->
+        <service
+            android:name=".presentation.complication.DisponibleComplicationService"
+            android:exported="true"
+            android:icon="@drawable/ic_wear_launcher"
+            android:label="@string/complication_disponible_label"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="RANGED_VALUE,SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="1800" />
+        </service>
+
+        <service
+            android:name=".presentation.complication.UpcomingPaymentComplicationService"
+            android:exported="true"
+            android:icon="@drawable/ic_wear_launcher"
+            android:label="@string/complication_upcoming_label"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="1800" />
+        </service>
+
     </application>
 </manifest>

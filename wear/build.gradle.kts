@@ -106,6 +106,13 @@ dependencies {
     implementation("androidx.wear.tiles:tiles:1.4.0")
     implementation("androidx.wear.protolayout:protolayout:1.2.0")
     implementation("androidx.wear.protolayout:protolayout-material:1.2.0")
+    // Complications (Fase 3). De aqui salen SuspendingComplicationDataSourceService
+    // y ComplicationDataSourceUpdateRequester. horologist-tiles ya arrastra este
+    // artefacto, pero SOLO en su variante de runtime: sin declararlo, las clases
+    // no estan en el classpath de compilacion. Se fija en la misma 1.2.1 que ya
+    // resuelve el grafo, para no mover nada mas.
+    implementation("androidx.wear.watchface:watchface-complications-data-source-ktx:1.2.1")
+
     // SuspendingTileService: onTileRequest en corrutina (para await del Data Layer).
     implementation("com.google.android.horologist:horologist-tiles:0.6.17")
 }
