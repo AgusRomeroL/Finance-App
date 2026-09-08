@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "purpose": "Casos canonicos pregunta -> intent para el asistente reactivo. Solo datos: la Fase 7 del plan de cierre los convierte en pruebas.",
+  "source": "ADENDA_IA_ON_DEVICE.md, seccion E.8, revalidado el 2026-09-07 contra el codigo y la semilla.",
+  "contract": {
+    "intents": "Los 12 de mx.budget.ai.domain.AssistantResponse.Intent, que son los mismos de assets/ai/intent_schema.json. La adenda lista 18; seis nunca se implementaron y por eso no aparecen aqui.",
+    "args": "Los nombres propios se comparan modulo AliasResolver: 'Pau' resuelve a la miembro Normita y 'BBVA' a la cuenta BBVA.",
+    "entities": "Verificados contra seed/budget_database.golden.db (2026-09-07): categorias, miembros, cuentas y planes existen tal cual.",
+    "heuristic": "Intent que produce HeuristicIntentGuesser sin LLM. Cuando difiere de expected_intent es una divergencia CONOCIDA del camino determinista, no un error: null significa que se rinde y la pregunta pasa al analisis abierto."
+  },
+  "cases": [
+    {
+      "id": "g01",
+      "question": "¿Cuánto queda en Gasolina?",
+      "expected_intent": "GET_CATEGORY_REMAINING",
+      "expected_args": { "category_code": "Gasolina" },
+      "heuristic": "GET_CATEGORY_REMAINING"
+    },
+    {
+      "id": "g02",
+      "question": "¿Cuánto presupuesto me queda para Despensa?",
+      "expected_intent": "GET_CATEGORY_REMAINING",
+      "expected_args": { "category_code": "Despensa" },
+      "heuristic": "GET_CATEGORY_REMAINING"
+    },
+    {
+      "id": "g03",
+      "question": "¿Todavía queda algo en Comida gatas?",
+      "expected_intent": "GET_CATEGORY_REMAINING",
+      "expected_args": { "category_code": "Comida gatas" },
+      "heuristic": "GET_CATEGORY_REMAINING",
+      "note": "El resolver prefiere el nombre mas largo, asi que 'Comida gatas' gana sobre 'Comida'."
+    },
+    {
+      "id": "g04",
+      "question": "¿En qué gastamos más?",
+      "expected_intent": "GET_TOP_CATEGORY",
+      "expected_args": {},
+      "heuristic": "GET_TOP_CATEGORY"
+    },
+    {
+      "id": "g05",
+      "question": "¿Dónde se nos va el dinero esta quincena?",
+      "expected_intent": "GET_TOP_CATEGORY",
+      "expected_args": {},
+      "heuristic": null,
+      "note": "La heuristica solo reconoce 'donde gast', no 'donde se nos va'; sin LLM cae al analisis abierto."
+    },
+    {
+      "id": "g06",
+      "question": "¿Quién ha gastado más en esta quincena?",
+      "expected_intent": "GET_TOP_SPENDER",
+      "expected_args": {},
+      "heuristic": "GET_TOP_SPENDER"
+    },
+    {
+      "id": "g07",
+      "question": "¿Quién gasta más?",
+      "expected_intent": "GET_TOP_SPENDER",
+      "expected_args": {},
+      "heuristic": "GET_TOP_SPENDER"
+    },
+    {
+      "id": "g08",
+      "question": "cuanto lleva david este mes",
+      "expected_intent": "GET_SPEND_BY_MEMBER",
+      "expected_args": { "member_alias": "David" },
+      "heuristic": "GET_SPEND_BY_MEMBER",
+      "note": "Sin acentos ni signos, como suele llegar el dictado."
+    },
+    {
+      "id": "g09",
+      "question": "¿Cuánto ha gastado Santiago?",
+      "expected_intent": "GET_SPEND_BY_MEMBER",
+      "expected_args": { "member_alias": "Santiago" },
+      "heuristic": "GET_SPEND_BY_MEMBER"
+    },
+    {
+      "id": "g10",
+      "question": "¿Cuánto lleva Pau?",
+      "expected_intent": "GET_SPEND_BY_MEMBER",
+      "expected_args": { "member_alias": "Normita" },
+      "heuristic": "GET_SPEND_BY_MEMBER",
+      "note": "'Pau' es alias corto de Normita en la semilla."
+    },
+    {
+      "id": "g11",
+      "question": "Dame el saldo de BBVA",
+      "expected_intent": "GET_WALLET_BALANCE",
+      "expected_args": { "wallet_name": "BBVA" },
+      "heuristic": "GET_WALLET_BALANCE"
+    },
+    {
+      "id": "g12",
+      "question": "¿Cuánto debo en Banamex Clásica?",
+      "expected_intent": "GET_WALLET_BALANCE",
+      "expected_args": { "wallet_name": "Banamex Clásica" },
+      "heuristic": "GET_CATEGORY_REMAINING",
+      "note": "Divergencia conocida: 'Banamex Clásica' es tambien el nombre de una categoria y la regla de categoria corre antes que la de cuenta."
+    },
+    {
+      "id": "g13",
+      "question": "¿Cuánto tengo en Efectivo?",
+      "expected_intent": "GET_WALLET_BALANCE",
+      "expected_args": { "wallet_name": "Efectivo" },
+      "heuristic": "GET_WALLET_BALANCE"
+    },
+    {
+      "id": "g14",
+      "question": "¿Cuánto ahorraríamos si no gastamos más en Entretenimiento?",
+      "expected_intent": "PROJECT_SAVINGS_IF",
+      "expected_args": { "hypothetical_cut_category": "Entretenimiento" },
+      "heuristic": "GET_TOP_CATEGORY",
+      "note": "Divergencia conocida: la heuristica nunca emite PROJECT_SAVINGS_IF y aqui se queda con 'gastamos mas'."
+    },
+    {
+      "id": "g15",
+      "question": "Calcula el ahorro si recortamos Diversión.",
+      "expected_intent": "PROJECT_SAVINGS_IF",
+      "expected_args": { "hypothetical_cut_category": "Diversión" },
+      "heuristic": "GET_CATEGORY_REMAINING",
+      "note": "Divergencia conocida: sin LLM solo se reconoce la categoria suelta."
+    },
+    {
+      "id": "g16",
+      "question": "¿Gasto más que la quincena pasada?",
+      "expected_intent": "COMPARE_QUINCENAS",
+      "expected_args": { "baseline_quincenas": 1 },
+      "heuristic": "GET_TOP_CATEGORY",
+      "note": "Divergencia conocida: la regla de 'gasto mas' corre antes que la de comparacion."
+    },
+    {
+      "id": "g17",
+      "question": "Compara con las últimas 6 quincenas",
+      "expected_intent": "COMPARE_QUINCENAS",
+      "expected_args": { "baseline_quincenas": 6 },
+      "heuristic": "COMPARE_QUINCENAS",
+      "note": "La heuristica no infiere el numero; el dispatcher usa 6 por defecto, que coincide."
+    },
+    {
+      "id": "g18",
+      "question": "¿En qué cuota voy con Mercado Libre 12 MSI?",
+      "expected_intent": "GET_INSTALLMENT_STATUS",
+      "expected_args": { "plan_name": "Mercado Libre 12 MSI" },
+      "heuristic": "GET_INSTALLMENT_STATUS"
+    },
+    {
+      "id": "g19",
+      "question": "¿Cómo va el Buró de Crédito 3 pagos?",
+      "expected_intent": "GET_INSTALLMENT_STATUS",
+      "expected_args": { "plan_name": "Buró de Crédito 3 pagos" },
+      "heuristic": "GET_CATEGORY_REMAINING",
+      "note": "Divergencia conocida: sin la palabra 'cuota' gana la categoria 'Buró de crédito'."
+    },
+    {
+      "id": "g20",
+      "question": "¿Qué cuotas vienen?",
+      "expected_intent": "LIST_UPCOMING_INSTALLMENTS",
+      "expected_args": {},
+      "heuristic": "LIST_UPCOMING_INSTALLMENTS"
+    },
+    {
+      "id": "g21",
+      "question": "Cuotas pendientes",
+      "expected_intent": "LIST_UPCOMING_INSTALLMENTS",
+      "expected_args": {},
+      "heuristic": "LIST_UPCOMING_INSTALLMENTS"
+    },
+    {
+      "id": "g22",
+      "question": "¿Por qué me pasé en Despensa?",
+      "expected_intent": "EXPLAIN_VARIANCE",
+      "expected_args": { "category_code": "Despensa" },
+      "heuristic": "GET_CATEGORY_REMAINING",
+      "note": "Divergencia conocida: la heuristica nunca emite EXPLAIN_VARIANCE."
+    },
+    {
+      "id": "g23",
+      "question": "Explica la desviación de Gasolina",
+      "expected_intent": "EXPLAIN_VARIANCE",
+      "expected_args": { "category_code": "Gasolina" },
+      "heuristic": "GET_CATEGORY_REMAINING",
+      "note": "Divergencia conocida, misma razon que g22."
+    },
+    {
+      "id": "g24",
+      "question": "¿Cómo vamos esta quincena?",
+      "expected_intent": "SUMMARIZE_QUINCENA",
+      "expected_args": {},
+      "heuristic": "SUMMARIZE_QUINCENA"
+    },
+    {
+      "id": "g25",
+      "question": "Resumen de la quincena",
+      "expected_intent": "SUMMARIZE_QUINCENA",
+      "expected_args": {},
+      "heuristic": "SUMMARIZE_QUINCENA"
+    },
+    {
+      "id": "g26",
+      "question": "¿Qué día es hoy?",
+      "expected_intent": "UNKNOWN",
+      "expected_args": {},
+      "heuristic": null,
+      "note": "UNKNOWN despacha a OutOfScope y la pantalla muestra el limite."
+    },
+    {
+      "id": "g27",
+      "question": "Cuéntame un chiste",
+      "expected_intent": "UNKNOWN",
+      "expected_args": {},
+      "heuristic": null
+    }
+  ]
+}

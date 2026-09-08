@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "purpose": "Que preguntas debe tratar QuestionClassifier.isOpenAnalysis como analisis abierto y cuales no. Solo datos: la Fase 7 las convierte en pruebas.",
+  "contract": {
+    "expected_open": "true = va directo a OpenAnalysisAnswerer sin gastar una pasada del LLM en el intent schema.",
+    "why_negatives": "Los casos en false son el control: si el regex se ensancha, una pregunta que si mapea a un intent acabaria contestada con prosa generica."
+  },
+  "cases": [
+    { "id": "o01", "question": "¿Qué patrón no sobresale a simple vista en mis gastos?", "expected_open": true },
+    { "id": "o02", "question": "¿Hay algo inusual esta quincena?", "expected_open": true },
+    { "id": "o03", "question": "Analiza mis gastos", "expected_open": true },
+    { "id": "o04", "question": "¿Algo que llama la atención en el mes?", "expected_open": true },
+    { "id": "o05", "question": "Dame un panorama general", "expected_open": true },
+    { "id": "o06", "question": "¿Qué observas en mi presupuesto?", "expected_open": true },
+    { "id": "o07", "question": "¿Ves alguna tendencia general?", "expected_open": true },
+    { "id": "o08", "question": "¿Hay algún gasto raro?", "expected_open": true },
+    { "id": "o09", "question": "¿Cuánto queda en Gasolina?", "expected_open": false },
+    { "id": "o10", "question": "¿Quién gasta más?", "expected_open": false },
+    { "id": "o11", "question": "Dame el saldo de BBVA", "expected_open": false },
+    { "id": "o12", "question": "Resumen de la quincena", "expected_open": false },
+    { "id": "o13", "question": "¿Qué cuotas vienen?", "expected_open": false }
+  ]
+}

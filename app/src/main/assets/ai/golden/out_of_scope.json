@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "purpose": "Que preguntas quedan fuera del presupuesto y deben recibir el mensaje de limite, y cuales no. Solo datos: la Fase 7 las convierte en pruebas.",
+  "contract": {
+    "checks": "IntentDispatcher.isWithinScope(question).",
+    "expected_within_scope": "false = la app dice que eso no lo sabe y ofrece los atajos, en vez de improvisar un analisis abierto que nadie pidio.",
+    "note": "Los casos en true son el control: una pregunta del presupuesto que el despacho no supo resolver TIENE que seguir yendo al analisis abierto."
+  },
+  "cases": [
+    { "id": "s01", "question": "¿Qué día es hoy?", "expected_within_scope": false },
+    { "id": "s02", "question": "Cuéntame un chiste", "expected_within_scope": false, "note": "Con comparacion por substring, 'cuentame' caia dentro por la palabra 'cuenta'." },
+    { "id": "s03", "question": "¿Cómo está el clima en Guadalajara?", "expected_within_scope": false },
+    { "id": "s04", "question": "¿Cuál es la capital de Francia?", "expected_within_scope": false },
+    { "id": "s05", "question": "Escríbeme un correo para mi jefe", "expected_within_scope": false },
+    { "id": "s06", "question": "¿Quién ganó el partido?", "expected_within_scope": false },
+    { "id": "s07", "question": "Ponme música", "expected_within_scope": false },
+    { "id": "s08", "question": "¿Cuánto queda en Gasolina?", "expected_within_scope": true },
+    { "id": "s09", "question": "¿Y el mes pasado cómo nos fue con la despensa?", "expected_within_scope": true },
+    { "id": "s10", "question": "¿Me pasé de presupuesto?", "expected_within_scope": true },
+    { "id": "s11", "question": "¿Cuánto le debo a la tarjeta?", "expected_within_scope": true },
+    { "id": "s12", "question": "¿Algo inusual en la quincena?", "expected_within_scope": true },
+    { "id": "s13", "question": "¿Y Santiago?", "expected_within_scope": true, "note": "Sin vocabulario de dinero: entra por el nombre del miembro, que resuelve el AliasResolver contra el hogar real." }
+  ]
+}
