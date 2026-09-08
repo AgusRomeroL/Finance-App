@@ -124,8 +124,8 @@ fun AiChatSheet(
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             )
             Text(
-                if (llmAvailable) "Pregunta libre (LLM on-device) o usa un atajo."
-                else "Sin LLM en este dispositivo: respuestas deterministas con tus datos.",
+                if (llmAvailable) "Pregunta libre sobre tu presupuesto, o usa un atajo."
+                else "Sin modelo en este dispositivo: respuestas con tus cifras, sin redactar.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -516,10 +516,12 @@ private fun formatResult(result: DispatchResult, money: NumberFormat): String = 
     // Ruta OPEN_ANALYSIS: el texto ya viene redactado (LLM o plantillas).
     is DispatchResult.OpenAnalysis -> result.text
 
-    // Estos tres casos los intercepta el ViewModel (needsOpenAnalysis) antes de
-    // llegar aquí; se dejan textos honestos por exhaustividad del `when`.
+    // OutOfScope SI se ve: el ViewModel lo emite cuando la pregunta no es del
+    // presupuesto, en vez de improvisar un análisis abierto que nadie pidió.
     DispatchResult.OutOfScope ->
-        "Eso queda fuera de lo que puedo ver en el presupuesto, pero pregúntame sobre tus gastos y te ayudo."
+        "Eso no está en el presupuesto, así que no lo sé. Puedo decirte en qué gastan " +
+            "más, cuánto queda en una categoría, quién gasta más, el saldo de una cuenta, " +
+            "cómo va la quincena o cómo van las cuotas."
 
     is DispatchResult.Unknown ->
         result.reason.ifBlank { "No pude resolverlo con los datos disponibles. Intenta reformular la pregunta." }

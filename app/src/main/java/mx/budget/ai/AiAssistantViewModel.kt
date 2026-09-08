@@ -30,7 +30,8 @@ import mx.budget.ai.suggest.SuggestedQuestionEngine
  * detectan ANTES de intentar el intent schema ([QuestionClassifier.isOpenAnalysis])
  * y van directo al [OpenAnalysisAnswerer]; además, cuando el dispatch se rinde
  * (OutOfScope/ParseError/Unknown sin razón) se corre una segunda pasada por la
- * misma ruta en vez de mostrar el texto enlatado de capacidades.
+ * misma ruta, pero SOLO si la pregunta es del presupuesto: lo que no lo es
+ * recibe un límite explícito en vez de un análisis que nadie pidió.
  *
  * **Fallback determinista sin LLM**: si el [OnDeviceLlm] no está disponible
  * (emulador, sin AICore/Gemma), [llmAvailable] queda en false pero la pregunta
@@ -178,13 +179,13 @@ class AiAssistantViewModel(
                         // La pregunta original habilita el fallback heurístico del
                         // dispatcher cuando la salida del LLM no parsea como intent.
                         val result = dispatcher.dispatch(rawJson, originalQuestion = question)
-                        if (needsOpenAnalysis(result)) runOpenAnalysis(question, startMs)
+                        if (gaveUp(result)) handleGaveUp(question, startMs)
                         else finish(result, System.currentTimeMillis() - startMs)
                     },
                     onFailure = {
                         // El RAG de intents falló (p. ej. generate() roto):
                         // la segunda pasada aún puede salvar la respuesta.
-                        runOpenAnalysis(question, startMs)
+                        handleGaveUp(question, startMs)
                     }
                 )
             } else {
@@ -192,7 +193,7 @@ class AiAssistantViewModel(
                 // HeuristicIntentGuesser sobre la pregunta original.
                 val result = runCatching { dispatcher.dispatch("", originalQuestion = question) }
                     .getOrElse { DispatchResult.Unknown(it.message ?: "Error interno") }
-                if (needsOpenAnalysis(result)) runOpenAnalysis(question, startMs)
+                if (gaveUp(result)) handleGaveUp(question, startMs)
                 else finish(result, System.currentTimeMillis() - startMs)
             }
         }
@@ -222,12 +223,26 @@ class AiAssistantViewModel(
         }
     }
 
-    /** El dispatch se rindió sin nada útil que decir → segunda pasada. */
-    private fun needsOpenAnalysis(result: DispatchResult): Boolean = when (result) {
+    /** El dispatch se rindió sin nada útil que decir. */
+    private fun gaveUp(result: DispatchResult): Boolean = when (result) {
         DispatchResult.OutOfScope -> true
         is DispatchResult.ParseError -> true
         is DispatchResult.Unknown -> result.reason.isBlank()
         else -> false
+    }
+
+    /**
+     * Qué hacer cuando el despacho se rindió.
+     *
+     * Antes TODO se reciclaba al análisis abierto, que siempre devuelve algo: si
+     * alguien preguntaba por el clima recibía un análisis de sus gastos como si esa
+     * fuera la respuesta. Ahora la segunda pasada solo corre cuando la pregunta es
+     * del presupuesto; si no, se dice el límite y se ofrecen los atajos.
+     */
+    private suspend fun handleGaveUp(question: String, startMs: Long) {
+        val withinScope = runCatching { dispatcher.isWithinScope(question) }.getOrDefault(true)
+        if (withinScope) runOpenAnalysis(question, startMs)
+        else finish(DispatchResult.OutOfScope, System.currentTimeMillis() - startMs)
     }
 
     private suspend fun runOpenAnalysis(question: String, startMs: Long) {
@@ -347,6 +362,7 @@ class AiAssistantViewModel(
                 "· Quién gasta más\n" +
                 "· El saldo de una cuenta\n" +
                 "· Cómo va la quincena\n" +
-                "O prueba uno de los atajos de abajo."
+                "O prueba uno de los atajos de abajo.\n" +
+                "Solo veo lo que está en el presupuesto: si preguntas otra cosa, te lo digo."
     }
 }

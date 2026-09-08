@@ -8,6 +8,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import mx.budget.ai.domain.AssistantResponse
+import mx.budget.ai.rag.QuestionClassifier
 import mx.budget.ai.domain.DispatchResult
 import mx.budget.data.local.result.QuincenaSnapshot
 import mx.budget.data.repository.AnalyticsRepository
@@ -79,6 +80,26 @@ class IntentDispatcher(
             ?: return DispatchResult.ParseError(rawResponse)
 
         return dispatch(response)
+    }
+
+    /**
+     * ¿La pregunta cae dentro de lo que este ledger puede contestar?
+     *
+     * Se usa cuando el despacho se rindió, para separar dos casos que antes se
+     * trataban igual: "no supe armar el intent, pero la pregunta es del
+     * presupuesto" (merece la segunda pasada del análisis abierto) y "esto no es
+     * del presupuesto" (merece que la app lo diga, en vez de improvisar un
+     * análisis que nadie pidió).
+     */
+    suspend fun isWithinScope(question: String): Boolean {
+        if (question.isBlank()) return false
+        if (QuestionClassifier.isOpenAnalysis(question)) return true
+        if (QuestionClassifier.hasFinancialVocabulary(question)) return true
+        val resolver = runCatching { resolverProvider() }.getOrNull() ?: return false
+        return resolver.findCategoryIn(question) != null ||
+            resolver.findMemberIn(question) != null ||
+            resolver.findWalletIn(question) != null ||
+            resolver.findInstallmentPlanIn(question) != null
     }
 
     /**
