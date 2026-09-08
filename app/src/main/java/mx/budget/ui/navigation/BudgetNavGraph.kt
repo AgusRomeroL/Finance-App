@@ -131,6 +131,8 @@ fun BudgetNavGraph(
     statementsChecklistViewModel: mx.budget.ui.statements.StatementsChecklistViewModel? = null,
     nvidiaApiKey: String = "",
     onNvidiaApiKeyChange: (String) -> Unit = {},
+    /** Gobierno del modelo de IA en Perfil (Fase 4). `null` lo oculta. */
+    aiAssistant: mx.budget.ui.profile.AiAssistantSettings? = null,
     startTutorial: Boolean = false,
     onTutorialSeen: () -> Unit = {},
 ) {
@@ -459,6 +461,7 @@ fun BudgetNavGraph(
                     { onNavigate(BudgetDestinations.MASTERS_INCOME) }
                 } else null,
                 onManageWallets = { onNavigate(BudgetDestinations.WALLETS) },
+                aiAssistant = aiAssistant,
                 nvidiaApiKey = nvidiaApiKey,
                 onNvidiaApiKeyChange = onNvidiaApiKeyChange,
                 onImportStatement = if (statementImportViewModel != null) {

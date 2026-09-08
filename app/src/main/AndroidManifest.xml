@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Red: solo la usa la importación de estados de cuenta (Fase C, paquete C1),
          que envía el TEXTO extraído localmente al LLM cloud de NVIDIA NIM. El PDF
@@ -12,6 +13,12 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Descarga del modelo de IA (Fase 4): son gigabytes, así que corre en un
+         servicio en primer plano de WorkManager para que sobreviva a que el usuario
+         salga de la app. Tipo dataSync: no hay otro tipo que describa bajar datos. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!-- Dictado por voz en la barra de búsqueda (SpeechRecognizer) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -118,6 +125,13 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/budget_capture_widget_info" />
         </receiver>
+
+        <!-- El servicio de primer plano lo aporta WorkManager; aquí solo se le
+             declara el tipo que exige Android 14+ para la descarga del modelo. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
         <!-- Servicio de sincronización Wear OS -->
         <service

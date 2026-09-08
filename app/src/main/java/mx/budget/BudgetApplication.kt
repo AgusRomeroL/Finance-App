@@ -30,6 +30,7 @@ import mx.budget.ai.proactive.NlCaptureExtractor
 import mx.budget.ai.proactive.ProactiveReasoner
 import mx.budget.ai.proactive.RetroAttributionEngine
 import mx.budget.ai.service.AiCoreManager
+import mx.budget.ai.service.AiModelManager
 import mx.budget.ai.service.HybridLlm
 import mx.budget.ai.service.LiteRtLmManager
 import mx.budget.ai.service.OnDeviceLlm
@@ -238,6 +239,18 @@ class BudgetApplication : Application() {
      * (captura NL, §G.3). Único punto de construcción del LLM en runtime.
      */
     lateinit var onDeviceLlm: OnDeviceLlm
+        private set
+
+    /**
+     * Provisión del modelo local (Fase 4): qué variante se eligió, si está en disco,
+     * cómo va la descarga y cómo borrarla. Es lo único que Perfil necesita conocer
+     * de la capa de IA; el engine y WorkManager quedan detrás.
+     */
+    lateinit var aiModelManager: AiModelManager
+        private set
+
+    /** Motor LLM que está respondiendo (AICore, Gemma local o ninguno). */
+    lateinit var llmEngine: kotlinx.coroutines.flow.StateFlow<mx.budget.ai.service.LlmEngine>
         private set
 
     /**
@@ -468,7 +481,16 @@ class BudgetApplication : Application() {
         // Híbrido: AICore (TPU, cuando Google lo provisione) → LiteRT-LM (Gemma
         // local, corre en Tensor G4 del Fold de Norma) → no-disponible. Único
         // constructor del LLM en runtime; lo comparten Capa 3 y la captura NL.
-        onDeviceLlm = HybridLlm(AiCoreManager(this), LiteRtLmManager(this))
+        val liteRtLmManager = LiteRtLmManager(this)
+        val hybridLlm = HybridLlm(AiCoreManager(this), liteRtLmManager)
+        onDeviceLlm = hybridLlm
+        llmEngine = hybridLlm.engine
+        aiModelManager = AiModelManager(
+            context = this,
+            settings = settingsRepository,
+            liteRtLm = liteRtLmManager,
+            scope = appScope,
+        )
         proactiveReasoner = ProactiveReasoner(
             llm = onDeviceLlm,
             systemPrompt = proactiveSystemPrompt,

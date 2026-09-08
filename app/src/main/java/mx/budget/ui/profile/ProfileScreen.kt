@@ -111,6 +111,11 @@ fun ProfileScreen(
     onManageCategories: (() -> Unit)? = null,
     onManageIncome: (() -> Unit)? = null,
     onManageWallets: (() -> Unit)? = null,
+    /**
+     * Gobierno del modelo local (Fase 4). `null` cuando la pantalla se compone sin
+     * la capa de IA (vista previa), y entonces la tarjeta no aparece.
+     */
+    aiAssistant: AiAssistantSettings? = null,
     nvidiaApiKey: String = "",
     onNvidiaApiKeyChange: (String) -> Unit = {},
     onImportStatement: (() -> Unit)? = null,
@@ -386,6 +391,11 @@ fun ProfileScreen(
                     renormalized = true
                 }
             )
+        }
+
+        if (aiAssistant != null) {
+            Spacer(Modifier.height(20.dp))
+            AiAssistantCard(aiAssistant)
         }
 
         Spacer(Modifier.height(20.dp))
@@ -859,7 +869,7 @@ private fun IdentityCard(
 
 /** Fila de ajuste con icono, título, subtítulo y chevron (o badge numérico). */
 @Composable
-private fun SettingRow(
+internal fun SettingRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtitle: String,

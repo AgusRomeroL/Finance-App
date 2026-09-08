@@ -51,3 +51,6 @@ Copy of presupuesto*.xlsx
 # Dependencias de Node (web/ y las pruebas de reglas)
 node_modules/
 package-lock.json
+
+# Token de Hugging Face para bajar el modelo Gemma (Fase 4): credencial local
+hf_token.local

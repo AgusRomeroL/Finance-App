@@ -49,6 +49,7 @@ class SettingsRepository(private val context: Context) {
     private val nvidiaApiKeyKey = stringPreferencesKey("nvidia_api_key")
     private val suggestedChipHistoryKey = stringPreferencesKey("suggested_chip_history_json")
     private val hasSeenTutorialKey = booleanPreferencesKey("has_seen_tutorial")
+    private val aiModelVariantKey = stringPreferencesKey("ai_model_variant")
 
     /** Flujo del toggle de color dinámico. Default `true` (Material You). */
     val dynamicColor: Flow<Boolean> = context.dataStore.data
@@ -321,6 +322,24 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    // ── Modelo del asistente on-device (Fase 4) ─────────────────────────────────
+
+    /**
+     * Variante del modelo Gemma elegida en Perfil (`"E2B"` por defecto, `"E4B"` la
+     * grande). No dice que esté descargada: eso lo sabe
+     * [mx.budget.ai.service.ModelStorage] mirando el disco. Aquí solo vive la
+     * intención del usuario, que es lo que la descarga y el engine consultan.
+     */
+    val aiModelVariant: Flow<String> = context.dataStore.data
+        .map { prefs -> prefs[aiModelVariantKey] ?: DEFAULT_AI_MODEL_VARIANT }
+
+    suspend fun getAiModelVariant(): String =
+        context.dataStore.data.first()[aiModelVariantKey] ?: DEFAULT_AI_MODEL_VARIANT
+
+    suspend fun setAiModelVariant(id: String) {
+        context.dataStore.edit { prefs -> prefs[aiModelVariantKey] = id }
+    }
+
     private fun decodeLongMap(raw: String?): Map<String, Long> {
         if (raw.isNullOrBlank()) return emptyMap()
         return runCatching { Json.decodeFromString<Map<String, Long>>(raw) }.getOrDefault(emptyMap())
@@ -348,6 +367,7 @@ class SettingsRepository(private val context: Context) {
 
     companion object {
         const val DEFAULT_REMINDER_LEAD_DAYS = 2
+        const val DEFAULT_AI_MODEL_VARIANT = "E2B"
 
         /** Sentinela "ya notificado, no volver a avisar" (hasta posponer o confirmar). */
         const val NEVER_AGAIN = Long.MAX_VALUE

@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// Reglas de Cloud Storage (Fase 4 del cierre, 2026-09-07).
+//
+// El bucket guarda una sola cosa: el modelo Gemma `.litertlm` que la app descarga
+// para su asistente on-device, mas su `manifest.json` con tamano y SHA-256.
+//
+// Decision 4 de la seccion 7 del plan: el origen es el Storage de este proyecto con
+// lectura para sesion iniciada. La app pega al endpoint REST con el idToken de
+// Firebase Auth, asi que esta regla si se aplica (el downloadUrl del SDK trae un
+// token propio que la esquivaria).
+//
+// Escritura: nadie desde el cliente. Los archivos los sube
+// `scripts/admin/upload_model.py` con el Admin SDK, que ignora estas reglas.
+//
+// Despliegue: python scripts/admin/deploy_rules.py --target storage
+// (el deploy de hosting NO despliega reglas y la CLI exige un permiso de
+// serviceusage que el service account no tiene).
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Modelos de IA: los lee cualquier sesion iniciada, anonima incluida, porque
+    // la app arranca con Auth anonima y el modelo no contiene datos del hogar.
+    match /models/{file=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Nada mas vive aqui. Un prefijo nuevo nace cerrado a proposito.
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

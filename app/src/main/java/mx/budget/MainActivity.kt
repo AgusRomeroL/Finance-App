@@ -366,6 +366,13 @@ class MainActivity : ComponentActivity() {
                 initial = SettingsRepository.LOCATION_LEVEL_NONE
             )
             val nvidiaApiKey by settings.nvidiaApiKey.collectAsState(initial = "")
+            // Modelo del asistente on-device (Fase 4): estado en disco, avance de la
+            // descarga y motor activo, que es lo que Perfil necesita mostrar.
+            val modelState by app.aiModelManager.state.collectAsState()
+            val selectedModelVariant by app.aiModelManager.selectedVariant.collectAsState(
+                initial = mx.budget.ai.service.ModelCatalog.default
+            )
+            val llmEngine by app.llmEngine.collectAsState()
             // Tutorial guiado (coach-marks): auto-arranca la primera vez. Valor inicial leído
             // síncrono al arrancar → sin parpadeo. Ver ui/tutorial/ y TUTORIAL.md.
             val hasSeenTutorial by settings.hasSeenTutorial.collectAsState(initial = app.initialHasSeenTutorial)
@@ -468,6 +475,14 @@ class MainActivity : ComponentActivity() {
                     statementsChecklistViewModel = statementsChecklistViewModel,
                     nvidiaApiKey = nvidiaApiKey,
                     onNvidiaApiKeyChange = { key -> scope.launch { settings.setNvidiaApiKey(key) } },
+                    aiAssistant = mx.budget.ui.profile.AiAssistantSettings(
+                        modelState = modelState,
+                        selectedVariant = selectedModelVariant,
+                        engine = llmEngine,
+                        onDownload = { variant -> app.aiModelManager.start(variant) },
+                        onCancel = { app.aiModelManager.cancel() },
+                        onDelete = { variant -> app.aiModelManager.delete(variant) },
+                    ),
                     startTutorial = !hasSeenTutorial,
                     onTutorialSeen = {
                         // Snapshot de proceso + persistencia: ver markTutorialSeenInProcess.
