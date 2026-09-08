@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import mx.budget.ai.dispatch.IntentDispatcher
 import mx.budget.ai.domain.AssistantResponse
 import mx.budget.ai.domain.DispatchResult
@@ -22,7 +23,7 @@ import mx.budget.ai.suggest.SuggestedQuestionEngine
 
 /**
  * ViewModel del asistente reactivo (MVP Fase 4 + ruta OPEN_ANALYSIS). Orquesta
- * el pipeline RAG (pregunta libre → LLM on-device → intent JSON → dispatcher
+ * el pipeline RAG (pregunta libre, LLM on-device, intent JSON, dispatcher
  * determinista) y mantiene el historial para la UI.
  *
  * **Ruta OPEN_ANALYSIS (paquete A1)**: las preguntas abiertas/analíticas se
@@ -35,7 +36,7 @@ import mx.budget.ai.suggest.SuggestedQuestionEngine
  * (emulador, sin AICore/Gemma), [llmAvailable] queda en false pero la pregunta
  * libre SIGUE funcionando: se adivina el intent con la heurística del
  * [IntentDispatcher] y, si no aplica, el [OpenAnalysisAnswerer] responde con
- * un insight determinista por plantillas — nunca el texto de capacidades.
+ * un insight determinista por plantillas, nunca el texto de capacidades.
  */
 class AiAssistantViewModel(
     private val llm: OnDeviceLlm,
@@ -71,6 +72,7 @@ class AiAssistantViewModel(
     val suggestedQuestions: StateFlow<List<SuggestedQuestion>> = _suggestedQuestions.asStateFlow()
 
     private var llmPollJob: Job? = null
+    private var inferenceJob: Job? = null
 
     init {
         ensureLlmReadinessChecked()
@@ -90,7 +92,7 @@ class AiAssistantViewModel(
 
     /**
      * El historial NUNCA arranca vacío: el asistente saluda primero y las
-     * pills de atajo quedan debajo — sin pantalla en blanco al abrir el chat.
+     * pills de atajo quedan debajo, sin pantalla en blanco al abrir el chat.
      */
     private fun seedWelcome() {
         _chatHistory.value = listOf(
@@ -100,7 +102,7 @@ class AiAssistantViewModel(
 
     /**
      * Dispara (o reanuda) el sondeo de disponibilidad del LLM. Segura de
-     * llamar varias veces — si ya está disponible o hay un sondeo en curso,
+     * llamar varias veces: si ya está disponible o hay un sondeo en curso,
      * no hace nada.
      *
      * La UI la invoca de nuevo cada vez que se abre el chat: así, si un
@@ -111,7 +113,7 @@ class AiAssistantViewModel(
      * Mientras el engine está `Pending` (Gemma en CPU puede tardar varios
      * minutos en frío, sobre todo la primera carga tras instalar), reintenta
      * con backoff exponencial SIN un límite de intentos que lo dé por
-     * perdido — el límite anterior (60 intentos × 2 s ≈ 120 s) apagaba la
+     * perdido; el límite anterior (60 intentos × 2 s ≈ 120 s) apagaba la
      * pregunta libre para siempre si la carga tardaba más, sin forma de
      * recuperarla salvo reiniciar el proceso.
      */
@@ -128,7 +130,7 @@ class AiAssistantViewModel(
                         return@launch
                     }
                     LlmReadiness.Unavailable -> {
-                        // Terminal por ahora (sin modelo/init fallido) — no se
+                        // Terminal por ahora (sin modelo/init fallido): no se
                         // insiste en bucle, pero ensureLlmReadinessChecked()
                         // puede relanzar el sondeo más tarde.
                         _llmAvailable.value = false
@@ -154,15 +156,12 @@ class AiAssistantViewModel(
 
         _chatHistory.update { it + ChatMessage(role = ChatMessage.Role.USER, text = question) }
 
-        viewModelScope.launch {
-            _uiState.value = AiAssistantUiState.Thinking
-            val startMs = System.currentTimeMillis()
-
+        startInference { startMs ->
             // Pregunta abierta/analítica → directo a OPEN_ANALYSIS, sin gastar
             // una pasada del LLM (lento) intentando el intent schema primero.
             if (QuestionClassifier.isOpenAnalysis(question)) {
                 runOpenAnalysis(question, startMs)
-                return@launch
+                return@startInference
             }
 
             if (_llmAvailable.value) {
@@ -207,10 +206,7 @@ class AiAssistantViewModel(
     fun sendOpenAnalysis(question: String) {
         if (question.isBlank()) return
         _chatHistory.update { it + ChatMessage(role = ChatMessage.Role.USER, text = question) }
-        viewModelScope.launch {
-            _uiState.value = AiAssistantUiState.Thinking
-            runOpenAnalysis(question, System.currentTimeMillis())
-        }
+        startInference { startMs -> runOpenAnalysis(question, startMs) }
     }
 
     /**
@@ -219,9 +215,7 @@ class AiAssistantViewModel(
      */
     fun sendPredefined(label: String, response: AssistantResponse) {
         _chatHistory.update { it + ChatMessage(role = ChatMessage.Role.USER, text = label) }
-        viewModelScope.launch {
-            _uiState.value = AiAssistantUiState.Thinking
-            val startMs = System.currentTimeMillis()
+        startInference { startMs ->
             val result = runCatching { dispatcher.dispatch(response) }
                 .getOrElse { DispatchResult.Unknown(it.message ?: "Error interno") }
             finish(result, System.currentTimeMillis() - startMs)
@@ -238,7 +232,17 @@ class AiAssistantViewModel(
 
     private suspend fun runOpenAnalysis(question: String, startMs: Long) {
         val answer = runCatching {
-            openAnalysisAnswerer.answer(question, defaultHouseholdId, useLlm = _llmAvailable.value)
+            openAnalysisAnswerer.answer(
+                question = question,
+                householdId = defaultHouseholdId,
+                useLlm = _llmAvailable.value,
+                onReasoning = {
+                    _uiState.value = AiAssistantUiState.Thinking(ThinkingPhase.REASONING, startMs)
+                },
+                onPartial = { text ->
+                    _uiState.value = AiAssistantUiState.Generating(text, startMs)
+                },
+            )
         }.getOrElse { OpenAnalysisAnswerer.Answer.Failed(it.message ?: "Error interno") }
 
         when (answer) {
@@ -256,6 +260,45 @@ class AiAssistantViewModel(
                     it + ChatMessage(role = ChatMessage.Role.ERROR, text = answer.reason)
                 }
             }
+        }
+    }
+
+    /**
+     * Arranca una inferencia cancelable y con tope de paciencia.
+     *
+     * Antes cada pregunta se lanzaba en el [viewModelScope] sin guardar el Job, así
+     * que no había forma de pararla: con Gemma en CPU eso son decenas de segundos
+     * de spinner que el usuario no puede interrumpir.
+     */
+    private fun startInference(block: suspend (Long) -> Unit) {
+        inferenceJob?.cancel()
+        inferenceJob = viewModelScope.launch {
+            val startMs = System.currentTimeMillis()
+            _uiState.value = AiAssistantUiState.Thinking(ThinkingPhase.READING_LEDGER, startMs)
+            val finished = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
+                block(startMs)
+                true
+            }
+            if (finished == null) {
+                runCatching { llm.cancelGeneration() }
+                val minutes = INFERENCE_TIMEOUT_MS / 60_000
+                val message = "El modelo lleva más de $minutes minutos sin responder. " +
+                    "Puedes volver a preguntar o usar uno de los atajos."
+                _uiState.value = AiAssistantUiState.Error(message)
+                _chatHistory.update { it + ChatMessage(role = ChatMessage.Role.ERROR, text = message) }
+            }
+        }
+    }
+
+    /** Para la respuesta en curso. La pregunta se queda en el historial. */
+    fun cancelCurrent() {
+        if (inferenceJob?.isActive != true) return
+        runCatching { llm.cancelGeneration() }
+        inferenceJob?.cancel()
+        inferenceJob = null
+        _uiState.value = AiAssistantUiState.Idle
+        _chatHistory.update {
+            it + ChatMessage(role = ChatMessage.Role.ASSISTANT, text = "Detuve la respuesta.")
         }
     }
 
@@ -277,7 +320,7 @@ class AiAssistantViewModel(
         _uiState.value = AiAssistantUiState.Idle
     }
 
-    // NOTA: no se hace llm.close() en onCleared — el OnDeviceLlm es el HybridLlm
+    // NOTA: no se hace llm.close() en onCleared: el OnDeviceLlm es el HybridLlm
     // compartido de la app (lo usa también la capa proactiva); su ciclo de vida
     // es el del proceso, no el de este ViewModel.
 
@@ -286,12 +329,19 @@ class AiAssistantViewModel(
         const val LLM_POLL_MAX_DELAY_MS = 15_000L
 
         /**
+         * Tope de espera de una respuesta. Medido con margen sobre la peor ruta
+         * conocida (Gemma en CPU); pasado ese punto lo honesto es decirlo, no
+         * seguir girando.
+         */
+        const val INFERENCE_TIMEOUT_MS = 180_000L
+
+        /**
          * Único lugar donde vive la guía de capacidades: como bienvenida, nunca
          * como respuesta a una pregunta.
          */
         const val WELCOME_MESSAGE =
             "Hola, soy tu asistente del presupuesto. Pregúntame lo que quieras sobre " +
-                "tus finanzas — por ejemplo:\n" +
+                "tus finanzas, por ejemplo:\n" +
                 "· En qué gastan más\n" +
                 "· Cuánto queda en una categoría\n" +
                 "· Quién gasta más\n" +

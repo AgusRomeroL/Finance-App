@@ -50,6 +50,7 @@ class SettingsRepository(private val context: Context) {
     private val suggestedChipHistoryKey = stringPreferencesKey("suggested_chip_history_json")
     private val hasSeenTutorialKey = booleanPreferencesKey("has_seen_tutorial")
     private val aiModelVariantKey = stringPreferencesKey("ai_model_variant")
+    private val openAnalysisDigestKey = stringPreferencesKey("open_analysis_digest_json")
 
     /** Flujo del toggle de color dinámico. Default `true` (Material You). */
     val dynamicColor: Flow<Boolean> = context.dataStore.data
@@ -338,6 +339,30 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setAiModelVariant(id: String) {
         context.dataStore.edit { prefs -> prefs[aiModelVariantKey] = id }
+    }
+
+    /**
+     * Digest del analisis abierto ya armado, con la firma de la quincena con la que
+     * se construyo. Reconstruirlo cuesta nueve consultas, asi que se guarda y solo
+     * se rehace cuando la firma cambia; el worker nocturno lo deja caliente.
+     */
+    @kotlinx.serialization.Serializable
+    data class CachedDigest(
+        val quincenaId: String,
+        val signature: String,
+        val digest: String,
+        val builtAtMs: Long,
+    )
+
+    suspend fun getOpenAnalysisDigest(): CachedDigest? {
+        val raw = context.dataStore.data.first()[openAnalysisDigestKey] ?: return null
+        return runCatching { Json.decodeFromString<CachedDigest>(raw) }.getOrNull()
+    }
+
+    suspend fun setOpenAnalysisDigest(cached: CachedDigest) {
+        context.dataStore.edit { prefs ->
+            prefs[openAnalysisDigestKey] = Json.encodeToString(cached)
+        }
     }
 
     private fun decodeLongMap(raw: String?): Map<String, Long> {

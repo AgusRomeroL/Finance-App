@@ -43,9 +43,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +62,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import mx.budget.ai.AiAssistantUiState
 import mx.budget.ai.AiAssistantViewModel
 import mx.budget.ai.ChatMessage
@@ -153,22 +156,17 @@ fun AiChatSheet(
                 }
             }
 
-            // Indicador "Pensando…" con entrada/salida animada por resorte.
+            // Indicador de espera honesto: dice en qué fase va, cuánto lleva,
+            // muestra el texto que llega token a token y deja pararlo.
             AnimatedVisibility(
-                visible = uiState is AiAssistantUiState.Thinking,
+                visible = uiState is AiAssistantUiState.Thinking ||
+                    uiState is AiAssistantUiState.Generating,
                 enter = fadeIn(spring(dampingRatio = 0.8f, stiffness = 380f)) +
                     expandVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
                 exit = fadeOut(spring(dampingRatio = 0.8f, stiffness = 380f)) +
                     shrinkVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 8.dp),
-                ) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(10.dp))
-                    Text("Pensando…", style = MaterialTheme.typography.bodySmall)
-                }
+                ThinkingIndicator(state = uiState, onCancel = { viewModel.cancelCurrent() })
             }
 
             Spacer(Modifier.height(12.dp))
@@ -178,7 +176,8 @@ fun AiChatSheet(
             // DINÁMICOS (Fase 3): los genera SuggestedQuestionEngine desde el
             // estado real (sobregasto, deuda, cercanía al límite) con rotación;
             // si el engine no entrega nada, caen los chips estáticos históricos.
-            val thinking = uiState is AiAssistantUiState.Thinking
+            val thinking = uiState is AiAssistantUiState.Thinking ||
+                uiState is AiAssistantUiState.Generating
             val suggested by viewModel.suggestedQuestions.collectAsState()
             Row(
                 modifier = Modifier
@@ -239,6 +238,62 @@ fun AiChatSheet(
                 onValueChange = { input = it },
                 onSend = send,
                 sendEnabled = input.isNotBlank() && !thinking,
+            )
+        }
+    }
+}
+
+/**
+ * Lo que se ve mientras el asistente trabaja.
+ *
+ * En el Pixel 7 (Tensor G2, sin AICore) una respuesta larga con Gemma en CPU se mide
+ * en decenas de segundos. Un spinner mudo todo ese rato es indistinguible de una app
+ * colgada, así que aquí se dice la fase, el tiempo que lleva, lo que ya escribió el
+ * modelo, y se ofrece parar. Nada de porcentajes inventados: el modelo no sabe
+ * cuánto le falta.
+ */
+@Composable
+private fun ThinkingIndicator(state: AiAssistantUiState, onCancel: () -> Unit) {
+    val startedAt = when (state) {
+        is AiAssistantUiState.Thinking -> state.startedAtMs
+        is AiAssistantUiState.Generating -> state.startedAtMs
+        else -> 0L
+    }
+    var elapsedSeconds by remember(startedAt) { mutableLongStateOf(0L) }
+    LaunchedEffect(startedAt) {
+        if (startedAt <= 0L) return@LaunchedEffect
+        while (true) {
+            elapsedSeconds = (System.currentTimeMillis() - startedAt) / 1000
+            delay(1_000)
+        }
+    }
+    val phaseLabel = when (state) {
+        is AiAssistantUiState.Thinking -> when (state.phase) {
+            mx.budget.ai.ThinkingPhase.READING_LEDGER -> "Leyendo tus datos"
+            mx.budget.ai.ThinkingPhase.REASONING -> "Pensando en el dispositivo"
+        }
+        is AiAssistantUiState.Generating -> "Escribiendo"
+        else -> "Pensando"
+    }
+    val streamed = (state as? AiAssistantUiState.Generating)?.streamedText.orEmpty()
+
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(10.dp))
+            Text(
+                if (elapsedSeconds >= 3) "$phaseLabel, ${elapsedSeconds} s" else phaseLabel,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onCancel) { Text("Detener") }
+        }
+        if (streamed.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                streamed,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

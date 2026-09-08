@@ -881,6 +881,7 @@ class AiAssistantViewModelFactory(
             expenseRepository = app.expenseRepository,
             incomeRepository = app.incomeRepository,
             installmentRepository = app.installmentRepository,
+            settings = app.settingsRepository,
         )
         return mx.budget.ai.AiAssistantViewModel(
             llm = app.onDeviceLlm,

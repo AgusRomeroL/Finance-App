@@ -102,6 +102,9 @@ class ExpenseRepositoryFirestore(
         awaitClose { listener.remove() }
     }
 
+    /** Sin firma: el lado nube no alimenta el digest precalculado. */
+    override suspend fun quincenaSignature(quincenaId: String): String = ""
+
     /**
      * Firestore no guarda la cadencia junto al gasto, asi que aqui no hay prorrateo
      * posible: devuelve el total crudo. No afecta al dashboard, que lee de Room.

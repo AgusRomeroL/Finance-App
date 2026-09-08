@@ -131,6 +131,20 @@ interface ExpenseDao {
     )
     fun observePostedTotal(quincenaId: String): Flow<Double>
 
+    /**
+     * Firma barata del estado de la quincena: cuantos gastos hay y cual es la marca
+     * de edicion mas reciente. La usa el digest precalculado del analisis abierto
+     * para saber si lo que tiene guardado sigue describiendo la realidad.
+     */
+    @Query(
+        """
+        SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at), 0)
+        FROM expense
+        WHERE quincena_id = :quincenaId
+        """
+    )
+    suspend fun quincenaSignature(quincenaId: String): String
+
     @Query(
         """
         SELECT COALESCE(SUM(amount_mxn), 0.0)

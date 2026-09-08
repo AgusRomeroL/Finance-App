@@ -34,6 +34,12 @@ interface ExpenseRepository {
     /** Total ejecutado (POSTED) en una quincena: KPI principal. */
     fun observePostedTotal(quincenaId: String): Flow<Double>
 
+    /**
+     * Firma del estado de la quincena (conteo y ultima edicion). Cadena vacia
+     * cuando la implementacion no puede calcularla, y entonces nada la cachea.
+     */
+    suspend fun quincenaSignature(quincenaId: String): String
+
     /** Total planeado (PLANNED) pendiente: indicador "falta gastar". */
     fun observePlannedTotal(quincenaId: String): Flow<Double>
 

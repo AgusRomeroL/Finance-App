@@ -678,6 +678,10 @@ class BudgetApplication : Application() {
         // engancha cuando exista el rollover automático.
         materializeRecurringForActiveQuincena()
 
+        // Digest del análisis abierto, precalculado a diario (Fase 4): la primera
+        // pregunta del día no paga las nueve consultas antes de la inferencia.
+        mx.budget.data.work.DigestPrecomputeWorker.schedule(this)
+
         // Recordatorios de gastos PLANNED (§G.2 Fase 3). Canal + trabajo periódico.
         ReminderNotifier.ensureChannel(this)
         scheduleReminders()

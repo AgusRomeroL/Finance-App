@@ -42,6 +42,9 @@ class ExpenseRepositoryImpl(
     override fun observePostedTotal(quincenaId: String): Flow<Double> =
         dao.observePostedTotal(quincenaId)
 
+    override suspend fun quincenaSignature(quincenaId: String): String =
+        dao.quincenaSignature(quincenaId)
+
     override fun observePlannedTotal(quincenaId: String): Flow<Double> =
         dao.observePlannedTotal(quincenaId)
 

@@ -88,7 +88,7 @@ class AiCoreManager(@Suppress("unused") private val context: Context) {
                 generateContentRequest(TextPart(prompt)) {
                     temperature = 0.05f
                     topK = 16
-                    maxOutputTokens = 240
+                    maxOutputTokens = MAX_OUTPUT_TOKENS
                     candidateCount = 1
                 }
             )
@@ -102,7 +102,7 @@ class AiCoreManager(@Suppress("unused") private val context: Context) {
             generateContentRequest(TextPart(prompt)) {
                 temperature = 0.05f
                 topK = 16
-                maxOutputTokens = 240
+                maxOutputTokens = MAX_OUTPUT_TOKENS
                 candidateCount = 1
             }
         ).map { it.candidates.firstOrNull()?.text.orEmpty() }.flowOn(Dispatchers.IO)
@@ -117,5 +117,13 @@ class AiCoreManager(@Suppress("unused") private val context: Context) {
     private fun setReadiness(r: Readiness): Readiness {
         _readiness.value = r
         return r
+    }
+
+    private companion object {
+        /**
+         * Tope de salida. Los 240 originales bastaban para el intent JSON pero
+         * cortaban el análisis abierto a media frase, que es texto que sí se lee.
+         */
+        const val MAX_OUTPUT_TOKENS = 512
     }
 }

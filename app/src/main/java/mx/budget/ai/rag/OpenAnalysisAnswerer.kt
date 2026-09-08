@@ -48,6 +48,7 @@ class OpenAnalysisAnswerer(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val installmentRepository: InstallmentRepository,
+    private val settings: mx.budget.data.settings.SettingsRepository? = null,
 ) {
 
     /** Resultado de la segunda pasada. */
@@ -67,7 +68,20 @@ class OpenAnalysisAnswerer(
     private val money: NumberFormat =
         NumberFormat.getCurrencyInstance(AppLocale).apply { maximumFractionDigits = 0 }
 
-    suspend fun answer(question: String, householdId: String, useLlm: Boolean): Answer =
+    /**
+     * @param onReasoning se invoca cuando terminan las consultas y empieza el LLM,
+     *   para que la interfaz deje de decir "leyendo tus datos".
+     * @param onPartial recibe el texto que va llegando token a token. En CPU una
+     *   respuesta tarda decenas de segundos y ver la frase formarse es la unica
+     *   senal honesta de que algo esta pasando.
+     */
+    suspend fun answer(
+        question: String,
+        householdId: String,
+        useLlm: Boolean,
+        onReasoning: (() -> Unit)? = null,
+        onPartial: ((String) -> Unit)? = null,
+    ): Answer =
         withContext(Dispatchers.IO) {
             val quincena = quincenaRepository.getActive(householdId)
                 ?: return@withContext Answer.Failed("No hay quincena activa para analizar.")
@@ -99,9 +113,18 @@ class OpenAnalysisAnswerer(
             }
 
             if (useLlm && promptTemplate.isNotBlank()) {
-                val digest = buildDigest(quincena, spendByCategory, historicalAvg, householdId)
+                val digest = cachedOrBuildDigest(quincena, spendByCategory, historicalAvg, householdId)
                 val prompt = assemble(digest, PromptSanitizer.sanitize(question))
-                val generated = llm.generate(prompt).getOrNull()?.let(::cleanLlmText)
+                onReasoning?.invoke()
+                val raw = runCatching {
+                    val sb = StringBuilder()
+                    llm.generateStream(prompt).collect { chunk ->
+                        sb.append(chunk)
+                        onPartial?.invoke(sb.toString())
+                    }
+                    sb.toString()
+                }.getOrNull()
+                val generated = raw?.let(::cleanLlmText)
                 if (!generated.isNullOrBlank()) return@withContext Answer.Llm(generated)
                 // LLM roto/vacío → nunca dejar al usuario sin respuesta.
             }
@@ -110,6 +133,59 @@ class OpenAnalysisAnswerer(
                 deterministicInsight(quincena, figures, spendByCategory, historicalAvg)
             )
         }
+
+    /**
+     * Construye el digest de la quincena activa y lo deja guardado. Lo llama el
+     * worker nocturno para que la primera pregunta del dia no pague las consultas.
+     * Devuelve `false` si no hay nada que precalcular.
+     */
+    suspend fun precomputeDigest(householdId: String): Boolean = withContext(Dispatchers.IO) {
+        val quincena = quincenaRepository.getActive(householdId) ?: return@withContext false
+        val spendByCategory = runCatching {
+            analyticsRepository.getSpendByCategory(householdId, quincena.id)
+        }.getOrDefault(emptyList())
+        val historicalAvg = runCatching {
+            analyticsRepository.getAvgSpendByCategoryHistorical(
+                householdId, sinceDate = "2000-01-01", nQuincenas = 6,
+            )
+        }.getOrDefault(emptyList())
+        cachedOrBuildDigest(quincena, spendByCategory, historicalAvg, householdId)
+        true
+    }
+
+    /**
+     * Devuelve el digest guardado si la quincena no ha cambiado desde que se armó;
+     * si cambió (o no hay firma disponible), lo reconstruye y lo guarda.
+     */
+    private suspend fun cachedOrBuildDigest(
+        quincena: QuincenaEntity,
+        spendByCategory: List<SpendByCategory>,
+        historicalAvg: List<SpendByCategory>,
+        householdId: String,
+    ): String {
+        val signature = runCatching { expenseRepository.quincenaSignature(quincena.id) }
+            .getOrDefault("")
+        if (signature.isNotBlank()) {
+            val cached = settings?.getOpenAnalysisDigest()
+            if (cached != null && cached.quincenaId == quincena.id && cached.signature == signature) {
+                return cached.digest
+            }
+        }
+        val digest = buildDigest(quincena, spendByCategory, historicalAvg, householdId)
+        if (signature.isNotBlank()) {
+            runCatching {
+                settings?.setOpenAnalysisDigest(
+                    mx.budget.data.settings.SettingsRepository.CachedDigest(
+                        quincenaId = quincena.id,
+                        signature = signature,
+                        digest = digest,
+                        builtAtMs = System.currentTimeMillis(),
+                    )
+                )
+            }
+        }
+        return digest
+    }
 
     // ── Digest para el LLM ───────────────────────────────────────────────
 
