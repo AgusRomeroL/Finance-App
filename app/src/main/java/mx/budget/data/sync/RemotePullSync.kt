@@ -34,7 +34,10 @@ import mx.budget.data.local.entity.ExpenseAttributionEntity
  * wallet_transfer, income_source y, desde v13, category) el doc remoto solo
  * se aplica si su `updatedAt` es ESTRICTAMENTE mayor que el local. Docs sin
  * campo (seed, legados) deserializan `updatedAt = 0` y nunca pisan una
- * edición local. member/quincena no tienen `updated_at` (solo pull): REPLACE.
+ * edición local. Desde v14 member y quincena tambien tienen `updated_at` y
+ * pasan por el mismo gate; el comentario que decia lo contrario llevaba dos
+ * versiones de esquema sin actualizarse. Desde la Fase 5 la quincena ademas se
+ * empuja (kind QUINCENA), asi que el ciclo de vida del periodo converge.
  *
  * ── DELETES REMOTOS (Fase 2e + LÁPIDAS) ─────────────────────────────────
  * Dos vías, ambas borran la fila local por id vía DAO directo:

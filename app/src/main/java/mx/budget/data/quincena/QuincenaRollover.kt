@@ -2,6 +2,7 @@ package mx.budget.data.quincena
 
 import android.util.Log
 import mx.budget.data.local.dao.QuincenaDao
+import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.entity.QuincenaEntity
 import java.time.LocalDate
 import java.time.ZoneId
@@ -14,8 +15,11 @@ import java.time.ZoneId
  * HOY, respetando el DFA (una sola ACTIVE por household):
  *
  * 1. Si la ACTIVE actual cubre hoy, no hace nada.
- * 2. Si la ACTIVE vencio (end_date anterior a hoy) la cierra con `closed_at`
- *    (los totales actual_* ya viven en sus columnas, snapshot implicito).
+ * 2. Si la ACTIVE vencio (end_date anterior a hoy) la deja en CLOSING_REVIEW,
+ *    es decir **pendiente de cierre**: sigue siendo editable y el dashboard
+ *    avisa. Antes se cerraba sola aqui, asi que nadie revisaba nunca lo que
+ *    quedo planeado sin ejecutar y el cierre del periodo era invisible. El
+ *    cierre de verdad lo hace una persona desde la pantalla de cierre (RF-32).
  * 3. **Rellena las quincenas intermedias ausentes.** Antes solo se creaba la de
  *    hoy, asi que tras semanas sin abrir la app el historial saltaba de julio a
  *    septiembre: los periodos de en medio no existian, nada podia colgar de
@@ -26,9 +30,10 @@ import java.time.ZoneId
  *    existe la crea con **id determinista** `q-YYYY-MM-HALF`: ambos telefonos
  *    generan LA MISMA quincena y el pull multi-dispositivo nunca rompe la FK
  *    `expense.quincena_id`.
- * 5. La activa, sellando `updated_at` para que el LWW del sync vea el cambio.
- *    Antes la activacion usaba `updateStatus`, que no toca esa marca, asi que el
- *    cambio de estado viajaba invisible.
+ * 5. La activa por [QuincenaLifecycle], que sella `updated_at` y encola la fila
+ *    `QUINCENA` en el outbox. Antes la activacion usaba `updateStatus`, que no
+ *    toca esa marca, y ademas las quincenas que nacian aqui no se subian nunca
+ *    a la nube: el otro telefono solo conocia las de la semilla.
  *
  * Toda quincena creada aqui **arrastra el presupuesto** de la ultima que lo
  * tenia declarado. Sin eso nacia con proyectado en cero y el disponible del
@@ -39,7 +44,16 @@ class QuincenaRollover(
     private val dao: QuincenaDao,
     private val householdId: String,
     private val zone: ZoneId = ZoneId.of("America/Mexico_City"),
+    /**
+     * Opcional porque la captura y el pago planeado construyen el rollover con
+     * lo minimo (solo llaman a [ensureForDate]). Cuando falta, las escrituras
+     * se hacen igual pero no se encolan para la nube; el arranque de la app si
+     * lo pasa, asi que el estado acaba viajando.
+     */
+    syncQueueDao: SyncQueueDao? = null,
 ) {
+
+    private val lifecycle = QuincenaLifecycle(dao, syncQueueDao)
 
     private val monthNames = listOf(
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -56,15 +70,24 @@ class QuincenaRollover(
         if (active != null && active.startDate <= iso && active.endDate >= iso) return active
 
         if (active != null) {
-            Log.i(TAG, "Cerrando quincena vencida ${active.label} (fin ${active.endDate})")
-            dao.update(active.copy(status = "CLOSED", closedAt = now, updatedAt = now))
+            Log.i(TAG, "Quincena vencida pendiente de cierre: ${active.label} (fin ${active.endDate})")
+            lifecycle.markPendingClose(active, now)
             backfillBetween(active.endDate, today, now)
         }
 
         val existing = dao.getForDate(householdId, iso)
-        val target = existing ?: withCarriedBudget(buildQuincena(today)).also { dao.insert(it) }
+        val target = existing
+            // Sin encolar: la activacion de la linea siguiente encola esa misma
+            // quincena y la fila duplicada no aporta nada.
+            ?: withCarriedBudget(buildQuincena(today))
+                .also { lifecycle.create(it, now, enqueue = false) }
 
-        dao.update(target.copy(status = "ACTIVE", updatedAt = now))
+        // Una quincena ya cerrada a mano no se reactiva: si el reloj del
+        // telefono retrocede o alguien cierra la del dia, el rollover no debe
+        // deshacer esa decision.
+        if (target.status == QuincenaLifecycle.CLOSED) return dao.getById(target.id)
+
+        lifecycle.activate(target, now)
         Log.i(TAG, "Quincena activa: ${target.label} (${target.id})")
         return dao.getById(target.id)
     }
@@ -86,8 +109,8 @@ class QuincenaRollover(
             guard++
             if (dao.getForDate(householdId, cursor.toString()) == null) {
                 val hueco = withCarriedBudget(buildQuincena(cursor))
-                    .copy(status = "CLOSED", closedAt = now, updatedAt = now)
-                dao.insert(hueco)
+                    .copy(status = QuincenaLifecycle.CLOSED, closedAt = now)
+                lifecycle.create(hueco, now)
                 created++
             }
             cursor = nextHalfStart(cursor)
@@ -108,7 +131,7 @@ class QuincenaRollover(
         val existing = dao.getForDate(householdId, date.toString())
         if (existing != null) return existing
         val q = withCarriedBudget(buildQuincena(date))
-        dao.insert(q)
+        lifecycle.create(q)
         Log.i(TAG, "Quincena aprovisionada para $date: ${q.label} (${q.id})")
         return q
     }
@@ -152,7 +175,7 @@ class QuincenaRollover(
             startDate = start.toString(),
             endDate = end.toString(),
             label = "${if (first) "Q1" else "Q2"} ${monthNames[month - 1]} $year",
-            status = "PROVISIONED",
+            status = QuincenaLifecycle.PROVISIONED,
         )
     }
 

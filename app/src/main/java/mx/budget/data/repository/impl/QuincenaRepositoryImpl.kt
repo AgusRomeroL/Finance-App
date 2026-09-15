@@ -4,10 +4,22 @@ import kotlinx.coroutines.flow.Flow
 import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.QuincenaSnapshot
+import mx.budget.data.quincena.QuincenaLifecycle
+import mx.budget.data.quincena.QuincenaRollover
 import mx.budget.data.repository.QuincenaRepository
+import java.time.LocalDate
 
+/**
+ * Implementacion Room (fuente de verdad) del [QuincenaRepository].
+ *
+ * Las transiciones delegan en [QuincenaLifecycle], que sella `updated_at` y
+ * encola la fila `QUINCENA` en el outbox. Antes llamaban a
+ * `QuincenaDao.updateStatus`, que no toca esa marca: el cambio de estado no
+ * llegaba nunca al otro dispositivo y el LWW del pull lo revertia.
+ */
 class QuincenaRepositoryImpl(
-    private val dao: QuincenaDao
+    private val dao: QuincenaDao,
+    private val lifecycle: QuincenaLifecycle = QuincenaLifecycle(dao),
 ) : QuincenaRepository {
 
     override fun observeActive(householdId: String) =
@@ -28,51 +40,37 @@ class QuincenaRepositoryImpl(
     override suspend fun getClosedSnapshots(householdId: String, n: Int): List<QuincenaSnapshot> =
         dao.getClosedSnapshots(householdId, n)
 
+    override fun observeByStatus(householdId: String, status: String): Flow<List<QuincenaEntity>> =
+        dao.observeByStatus(householdId, status)
+
+    override suspend fun getByStatus(householdId: String, status: String): List<QuincenaEntity> =
+        dao.getByStatus(householdId, status)
+
     override suspend fun provision(householdId: String, year: Int, month: Int, half: String): String {
-        val id = java.util.UUID.randomUUID().toString()
-
-        // Calcular fechas según la mitad del mes
-        val paddedMonth = month.toString().padStart(2, '0')
-        val startDay = if (half == "FIRST") "01" else "16"
-        val lastDay = java.util.Calendar.getInstance().apply {
-            set(year, month - 1, 1)
-        }.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
-        val endDay = if (half == "FIRST") "15" else lastDay.toString().padStart(2, '0')
-
-        val startDate = "$year-$paddedMonth-$startDay"
-        val endDate   = "$year-$paddedMonth-$endDay"
-
-        val monthNames = listOf("Ene","Feb","Mar","Abr","May","Jun",
-                                "Jul","Ago","Sep","Oct","Nov","Dic")
-        val halfNum = if (half == "FIRST") "Q1" else "Q2"
-        val label = "$halfNum ${monthNames.getOrElse(month - 1) { paddedMonth }} $year"
-
-        dao.insert(
-            QuincenaEntity(
-                id = id,
-                householdId = householdId,
-                year = year,
-                month = month,
-                half = half,
-                startDate = startDate,
-                endDate = endDate,
-                label = label,
-                status = "PROVISIONED"
-            )
-        )
-        return id
+        val day = if (half == "FIRST") 1 else 16
+        val fecha = LocalDate.of(year, month, day)
+        // Reutiliza el builder determinista del rollover en vez de replicar el
+        // calculo de fechas, el nombre del mes y la etiqueta.
+        val quincena = QuincenaRollover(dao, householdId).ensureForDate(fecha)
+        return quincena.id
     }
 
-    override suspend fun activate(quincenaId: String) =
-        dao.updateStatus(quincenaId, "ACTIVE")
-
-    override suspend fun startClosingReview(quincenaId: String) =
-        dao.updateStatus(quincenaId, "CLOSING_REVIEW")
-
-    override suspend fun close(quincenaId: String) =
-        dao.updateStatus(quincenaId, "CLOSED")
-
-    override suspend fun recalculateActuals(quincenaId: String) {
-        // No-op: los totales se actualizan vía triggers o consultas del DAO
+    override suspend fun activate(quincenaId: String) {
+        val quincena = dao.getById(quincenaId) ?: return
+        lifecycle.activate(quincena)
     }
+
+    override suspend fun startClosingReview(quincenaId: String) {
+        val quincena = dao.getById(quincenaId) ?: return
+        lifecycle.markPendingClose(quincena)
+    }
+
+    override suspend fun close(quincenaId: String, applyDecisions: suspend () -> Unit) =
+        lifecycle.close(quincenaId, applyDecisions = applyDecisions)
+
+    override suspend fun reopen(quincenaId: String) =
+        lifecycle.reopen(quincenaId)
+
+    override suspend fun recalculateActuals(quincenaId: String) =
+        lifecycle.recalcActuals(quincenaId)
 }

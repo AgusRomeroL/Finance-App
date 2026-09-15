@@ -1,147 +1,78 @@
 package mx.budget.data.remote
 
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import mx.budget.data.local.entity.QuincenaEntity
-import mx.budget.data.local.result.QuincenaSnapshot
-import mx.budget.data.repository.QuincenaRepository
-import java.util.UUID
 
+/**
+ * Lado nube de las quincenas (`households/{hid}/quincenas/{id}`).
+ *
+ * Sustituye a la version anterior, que implementaba el [mx.budget.data.repository.QuincenaRepository]
+ * completo, no la instanciaba nadie y traia literales rotos y fechas de
+ * demostracion. Ahora sigue el molde de [HouseholdRepositoryFirestore]: sin
+ * interfaz, un solo `upsert` y el push lo drena el
+ * [mx.budget.data.sync.SyncManager] con el kind `QUINCENA`.
+ */
 class QuincenaRepositoryFirestore(
-    private val firestore: FirebaseFirestore
-) : QuincenaRepository {
+    private val firestore: FirebaseFirestore,
+    private val householdId: String,
+) {
 
-    private fun getCollection(householdId: String) =
-        firestore.collection("households").document(householdId).collection("quincenas")
+    private fun document(quincenaId: String) =
+        firestore.collection("households")
+            .document(householdId)
+            .collection("quincenas")
+            .document(quincenaId)
 
-    override fun observeActive(householdId: String): Flow<QuincenaEntity?> = callbackFlow {
-        val listener = getCollection(householdId)
-            .whereEqualTo("status", "ACTIVE")
-            .limit(1)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) { close(error); return@addSnapshotListener }
-                if (snapshot != null) {
-                    trySend(snapshot.documents.firstOrNull()?.toObject(QuincenaEntity::class.java))
-                }
-            }
-        awaitClose { listener.remove() }
-    }
-
-    override suspend fun getActive(householdId: String): QuincenaEntity? {
-        val matches = getCollection(householdId).whereEqualTo("status", "ACTIVE").limit(1).get().await()
-        return matches.documents.firstOrNull()?.toObject(QuincenaEntity::class.java)
-    }
-
-    override suspend fun getById(id: String): QuincenaEntity? {
-        val matches = firestore.collectionGroup("quincenas").whereEqualTo("id", id).get().await()
-        return matches.documents.firstOrNull()?.toObject(QuincenaEntity::class.java)
-    }
-
-    override fun observeAll(householdId: String): Flow<List<QuincenaEntity>> = callbackFlow {
-        val listener = getCollection(householdId)
-            .orderBy("startDate", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) { close(error); return@addSnapshotListener }
-                if (snapshot != null) {
-                    trySend(snapshot.documents.mapNotNull { it.toObject(QuincenaEntity::class.java) })
-                }
-            }
-        awaitClose { listener.remove() }
-    }
-
-    override fun observeClosedSnapshots(householdId: String, n: Int): Flow<List<QuincenaSnapshot>> = callbackFlow {
-        val listener = getCollection(householdId)
-            .whereEqualTo("status", "CLOSED")
-            .orderBy("startDate", Query.Direction.DESCENDING)
-            .limit(n.toLong())
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) { close(error); return@addSnapshotListener }
-                if (snapshot != null) {
-                    val snapshots = snapshot.documents.mapNotNull { doc ->
-                        val entity = doc.toObject(QuincenaEntity::class.java) ?: return@mapNotNull null
-                        QuincenaSnapshot(
-                            quincenaId = entity.id,
-                            label = entity.label,
-                            startDate = entity.startDate,
-                            endDate = entity.endDate,
-                            projectedIncomeMxn = entity.projectedIncomeMxn,
-                            projectedExpensesMxn = entity.projectedExpensesMxn,
-                            actualIncomeMxn = entity.actualIncomeMxn,
-                            actualExpensesMxn = entity.actualExpensesMxn,
-                            savingsMxn = entity.actualIncomeMxn - entity.actualExpensesMxn
-                        )
-                    }
-                    trySend(snapshots)
-                }
-            }
-        awaitClose { listener.remove() }
-    }
-
-    override suspend fun getClosedSnapshots(householdId: String, n: Int): List<QuincenaSnapshot> {
-        val matches = getCollection(householdId)
-            .whereEqualTo("status", "CLOSED")
-            .orderBy("startDate", Query.Direction.DESCENDING)
-            .limit(n.toLong())
-            .get()
-            .await()
-            
-        return matches.documents.mapNotNull { doc ->
-            val entity = doc.toObject(QuincenaEntity::class.java) ?: return@mapNotNull null
-            QuincenaSnapshot(
-                quincenaId = entity.id,
-                label = entity.label,
-                startDate = entity.startDate,
-                endDate = entity.endDate,
-                projectedIncomeMxn = entity.projectedIncomeMxn,
-                projectedExpensesMxn = entity.projectedExpensesMxn,
-                actualIncomeMxn = entity.actualIncomeMxn,
-                actualExpensesMxn = entity.actualExpensesMxn,
-                savingsMxn = entity.actualIncomeMxn - entity.actualExpensesMxn
-            )
-        }
-    }
-
-    override suspend fun provision(householdId: String, year: Int, month: Int, half: String): String {
-        // Logic to provision would normally query recurrence templates.
-        // For now, just create the entity as PROVISIONED.
-        val id = "q_\${UUID.randomUUID()}"
-        val entity = QuincenaEntity(
-            id = id,
-            householdId = householdId,
-            year = year,
-            month = month,
-            half = half,
-            status = "PROVISIONED",
-            label = "\$month/\$year \$half",
-            startDate = "2026-04-01", // Demo value
-            endDate = "2026-04-15" // Demo value
+    /**
+     * Sube la quincena con `merge` y limpia la lapida en el mismo lote.
+     *
+     * `closedAt` se manda con [FieldValue.delete] cuando es nulo (reapertura).
+     * Sin eso el otro dispositivo leeria una quincena reabierta con la fecha de
+     * cierre vieja: el mapper del pull cae a snake_case si falta la clave
+     * camelCase, y los documentos de la semilla si traen `closed_at`.
+     */
+    suspend fun upsert(quincena: QuincenaEntity) {
+        val ref = document(quincena.id)
+        val batch = firestore.batch()
+        batch.set(ref, quincena.toRemoteMap(), SetOptions.merge())
+        val limpieza = mutableMapOf<String, Any>(
+            "deletedAt" to FieldValue.delete(),
+            "deleted_at" to FieldValue.delete(),
         )
-        getCollection(householdId).document(id).set(entity, SetOptions.merge()).await()
-        return id
+        if (quincena.closedAt == null) {
+            limpieza["closedAt"] = FieldValue.delete()
+            limpieza["closed_at"] = FieldValue.delete()
+        }
+        batch.update(ref, limpieza)
+        batch.commit().await()
     }
 
-    override suspend fun activate(quincenaId: String) {
-        firestore.collectionGroup("quincenas").whereEqualTo("id", quincenaId).get().await()
-            .documents.firstOrNull()?.reference?.update("status", "ACTIVE")?.await()
-    }
-
-    override suspend fun startClosingReview(quincenaId: String) {
-        firestore.collectionGroup("quincenas").whereEqualTo("id", quincenaId).get().await()
-            .documents.firstOrNull()?.reference?.update("status", "CLOSING_REVIEW")?.await()
-    }
-
-    override suspend fun close(quincenaId: String) {
-        firestore.collectionGroup("quincenas").whereEqualTo("id", quincenaId).get().await()
-            .documents.firstOrNull()?.reference?.update("status", "CLOSED", "closedAt", System.currentTimeMillis())?.await()
-    }
-
-    override suspend fun recalculateActuals(quincenaId: String) {
-        // Here we would ideally calculate actuals via an aggregation query or client-side.
-        // Firebase Cloud Functions is best for this, but for now we keep it simple.
+    /**
+     * Mapa explicito en camelCase en vez de `set(entity)`: el serializador de
+     * beans de Firestore ya mordio a las plantillas recurrentes (`isActive` se
+     * convertia en `active`).
+     */
+    private fun QuincenaEntity.toRemoteMap(): Map<String, Any> {
+        val mapa = mutableMapOf<String, Any>(
+            "id" to id,
+            "householdId" to householdId,
+            "year" to year,
+            "month" to month,
+            "half" to half,
+            "startDate" to startDate,
+            "endDate" to endDate,
+            "label" to label,
+            "projectedIncomeMxn" to projectedIncomeMxn,
+            "projectedExpensesMxn" to projectedExpensesMxn,
+            "actualIncomeMxn" to actualIncomeMxn,
+            "actualExpensesMxn" to actualExpensesMxn,
+            "status" to status,
+            "updatedAt" to updatedAt,
+        )
+        closedAt?.let { mapa["closedAt"] = it }
+        return mapa
     }
 }

@@ -34,6 +34,7 @@ class SettingsRepository(private val context: Context) {
     private val statementSeedV2DoneKey = booleanPreferencesKey("statement_seed_v2_done")
     private val templateCuration202607DoneKey = booleanPreferencesKey("template_curation_2026_07_done")
     private val balanceAnchorAlignedKey = booleanPreferencesKey("balance_anchor_aligned")
+    private val closedActualsRecomputedKey = booleanPreferencesKey("closed_actuals_recomputed")
     private val bankCaptureEnabledKey = booleanPreferencesKey("bank_capture_enabled")
     private val reminderLeadDaysKey = intPreferencesKey("reminder_lead_days")
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
@@ -78,6 +79,21 @@ class SettingsRepository(private val context: Context) {
      * (corte + saldo + fila `statement_import`), para que el checklist arranque en
      * verde. Idempotente vía este flag.
      */
+    /**
+     * Saneo one-shot de los totales reales de las quincenas cerradas (Fase 5).
+     * El rollover cerraba en automatico sin recalcular `actual_income_mxn` ni
+     * `actual_expenses_mxn`, asi que todas las quincenas cerradas desde julio
+     * de 2026 quedaron en cero y hundian la tendencia de Analiticas y las
+     * respuestas del asistente. El recalculo NO sella `updated_at`, para no
+     * fabricar una marca mas nueva que el cierre real de otro dispositivo.
+     */
+    suspend fun isClosedActualsRecomputed(): Boolean =
+        context.dataStore.data.first()[closedActualsRecomputedKey] ?: false
+
+    suspend fun setClosedActualsRecomputed(done: Boolean) {
+        context.dataStore.edit { prefs -> prefs[closedActualsRecomputedKey] = done }
+    }
+
     suspend fun isStatementSeedDone(): Boolean =
         context.dataStore.data.first()[statementSeedDoneKey] ?: false
 

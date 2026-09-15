@@ -118,6 +118,29 @@ interface QuincenaDao {
     )
     suspend fun getLatestWithBudget(householdId: String, beforeStartDate: String): QuincenaEntity?
 
+    /**
+     * Quincenas del hogar en un estado concreto, de la mas antigua a la mas
+     * nueva. La usa el aviso de "pendiente de cierre" del dashboard, que tiene
+     * que poder mostrar varias (un mes sin abrir la app deja mas de una).
+     */
+    @Query(
+        """
+        SELECT * FROM quincena
+        WHERE household_id = :householdId AND status = :status
+        ORDER BY start_date ASC
+        """
+    )
+    fun observeByStatus(householdId: String, status: String): Flow<List<QuincenaEntity>>
+
+    @Query(
+        """
+        SELECT * FROM quincena
+        WHERE household_id = :householdId AND status = :status
+        ORDER BY start_date ASC
+        """
+    )
+    suspend fun getByStatus(householdId: String, status: String): List<QuincenaEntity>
+
     @Query("UPDATE quincena SET status = :status WHERE id = :quincenaId")
     suspend fun updateStatus(quincenaId: String, status: String)
 
@@ -138,6 +161,46 @@ interface QuincenaDao {
         """
     )
     suspend fun recalcActualExpenses(quincenaId: String, now: Long)
+
+    /**
+     * Gemela de [recalcActualExpenses] para el ingreso recibido. El cierre
+     * manual congela las dos columnas a la vez: hasta ahora `actual_income_mxn`
+     * no la recalculaba nadie y la tendencia de Analiticas leia ceros.
+     */
+    @Query(
+        """
+        UPDATE quincena
+        SET actual_income_mxn = (
+                SELECT COALESCE(SUM(amount_mxn), 0) FROM income_source
+                WHERE quincena_id = :quincenaId AND status = 'POSTED'
+            ),
+            updated_at = :now
+        WHERE id = :quincenaId
+        """
+    )
+    suspend fun recalcActualIncome(quincenaId: String, now: Long)
+
+    /**
+     * Recalcula las dos columnas SIN sellar `updated_at`. Solo la usa el barrido
+     * unico de arranque que sanea las quincenas que el rollover cerro en
+     * automatico con ceros: sellar la marca ahi fabricaria un LWW mas nuevo que
+     * el cierre o la reapertura legitimos de otro dispositivo.
+     */
+    @Query(
+        """
+        UPDATE quincena
+        SET actual_expenses_mxn = (
+                SELECT COALESCE(SUM(amount_mxn), 0) FROM expense
+                WHERE quincena_id = :quincenaId AND status = 'POSTED'
+            ),
+            actual_income_mxn = (
+                SELECT COALESCE(SUM(amount_mxn), 0) FROM income_source
+                WHERE quincena_id = :quincenaId AND status = 'POSTED'
+            )
+        WHERE id = :quincenaId
+        """
+    )
+    suspend fun recalcActualsWithoutStamp(quincenaId: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(quincena: QuincenaEntity)

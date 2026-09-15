@@ -36,11 +36,20 @@ interface QuincenaRepository {
     suspend fun getClosedSnapshots(householdId: String, n: Int = 6): List<QuincenaSnapshot>
 
     /**
-     * Provisiona una nueva quincena: crea la entidad con status PROVISIONED
-     * y materializa los gastos PLANNED desde las plantillas recurrentes
-     * que apliquen a esta cadencia.
+     * Observa las quincenas del hogar en un estado concreto, de la mas antigua
+     * a la mas nueva. La usa el aviso de "pendiente de cierre".
+     */
+    fun observeByStatus(householdId: String, status: String): Flow<List<QuincenaEntity>>
+
+    suspend fun getByStatus(householdId: String, status: String): List<QuincenaEntity>
+
+    /**
+     * Provisiona una quincena con **id determinista** `q-YYYY-MM-HALF` para que
+     * dos dispositivos generen la misma y el pull no rompa la FK
+     * `expense.quincena_id`. Antes acuniaba un UUID aleatorio, que era justo lo
+     * contrario.
      *
-     * @return ID de la quincena creada.
+     * @return ID de la quincena creada (o el de la existente).
      */
     suspend fun provision(
         householdId: String,
@@ -50,26 +59,31 @@ interface QuincenaRepository {
     ): String
 
     /**
-     * Transición PROVISIONED → ACTIVE.
+     * Transicion a ACTIVE.
      * Invariante: no puede haber otra ACTIVE en el mismo household.
      */
     suspend fun activate(quincenaId: String)
 
     /**
-     * Transición ACTIVE → CLOSING_REVIEW.
-     * El usuario verifica gastos pendientes antes de cerrar.
+     * Transicion ACTIVE a CLOSING_REVIEW: la quincena vencio y espera cierre
+     * manual. La escribe el rollover al pasar el ultimo dia del periodo.
      */
     suspend fun startClosingReview(quincenaId: String)
 
     /**
-     * Transición CLOSING_REVIEW → CLOSED.
-     * Congela todos los datos. Snapshot de KPIs finales.
+     * Transicion CLOSING_REVIEW a CLOSED (RF-32). Congela los totales reales y
+     * bloquea la edicion de sus movimientos. [applyDecisions] corre dentro de
+     * la misma transaccion: ahi la pantalla de cierre resuelve lo que quedo
+     * planeado sin ejecutar.
      */
-    suspend fun close(quincenaId: String)
+    suspend fun close(quincenaId: String, applyDecisions: suspend () -> Unit = {})
+
+    /** Transicion CLOSED a CLOSING_REVIEW: descongela para corregir. */
+    suspend fun reopen(quincenaId: String)
 
     /**
-     * Recalcula los totales actuales de la quincena
-     * sumando todos los POSTED + income POSTED.
+     * Recalcula los totales reales de la quincena desde los gastos y los
+     * ingresos POSTED. Hasta la Fase 5 era un no-op y esas columnas mentian.
      */
     suspend fun recalculateActuals(quincenaId: String)
 }

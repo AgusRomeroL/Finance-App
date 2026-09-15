@@ -22,6 +22,7 @@ import mx.budget.data.local.dao.IncomeSourceDao
 import mx.budget.data.local.dao.InstallmentPlanDao
 import mx.budget.data.local.dao.LoanDao
 import mx.budget.data.local.dao.PaymentMethodDao
+import mx.budget.data.local.dao.QuincenaDao
 import mx.budget.data.local.dao.RecurrenceTemplateDao
 import mx.budget.data.local.dao.SavingsGoalDao
 import mx.budget.data.local.dao.StatementImportDao
@@ -31,6 +32,7 @@ import mx.budget.data.remote.CategoryRepositoryFirestore
 import mx.budget.data.remote.HouseholdRepositoryFirestore
 import mx.budget.data.remote.LoanRepositoryFirestore
 import mx.budget.data.remote.MemberRepositoryFirestore
+import mx.budget.data.remote.QuincenaRepositoryFirestore
 import mx.budget.data.remote.RecurrenceRepositoryFirestore
 import mx.budget.data.remote.StatementRepositoryFirestore
 import mx.budget.data.repository.ExpenseRepository
@@ -111,6 +113,11 @@ class SyncManager(
     // checklist mensual converja entre los dispositivos del hogar.
     private val statementImportDao: StatementImportDao? = null,
     private val remoteStatementRepository: StatementRepositoryFirestore? = null,
+    // Fase 5: el ciclo de vida de la quincena (pendiente de cierre, cierre y
+    // reapertura) tambien se empuja; antes el estado se quedaba en el telefono
+    // que lo cambiaba y el otro seguia viendo la quincena como activa.
+    private val quincenaDao: QuincenaDao? = null,
+    private val remoteQuincenaRepository: QuincenaRepositoryFirestore? = null,
 ) {
 
     private val mutex = Mutex()
@@ -350,6 +357,16 @@ class SyncManager(
                         row.entityType == "STATEMENT" && row.operation == "DELETE" -> {
                             remoteStatementRepository?.deleteById(row.entityId)
                             syncQueueDao.delete(row.id)
+                        }
+
+                        row.entityType == "QUINCENA" && row.operation == "UPSERT" -> {
+                            val quincena = quincenaDao?.getById(row.entityId)
+                            if (quincena == null || remoteQuincenaRepository == null) {
+                                syncQueueDao.delete(row.id)
+                            } else {
+                                remoteQuincenaRepository.upsert(quincena)
+                                syncQueueDao.delete(row.id)
+                            }
                         }
 
                         row.entityType == "HOUSEHOLD" && row.operation == "UPSERT" -> {
