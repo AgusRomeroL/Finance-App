@@ -412,10 +412,21 @@ private fun ViewModeContent(
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             Spacer(Modifier.height(8.dp))
         }
+        // Fase 5: una quincena cerrada congela sus movimientos. Se dice por que
+        // no se puede y como desbloquearlo, en vez de ofrecer botones que
+        // chocarian contra la guardia del repositorio.
+        if (detail.frozen) {
+            Text(
+                "Quincena cerrada. Reábrela desde Inicio para editar o eliminar este movimiento.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(
                 onClick = onDeleteRequest,
-                enabled = detail.entity != null && !detail.saving,
+                enabled = detail.entity != null && !detail.saving && !detail.frozen,
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(
@@ -429,7 +440,7 @@ private fun ViewModeContent(
             }
             Button(
                 onClick = onEdit,
-                enabled = detail.entity != null && !detail.saving,
+                enabled = detail.entity != null && !detail.saving && !detail.frozen,
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))

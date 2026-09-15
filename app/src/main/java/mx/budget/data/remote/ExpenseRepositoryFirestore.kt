@@ -354,4 +354,8 @@ class ExpenseRepositoryFirestore(
     override suspend fun setOccurredAt(expenseId: String, occurredAt: Long) {
         // Igual que setLocation: el cambio viaja en el UPSERT del ExpenseEntity.
     }
+
+    override suspend fun moveToQuincena(expenseId: String, quincenaId: String, occurredAt: Long?) {
+        // Igual que setOccurredAt: el cambio viaja en el UPSERT del ExpenseEntity.
+    }
 }

@@ -55,6 +55,12 @@ data class ExpenseDetailState(
     val payerShares: Map<String, Int> = emptyMap(),
     val saving: Boolean = false,
     val editError: String? = null,
+    /**
+     * La quincena del gasto está cerrada: editar y eliminar dejan de
+     * ofrecerse. Vale más no ofrecer la acción que dejar que choque
+     * contra la guardia del repositorio.
+     */
+    val frozen: Boolean = false,
 ) {
     /** `true` si el gasto ya trae una ubicación real (no NONE/null). */
     val hasLocation: Boolean
@@ -91,6 +97,8 @@ class ExpenseDetailViewModel(
     private val householdId: String,
     /** Fase 6: refleja el reembolso en la propuesta remota del colaborador. */
     private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
+    /** Fase 5: lectura de la congelación de la quincena del gasto. */
+    private val freezeGuard: mx.budget.data.quincena.QuincenaFreezeGuard? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ExpenseDetailState?>(null)
@@ -114,8 +122,10 @@ class ExpenseDetailViewModel(
         viewModelScope.launch {
             val entity = expenseRepository.getById(row.expenseId) ?: return@launch
             val attributions = expenseRepository.getAttributions(row.expenseId)
+            val frozen = freezeGuard?.isClosed(entity.quincenaId) ?: false
             _state.update {
                 it?.copy(
+                    frozen = frozen,
                     occurredAt = entity.occurredAt,
                     latitude = entity.latitude,
                     longitude = entity.longitude,

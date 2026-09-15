@@ -212,6 +212,13 @@ interface ExpenseRepository {
     suspend fun setOccurredAt(expenseId: String, occurredAt: Long)
 
     /**
+     * Reasigna el gasto a [quincenaId] y, si se indica, mueve su fecha. La
+     * usa el cierre de quincena para pasar a la quincena en curso lo
+     * planeado que nunca se ejecutó.
+     */
+    suspend fun moveToQuincena(expenseId: String, quincenaId: String, occurredAt: Long? = null)
+
+    /**
      * Transiciona un gasto de PLANNED a POSTED.
      * Ajusta saldo del wallet y recalcula totales de quincena.
      */

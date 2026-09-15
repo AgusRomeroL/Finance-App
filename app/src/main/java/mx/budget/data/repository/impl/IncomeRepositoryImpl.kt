@@ -9,6 +9,7 @@ import mx.budget.data.local.dao.SyncQueueDao
 import mx.budget.data.local.entity.IncomeSourceEntity
 import mx.budget.data.local.entity.SyncQueueEntity
 import mx.budget.data.local.result.IncomeByMember
+import mx.budget.data.quincena.QuincenaFreezeGuard
 import mx.budget.data.repository.IncomeRepository
 
 /**
@@ -24,6 +25,8 @@ class IncomeRepositoryImpl(
     private val paymentMethodDao: PaymentMethodDao,
     private val syncQueueDao: SyncQueueDao,
     private val db: BudgetDatabase,
+    /** Rechaza ingresos sobre una quincena cerrada (RF-32). */
+    private val freezeGuard: QuincenaFreezeGuard? = null,
 ) : IncomeRepository {
 
     private val creditKinds = setOf("CREDIT_CARD", "DEPARTMENT_STORE_CARD", "BNPL_INSTALLMENT")
@@ -44,6 +47,7 @@ class IncomeRepositoryImpl(
 
     override suspend fun insert(income: IncomeSourceEntity) {
         db.withTransaction {
+            freezeGuard?.ensureEditable(income.quincenaId)
             dao.insert(income.copy(updatedAt = System.currentTimeMillis()))
             if (income.status == "POSTED") creditWallet(income.paymentMethodId, income.amountMxn, posting = true)
             enqueue("INCOME", income.id, "UPSERT")
@@ -58,6 +62,10 @@ class IncomeRepositoryImpl(
             // Revierte el efecto del estado anterior y aplica el nuevo (cambios de
             // monto/cuenta/status sin doble conteo).
             val old = dao.getById(income.id)
+            freezeGuard?.ensureEditable(income.quincenaId)
+            if (old != null && old.quincenaId != income.quincenaId) {
+                freezeGuard?.ensureEditable(old.quincenaId)
+            }
             if (old != null && old.status == "POSTED") {
                 creditWallet(old.paymentMethodId, old.amountMxn, posting = false)
             }
@@ -71,6 +79,7 @@ class IncomeRepositoryImpl(
         db.withTransaction {
             val income = dao.getById(incomeId) ?: return@withTransaction
             if (income.status == "POSTED") return@withTransaction
+            freezeGuard?.ensureEditable(income.quincenaId)
             dao.update(income.copy(status = "POSTED", updatedAt = System.currentTimeMillis()))
             creditWallet(income.paymentMethodId, income.amountMxn, posting = true)
             enqueue("INCOME", incomeId, "UPSERT")

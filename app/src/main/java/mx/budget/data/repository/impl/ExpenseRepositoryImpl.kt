@@ -16,6 +16,7 @@ import mx.budget.data.local.result.PendingReimbursementByPayer
 import mx.budget.data.local.result.PendingReimbursementExpense
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.local.result.TopExpense
+import mx.budget.data.quincena.QuincenaFreezeGuard
 import mx.budget.data.repository.ExpenseRepository
 
 /**
@@ -30,7 +31,13 @@ class ExpenseRepositoryImpl(
     private val dao: ExpenseDao,
     private val attributionDao: ExpenseAttributionDao,
     private val syncQueueDao: SyncQueueDao,
-    private val db: BudgetDatabase
+    private val db: BudgetDatabase,
+    /**
+     * Rechaza escrituras sobre una quincena cerrada (RF-32). Es nulo en la
+     * instancia que usan los inicializadores del sistema, que siembran y
+     * reconcilian sobre periodos historicos ya cerrados.
+     */
+    private val freezeGuard: QuincenaFreezeGuard? = null,
 ) : ExpenseRepository {
 
     override fun observeWithDetails(quincenaId: String): Flow<List<ExpenseWithDetails>> =
@@ -118,6 +125,7 @@ class ExpenseRepositoryImpl(
         attributions: List<ExpenseAttributionEntity>
     ) {
         db.withTransaction {
+            freezeGuard?.ensureEditable(expense.quincenaId)
             dao.insert(expense.copy(updatedAt = System.currentTimeMillis()))
             attributionDao.deleteByExpenseId(expense.id)
             attributionDao.insertAll(attributions)
@@ -137,6 +145,11 @@ class ExpenseRepositoryImpl(
             // aplica el del nuevo. Cubre cambios de monto, de wallet y de status
             // (POSTED↔PLANNED) sin doble conteo.
             val old = dao.getById(expense.id)
+            freezeGuard?.ensureEditable(expense.quincenaId)
+            if (old != null && old.quincenaId != expense.quincenaId) {
+                // Sacar un gasto de una quincena cerrada tambien la altera.
+                freezeGuard?.ensureEditable(old.quincenaId)
+            }
             if (old != null && old.status == "POSTED") {
                 applyToWallet(old.paymentMethodId, old.amountMxn, posting = false)
             }
@@ -181,6 +194,7 @@ class ExpenseRepositoryImpl(
     override suspend fun deleteAndRevertBalance(expenseId: String) {
         db.withTransaction {
             val expense = dao.getById(expenseId) ?: return@withTransaction
+            freezeGuard?.ensureEditable(expense.quincenaId)
             if (expense.status == "POSTED") {
                 applyToWallet(expense.paymentMethodId, expense.amountMxn, posting = false)
             }
@@ -214,7 +228,29 @@ class ExpenseRepositoryImpl(
     override suspend fun setOccurredAt(expenseId: String, occurredAt: Long) {
         db.withTransaction {
             val expense = dao.getById(expenseId) ?: return@withTransaction
+            freezeGuard?.ensureEditable(expense.quincenaId)
             dao.update(expense.copy(occurredAt = occurredAt, updatedAt = System.currentTimeMillis()))
+            enqueueSync(expenseId, "UPSERT")
+        }
+    }
+
+    /**
+     * Reasigna un gasto a otra quincena (cierre de periodo: lo planeado que
+     * no se ejecuto pasa a la quincena en curso). No mira la quincena de
+     * ORIGEN a proposito: esta es justo la operacion que el cierre ejecuta
+     * sobre el periodo que esta congelando, dentro de su misma transaccion.
+     */
+    override suspend fun moveToQuincena(expenseId: String, quincenaId: String, occurredAt: Long?) {
+        db.withTransaction {
+            val expense = dao.getById(expenseId) ?: return@withTransaction
+            freezeGuard?.ensureEditable(quincenaId)
+            dao.update(
+                expense.copy(
+                    quincenaId = quincenaId,
+                    occurredAt = occurredAt ?: expense.occurredAt,
+                    updatedAt = System.currentTimeMillis(),
+                )
+            )
             enqueueSync(expenseId, "UPSERT")
         }
     }
@@ -237,6 +273,7 @@ class ExpenseRepositoryImpl(
         db.withTransaction {
             val expense = dao.getById(expenseId) ?: return@withTransaction
             if (expense.status != "PLANNED") return@withTransaction
+            freezeGuard?.ensureEditable(expense.quincenaId)
 
             val newAmount = actualAmountMxn ?: expense.amountMxn
             dao.update(expense.copy(status = "POSTED", amountMxn = newAmount, updatedAt = System.currentTimeMillis()))
