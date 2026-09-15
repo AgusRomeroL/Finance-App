@@ -207,8 +207,11 @@ class DashboardViewModel(
 
     // ── Navegación entre quincenas ──────────────────────────────────────────────
 
-    /** Todas las quincenas del hogar, ordenadas de más reciente a más antigua. */
-    private val allQuincenas: StateFlow<List<QuincenaEntity>> = quincenaRepository
+    /**
+     * Todas las quincenas del hogar, ordenadas de más reciente a más antigua.
+     * Pública desde la Fase 5: la pantalla de Quincenas lista lo mismo.
+     */
+    val allQuincenas: StateFlow<List<QuincenaEntity>> = quincenaRepository
         .observeAll(householdId)
         .catch { emit(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -218,6 +221,15 @@ class DashboardViewModel(
         .observeActive(householdId)
         .catch { emit(null) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Quincenas vencidas que esperan cierre manual (Fase 5, RF-32). Pueden ser
+     * varias: un mes sin abrir la app deja una cola.
+     */
+    val pendingClose: StateFlow<List<QuincenaEntity>> = quincenaRepository
+        .observeByStatus(householdId, mx.budget.data.quincena.QuincenaLifecycle.CLOSING_REVIEW)
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Quincena que el usuario eligió ver con el chip ‹ › (null = seguir la activa). */
     private val selectedQuincenaId = MutableStateFlow<String?>(null)

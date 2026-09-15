@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NoAccounts
@@ -100,6 +101,7 @@ fun ProfileScreen(
     onCalendarMirrorToggle: (Boolean) -> Unit = {},
     locationLevel: String = "NONE",
     onLocationLevelChange: (String) -> Unit = {},
+    onOpenQuincenas: (() -> Unit)? = null,
     onOpenHousehold: (() -> Unit)? = null,
     /**
      * Estado de identidad de la sesión. `null` cuando la pantalla se compone sin
@@ -240,7 +242,8 @@ fun ProfileScreen(
 
         // Card de administración de maestros (paquete B2): miembros, categorías,
         // ingresos y cuentas. Cada fila abre su pantalla CRUD.
-        if (onManageMembers != null || onManageCategories != null || onManageIncome != null || onManageWallets != null) {
+        if (onManageMembers != null || onManageCategories != null || onManageIncome != null ||
+            onManageWallets != null || onOpenQuincenas != null) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -292,6 +295,16 @@ fun ProfileScreen(
                         subtitle = "Saldos, tarjetas y efectivo",
                         trailingBadge = null,
                         onClick = onManageWallets
+                    )
+                }
+                if (onOpenQuincenas != null) {
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow(
+                        icon = Icons.Filled.EventAvailable,
+                        title = "Quincenas",
+                        subtitle = "Cerrar el periodo, reabrirlo y ver su resumen",
+                        trailingBadge = null,
+                        onClick = onOpenQuincenas
                     )
                 }
             }

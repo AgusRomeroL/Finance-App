@@ -198,7 +198,8 @@ class MainActivity : ComponentActivity() {
             app.walletRepository,
             app.memberRepository,
             app.householdId,
-            app.membershipRepository
+            app.membershipRepository,
+            app.quincenaFreezeGuard
         ))[mx.budget.ui.detail.ExpenseDetailViewModel::class.java]
     }
 
@@ -253,6 +254,11 @@ class MainActivity : ComponentActivity() {
     private val statementsChecklistViewModel: mx.budget.ui.statements.StatementsChecklistViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, StatementsChecklistViewModelFactory(app))[mx.budget.ui.statements.StatementsChecklistViewModel::class.java]
+    }
+
+    private val quincenaCloseViewModel: mx.budget.ui.quincena.QuincenaCloseViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, QuincenaCloseViewModelFactory(app))[mx.budget.ui.quincena.QuincenaCloseViewModel::class.java]
     }
 
     private val captureViewModel: CaptureViewModel by lazy {
@@ -473,6 +479,7 @@ class MainActivity : ComponentActivity() {
                     startOnboarding = app.needsOnboarding,
                     statementImportViewModel = statementImportViewModel,
                     statementsChecklistViewModel = statementsChecklistViewModel,
+                    quincenaCloseViewModel = quincenaCloseViewModel,
                     nvidiaApiKey = nvidiaApiKey,
                     onNvidiaApiKeyChange = { key -> scope.launch { settings.setNvidiaApiKey(key) } },
                     aiAssistant = mx.budget.ui.profile.AiAssistantSettings(
@@ -506,6 +513,23 @@ class StatementsChecklistViewModelFactory(
         return mx.budget.ui.statements.StatementsChecklistViewModel(
             walletRepository = app.walletRepository,
             statementImportDao = app.database.statementImportDao(),
+            householdId = app.householdId,
+        ) as T
+    }
+}
+
+/** Factory del cierre manual de quincena (Fase 5, RF-32). */
+class QuincenaCloseViewModelFactory(
+    private val app: BudgetApplication,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.quincena.QuincenaCloseViewModel(
+            quincenaRepository = app.quincenaRepository,
+            expenseRepository = app.expenseRepository,
+            incomeRepository = app.incomeRepository,
+            analyticsRepository = app.analyticsRepository,
+            walletRepository = app.walletRepository,
             householdId = app.householdId,
         ) as T
     }
@@ -930,6 +954,7 @@ class ExpenseDetailViewModelFactory(
     private val memberRepository: MemberRepository,
     private val householdId: String,
     private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
+    private val freezeGuard: mx.budget.data.quincena.QuincenaFreezeGuard? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -941,6 +966,7 @@ class ExpenseDetailViewModelFactory(
             memberRepository = memberRepository,
             householdId = householdId,
             membershipRepository = membershipRepository,
+            freezeGuard = freezeGuard,
         ) as T
     }
 }

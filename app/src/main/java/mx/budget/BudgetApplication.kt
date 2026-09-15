@@ -81,6 +81,26 @@ class BudgetApplication : Application() {
     lateinit var quincenaRepository: QuincenaRepository
         private set
 
+    /** Transiciones de estado de la quincena (Fase 5, RF-32). */
+    lateinit var quincenaLifecycle: mx.budget.data.quincena.QuincenaLifecycle
+        private set
+
+    /** Lectura de la congelacion para la interfaz (ocultar acciones imposibles). */
+    lateinit var quincenaFreezeGuard: mx.budget.data.quincena.QuincenaFreezeGuard
+        private set
+
+    /**
+     * Gemelo de [expenseRepository] SIN la guardia de quincena cerrada.
+     *
+     * Lo usan solo los procesos del sistema que escriben sobre periodos
+     * historicos: el sembrado de estados de cuenta del primer arranque, la
+     * curacion de plantillas y la aplicacion de un estado de cuenta, cuyos
+     * cargos caen por fecha en quincenas que ya estan cerradas. Con la guardia,
+     * una instalacion limpia moriria en el sembrado.
+     */
+    lateinit var systemExpenseRepository: ExpenseRepository
+        private set
+
     lateinit var expenseRepository: ExpenseRepository
         private set
 
@@ -363,7 +383,15 @@ class BudgetApplication : Application() {
         val syncQueueDao = database.syncQueueDao()
 
         // Repositorios públicos = implementaciones Room (offline-first).
-        quincenaRepository = QuincenaRepositoryImpl(database.quincenaDao())
+        // Fase 5: las transiciones pasan por QuincenaLifecycle, que sella
+        // updated_at y encola la fila QUINCENA del outbox.
+        quincenaFreezeGuard = mx.budget.data.quincena.QuincenaFreezeGuard(database.quincenaDao())
+        quincenaLifecycle = mx.budget.data.quincena.QuincenaLifecycle(
+            dao = database.quincenaDao(),
+            syncQueueDao = syncQueueDao,
+            db = database,
+        )
+        quincenaRepository = QuincenaRepositoryImpl(database.quincenaDao(), quincenaLifecycle)
         // Desde v14 los miembros se escriben localmente (wizard, CRUD de maestros):
         // el repo estampa updated_at y encola MEMBER en el outbox.
         memberRepository = MemberRepositoryImpl(
@@ -401,7 +429,8 @@ class BudgetApplication : Application() {
             dao = database.incomeSourceDao(),
             paymentMethodDao = database.paymentMethodDao(),
             syncQueueDao = syncQueueDao,
-            db = database
+            db = database,
+            freezeGuard = quincenaFreezeGuard
         )
         // MVP Fase 3: analíticas + hoja de balance. Desde Fase 3.5 los repos de
         // balance encolan en sync_queue (patrón TRANSFER).
@@ -410,6 +439,13 @@ class BudgetApplication : Application() {
         loanRepository = mx.budget.data.repository.impl.LoanRepositoryImpl(database.loanDao(), syncQueueDao, database)
         savingsRepository = mx.budget.data.repository.impl.SavingsRepositoryImpl(database.savingsGoalDao(), syncQueueDao, database)
         expenseRepository = ExpenseRepositoryImpl(
+            dao = expenseDao,
+            attributionDao = attributionDao,
+            syncQueueDao = syncQueueDao,
+            db = database,
+            freezeGuard = quincenaFreezeGuard
+        )
+        systemExpenseRepository = ExpenseRepositoryImpl(
             dao = expenseDao,
             attributionDao = attributionDao,
             syncQueueDao = syncQueueDao,
@@ -430,7 +466,7 @@ class BudgetApplication : Application() {
             installmentRepository = installmentRepository,
             statementImportDao = database.statementImportDao(),
             statementLineDao = database.statementLineDao(),
-            expenseRepository = expenseRepository,
+            expenseRepository = systemExpenseRepository,
             transferRepository = transferRepository,
             expenseDao = database.expenseDao(),
             categoryDao = database.categoryDao(),
@@ -571,6 +607,11 @@ class BudgetApplication : Application() {
         // checklist mensual converja entre dispositivos.
         val remoteStatementRepository =
             mx.budget.data.remote.StatementRepositoryFirestore(firestore, householdId)
+        // Quincenas (Fase 5): push del ciclo de vida (pendiente de cierre,
+        // cierre, reapertura) y de las que crea el rollover, que hasta ahora
+        // solo existian en el telefono que las genero.
+        val remoteQuincenaRepository =
+            mx.budget.data.remote.QuincenaRepositoryFirestore(firestore, householdId)
 
         // Arranca el drenado del outbox (por conectividad + intento inicial).
         syncManager = SyncManager(
@@ -601,7 +642,9 @@ class BudgetApplication : Application() {
             householdDao = database.householdDao(),
             remoteHouseholdRepository = remoteHouseholdRepository,
             statementImportDao = database.statementImportDao(),
-            remoteStatementRepository = remoteStatementRepository
+            remoteStatementRepository = remoteStatementRepository,
+            quincenaDao = database.quincenaDao(),
+            remoteQuincenaRepository = remoteQuincenaRepository
         )
 
         // Dirección PULL (Firestore → Room). Comparte `appScope` y la misma
@@ -642,7 +685,7 @@ class BudgetApplication : Application() {
                     categoryRepository = categoryRepository,
                     walletRepository = walletRepository,
                     installmentRepository = installmentRepository,
-                    expenseRepository = expenseRepository,
+                    expenseRepository = systemExpenseRepository,
                     transferRepository = transferRepository,
                     expenseDao = database.expenseDao(),
                     memberDao = database.memberDao(),
@@ -661,6 +704,18 @@ class BudgetApplication : Application() {
                     database.paymentMethodDao()
                         .alignAnchorsToCurrent(householdId, System.currentTimeMillis())
                     settingsRepository.setBalanceAnchorAligned(true)
+                }
+            }
+            // Saneo unico de los totales de las quincenas que el rollover cerro
+            // en automatico: nacieron con actual_* en cero porque nadie los
+            // recalculaba, y de ahi salen la tendencia de Analiticas y el
+            // promedio que cita el asistente.
+            runCatching {
+                if (!settingsRepository.isClosedActualsRecomputed()) {
+                    val dao = database.quincenaDao()
+                    dao.getByStatus(householdId, mx.budget.data.quincena.QuincenaLifecycle.CLOSED)
+                        .forEach { dao.recalcActualsWithoutStamp(it.id) }
+                    settingsRepository.setClosedActualsRecomputed(true)
                 }
             }
             remotePullSync.start()
@@ -1072,13 +1127,14 @@ class BudgetApplication : Application() {
                     recurrenceDao = database.recurrenceTemplateDao(),
                     recurrenceRepository = recurrenceRepository,
                     expenseDao = database.expenseDao(),
-                    expenseRepository = expenseRepository,
+                    expenseRepository = systemExpenseRepository,
                 ).curateOnce()
             }
             val active = runCatching {
                 mx.budget.data.quincena.QuincenaRollover(
                     dao = database.quincenaDao(),
                     householdId = householdId,
+                    syncQueueDao = database.syncQueueDao(),
                 ).ensureActiveForToday()
             }.getOrNull() ?: quincenaRepository.getActive(householdId) ?: return@launch
             runCatching { recurrenceMaterializer.materialize(active) }

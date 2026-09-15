@@ -63,6 +63,7 @@ import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -263,6 +264,8 @@ fun DashboardScreen(
     onOpenProfile: () -> Unit = {},
     tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
     tutorialCaptureOpen: Boolean = false,
+    /** Abre el cierre de la quincena indicada (Fase 5). */
+    onOpenQuincenaClose: (String) -> Unit = {},
 ) {
     val rawUiState by viewModel.uiState.collectAsState()
     val hasWallets by viewModel.hasWallets.collectAsState()
@@ -276,6 +279,8 @@ fun DashboardScreen(
     val reimbursementTotals by viewModel.pendingReimbursementTotals.collectAsState()
     val rawMembers by viewModel.members.collectAsState()
     val rawSingleMember by viewModel.singleMember.collectAsState()
+    // Fase 5: quincenas vencidas que esperan cierre manual.
+    val rawPendingClose by viewModel.pendingClose.collectAsState()
 
     // Tutorial: mientras el tour corre, se muestran datos DEMO (nunca tocan Room). Ver TUTORIAL.md.
     val demo = tutorialController?.demoActive == true
@@ -284,6 +289,7 @@ fun DashboardScreen(
     val bankCaptures = if (demo) mx.budget.ui.tutorial.TutorialDemoData.bankCaptures else rawBankCaptures
     val members = if (demo) mx.budget.ui.tutorial.TutorialDemoData.members else rawMembers
     val singleMember = if (demo) false else rawSingleMember
+    val pendingClose = if (demo) emptyList() else rawPendingClose
 
     val isExpanded = windowWidthDp >= 600.dp
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -389,6 +395,8 @@ fun DashboardScreen(
                 tutorialController = tutorialController,
                 hasWallets = hasWallets,
                 onOpenCapture = { onOpenCapture(CaptureSheetMode.New) },
+                pendingClose = pendingClose,
+                onOpenQuincenaClose = onOpenQuincenaClose,
             )
         } else {
             CompactDashboard(
@@ -412,6 +420,8 @@ fun DashboardScreen(
                 tutorialController = tutorialController,
                 hasWallets = hasWallets,
                 onOpenCapture = { onOpenCapture(CaptureSheetMode.New) },
+                pendingClose = pendingClose,
+                onOpenQuincenaClose = onOpenQuincenaClose,
             )
         }
     }
@@ -466,6 +476,9 @@ private fun ExpandedDashboard(
     tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
     hasWallets: Boolean = true,
     onOpenCapture: () -> Unit = {},
+    /** Quincenas vencidas sin cerrar (Fase 5) y su acceso al cierre. */
+    pendingClose: List<mx.budget.data.local.entity.QuincenaEntity> = emptyList(),
+    onOpenQuincenaClose: (String) -> Unit = {},
 ) {
     // El rail (con FAB de captura) lo aporta el MainShell. Aquí, la barra superior
     // (búsqueda + avatar de Perfil) es la dueña del inset superior (edge-to-edge).
@@ -507,6 +520,11 @@ private fun ExpandedDashboard(
                             canViewNewer = state.canViewNewer,
                             viewingActive = state.viewingActive,
                             quincenaNav = quincenaNav
+                        )
+                        PendingCloseCard(
+                            pending = pendingClose,
+                            onOpen = onOpenQuincenaClose,
+                            modifier = Modifier.padding(top = 14.dp),
                         )
                         // Journey guiado: primeros pasos (se oculta solo con datos).
                         FirstStepsCard(
@@ -707,6 +725,9 @@ private fun CompactDashboard(
     tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
     hasWallets: Boolean = true,
     onOpenCapture: () -> Unit = {},
+    /** Quincenas vencidas sin cerrar (Fase 5) y su acceso al cierre. */
+    pendingClose: List<mx.budget.data.local.entity.QuincenaEntity> = emptyList(),
+    onOpenQuincenaClose: (String) -> Unit = {},
 ) {
     // La navegación (pill flotante + "+") la aporta el MainShell. Aquí: barra superior
     // fija (búsqueda + avatar de Perfil) + lista que scrollea por detrás del pill.
@@ -741,6 +762,12 @@ private fun CompactDashboard(
                                 canViewNewer = state.canViewNewer,
                                 viewingActive = state.viewingActive,
                                 quincenaNav = quincenaNav
+                            )
+                        }
+                        item(key = "pending_close") {
+                            PendingCloseCard(
+                                pending = pendingClose,
+                                onOpen = onOpenQuincenaClose,
                             )
                         }
                         // Journey guiado: primeros pasos (se oculta solo cuando ya hay
@@ -857,6 +884,82 @@ private fun CompactDashboard(
  * SIGUIENTE paso natural: sin cuentas → crear la primera; con cuentas pero sin
  * gastos → registrar el primero. Se oculta sola cuando ya hay ambos (con resorte).
  */
+/**
+ * Aviso de quincena vencida pendiente de cierre (Fase 5, RF-32).
+ *
+ * No se puede descartar a proposito: mientras el periodo no se cierre, sus
+ * planeados sin ejecutar siguen reservando dinero de un periodo que ya termino.
+ */
+@Composable
+private fun PendingCloseCard(
+    pending: List<mx.budget.data.local.entity.QuincenaEntity>,
+    onOpen: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedVisibility(
+        visible = pending.isNotEmpty(),
+        enter = fadeIn(spring(stiffness = 380f)) +
+            expandVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+        exit = fadeOut(spring(stiffness = 380f)) +
+            shrinkVertically(spring(dampingRatio = 0.8f, stiffness = 380f)),
+        modifier = modifier,
+    ) {
+        val primera = pending.firstOrNull() ?: return@AnimatedVisibility
+        val interaction = rememberPressInteractionSource()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .pressScale(interactionSource = interaction)
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.tertiaryContainer)
+                .clickable(
+                    interactionSource = interaction,
+                    indication = LocalIndication.current,
+                    onClick = { onOpen(primera.id) },
+                )
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.EventAvailable,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onTertiary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "PENDIENTE DE CIERRE",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.75f),
+                    letterSpacing = 1.2.sp,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    if (pending.size == 1) "Revisa y cierra ${primera.label}"
+                    else "${pending.size} quincenas esperan cierre. Empieza por ${primera.label}",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun FirstStepsCard(
     hasWallets: Boolean,

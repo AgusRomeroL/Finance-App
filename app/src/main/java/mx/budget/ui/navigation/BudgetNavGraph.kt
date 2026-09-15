@@ -82,6 +82,8 @@ object BudgetDestinations {
     const val MASTERS_INCOME = "masters_income"
     const val STATEMENTS = "statements"
     const val STATEMENTS_MONTH = "statements_month"
+    const val QUINCENAS = "quincenas"
+    const val QUINCENA_CLOSE = "quincena_close"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -133,6 +135,8 @@ fun BudgetNavGraph(
     onNvidiaApiKeyChange: (String) -> Unit = {},
     /** Gobierno del modelo de IA en Perfil (Fase 4). `null` lo oculta. */
     aiAssistant: mx.budget.ui.profile.AiAssistantSettings? = null,
+    /** Cierre manual de quincena (Fase 5). `null` oculta las rutas. */
+    quincenaCloseViewModel: mx.budget.ui.quincena.QuincenaCloseViewModel? = null,
     startTutorial: Boolean = false,
     onTutorialSeen: () -> Unit = {},
 ) {
@@ -285,6 +289,9 @@ fun BudgetNavGraph(
                 onOpenProfile = { onNavigate(BudgetDestinations.PROFILE) },
                 tutorialController = tutorialController,
                 tutorialCaptureOpen = tutorialCaptureOpen,
+                onOpenQuincenaClose = { id ->
+                    onNavigate("${BudgetDestinations.QUINCENA_CLOSE}?quincenaId=$id")
+                },
             )
         }
 
@@ -432,6 +439,7 @@ fun BudgetNavGraph(
                 onCalendarMirrorToggle = onCalendarMirrorToggle,
                 locationLevel = locationLevel,
                 onLocationLevelChange = onLocationLevelChange,
+                onOpenQuincenas = { onNavigate(BudgetDestinations.QUINCENAS) },
                 onOpenHousehold = if (householdViewModel != null) {
                     { onNavigate(BudgetDestinations.HOUSEHOLD) }
                 } else null,
@@ -531,6 +539,48 @@ fun BudgetNavGraph(
                 )
             } else {
                 PlaceholderScreen("Estados del mes", onNavigate)
+            }
+        }
+
+        composable(
+            route = BudgetDestinations.QUINCENAS,
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) {
+            val quincenas by dashboardViewModel.allQuincenas.collectAsState()
+            mx.budget.ui.quincena.QuincenasScreen(
+                quincenas = quincenas,
+                onOpen = { id -> onNavigate("${BudgetDestinations.QUINCENA_CLOSE}?quincenaId=$id") },
+                onBack = { onNavigate(BudgetDestinations.PROFILE) },
+            )
+        }
+
+        composable(
+            route = "${BudgetDestinations.QUINCENA_CLOSE}?quincenaId={quincenaId}",
+            arguments = listOf(
+                navArgument("quincenaId") {
+                    type = NavType.StringType; nullable = true; defaultValue = null
+                }
+            ),
+            enterTransition = slideEnter, exitTransition = slideExit,
+            popEnterTransition = slideEnter, popExitTransition = slideExit,
+        ) { backStackEntry ->
+            val quincenaId = backStackEntry.arguments?.getString("quincenaId")
+            if (quincenaCloseViewModel != null && quincenaId != null) {
+                // Sin rol en la nube (hogar solo local) se permite: no hay con
+                // quien repartir la decisión.
+                val rol = householdViewModel?.uiState?.collectAsState()?.value?.myRole
+                val puedeGestionar = rol == null ||
+                    rol == mx.budget.data.remote.MembershipRepository.ROLE_OWNER ||
+                    rol == mx.budget.data.remote.MembershipRepository.ROLE_PAYER
+                mx.budget.ui.quincena.QuincenaCloseScreen(
+                    viewModel = quincenaCloseViewModel,
+                    quincenaId = quincenaId,
+                    canManage = puedeGestionar,
+                    onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
+                )
+            } else {
+                PlaceholderScreen("Cierre de quincena", onNavigate)
             }
         }
 
