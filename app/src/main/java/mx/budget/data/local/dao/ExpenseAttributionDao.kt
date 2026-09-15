@@ -33,6 +33,13 @@ interface ExpenseAttributionDao {
     suspend fun getByExpenseId(expenseId: String): List<ExpenseAttributionEntity>
 
     /**
+     * Atribuciones de varios gastos de una vez (exportaciones). El caller trocea
+     * la lista: SQLite tope en 999 variables por sentencia.
+     */
+    @Query("SELECT * FROM expense_attribution WHERE expense_id IN (:expenseIds)")
+    suspend fun getForExpenses(expenseIds: List<String>): List<ExpenseAttributionEntity>
+
+    /**
      * Gasto agregado por miembro para un [role] dado ("BENEFICIARY" o "PAYER")
      * en la quincena, considerando solo gastos POSTED. Ordenado de mayor a menor.
      *

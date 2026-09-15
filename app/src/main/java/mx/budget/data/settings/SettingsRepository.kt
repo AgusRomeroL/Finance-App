@@ -35,12 +35,14 @@ class SettingsRepository(private val context: Context) {
     private val templateCuration202607DoneKey = booleanPreferencesKey("template_curation_2026_07_done")
     private val balanceAnchorAlignedKey = booleanPreferencesKey("balance_anchor_aligned")
     private val closedActualsRecomputedKey = booleanPreferencesKey("closed_actuals_recomputed")
+    private val exportLastAtKey = stringPreferencesKey("export_last_at_json")
     private val bankCaptureEnabledKey = booleanPreferencesKey("bank_capture_enabled")
     private val reminderLeadDaysKey = intPreferencesKey("reminder_lead_days")
     private val reminderStateKey = stringPreferencesKey("reminder_state_json")
     private val dismissedTemplateSuggestionsKey = stringSetPreferencesKey("dismissed_template_suggestions")
     private val statementCycleNotifiedKey = stringSetPreferencesKey("statement_cycle_notified")
     private val paymentDueNotifiedKey = stringSetPreferencesKey("payment_due_notified")
+    private val quincenaCloseNotifiedKey = stringSetPreferencesKey("quincena_close_notified")
     private val calendarMirrorEnabledKey = booleanPreferencesKey("calendar_mirror_enabled")
     private val calendarMirrorIdKey = longPreferencesKey("calendar_mirror_id")
     private val calendarEventMapKey = stringPreferencesKey("calendar_event_map_json")
@@ -93,6 +95,23 @@ class SettingsRepository(private val context: Context) {
     suspend fun setClosedActualsRecomputed(done: Boolean) {
         context.dataStore.edit { prefs -> prefs[closedActualsRecomputedKey] = done }
     }
+
+    /**
+     * Ultima vez que se genero cada exportacion o respaldo (Fase 5). Un solo mapa
+     * en vez de cinco claves sueltas: la seccion de Perfil las lee todas juntas.
+     */
+    val exportTimestamps: Flow<Map<String, Long>> = context.dataStore.data
+        .map { prefs -> decodeLongMap(prefs[exportLastAtKey]) }
+
+    suspend fun setExportTimestamp(clave: String, epochMillis: Long) {
+        context.dataStore.edit { prefs ->
+            val actual = decodeLongMap(prefs[exportLastAtKey]).toMutableMap()
+            actual[clave] = epochMillis
+            prefs[exportLastAtKey] = Json.encodeToString(actual)
+        }
+    }
+
+    suspend fun setRestoreLastAt(epochMillis: Long) = setExportTimestamp(EXPORT_RESTORE, epochMillis)
 
     suspend fun isStatementSeedDone(): Boolean =
         context.dataStore.data.first()[statementSeedDoneKey] ?: false
@@ -225,6 +244,16 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setStatementCycleNotified(keys: Set<String>) {
         context.dataStore.edit { prefs -> prefs[statementCycleNotifiedKey] = keys }
+    }
+
+    // Dedupe del aviso de quincena pendiente de cierre (Fase 5): ids ya avisados.
+    // El aviso persistente del dashboard es el que insiste; la notificación se
+    // manda una sola vez por periodo.
+    suspend fun getQuincenaCloseNotified(): Set<String> =
+        context.dataStore.data.first()[quincenaCloseNotifiedKey] ?: emptySet()
+
+    suspend fun setQuincenaCloseNotified(ids: Set<String>) {
+        context.dataStore.edit { prefs -> prefs[quincenaCloseNotifiedKey] = ids }
     }
 
     // Dedupe del recordatorio de fecha límite de pago de tarjeta (estados v2 Fase 5).
@@ -408,6 +437,13 @@ class SettingsRepository(private val context: Context) {
 
     companion object {
         const val DEFAULT_REMINDER_LEAD_DAYS = 2
+
+        // Claves del mapa de ultimas ejecuciones de la seccion "Exportar y respaldar".
+        const val EXPORT_PDF = "pdf"
+        const val EXPORT_XLSX = "xlsx"
+        const val EXPORT_CSV = "csv"
+        const val EXPORT_BACKUP = "backup"
+        const val EXPORT_RESTORE = "restore"
         const val DEFAULT_AI_MODEL_VARIANT = "E2B"
 
         /** Sentinela "ya notificado, no volver a avisar" (hasta posponer o confirmar). */

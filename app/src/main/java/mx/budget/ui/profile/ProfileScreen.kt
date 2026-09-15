@@ -121,6 +121,9 @@ fun ProfileScreen(
     nvidiaApiKey: String = "",
     onNvidiaApiKeyChange: (String) -> Unit = {},
     onImportStatement: (() -> Unit)? = null,
+    /** Exportar y respaldar (Fase 5). `null` oculta la sección. */
+    exportViewModel: ExportViewModel? = null,
+    onRestoreBackup: ((mx.budget.data.backup.BackupInspection) -> Unit)? = null,
     onShowTutorial: (() -> Unit)? = null,
     tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
 ) {
@@ -546,6 +549,13 @@ fun ProfileScreen(
                     ),
                 )
             }
+            Spacer(Modifier.height(20.dp))
+        }
+
+        // Exportar y respaldar (Fase 5). Va junto a estados de cuenta porque
+        // las dos son operaciones sobre el archivo del hogar, no ajustes.
+        if (exportViewModel != null && onRestoreBackup != null) {
+            ExportSection(viewModel = exportViewModel, onRestore = onRestoreBackup)
             Spacer(Modifier.height(20.dp))
         }
 

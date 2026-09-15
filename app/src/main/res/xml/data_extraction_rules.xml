@@ -1,11 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copia automática de Android (API 31+; en estas versiones el archivo que manda es
+  este, no backup_rules.xml).
+
+  Es una lista blanca: lo que no se incluye no viaja. Por eso basta con nombrar la
+  base y las preferencias. Quedan fuera solos el diario de SQLite (-wal, -shm),
+  que sin su archivo principal no significa nada, y la caché local de Firestore,
+  que se vuelve a llenar sola al reconectar.
+
+  Para que la copia no se lleve una base con días de retraso, la app hace
+  checkpoint del diario cada vez que pasa a segundo plano (DatabaseBackupManager).
+-->
 <data-extraction-rules>
     <cloud-backup>
-        <exclude domain="database" path="budget.db" />
-        <exclude domain="database" path="budget.db-shm" />
-        <exclude domain="database" path="budget.db-wal" />
+        <include domain="database" path="budget.db" />
+        <include domain="file" path="datastore/budget_settings.preferences_pb" />
     </cloud-backup>
     <device-transfer>
-        <exclude domain="database" path="budget.db" />
+        <include domain="database" path="budget.db" />
+        <include domain="file" path="datastore/budget_settings.preferences_pb" />
     </device-transfer>
 </data-extraction-rules>

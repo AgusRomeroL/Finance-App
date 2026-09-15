@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Rutas que el FileProvider puede compartir. Solo la carpeta de trabajo de las
+  exportaciones: nada de la base ni de las preferencias sale por aquí.
+-->
+<paths>
+    <cache-path name="exports" path="exports/" />
+</paths>

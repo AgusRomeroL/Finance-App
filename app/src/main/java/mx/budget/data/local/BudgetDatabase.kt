@@ -124,6 +124,19 @@ abstract class BudgetDatabase : RoomDatabase() {
     abstract fun statementLineDao(): StatementLineDao
 
     companion object {
+
+        /**
+         * Version del esquema. Repetida en la anotacion @Database porque una
+         * anotacion solo admite constantes en tiempo de compilacion de su propio
+         * archivo; si cambia una, cambia la otra. La lee la validacion de un
+         * respaldo antes de restaurarlo: un archivo de una version mayor haria
+         * reventar a Room por downgrade al abrir.
+         */
+        const val SCHEMA_VERSION = 21
+
+        /** Nombre del archivo de la base en el dispositivo. */
+        const val FILE_NAME = "budget.db"
+
         /**
          * `ALTER TABLE ADD COLUMN` idempotente. Necesario porque hubo builds de la
          * línea `feat/expressive-ux` cuya v17 ya incluía las columnas que aquí

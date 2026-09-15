@@ -137,6 +137,9 @@ fun BudgetNavGraph(
     aiAssistant: mx.budget.ui.profile.AiAssistantSettings? = null,
     /** Cierre manual de quincena (Fase 5). `null` oculta las rutas. */
     quincenaCloseViewModel: mx.budget.ui.quincena.QuincenaCloseViewModel? = null,
+    /** Exportaciones y respaldo (Fase 5). `null` oculta la sección de Perfil. */
+    exportViewModel: mx.budget.ui.profile.ExportViewModel? = null,
+    onRestoreBackup: ((mx.budget.data.backup.BackupInspection) -> Unit)? = null,
     startTutorial: Boolean = false,
     onTutorialSeen: () -> Unit = {},
 ) {
@@ -440,6 +443,8 @@ fun BudgetNavGraph(
                 locationLevel = locationLevel,
                 onLocationLevelChange = onLocationLevelChange,
                 onOpenQuincenas = { onNavigate(BudgetDestinations.QUINCENAS) },
+                exportViewModel = exportViewModel,
+                onRestoreBackup = onRestoreBackup,
                 onOpenHousehold = if (householdViewModel != null) {
                     { onNavigate(BudgetDestinations.HOUSEHOLD) }
                 } else null,

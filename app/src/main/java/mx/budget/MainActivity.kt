@@ -261,6 +261,11 @@ class MainActivity : ComponentActivity() {
         ViewModelProvider(this, QuincenaCloseViewModelFactory(app))[mx.budget.ui.quincena.QuincenaCloseViewModel::class.java]
     }
 
+    private val exportViewModel: mx.budget.ui.profile.ExportViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, ExportViewModelFactory(app))[mx.budget.ui.profile.ExportViewModel::class.java]
+    }
+
     private val captureViewModel: CaptureViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, CaptureViewModelFactory(
@@ -480,6 +485,19 @@ class MainActivity : ComponentActivity() {
                     statementImportViewModel = statementImportViewModel,
                     statementsChecklistViewModel = statementsChecklistViewModel,
                     quincenaCloseViewModel = quincenaCloseViewModel,
+                    exportViewModel = exportViewModel,
+                    onRestoreBackup = { inspeccion ->
+                        // La restauración mata el proceso, así que corre en el
+                        // scope de la Activity y no dentro del composable.
+                        scope.launch {
+                            runCatching { app.restoreDatabaseAndRestart(inspeccion) }
+                                .onFailure { e ->
+                                    exportViewModel.fallarRestauracion(
+                                        e.message ?: "No se pudo restaurar el respaldo."
+                                    )
+                                }
+                        }
+                    },
                     nvidiaApiKey = nvidiaApiKey,
                     onNvidiaApiKeyChange = { key -> scope.launch { settings.setNvidiaApiKey(key) } },
                     aiAssistant = mx.budget.ui.profile.AiAssistantSettings(
@@ -513,6 +531,33 @@ class StatementsChecklistViewModelFactory(
         return mx.budget.ui.statements.StatementsChecklistViewModel(
             walletRepository = app.walletRepository,
             statementImportDao = app.database.statementImportDao(),
+            householdId = app.householdId,
+        ) as T
+    }
+}
+
+/** Factory de exportaciones y respaldo (Fase 5). */
+class ExportViewModelFactory(
+    private val app: BudgetApplication,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.profile.ExportViewModel(
+            context = app,
+            quincenaRepository = app.quincenaRepository,
+            reportBuilder = app.quincenaReportBuilder,
+            csvExporter = mx.budget.data.export.CsvExporter(
+                expenseRepository = app.expenseRepository,
+                transferRepository = app.transferRepository,
+                reportBuilder = app.quincenaReportBuilder,
+                quincenaDao = app.database.quincenaDao(),
+                categoryDao = app.database.categoryDao(),
+                memberDao = app.database.memberDao(),
+                paymentMethodDao = app.database.paymentMethodDao(),
+                householdId = app.householdId,
+            ),
+            backupManager = app.databaseBackupManager,
+            settings = app.settingsRepository,
             householdId = app.householdId,
         ) as T
     }

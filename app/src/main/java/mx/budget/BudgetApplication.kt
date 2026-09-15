@@ -81,6 +81,14 @@ class BudgetApplication : Application() {
     lateinit var quincenaRepository: QuincenaRepository
         private set
 
+    /** Respaldo y restauracion de la base completa (Fase 5). */
+    lateinit var databaseBackupManager: mx.budget.data.backup.DatabaseBackupManager
+        private set
+
+    /** Reune el reporte de una quincena para el PDF y el libro XLSX (Fase 5). */
+    lateinit var quincenaReportBuilder: mx.budget.data.export.QuincenaReportBuilder
+        private set
+
     /** Transiciones de estado de la quincena (Fase 5, RF-32). */
     lateinit var quincenaLifecycle: mx.budget.data.quincena.QuincenaLifecycle
         private set
@@ -304,6 +312,33 @@ class BudgetApplication : Application() {
     }
 
     /**
+     * Instala el respaldo ya validado y reinicia el proceso. No regresa.
+     *
+     * El reinicio no es pereza: Room, los repositorios, el sync y una docena de
+     * pantallas guardan referencias a DAOs de la base que se acaba de reemplazar,
+     * y `householdId` se resuelve una sola vez al arrancar.
+     */
+    suspend fun restoreDatabaseAndRestart(
+        inspeccion: mx.budget.data.backup.BackupInspection,
+    ): Nothing {
+        runCatching { remotePullSync.stop() }
+        databaseBackupManager.restore(inspeccion)
+        settingsRepository.setRestoreLastAt(System.currentTimeMillis())
+        val intent = android.content.Intent(this, RestartActivity::class.java).apply {
+            addFlags(
+                android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                    android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+            )
+        }
+        startActivity(intent)
+        morirTrasRestaurar()
+    }
+
+    /** `true` en el proceso auxiliar `:restart`. */
+    private fun esProcesoDeReinicio(): Boolean =
+        runCatching { getProcessName() }.getOrNull()?.endsWith(":restart") == true
+
+    /**
      * `true` si la instalación está vacía (sin hogar/miembros/gastos) y hay que
      * mostrar el **wizard de onboarding** (paquete B2). Resuelto síncrono en
      * [onCreate] (mismo patrón que [householdId]); lo lee [MainActivity] para
@@ -322,12 +357,17 @@ class BudgetApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        // El proceso auxiliar que relanza la app tras restaurar un respaldo NO
+        // debe abrir la base, Firebase ni los workers: solo existe para arrancar
+        // MainActivity cuando el proceso principal ya murio.
+        if (esProcesoDeReinicio()) return
+
         applyAppLocale()
 
         database = Room.databaseBuilder(
             this,
             BudgetDatabase::class.java,
-            "budget.db"
+            BudgetDatabase.FILE_NAME
         )
             .createFromAsset("budget_database.db")
             .addMigrations(
@@ -645,6 +685,36 @@ class BudgetApplication : Application() {
             remoteStatementRepository = remoteStatementRepository,
             quincenaDao = database.quincenaDao(),
             remoteQuincenaRepository = remoteQuincenaRepository
+        )
+
+        databaseBackupManager = mx.budget.data.backup.DatabaseBackupManager(
+            context = this,
+            database = database,
+            householdId = householdId,
+        )
+        quincenaReportBuilder = mx.budget.data.export.QuincenaReportBuilder(
+            quincenaRepository = quincenaRepository,
+            expenseRepository = expenseRepository,
+            incomeRepository = incomeRepository,
+            analyticsRepository = analyticsRepository,
+            walletRepository = walletRepository,
+            loanRepository = loanRepository,
+            installmentRepository = installmentRepository,
+            attributionDao = attributionDao,
+            memberDao = database.memberDao(),
+            categoryDao = database.categoryDao(),
+            householdId = householdId,
+        )
+
+        // Copia automatica de Android: el diario WAL puede llevar dias de retraso
+        // sobre el archivo principal, y la copia solo se lleva el principal. Un
+        // checkpoint al pasar a segundo plano lo mantiene al dia.
+        androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(
+            object : androidx.lifecycle.DefaultLifecycleObserver {
+                override fun onStop(owner: androidx.lifecycle.LifecycleOwner) {
+                    appScope.launch { databaseBackupManager.checkpoint() }
+                }
+            }
         )
 
         // Dirección PULL (Firestore → Room). Comparte `appScope` y la misma

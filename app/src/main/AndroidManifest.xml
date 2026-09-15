@@ -37,7 +37,7 @@
 
     <application
         android:name=".BudgetApplication"
-        android:allowBackup="false"
+        android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="true"
         android:fullBackupContent="@xml/backup_rules"
@@ -125,6 +125,28 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/budget_capture_widget_info" />
         </receiver>
+
+        <!-- Relanza la app tras restaurar un respaldo. Proceso aparte a propósito:
+             el principal tiene que morir para soltar la base que se reemplaza. -->
+        <activity
+            android:name=".RestartActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:process=":restart"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Comparte los archivos exportados sin exponer nada más: solo la
+             carpeta de trabajo de la caché. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="mx.budget.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- El servicio de primer plano lo aporta WorkManager; aquí solo se le
              declara el tipo que exige Android 14+ para la descarga del modelo. -->
