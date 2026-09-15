@@ -1,0 +1,77 @@
+<!-- @dsCard group="Datos" -->
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<title>TransactionRow</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .lista { display: flex; flex-direction: column; gap: 10px; max-width: 620px; }
+  .fila {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--surface-container);
+    border-radius: var(--r-m);
+    padding: 14px 16px;
+  }
+  .avatar {
+    width: 44px; height: 44px; border-radius: var(--r-pill);
+    background: var(--primary-container); color: var(--on-primary-container);
+    display: grid; place-items: center; font-weight: 700; flex: none;
+  }
+  .texto { flex: 1; min-width: 0; }
+  .concepto { font-weight: 600; }
+  .detalle { font-size: 15px; font-weight: 400; color: var(--on-surface-variant); }
+  .monto { font-weight: 600; white-space: nowrap; }
+  .monto.gasto { color: var(--expense); }
+  .monto.ingreso { color: var(--income); }
+  .monto.programado { color: var(--on-surface-variant); }
+  .monto.transferencia { color: var(--on-surface); }
+</style>
+</head>
+<body>
+<div class="lienzo">
+  <div class="titulo-caso">TransactionRow</div>
+  <p class="nota">
+    Un renglón por movimiento, separado por espacio y cambio tonal, nunca por una
+    línea. El significado no depende del color: cada tono lleva su signo y su
+    icono, y el lector de pantalla oye la palabra.
+  </p>
+  <div class="lista">
+    <div class="fila">
+      <div class="avatar">D</div>
+      <div class="texto">
+        <div class="concepto">Despensa</div>
+        <div class="detalle">Alimentos · Banamex Clásica</div>
+      </div>
+      <div class="monto gasto">↓ −$1,950</div>
+    </div>
+    <div class="fila">
+      <div class="avatar">N</div>
+      <div class="texto">
+        <div class="concepto">Sueldo</div>
+        <div class="detalle">Ingresos · BBVA</div>
+      </div>
+      <div class="monto ingreso">↑ +$75,000</div>
+    </div>
+    <div class="fila">
+      <div class="avatar">H</div>
+      <div class="texto">
+        <div class="concepto">Hipoteca</div>
+        <div class="detalle">Vivienda · Programado para el 1 de octubre</div>
+      </div>
+      <div class="monto programado">🕐 −$4,000</div>
+    </div>
+    <div class="fila">
+      <div class="avatar">↔</div>
+      <div class="texto">
+        <div class="concepto">Efectivo a Banamex</div>
+        <div class="detalle">Transferencia</div>
+      </div>
+      <div class="monto transferencia">$3,000</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

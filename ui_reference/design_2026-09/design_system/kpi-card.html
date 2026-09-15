@@ -1,0 +1,58 @@
+<!-- @dsCard group="Datos" -->
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<title>KpiCard</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .kpi {
+    background: var(--surface-container-lowest);
+    border-radius: var(--r-l);
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 260px;
+  }
+  .kpi .cifra {
+    font-family: var(--font-display);
+    font-weight: 300;
+    font-size: 46px;
+    line-height: 1.05;
+    letter-spacing: -0.5px;
+  }
+  .kpi .pie { font-size: 15px; font-weight: 400; color: var(--on-surface-variant); }
+  .fila { display: flex; gap: 18px; flex-wrap: wrap; }
+  .kpi.alerta .cifra { color: var(--expense); }
+  .kpi.ingreso .cifra { color: var(--income); }
+</style>
+</head>
+<body>
+<div class="lienzo">
+  <div class="titulo-caso">KpiCard</div>
+  <p class="nota">
+    Tarjeta de dato. La cifra va en el tamaño óptico display con peso ligero y la
+    etiqueta en mayúsculas con peso alto: ese contraste es el que da el aire
+    editorial. Sobre superficie de datos, la más profunda de la escala.
+  </p>
+  <div class="fila">
+    <div class="kpi">
+      <div class="etiqueta">Disponible</div>
+      <div class="cifra">$54,206</div>
+      <div class="pie">Quedan 9 días de quincena</div>
+    </div>
+    <div class="kpi ingreso">
+      <div class="etiqueta">Ingreso</div>
+      <div class="cifra">$75,000</div>
+      <div class="pie">Recibido</div>
+    </div>
+    <div class="kpi alerta">
+      <div class="etiqueta">Sobregiro</div>
+      <div class="cifra">−$1,240</div>
+      <div class="pie">BBVA débito</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,77 @@
+/* Tokens reales de la app (ui/theme/*.kt). Modo oscuro, que es como la usa Norma. */
+:root {
+  color-scheme: dark;
+
+  --primary: #77DA9A;
+  --on-primary: #00391F;
+  --primary-container: #005233;
+  --on-primary-container: #92F7B4;
+
+  --surface: #0F1513;
+  --surface-container-lowest: #0A100E;
+  --surface-container-low: #171D1B;
+  --surface-container: #1B211F;
+  --surface-container-high: #262B2A;
+  --surface-container-highest: #313634;
+  --on-surface: #DEE4E1;
+  --on-surface-variant: #BEC9C3;
+  --outline: #88938E;
+
+  --income: #7DDB9E;
+  --income-container: #00391F;
+  --on-income-container: #B7F4C5;
+  --expense: #FFB4AB;
+  --expense-container: #93000A;
+  --on-expense-container: #FFDAD6;
+  --warning: #FFB951;
+  --warning-container: #6A4300;
+
+  --r-xs: 6px;
+  --r-s: 10px;
+  --r-m: 14px;
+  --r-l: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  --font-text: "Google Sans Flex Text", "Google Sans", system-ui, sans-serif;
+  --font-display: "Google Sans Flex Display", "Google Sans", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 32px;
+  background: var(--surface);
+  color: var(--on-surface);
+  font-family: var(--font-text);
+  /* Norma usa escala 1.3 con negrita: las vistas previas se miran asi. */
+  font-size: 20.8px;
+  font-weight: 500;
+}
+
+.lienzo { display: flex; flex-direction: column; gap: 28px; max-width: 900px; }
+
+.titulo-caso {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.etiqueta {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.nota {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--on-surface-variant);
+  max-width: 62ch;
+  line-height: 1.5;
+}

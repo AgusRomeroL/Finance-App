@@ -1,0 +1,103 @@
+# Auditoría de recorridos y accesibilidad (Fase 6a)
+
+Fecha: 2026-09-15. Dispositivo: emulador `FinanceFold` con la **configuración fiel del Fold de Norma**: `wm size 2076x2152`, `wm density 408`, `font_scale 1.30`, `font_weight_adjustment 300`, modo oscuro. Build: `20ce60b` (cierre de la Fase 5).
+
+Evidencia: volcados de `uiautomator` en `capturas/*.xml` y capturas de pantalla en `capturas/*.png`. Las mediciones de objetivos táctiles salen de los volcados, no de mirar la pantalla: a 408 dpi, 1 dp son 2.55 px.
+
+Estado de cada hallazgo: **abierto** (nadie lo ha tocado), **resuelto** (arreglado en la 6b), **aceptado** (se decide vivir con ello) o **diferido** (con fase).
+
+---
+
+## 1. Resumen
+
+Lo que se creía y lo que resultó ser:
+
+| Se creía | Resultó |
+|---|---|
+| 199 objetivos táctiles por debajo de 48 dp | **6 reales.** El conteo previo era de tamaños de icono, no de áreas táctiles: Compose ya expande los clicables al mínimo interactivo. |
+| 30 iconos sin descripción para lectores de pantalla | **Cero clicables sin etiqueta** en las cinco pantallas principales. Los 30 son iconos decorativos junto a texto visible, que es exactamente donde `null` es lo correcto. |
+| La captura es rápida | **No en el Fold de Norma.** Con su tipografía, el teclado numérico ocupa media hoja y la fila de categorías recientes, que es el camino corto, queda debajo del pliegue. |
+
+La fricción de fondo no es de accesibilidad sino de **densidad a tipografía grande**: la app se diseñó y se probó con una escala normal, y a font 1.3 + negrita los caminos cortos dejan de estar a la vista.
+
+---
+
+## 2. Objetivos táctiles menores a 48 dp
+
+Medido sobre los volcados con el script de la sesión. Regla de Material: 48 × 48 dp de área táctil.
+
+| Pantalla | Elemento | Medido | Estado |
+|---|---|---|---|
+| Analíticas | Los cuatro pills de periodo (`Histórico`, `Anual`, `Mensual`, `Quincenal`) | 34 dp de alto | abierto |
+| Cuentas | Filas de cuenta de la lista de saldos (`Mercado Pago`, `Coppel`) | 41 dp de alto | abierto |
+| Inicio | Un contenedor clicable del encabezado | 40 dp de ancho | abierto |
+
+Todo lo demás llega a 48 dp o más, incluidos los botones "atrás" de 40 dp que el análisis estático señalaba: Compose expande su área táctil aunque el círculo pintado sea menor.
+
+**Origen:** `ui/common/PeriodSelector.kt` (los pills usan `FilterChip` con altura propia) y la fila de saldo de `ui/wallets/BalanceSections.kt`.
+
+## 3. Etiquetas para lectores de pantalla
+
+Cero clicables sin etiqueta en Inicio, Calendario, Cuentas, Analíticas y Perfil. Los iconos con `contentDescription = null` (30 en el código) están todos junto a texto visible dentro del mismo elemento clicable, que es el caso en el que la descripción nula es correcta: repetirla haría que TalkBack leyera dos veces lo mismo.
+
+Lo que sí falta, y no se detecta con un volcado:
+
+- **`Role.Button` en los clicables hechos a mano.** `SettingRow` y los círculos de "atrás" usan `Modifier.clickable` sin rol semántico, así que TalkBack los anuncia como texto y no dice que se pueden activar. Estado: abierto.
+- **Encabezados sin `heading()`.** Las cabeceras de sección (`AJUSTES`, `EXPORTAR Y RESPALDAR`, `RECORDATORIOS`) no están marcadas, así que la navegación por encabezados de TalkBack no salta entre ellas. Estado: abierto.
+- **Sin región viva en el guardado.** Al guardar un gasto, el estado cambia sin anunciarse. Estado: abierto.
+
+Pendiente de hardware: la pasada con TalkBack y Accessibility Scanner en el Pixel 7, que es lo único que mide contraste real y orden de foco.
+
+## 4. Recorrido: capturar un gasto
+
+Camino mínimo real en el Fold, con la hoja recién abierta:
+
+1. Tocar el "+" del rail.
+2. Teclear el monto (una pulsación por dígito).
+3. **Desplazar** para llegar a las categorías recientes.
+4. Elegir categoría.
+5. Elegir cuenta.
+6. Elegir beneficiario.
+7. Guardar.
+
+Evidencia (`capturas/captura-monto.png`): con el monto ya escrito, la hoja muestra el importe, el campo de concepto y el teclado numérico completo; la etiqueta `RECIENTES` asoma en el borde inferior y sus chips quedan tapados por la barra de resumen. El teclado numérico ocupa 530 de los 2000 px visibles.
+
+**Hallazgo 4.1 (abierto, severidad alta).** El camino corto no está a la vista. A tipografía normal los chips de categorías recientes caben; a font 1.3 + negrita no, y la persona para la que se hizo la app usa font 1.3 + negrita.
+
+**Hallazgo 4.2 (abierto, severidad media).** El teclado numérico se lleva media hoja aunque el importe típico del hogar tenga tres o cuatro dígitos. Es el elemento que empuja todo lo demás hacia abajo.
+
+**Hallazgo 4.3 (aceptado).** Elegir una fecha distinta de hoy exige abrir "Más" y el selector de fecha: cinco interacciones extra. Es correcto que el caso raro cueste más que el común.
+
+## 5. Recorrido: entender "cuánto me queda"
+
+El encabezado del panel muestra la etiqueta de la quincena y su rango, y el KPI `Disponible` con el anillo de progreso. En el Fold las dos cosas caben sin cortes a font 1.3 + negrita.
+
+**Hallazgo 5.1 (abierto, severidad baja).** El anillo dice "0 % gastado" y el KPI dice `$54,206` sin explicar que el disponible ya descuenta lo reservado. La tarjeta "Reservado" está más abajo, fuera de la primera pantalla.
+
+## 6. Recorrido: cerrar la quincena (nuevo en la Fase 5)
+
+Verificado de punta a punta. El aviso del panel cabe sin cortes, la pantalla de cierre lista lo planeado con tres opciones por fila y "Mover todos" resuelve 48 filas de una vez.
+
+**Hallazgo 6.1 (abierto, severidad media).** Con 48 pagos planeados, el botón de cerrar queda a 25 gestos de desplazamiento del inicio de la pantalla. La decisión masiva existe, pero confirmar exige llegar hasta abajo.
+
+## 7. Recorrido: exportar y respaldar (nuevo en la Fase 5)
+
+**Hallazgo 7.1 (abierto, severidad media).** La sección vive al final de Perfil: hay que pasar por siete tarjetas para llegar. Perfil se ha convertido en una lista larga de doce secciones sin jerarquía entre ellas.
+
+## 8. Recorridos pendientes de auditar
+
+Estos tres necesitan datos o dispositivos que esta sesión no tiene:
+
+- **Confirmar un pago planeado desde la notificación.** Exige que el trabajo periódico dispare, o forzarlo con WorkManager.
+- **Importar el estado del mes.** Necesita la clave de NVIDIA y un PDF real de estado de cuenta.
+- **Proponer desde la web.** Necesita una sesión de colaborador con rol en la nube; el emulador está en sesión anónima sin rol y todo su push falla con permiso denegado.
+
+## 9. Lo que se lleva la sub-fase 6b
+
+Por orden de impacto sobre el uso diario:
+
+1. Hoja de captura: que el camino corto quepa a font 1.3 + negrita (hallazgos 4.1 y 4.2).
+2. Objetivos táctiles de Analíticas y Cuentas (sección 2).
+3. Semántica: `Role.Button`, encabezados y región viva (sección 3).
+4. Perfil: jerarquía entre doce secciones (hallazgo 7.1).
+5. Cierre de quincena: confirmar sin recorrer toda la lista (hallazgo 6.1).

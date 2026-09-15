@@ -1,0 +1,78 @@
+<!-- @dsCard group="Captura" -->
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<title>Hoja de captura</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .hoja {
+    width: 640px; background: var(--surface-container-low);
+    border-radius: var(--r-xl) var(--r-xl) 0 0; padding: 24px; display: flex;
+    flex-direction: column; gap: 18px;
+  }
+  .encabezado { display: flex; align-items: center; gap: 16px; }
+  .cerrar { width: 48px; height: 48px; border-radius: var(--r-pill);
+    background: var(--surface-container-high); display: grid; place-items: center; }
+  .segmento { margin-left: auto; display: flex; background: var(--surface-container-high);
+    border-radius: var(--r-pill); padding: 4px; }
+  .segmento span { padding: 10px 20px; border-radius: var(--r-pill); font-weight: 600; }
+  .segmento .on { background: var(--expense-container); color: var(--on-expense-container); }
+  .tarjeta { background: var(--surface-container); border-radius: var(--r-l); padding: 20px; }
+  .monto { font-family: var(--font-display); font-weight: 300; font-size: 56px; line-height: 1; }
+  .teclas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+  .tecla { height: 62px; border-radius: 18px; background: var(--surface-container-high);
+    display: grid; place-items: center; font-size: 24px; font-weight: 600; }
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip { min-height: 48px; display: inline-flex; align-items: center; padding: 0 18px;
+    border-radius: var(--r-pill); background: var(--surface-container-high); font-weight: 600; }
+  .resumen { display: flex; align-items: center; gap: 16px; background: var(--surface-container-high);
+    border-radius: var(--r-l); padding: 16px 20px; }
+  .guardar { margin-left: auto; background: var(--primary); color: var(--on-primary);
+    border-radius: var(--r-pill); padding: 14px 28px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="lienzo">
+  <div class="titulo-caso">Hoja de captura (estado actual)</div>
+  <p class="nota">
+    Así se ve hoy a escala de fuente 1.3 con negrita, que es como la usa Norma. El
+    teclado numérico ocupa más de la mitad de la hoja y empuja las categorías
+    recientes fuera de la vista: ese es el hallazgo 4.1 de la auditoría y lo que
+    el brief 1 pide resolver.
+  </p>
+  <div class="hoja">
+    <div class="encabezado">
+      <div class="cerrar">✕</div>
+      <div>
+        <div class="etiqueta">Nuevo movimiento</div>
+        <div style="font-family:var(--font-display);font-weight:300;font-size:30px">Capturar gasto</div>
+      </div>
+      <div class="segmento"><span class="on">Gasto</span><span>Ingreso</span></div>
+    </div>
+    <div class="tarjeta">
+      <div class="etiqueta">Monto</div>
+      <div class="monto">$147</div>
+      <div class="teclas">
+        <div class="tecla">1</div><div class="tecla">2</div><div class="tecla">3</div><div class="tecla">⌫</div>
+        <div class="tecla">4</div><div class="tecla">5</div><div class="tecla">6</div><div class="tecla">.</div>
+        <div class="tecla">7</div><div class="tecla">8</div><div class="tecla">9</div><div class="tecla">000</div>
+      </div>
+    </div>
+    <div class="tarjeta">
+      <div class="etiqueta">Categoría · recientes</div>
+      <div class="chips" style="margin-top:12px">
+        <span class="chip">Despensa</span><span class="chip">Gasolina</span><span class="chip">Restaurante</span>
+      </div>
+    </div>
+    <div class="resumen">
+      <div>
+        <div class="etiqueta">Resumen</div>
+        <div style="font-weight:600">Elige categoría · $147</div>
+      </div>
+      <div class="guardar">Guardar</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

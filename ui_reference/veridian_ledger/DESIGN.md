@@ -1,89 +1,127 @@
-> **Documento histórico (marcado el 2026-09-05).** Esta es la especificación original del concepto
-> "The Architectural Ledger" tal como salió de la herramienta de diseño. La implementación real
-> en `app/src/main/java/mx/budget/ui/theme/` difiere en dos puntos que conviene conocer antes de
-> citarla: (1) la tipografía embarcada es **Google Sans Flex** (instancias estáticas en
-> `res/font/`, ver `Type.kt`), no Roboto Flex; (2) los tokens de color viven en `Color.kt`
-> (`Primary = #006C44` como esquema estático derivado de la semilla `#016E3E`) y el tema aplica
-> **color dinámico (Material You)** por default, con los semánticos financieros fuera del
-> `ColorScheme` (`FinanceColors.kt`). Las reglas de superficie sin líneas, radios y jerarquía
-> tonal sí se aplicaron. La guía vigente es `CLAUDE.md` §Capa de UI.
+# Sistema de diseño: The Architectural Ledger
 
-```markdown
-# Design System Specification: The Architectural Ledger
+Reescrito el 2026-09-15 (Fase 6a) con los tokens **reales** del código. La versión anterior era la especificación original del concepto tal como salió de la herramienta de diseño y llevaba dos años divergiendo de la implementación: hablaba de Roboto Flex cuando la app embarca Google Sans Flex, y de un verde fijo cuando el tema aplica color dinámico.
 
-## 1. Overview & Creative North Star
-**Creative North Star: The Architectural Ledger**
-This design system moves away from the "app-grid" aesthetic and toward a high-end editorial experience. It treats the Pixel 9 Pro Fold’s expansive inner display as a canvas for data storytelling. By combining the precision of a professional financial ledger with the breathing room of an architectural magazine, we create a "High-End Editorial" experience. 
+Este archivo es la referencia que alimenta a las herramientas de diseño. La guía de mantenimiento del código sigue siendo `CLAUDE.md`, sección "Capa de UI".
 
-The system leverages the near-square aspect ratio of the Fold to implement asymmetrical "Bento" layouts. We prioritize **Tonal Layering** over structural lines, ensuring that data density does not lead to cognitive overload. Every element feels like a physical object (a slab of fine paper or a pane of frosted glass) resting within a meticulously organized space.
+Fuentes en el código, por si algo aquí vuelve a quedar viejo: `ui/theme/Color.kt`, `FinanceColors.kt`, `Type.kt`, `Shape.kt`, `Motion.kt`, `AmountSemantics.kt`.
 
-## 2. Colors & Surface Philosophy
-The palette is rooted in `primary: #016e3e` (Accounting Green), signaling stability and growth. 
+---
 
-### The "No-Line" Rule
-To achieve a premium feel, **1px solid borders are strictly prohibited** for sectioning or containment. Boundaries must be defined solely through:
-- **Background Color Shifts:** Placing a `surface_container_lowest` card on a `surface_container_low` background.
-- **Tonal Transitions:** Using depth and color blocks to imply separation.
+## 1. Idea rectora
 
-### Surface Hierarchy & Nesting
-Treat the UI as a series of nested physical layers. On the Pixel 9 Pro Fold, the "base" is the `surface`. Information is organized in containers that "lift" or "recede" based on their token:
-1.  **Base Layer:** `surface` (#f9f9f9).
-2.  **Structural Zones:** `surface_container_low` (#f3f4f4) for sidebars or secondary navigation.
-3.  **Content Cards:** `surface_container_lowest` (#ffffff) for high-priority data modules.
-4.  **Interactive Overlays:** `surface_container_highest` (#e0e3e4) for transient elements like menus.
+Tratar la pantalla interna del Fold como una hoja de un libro contable de buena factura: densidad alta de información, jerarquía por capas tonales en vez de líneas, y aire suficiente para que las cifras respiren. Cada elemento se siente un objeto físico apoyado sobre otro, no una caja dibujada.
 
-### The "Glass & Gradient" Rule
-To move beyond a flat, "out-of-the-box" Material feel:
-- **CTAs:** Use a subtle linear gradient from `primary` (#016e3e) to `primary_dim` (#006035) at a 135° angle to provide visual "soul."
-- **Floating Elements:** Use Glassmorphism for floating action buttons or temporary overlays. Apply a 70% opacity to the surface color with a `24px` backdrop blur to allow the dashboard colors to bleed through softly.
+**Restricción que manda sobre todo lo demás:** el aparato real es un Pixel 9 Pro Fold con pantalla interna de 2076 × 2152 px (casi cuadrada) y su dueña usa **escala de fuente 1.3 con negrita**. Un diseño que solo funcione a escala normal no sirve. Nada de anchos o altos fijos que recorten, `maxLines` generosos y filas que se reacomoden.
 
-## 3. Typography: Google Sans Flex (originally specified as Roboto Flex)
-The app ships **Google Sans Flex** as static weight cuts (the original concept named Roboto Flex); the intent is the same: exploit the weight axis, creating a high-contrast hierarchy that feels custom-tuned for financial clarity.
+## 2. Color
 
-*   **Display (Editorial Impact):** `display-lg` (3.5rem) should use a `wght: 300` (Light) for large balance totals, providing an air of sophisticated wealth management.
-*   **Headlines (Navigation):** `headline-sm` (1.5rem) at `wght: 600` (Semi-Bold) for section titles to ground the user.
-*   **Body (Data):** `body-lg` (1rem) at `wght: 400` (Regular) for standard descriptions.
-*   **Labels (The Ledger Look):** `label-md` (0.75rem) at `wght: 700` (Bold) and `ALL CAPS` with `0.05rem` letter spacing for data labels (e.g., "GROSS MARGIN," "EXPENSE TYPE"). This creates an authoritative, professional tone.
+El tema aplica **color dinámico de Material You** por defecto: los roles cromáticos salen del fondo de pantalla. El verde sembrado es la semilla de respaldo, no la verdad única. Para un mockup conviene pintar con el respaldo y anotar qué roles cambiarían.
 
-## 4. Elevation & Depth
-Depth is achieved through **Tonal Layering** rather than traditional drop shadows.
+### Roles, valor de respaldo (claro)
 
-*   **The Layering Principle:** Place `surface_container_lowest` components (Cards) on a `surface_container` background. The contrast between #ffffff and #edeeee provides a soft, natural lift.
-*   **Ambient Shadows:** If a "floating" effect is required (e.g., a modal), use an ultra-diffused shadow: `box-shadow: 0 12px 40px rgba(0, 0, 0, 0.04)`. The shadow color must never be pure black; it should be a tinted version of `on_surface`.
-*   **The "Ghost Border":** If accessibility requires a border, use the `outline_variant` token at **15% opacity**. Never use 100% opaque lines.
+| Rol | Valor |
+|---|---|
+| `primary` | `#006C44` |
+| `onPrimary` | `#FFFFFF` |
+| `primaryContainer` | `#92F7B4` |
+| `onPrimaryContainer` | `#002111` |
+| `primaryDim` | `#005233` |
+| `inversePrimary` | `#77DA9A` |
 
-## 5. Components & Shape Logic
-All major containers (Cards, Main Panels, Bottom Sheets) must use the **Extra-Large (28dp/1.75rem)** corner radius. Smaller elements (Buttons, Chips) use a **Full (9999px)** radius to create a "pill" contrast.
+### Semánticos financieros (fuera del `ColorScheme`)
 
-### Cards & Data Modules
-- **Rule:** Forbid divider lines within cards.
-- **Implementation:** Separate line items within a financial list using `8dp` or `16dp` of vertical whitespace or subtle alternating backgrounds (`surface_container_low` vs `surface_container_lowest`).
-- **Interaction:** Cards should have a subtle scale-down effect (0.98x) on press to mimic physical compression.
+Viven en `MaterialTheme.financeColors` y se armonizan al primary con tope bajo solo en modo dinámico, para que un fondo de pantalla naranja no convierta un ingreso en algo que parezca una alerta.
 
-### Buttons (The Statement Piece)
-- **Primary:** Gradient fill (`primary` to `primary_dim`), `on_primary` text, 28dp radius, no shadow.
-- **Secondary:** `surface_container_high` fill, `on_surface` text.
-- **Tertiary/Ghost:** No fill, `primary` text weight 600.
+| Tono | Color | Contenedor |
+|---|---|---|
+| Ingreso | `#0F5A2E` | `#B7F4C5` |
+| Gasto | `#BA1A1A` | `#FFDAD6` |
+| Aviso | `#8B5A00` | `#FFDDB3` |
 
-### Input Fields
-- **Style:** Use "Unfilled" style with a heavy bottom-weighted emphasis.
-- **Visual:** A `surface_container_highest` background with a `2dp` bottom-only stroke using `primary` when focused. The 28dp radius applies to the top corners only for a unique "tabbed" input look.
+### Regla no cromática (obligatoria)
 
-### Financial Indicators
-- **Success (Income):** `income` (#0F5A2E).
-- **Error (Expense):** `expense/error` (#BA1A1A).
-- **Warning:** `warning` (#8B5A00).
-- These should always be accompanied by high-contrast `on_` text tokens to ensure readability against the accounting green theme.
+El significado financiero **nunca** depende solo del color. Cada tono lleva signo, icono y etiqueta (`ui/theme/AmountSemantics.kt`):
 
-## 6. Do's and Don'ts
+| Tono | Signo | Icono | Etiqueta |
+|---|---|---|---|
+| INCOME | `+` | flecha arriba | Ingreso |
+| EXPENSE | `−` | flecha abajo | Gasto |
+| WARNING | ninguno | triángulo | Aviso |
+| SCHEDULED | `−` | reloj | Programado |
+| TRANSFER | ninguno | flecha doble | Transferencia |
+| NEUTRAL | ninguno | ninguno | ninguna |
 
-### Do
-- **DO** use the Fold's horizontal real estate to display a "Side-Car" navigation on the left and a "Bento-Box" dashboard on the right.
-- **DO** use variable font weights to create hierarchy (e.g., a very thin balance amount next to a very bold "USD" label).
-- **DO** use large amounts of "Negative Space" (minimum 24dp gutters) to allow complex financial data to breathe.
+### Superficies
 
-### Don't
-- **DON'T** use 1px dividers to separate list items; use white space or tonal shifts.
-- **DON'T** use standard Material 2 shadows. The aesthetic must feel like "Tonal Depth," not "Drop Shadows."
-- **DON'T** use hard-edged corners. Every major structural element must honor the 28dp "Extra-Large" radius to maintain the fluid, modern aesthetic.
-- **DON'T** clutter the inner display. Use the space for high-information density, but ensure the "Creative North Star" of editorial clarity is maintained through strict typographic alignment.
+Jerarquía por capas tonales, nunca por líneas de un píxel. Una tarjeta de datos se apoya sobre un contenedor más oscuro (o más claro en modo claro) y esa diferencia es toda la separación que necesita.
+
+`surface` → `surfaceContainerLow` (zonas estructurales) → `surfaceContainer` (tarjetas de ajustes) → `surfaceContainerLowest` (tarjetas de datos) → `surfaceContainerHighest` (elementos flotantes).
+
+## 3. Tipografía
+
+**Google Sans Flex** (licencia SIL OFL), embarcada como cortes estáticos en `res/font/`, en dos tamaños ópticos:
+
+- `GoogleSansFlexText` para títulos, cuerpo y etiquetas.
+- `GoogleSansFlexDisplay` para display y headline, es decir los montos héroe.
+
+Cortes disponibles: Light, Regular, Medium, SemiBold, Bold. No se usa la tipografía del sistema en ningún punto.
+
+Escala real (`Type.kt`), con lo que importa de cada estilo:
+
+| Estilo | Familia | Tamaño | Peso | Uso |
+|---|---|---|---|---|
+| `displayLarge` | Display | 57 sp | Light | Cifra héroe |
+| `headlineMedium` | Display | 28 sp | Light | Título de pantalla |
+| `titleMedium` | Text | 16 sp | Medium | Título de tarjeta |
+| `bodyLarge` | Text | 16 sp | Regular | Cuerpo |
+| `labelSmall` | Text | 10 sp | Bold, `letterSpacing` 0.8 | Cabecera de sección en mayúsculas |
+
+El contraste entre un monto muy ligero y una etiqueta muy pesada es deliberado: es lo que da el aire de publicación editorial.
+
+**Resiliencia:** los importes usan `AutoSizeAmountText`, que encoge la cifra hasta que quepa en una línea en vez de recortarla. Un monto cortado es un dato falso.
+
+## 4. Forma
+
+Escala centralizada en `BudgetShapes` y `AppShapes`. Nada de radios sueltos en el código.
+
+| Rol | Radio |
+|---|---|
+| `extraSmall` | 6 dp |
+| `small` | 10 dp |
+| `medium` | 14 dp |
+| `large` | 20 dp |
+| `extraLarge` | 28 dp |
+
+Formas por intención: tarjeta 20 dp, tecla del teclado numérico 18 dp, campo de entrada 22 dp, contenedor héroe y diálogos 28 dp, píldora al 50 %.
+
+## 5. Movimiento
+
+Todo cambio de estado se anima con resortes, nunca con saltos ni interpolaciones lineales. Los tokens viven en `ui/theme/Motion.kt`:
+
+| Token | Especificación | Uso |
+|---|---|---|
+| `BudgetMotion.standard()` | resorte, amortiguación 0.8, rigidez 380 | Todo, salvo razón concreta |
+| `BudgetMotion.canvas()` | resorte, amortiguación 0.85, rigidez 120 | Barridos de anillo y gráficas |
+| `BudgetMotion.press()` | resorte crítico, rigidez alta | Respuesta al toque |
+
+Complementos: `Modifier.pressScale` (0.97 al presionar), `Modifier.staggeredEntrance` (40 ms por elemento, tope de 8) y `LocalReducedMotion`, que lee la escala de animación del sistema y degrada a fundidos cortos.
+
+**Nota de implementación:** aunque Material 3 1.4.0 está en el classpath, `MaterialExpressiveTheme` y `MotionScheme.expressive()` son internos en esa versión. El tema usa `MaterialTheme` estable y el sello expresivo se consigue con estos primitivos.
+
+## 6. Qué hacer y qué no
+
+**Hacer**
+
+- Usar el espacio horizontal del Fold para una disposición de dos paneles con divisor arrastrable.
+- Apoyarse en el peso variable de la tipografía para la jerarquía: una cifra muy fina junto a una etiqueta muy densa.
+- Dejar aire: canales de 24 dp como mínimo entre bloques.
+- Diseñar el estado a font 1.3 con negrita antes que el estado a escala normal.
+
+**No hacer**
+
+- Divisores de un píxel para separar elementos de una lista.
+- Sombras al estilo Material 2: la profundidad es tonal.
+- Esquinas duras en elementos estructurales.
+- Confiar el significado financiero solo al color.
+- Emojis dentro de un PDF exportado: la fuente de emoji de Android es de mapa de bits y no se embebe.

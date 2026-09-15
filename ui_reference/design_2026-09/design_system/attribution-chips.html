@@ -1,0 +1,54 @@
+<!-- @dsCard group="Captura" -->
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<title>Chips de atribución</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .bloque {
+    background: var(--surface-container); border-radius: var(--r-l);
+    padding: 20px; max-width: 700px;
+  }
+  .cabecera { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+  .cabecera .pct { margin-left: auto; color: var(--income); font-weight: 700; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 10px;
+    border-radius: var(--r-pill); padding: 12px 18px;
+    background: var(--surface-container-high); color: var(--on-surface);
+    font-weight: 600; min-height: 48px;
+  }
+  .chip.on { background: var(--primary-container); color: var(--on-primary-container); }
+  .chip .paso {
+    width: 30px; height: 30px; border-radius: var(--r-pill);
+    background: rgba(255,255,255,.14); display: grid; place-items: center; font-weight: 700;
+  }
+</style>
+</head>
+<body>
+<div class="lienzo">
+  <div class="titulo-caso">Chips de atribución</div>
+  <p class="nota">
+    Cada gasto se reparte en dos dimensiones independientes: quién lo consume y
+    quién lo paga. Cada una suma 100 %. El chip crece al seleccionarse para
+    mostrar su porcentaje y los dos botones que lo ajustan, y mantiene 48 dp de
+    alto en los dos estados.
+  </p>
+  <div class="bloque">
+    <div class="cabecera">
+      <span class="etiqueta">Beneficia a · consume</span>
+      <span class="pct">100 %</span>
+    </div>
+    <div class="chips">
+      <span class="chip">Todos</span>
+      <span class="chip on"><span class="paso">−</span> Norma 40 % <span class="paso">+</span></span>
+      <span class="chip on"><span class="paso">−</span> Santiago 30 % <span class="paso">+</span></span>
+      <span class="chip on"><span class="paso">−</span> David 30 % <span class="paso">+</span></span>
+      <span class="chip">Agustín</span>
+      <span class="chip">Normita</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

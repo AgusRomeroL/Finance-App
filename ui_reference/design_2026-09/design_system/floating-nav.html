@@ -1,0 +1,63 @@
+<!-- @dsCard group="Navegación" -->
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<title>FloatingNavBar</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .pill {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--surface-container-highest);
+    border-radius: var(--r-pill); padding: 10px;
+  }
+  .accion {
+    width: 56px; height: 56px; border-radius: var(--r-pill);
+    display: grid; place-items: center; font-size: 22px;
+    background: var(--surface-container-high);
+  }
+  .accion.principal { background: var(--primary); color: var(--on-primary); font-size: 28px; }
+  .buscar {
+    flex: 1; min-width: 220px; height: 56px; border-radius: var(--r-pill);
+    background: var(--surface-container-high); display: flex; align-items: center;
+    padding: 0 20px; color: var(--on-surface-variant); font-weight: 500;
+  }
+  .rail {
+    width: 96px; background: var(--surface-container-low); border-radius: var(--r-l);
+    padding: 20px 0; display: flex; flex-direction: column; align-items: center; gap: 18px;
+  }
+  .rail .item { width: 56px; height: 56px; border-radius: var(--r-pill);
+    display: grid; place-items: center; font-size: 22px; }
+  .rail .item.activo { background: var(--primary); color: var(--on-primary); }
+  .rail .nombre { font-size: 13px; font-weight: 600; }
+  .par { display: flex; gap: 28px; align-items: flex-start; }
+</style>
+</head>
+<body>
+<div class="lienzo">
+  <div class="titulo-caso">FloatingNavBar y rail</div>
+  <p class="nota">
+    La misma navegación en sus dos formas: píldora flotante cuando la ventana es
+    compacta (teléfono plegado) y rail vertical cuando es expandida (pantalla
+    interna). El botón de capturar es el único con relleno sólido: es la acción que
+    la app existe para hacer.
+  </p>
+  <div class="par">
+    <div class="rail">
+      <div class="item">🏦</div>
+      <div class="item principal accion principal">+</div>
+      <div class="item activo">▦</div>
+      <div class="nombre">Inicio</div>
+      <div class="item">🗓</div>
+      <div class="item">👛</div>
+      <div class="item">📈</div>
+    </div>
+    <div class="pill">
+      <div class="buscar">Buscar movimientos</div>
+      <div class="accion">🎙</div>
+      <div class="accion principal">+</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

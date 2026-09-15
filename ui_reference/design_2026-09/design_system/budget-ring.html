@@ -1,0 +1,66 @@
+<!-- @dsCard group="Datos" -->
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<title>BudgetRing</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .heroe {
+    background: var(--surface-container-lowest);
+    border-radius: var(--r-xl);
+    padding: 30px;
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    max-width: 620px;
+  }
+  .anillo { position: relative; width: 190px; height: 190px; flex: none; }
+  .anillo svg { transform: rotate(-90deg); }
+  .anillo .centro {
+    position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
+  }
+  .anillo .pct { font-family: var(--font-display); font-weight: 300; font-size: 40px; }
+  .anillo .sub { font-size: 14px; font-weight: 400; color: var(--on-surface-variant); }
+  .cifras { display: flex; flex-direction: column; gap: 12px; }
+  .cifra-grande { font-family: var(--font-display); font-weight: 300; font-size: 44px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    border-radius: var(--r-m); padding: 8px 14px; font-size: 16px; font-weight: 600;
+  }
+  .chip.ingreso { background: var(--income-container); color: var(--on-income-container); }
+  .chip.gasto { background: var(--expense-container); color: var(--on-expense-container); }
+</style>
+</head>
+<body>
+<div class="lienzo">
+  <div class="titulo-caso">BudgetRing</div>
+  <p class="nota">
+    Anillo de progreso del presupuesto, dibujado en Canvas y animado con el resorte
+    lento (amortiguación 0.85, rigidez 120). La cifra héroe es lo que queda, no lo
+    que se gastó: es la pregunta que la persona se hace al abrir la app.
+  </p>
+  <div class="heroe">
+    <div class="anillo">
+      <svg width="190" height="190" viewBox="0 0 190 190" aria-hidden="true">
+        <circle cx="95" cy="95" r="80" fill="none" stroke="var(--surface-container-high)" stroke-width="18"/>
+        <circle cx="95" cy="95" r="80" fill="none" stroke="var(--primary)" stroke-width="18"
+                stroke-linecap="round" stroke-dasharray="502" stroke-dashoffset="341"/>
+      </svg>
+      <div class="centro">
+        <div class="pct">32%</div>
+        <div class="sub">gastado</div>
+      </div>
+    </div>
+    <div class="cifras">
+      <div>
+        <div class="etiqueta">Disponible</div>
+        <div class="cifra-grande">$54,206</div>
+      </div>
+      <div class="chip ingreso">↑ Ingreso +$75,000</div>
+      <div class="chip gasto">↓ Gasto −$20,794</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
