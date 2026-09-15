@@ -25,7 +25,7 @@ data class SuggestedQuestion(
 
 /**
  * Genera los pills de pregunta del chat de Analíticas a partir del ESTADO REAL
- * del presupuesto — espejo estructural de `ProactiveReasoner`: candidatos
+ * del presupuesto, espejo estructural de `ProactiveReasoner`: candidatos
  * deterministas (SQL/Kotlin) primero, re-ranking LLM opcional después, y el
  * fallback determinista siempre intacto.
  *
@@ -43,7 +43,7 @@ data class SuggestedQuestion(
  *
  * Re-ranking LLM (opcional, "sugeridos por IA"): si el LLM on-device ya está
  * `Available` (no se espera su carga), se le pide elegir el orden de los ids;
- * la respuesta se valida contra el conjunto de candidatos — ids inventados se
+ * la respuesta se valida contra el conjunto de candidatos: ids inventados se
  * descartan y ante cualquier fallo queda el orden determinista.
  */
 class SuggestedQuestionEngine(
@@ -182,7 +182,7 @@ class SuggestedQuestionEngine(
     private companion object {
         const val FRESHNESS_WINDOW_MS = 24L * 60 * 60 * 1000
 
-        /** Pool estable — los 5 chips históricos + el patrón inusual (OPEN_ANALYSIS). */
+        /** Pool estable: los 5 chips históricos + el patrón inusual (OPEN_ANALYSIS). */
         val STABLE_POOL = listOf(
             SuggestedQuestion(
                 id = "pool:unusual",

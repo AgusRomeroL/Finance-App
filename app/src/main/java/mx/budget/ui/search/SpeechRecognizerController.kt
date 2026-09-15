@@ -40,7 +40,7 @@ sealed interface SpeechState {
  *
  * Decisiones anti-bug:
  *  - **`ERROR_RECOGNIZER_BUSY`**: causa típica del síntoma "parece escuchar pero
- *    no" (un recognizer previo quedó vivo — p. ej. una fuga en otra pantalla).
+ *    no" (un recognizer previo quedó vivo, p. ej. una fuga en otra pantalla).
  *    Se destruye la instancia, se recrea y se reintenta UNA vez.
  *  - **`NO_MATCH`/`SPEECH_TIMEOUT`**: mensaje amable y regreso a reposo.
  *  - **On-device primero** ([SpeechRecognizer.createOnDeviceSpeechRecognizer],

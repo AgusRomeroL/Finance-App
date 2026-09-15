@@ -11,7 +11,7 @@ import mx.budget.data.local.result.InstallmentSummary
 import mx.budget.data.repository.InstallmentRepository
 
 /**
- * Implementación Room del [InstallmentRepository] — MVP Fase 3.5: cada
+ * Implementación Room del [InstallmentRepository], MVP Fase 3.5: cada
  * escritura estampa `updated_at` y encola `INSTALLMENT` en `sync_queue` dentro
  * de la MISMA transacción (patrón TRANSFER). El pull escribe vía DAO directo.
  */

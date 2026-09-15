@@ -1,7 +1,7 @@
 package mx.budget.ui.capture
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CaptureSheetMode — contrato público del modo de apertura del CaptureBottomSheet
+// CaptureSheetMode: contrato público del modo de apertura del CaptureBottomSheet
 // (SP-A1, paquete A3). Otros paquetes (voz, banco, reloj, bandeja) abren la hoja
 // con un modo Review pre-llenado y campos faltantes marcados "Por decidir".
 // ─────────────────────────────────────────────────────────────────────────────
@@ -9,7 +9,7 @@ package mx.budget.ui.capture
 /**
  * Modo con el que se abre el [CaptureBottomSheet].
  *
- * - [New]: captura manual de gasto desde cero (default — todos los call sites
+ * - [New]: captura manual de gasto desde cero (default, todos los call sites
  *   existentes siguen compilando sin cambios).
  * - [Income]: la hoja abre directamente en modo ingreso (toggle en "Ingreso").
  * - [Review]: la hoja abre pre-llenada desde una captura externa (NL/voz/banco);

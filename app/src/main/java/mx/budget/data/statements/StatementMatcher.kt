@@ -12,7 +12,7 @@ import kotlin.math.abs
 /**
  * Matching determinista de movimientos del estado de cuenta contra gastos
  * existentes (Fase 5). **El LLM propone, esta clase dispone**: cualquier vínculo
- * — local o sugerido por NIM — pasa por [validate] antes de aceptarse.
+ * local o sugerido por NIM: pasa por [validate] antes de aceptarse.
  *
  * Score por par (movimiento, gasto), máximo 1.0:
  * - **Monto** (criterio bloqueante): exacto ±$0.005 → 0.55; ±1 % → 0.45;
@@ -57,7 +57,7 @@ class StatementMatcher(
     }
 
     /** Canonicalización ligera (lower + unaccent + tokens ordenados), suficiente
-     *  para descripciones bancarias — sin expansión de miembros (no aparecen). */
+     *  para descripciones bancarias: sin expansión de miembros (no aparecen). */
     fun canonicalize(text: String): String =
         text.lowercase()
             .unaccent()

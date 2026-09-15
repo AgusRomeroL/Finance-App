@@ -63,7 +63,7 @@ fun MainShell(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface)
         ) {
-            // TUTORIAL: DASH_NAV — ver TUTORIAL.md
+            // TUTORIAL: DASH_NAV, ver TUTORIAL.md
             Box(modifier = Modifier.statusBarsPadding().tutorialTarget(TutorialKey.DASH_NAV, tutorialController)) {
                 NavigationRailCustom(
                     currentRoute = currentRoute,
@@ -87,7 +87,7 @@ fun MainShell(
                 .background(MaterialTheme.colorScheme.surface)
         ) {
             content()
-            // TUTORIAL: DASH_NAV — ver TUTORIAL.md
+            // TUTORIAL: DASH_NAV, ver TUTORIAL.md
             FloatingNavBar(
                 currentRoute = currentRoute,
                 onNavigate = onNavigate,

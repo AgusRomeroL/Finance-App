@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 
 
 /**
- * Registro atómico de gasto — evento inmutable del ledger.
+ * Registro atómico de gasto: evento inmutable del ledger.
  *
  * Cada fila del sistema Excel colapsa en un Expense con relaciones
  * normalizadas a categoría, método de pago, quincena y opcionalmente

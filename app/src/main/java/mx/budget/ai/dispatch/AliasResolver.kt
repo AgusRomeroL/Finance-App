@@ -16,9 +16,9 @@ import mx.budget.data.local.entity.PaymentMethodEntity
  * 2. **Contención** en cualquier dirección ("bancomer" ⊂ "BBVA Bancomer").
  * 3. **Jaro-Winkler ≥ [FUZZY_THRESHOLD]** (typos: "bancomner" → "Bancomer"),
  *    reutilizando el mismo `jaroWinkler` de `mx.budget.core` que ya usa el
- *    ConceptCanonicalizer — se elige el mejor score, no el primero que pase.
+ *    ConceptCanonicalizer: se elige el mejor score, no el primero que pase.
  *
- * Para miembros, los `shortAliases` (JSON) cuentan en los tres niveles — antes
+ * Para miembros, los `shortAliases` (JSON) cuentan en los tres niveles: antes
  * solo se miraba `displayName` y "Pau" no resolvía a "Paulina".
  */
 class AliasResolver(

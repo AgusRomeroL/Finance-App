@@ -52,7 +52,7 @@ class NewPlannedViewModel(
     /**
      * Member vinculado a la sesión (roles v2, `BudgetApplication.linkedMemberId`):
      * si existe entre los members activos, es el pagador default de la siembra
-     * inicial — mismo criterio que la captura. null = cadena histórica.
+     * inicial: mismo criterio que la captura. null = cadena histórica.
      */
     private val sessionMemberId: String? = null,
 ) : ViewModel() {

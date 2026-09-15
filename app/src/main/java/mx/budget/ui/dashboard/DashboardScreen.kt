@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -110,6 +111,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.sp
 import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.data.local.entity.PendingCaptureEntity
@@ -1290,10 +1292,13 @@ private fun QuincenaNavChip(
 @Composable
 private fun ChevronButton(icon: ImageVector, description: String, enabled: Boolean, tint: Color, onClick: () -> Unit) {
     Box(
+        // El circulo pintado mide 32 dp, pero el area que responde al dedo tiene
+        // que llegar a 48 (auditoria de la Fase 6a: era el unico objeto del panel
+        // por debajo del minimo). El aspecto no cambia.
         modifier = Modifier
-            .size(32.dp)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .clip(CircleShape)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(

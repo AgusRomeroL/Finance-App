@@ -7,7 +7,7 @@ import mx.budget.ui.capture.CaptureSheetMode
 import org.json.JSONObject
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PendingCaptureReview — puente bandeja unificada → CaptureBottomSheet (SP-A1)
+// PendingCaptureReview: puente bandeja unificada → CaptureBottomSheet (SP-A1)
 // Contrato compartido entre los paquetes A2 y A4: "Registrar" una captura
 // pendiente NUNCA inserta directo; siempre abre la hoja en modo Review con
 // prefill completo y los campos que la fuente no pudo determinar marcados

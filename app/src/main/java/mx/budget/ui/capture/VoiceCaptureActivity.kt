@@ -71,7 +71,7 @@ import mx.budget.ui.theme.BudgetMotion
  * confirma con el chip del inicio (propose-then-confirm).
  *
  * Degrada con gracia: si el dispositivo no soporta reconocimiento de voz (p. ej.
- * el emulador), oculta el micrófono y el usuario escribe la frase a mano — el
+ * el emulador), oculta el micrófono y el usuario escribe la frase a mano: el
  * mismo parser determinista la procesa.
  */
 class VoiceCaptureActivity : ComponentActivity() {
@@ -107,7 +107,7 @@ class VoiceCaptureActivity : ComponentActivity() {
         app.captureNaturalLanguage(text, source)
         Toast.makeText(
             this,
-            "Propuesta creada — confírmala en el inicio",
+            "Propuesta creada: confírmala en el inicio",
             Toast.LENGTH_SHORT,
         ).show()
         finish()
@@ -164,7 +164,7 @@ private fun VoiceCaptureOverlay(
     }
     DisposableEffect(Unit) { onDispose { controller.destroy() } }
 
-    // "Materialize" (Material Expressive): el overlay no aparece de golpe — el scrim
+    // "Materialize" (Material Expressive): el overlay no aparece de golpe, el scrim
     // se atenúa y la tarjeta crece 0.9→1 con fade. (El animateFloatAsState anterior
     // arrancaba YA en 1f, por lo que la animación nunca corría y el pop-up entraba
     // brusco.) Respeta reduced-motion.

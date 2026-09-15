@@ -51,7 +51,7 @@ private val SpotSpring = spring<Rect>(dampingRatio = 0.8f, stiffness = 380f)
 
 /** Tiempo máximo de espera a que un target registre sus bounds antes de degradar a globo centrado. */
 // 2500ms: la navegación + composición fría de una pantalla (Perfil con
-    // DataStore, listas) puede exceder 800ms en gama media — el timeout corto
+    // DataStore, listas) puede exceder 800ms en gama media: el timeout corto
     // degradaba a globo centrado targets perfectamente válidos.
     private const val RESOLVE_TIMEOUT_MS = 2500L
 
@@ -126,7 +126,7 @@ fun TutorialOverlay(
             controller.markUnresolved(step.key)
         } else {
             // Caso "registrado TARDE" (composición tras navegar a la pantalla): el
-            // hook de arriba fue null en su momento y nadie re-scrolleaba — el rect
+            // hook de arriba fue null en su momento y nadie re-scrolleaba: el rect
             // resolvía FUERA de pantalla y el spotlight quedaba invisible (paso 21,
             // Perfil). Re-invocar aquí es no-op si el target ya está visible.
             controller.scrollHookFor(step.key)?.invoke()

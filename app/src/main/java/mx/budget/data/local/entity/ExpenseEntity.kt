@@ -7,7 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Registro atómico de gasto — evento inmutable del ledger.
+ * Registro atómico de gasto: evento inmutable del ledger.
  *
  * Cada fila del sistema Excel colapsa en un Expense con relaciones
  * normalizadas a categoría, método de pago, quincena y opcionalmente
@@ -167,7 +167,7 @@ data class ExpenseEntity(
     @ColumnInfo(name = "place_label")
     val placeLabel: String? = null,
 
-    /** `CAPTURE | CONFIRM | MANUAL | NONE` — procedencia de la ubicación (§G.4.2). */
+    /** `CAPTURE | CONFIRM | MANUAL | NONE`: procedencia de la ubicación (§G.4.2). */
     @ColumnInfo(name = "location_source")
     val locationSource: String? = null,
 
@@ -195,7 +195,7 @@ data class ExpenseEntity(
     val externalPayerMemberId: String? = null,
 
     /**
-     * Última modificación local (epoch millis) — base de la resolución de
+     * Última modificación local (epoch millis): base de la resolución de
      * conflictos LWW del sync multi-dispositivo (MVP Fase 2). Los repos la
      * estampan en cada escritura; el pull remoto solo aplica un documento si su
      * `updatedAt` es mayor que el local. `0` = nunca editado tras la migración

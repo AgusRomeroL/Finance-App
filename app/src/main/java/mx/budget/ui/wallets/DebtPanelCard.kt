@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import mx.budget.ui.theme.financeColors
 import java.text.NumberFormat
@@ -36,7 +38,7 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /**
- * Panel de deuda por tarjeta (estados v2 Fase 5). Vive en Cuentas — es operativo:
+ * Panel de deuda por tarjeta (estados v2 Fase 5). Vive en Cuentas, que es donde toca:
  * saldo, utilización, tasa, pago mínimo y fecha límite del último estado importado.
  * Filas expandibles con resorte; sin alturas fijas (resiliente a fontScale alto).
  */
@@ -86,7 +88,13 @@ private fun DebtRow(c: CardDebt, money: NumberFormat) {
     Column(
         Modifier
             .fillMaxWidth()
-            .clickable { expanded = !expanded }
+            // 48 dp de alto minimo y rol de boton: la fila medía 41 dp y el lector
+            // de pantalla no decía que se podía desplegar (auditoría de la Fase 6a).
+            .heightIn(min = 48.dp)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = if (expanded) "Contraer el detalle" else "Ver el detalle",
+            ) { expanded = !expanded }
             .animateContentSize(spring(dampingRatio = 0.8f, stiffness = 380f))
             .padding(vertical = 8.dp),
     ) {

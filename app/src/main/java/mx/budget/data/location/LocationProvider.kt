@@ -39,8 +39,8 @@ enum class LocationLevel { NONE, WHILE_IN_USE, PERSISTENT }
  * Proveedor de ubicación on-device para la señal de contexto del gasto (G.4).
  *
  * Cruza **intención** (nivel elegido en Perfil, persistido en [SettingsRepository])
- * con **permiso** concedido por el SO antes de pedir nada. Devuelve `null` —y el
- * llamador marca `location_source=NONE`— en cuanto falte cualquiera de los dos, o si
+ * con **permiso** concedido por el SO antes de pedir nada. Devuelve `null`, y el
+ * llamador marca `location_source=NONE`: en cuanto falte cualquiera de los dos, o si
  * el fix/geocode falla. Nunca lanza: la ubicación es accesoria, jamás bloquea la
  * captura.
  *

@@ -6,8 +6,8 @@ package mx.budget.ai.dispatch
  * contrato "solo JSON" de tres maneras típicas, todas recuperables:
  *
  *  1. Fences de markdown (```json ... ```) o prosa antes del objeto.
- *  2. Prosa DESPUÉS del objeto ("Espero que te sirva…") — el objeto en sí es válido.
- *  3. Truncamiento por maxOutputTokens — llaves/comillas sin cerrar.
+ *  2. Prosa DESPUÉS del objeto ("Espero que te sirva…"): el objeto en sí es válido.
+ *  3. Truncamiento por maxOutputTokens: llaves/comillas sin cerrar.
  */
 object JsonRepairer {
     fun repair(raw: String): String {

@@ -8,13 +8,13 @@ package mx.budget.data.statements
  * wallet + MSI (C1), la app puede reescribir el ledger con confirmación
  * explícita del usuario:
  *
- *  1. [AggregateCandidate] — gastos agregados de "pago de tarjeta" (en la
+ *  1. [AggregateCandidate]: gastos agregados de "pago de tarjeta" (en la
  *     semilla, categoría `LOANS.<TARJETA>` pagada desde un wallet bancario)
  *     detectados dentro del periodo del estado. Convertirlos = borrar el gasto
  *     (revirtiendo su saldo) y registrar una transferencia banco→tarjeta
  *     (RF-41), para que el pago deje de contar como gasto y quede como abono
  *     a la deuda.
- *  2. [PlannedPurchase] — compras itemizadas del estado que se insertan como
+ *  2. [PlannedPurchase]: compras itemizadas del estado que se insertan como
  *     gastos reales cargados al wallet de la tarjeta, con categoría sugerida
  *     por historial, beneficiarios en partes iguales y pagador 100% el adulto
  *     pagador de la casa (regla del hogar desde oct-2025), marcadas para

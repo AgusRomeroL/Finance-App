@@ -120,7 +120,7 @@ fun FloatingNavBar(
             },
         )
         // "+": captura de gasto.
-        // TUTORIAL: DASH_ACTION_BAR — ver TUTORIAL.md (el tag es no-op si controller es null)
+        // TUTORIAL: DASH_ACTION_BAR, ver TUTORIAL.md (el tag es no-op si controller es null)
         CircleActionButton(
             container = MaterialTheme.colorScheme.primary,
             content = MaterialTheme.colorScheme.onPrimary,
@@ -134,7 +134,7 @@ fun FloatingNavBar(
 
 /**
  * Ítem del pill: ícono siempre; al seleccionarse el fondo se tiñe a
- * `primaryContainer` y la etiqueta se expande a un costado — ambos animados con
+ * `primaryContainer` y la etiqueta se expande a un costado: ambos animados con
  * resorte (M3 expresivo).
  */
 @Composable

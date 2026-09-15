@@ -22,7 +22,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Modelo de UI — sugerencias agrupadas por concepto canónico (Apéndice F.3.7)
+// Modelo de UI: sugerencias agrupadas por concepto canónico (Apéndice F.3.7)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** En qué cubeta de la cola cae el grupo. */
@@ -102,7 +102,7 @@ class AttributionReviewViewModel(
     /**
      * Miembros del hogar para sembrar el editor de % al editar un grupo. Excluye
      * terceros (EXTERNAL_*: acreedores/deudores/proveedores), igual que la captura
-     * — no son beneficiarios/pagadores válidos del reparto interno.
+     * no son beneficiarios/pagadores válidos del reparto interno.
      */
     val members: StateFlow<List<MemberEntity>> = memberRepository
         .observeActiveMembers(householdId)
@@ -116,7 +116,7 @@ class AttributionReviewViewModel(
         memberRepository.observeActiveMembers(householdId)
     ) { pending, auto, members ->
         // Concepto + monto de cada gasto para etiquetar los grupos. ~800 filas,
-        // relectura puntual al cambiar la cola — barato.
+        // relectura puntual al cambiar la cola: barato.
         val expenses = expenseDao.getAll(householdId).associateBy { it.id }
         val names = members.associate { it.id to it.displayName }
         AttributionReviewUiState(
@@ -183,7 +183,7 @@ class AttributionReviewViewModel(
             role = role,
             distributionBps = dist.associate { it.memberId to it.shareBps },
             shares = dist.map {
-                MemberShareUi(it.memberId, names[it.memberId] ?: "—", (it.shareBps / 100.0).roundToInt())
+                MemberShareUi(it.memberId, names[it.memberId] ?: "Sin nombre", (it.shareBps / 100.0).roundToInt())
             },
             sampleSize = rep.sampleSize,
             confidence = rep.confidence,

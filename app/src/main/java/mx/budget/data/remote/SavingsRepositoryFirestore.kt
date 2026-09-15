@@ -9,7 +9,7 @@ import mx.budget.data.local.entity.SavingsGoalEntity
 import mx.budget.data.repository.SavingsRepository
 
 /**
- * Lado nube (Firestore) del [SavingsRepository] — MVP Fase 3.5: solo lo usa el
+ * Lado nube (Firestore) del [SavingsRepository], MVP Fase 3.5: solo lo usa el
  * SyncManager para empujar metas. Subcolección `households/{hh}/savings_goal`.
  * Lecturas no-op (la app SIEMPRE lee de Room; el pull lo hace RemotePullSync).
  */

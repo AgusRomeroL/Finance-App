@@ -310,16 +310,16 @@ fun HouseholdScreen(
 
             // ── Invitar (generar y compartir código) ─────────────────────────
             // Gate de producto: invitar exige un GRUPO creado por el usuario y
-            // seleccionado — nunca el hogar sembrado (default_household), cuyos
+            // seleccionado: nunca el hogar sembrado (default_household), cuyos
             // datos reales no son para invitados.
             val canInvite = state.activeHouseholdId.isNotBlank() &&
                 state.activeHouseholdId != "default_household"
             SectionCard(label = "INVITAR A OTRO DISPOSITIVO") {
                 Text(
                     if (canInvite)
-                        "Elige quién del grupo es la persona invitada y genera un código de 8 caracteres. Quien lo canjee (app o web) queda vinculada a ese integrante — su rol deriva de él."
+                        "Elige quién del grupo es la persona invitada y genera un código de 8 caracteres. Quien lo canjee (app o web) queda vinculada a ese integrante y su rol deriva de él."
                     else
-                        "Para invitar, primero crea un grupo (arriba) y selecciónalo. Los invitados entran a ese grupo — nunca a tu presupuesto personal.",
+                        "Para invitar, primero crea un grupo (arriba) y selecciónalo. Los invitados entran a ese grupo, nunca a tu presupuesto personal.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -332,7 +332,7 @@ fun HouseholdScreen(
                 var inviteMemberId by rememberSaveable { mutableStateOf<String?>(null) }
                 // Cinturón de identidad: el VM ya excluye al member de la sesión,
                 // pero pudo construirse ANTES de que linkedMemberId se resolviera
-                // online — se filtra otra vez con el CompositionLocal fresco.
+                // online: se filtra otra vez con el CompositionLocal fresco.
                 val sessionId = LocalSessionMemberId.current
                 val eligibleMembers = state.eligibleMembers.filter { it.id != sessionId }
                 val selectedMember = eligibleMembers.firstOrNull { it.id == inviteMemberId }

@@ -26,8 +26,8 @@ import mx.budget.data.repository.WalletRepository
  * Estado del detalle de un gasto (Apéndice G.4.1 / G.4.3 + edición completa, MVP Fase 1).
  *
  * Combina los campos de display del [row] (concepto, monto, categoría, wallet) con
- * los campos de ubicación/hora editables, las atribuciones actuales y — en modo
- * edición — los borradores de concepto/monto/categoría/wallet/splits.
+ * los campos de ubicación/hora editables, las atribuciones actuales y: en modo
+ * edición: los borradores de concepto/monto/categoría/wallet/splits.
  */
 data class ExpenseDetailState(
     val row: ExpenseWithDetails,
@@ -81,8 +81,8 @@ data class ExpenseDetailState(
  *
  * Además de ver/editar ubicación (G.4.3) y hora (G.4.1), permite **editar el gasto
  * completo** (concepto, monto, categoría, wallet y atribuciones por rol) vía
- * [ExpenseRepository.updateWithAttributions] — que revierte/aplica el efecto en el
- * saldo del wallet en la misma transacción — y **borrarlo** vía
+ * [ExpenseRepository.updateWithAttributions]: que revierte/aplica el efecto en el
+ * saldo del wallet en la misma transacción, y **borrarlo** vía
  * [ExpenseRepository.deleteAndRevertBalance].
  *
  * Nota MVP: editar la fecha NO recalcula la quincena; el gasto conserva su
@@ -192,7 +192,7 @@ class ExpenseDetailViewModel(
         _state.update { it?.copy(draftWalletId = walletId) }
     }
 
-    // Selección de miembros por rol — mismo comportamiento que CaptureViewModel:
+    // Selección de miembros por rol, mismo comportamiento que CaptureViewModel:
     // toggle re-reparte equitativo; el stepper ajusta ±5 acotado a [0, 100].
 
     fun onBeneficiaryToggled(memberId: String) {
@@ -458,7 +458,7 @@ class ExpenseDetailViewModel(
     }
 
     /**
-     * Construye las filas de atribución de un rol desde los shares en % —
+     * Construye las filas de atribución de un rol desde los shares en %;
      * el último miembro absorbe el resto para garantizar 10,000 bps exactos.
      */
     private fun buildRows(

@@ -17,7 +17,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
  * se posiciona, y los da de baja al salir de la composición (scroll/recycle/navegación). El
  * overlay lee esos bounds para dibujar el spotlight. Ver `TUTORIAL.md`.
  *
- * Uso — encadenar al final del `Modifier` del elemento:
+ * Uso: encadenar al final del `Modifier` del elemento:
  * ```
  * Modifier
  *     .clip(...)
@@ -25,7 +25,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
  * ```
  *
  * [controller] es nullable a propósito: en pantallas donde el tour no está activo (o en
- * previews) se pasa `null` y el modifier es un no-op — así cada `tutorialTarget(...)` puede
+ * previews) se pasa `null` y el modifier es un no-op: así cada `tutorialTarget(...)` puede
  * escribirse incondicionalmente en el `Modifier` sin envolturas.
  *
  * **Auto-scroll:** el modifier adjunta un `BringIntoViewRequester` y registra por defecto un

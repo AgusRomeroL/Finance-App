@@ -11,7 +11,7 @@ import androidx.room.PrimaryKey
  * [mx.budget.data.sync.SyncManager] la drena hacia Firestore cuando hay
  * conexión. Room es la fuente de verdad: el push es eventual e idempotente.
  *
- * Sin foreign keys a propósito — la cola debe sobrevivir aunque la entidad
+ * Sin foreign keys a propósito: la cola debe sobrevivir aunque la entidad
  * referenciada cambie, y un DELETE debe poder sincronizarse después de que
  * la fila original ya no exista localmente.
  */
@@ -38,7 +38,7 @@ data class SyncQueueEntity(
      * Reintentos acumulados. Además de diagnóstico, es el criterio dead-letter:
      * al alcanzar el máximo (ver `SyncManager.MAX_ATTEMPTS`) la fila se
      * considera fallida definitiva y [mx.budget.data.local.dao.SyncQueueDao.getPending]
-     * deja de devolverla — así una fila venenosa no bloquea el push del resto.
+     * deja de devolverla: así una fila venenosa no bloquea el push del resto.
      */
     val attempts: Int = 0
 )

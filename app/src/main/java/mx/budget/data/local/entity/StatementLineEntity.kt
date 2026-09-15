@@ -7,7 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Movimiento individual de un estado de cuenta importado (Fase 5 — pre-match).
+ * Movimiento individual de un estado de cuenta importado (Fase 5, pre-match).
  *
  * **Tabla LOCAL-ONLY** (como `pending_capture` y `statement_import`): NO se
  * sincroniza. Persiste cada línea del estado con su resultado de conciliación
@@ -53,7 +53,7 @@ data class StatementLineEntity(
     @ColumnInfo(name = "import_id")
     val importId: String,
 
-    /** Hash determinista (fecha|monto|descripción canónica) — idempotencia. */
+    /** Hash determinista (fecha|monto|descripción canónica): idempotencia. */
     @ColumnInfo(name = "line_fingerprint")
     val lineFingerprint: String,
 
@@ -70,7 +70,7 @@ data class StatementLineEntity(
     @ColumnInfo(name = "amount_mxn")
     val amountMxn: Double,
 
-    /** `CHARGE` (cargo) — reservado `PAYMENT` por si luego se importan abonos. */
+    /** `CHARGE` (cargo): reservado `PAYMENT` por si luego se importan abonos. */
     @ColumnInfo(defaultValue = "'CHARGE'")
     val direction: String = "CHARGE",
 

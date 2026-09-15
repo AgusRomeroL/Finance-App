@@ -124,10 +124,10 @@ class BankCaptureManager(
      * widget, reloj. Flujo **crear-inmediato + enriquecer-async (D1)**:
      *
      *  1. SÍNCRONO (<1 s, sin LLM): corre solo el parser determinista
-     *     ([NlCaptureExtractor.extractFast] — monto/concepto/fecha) e inserta la
+     *     ([NlCaptureExtractor.extractFast], monto/concepto/fecha) e inserta la
      *     propuesta `PENDING` con `enrichStatus="ENRICHING"`. **Sin defaults
      *     silenciosos**: wallet/categoría solo si hay evidencia real (mención
-     *     explícita en la frase, o —para categoría— match del historial); si no,
+     *     explícita en la frase, o: para categoría: match del historial); si no,
      *     `null` y la revisión los pedirá ("Por decidir").
      *  2. ASYNC: encola [EnrichCaptureWorker], que completa categoría/atribución
      *     con heurísticas y (solo si AICore está disponible) la pasada LLM rica,
@@ -182,9 +182,9 @@ class BankCaptureManager(
      * Fase 2 del flujo D1 (la llama [EnrichCaptureWorker], bajo su watchdog):
      * enriquece una captura `ENRICHING` sin bloquear al usuario.
      *
-     *  1. **LLM rica** — SOLO si AICore/Gemini Nano está disponible (el gate vive
+     *  1. **LLM rica**: SOLO si AICore/Gemini Nano está disponible (el gate vive
      *     en [NlCaptureExtractor.enrich]; LiteRT-LM/Gemma queda PROHIBIDO en este
-     *     camino — su carga de 3.7 GB era la causa del OOM-kill tras dictar):
+     *     camino: su carga de 3.7 GB era la causa del OOM-kill tras dictar):
      *     beneficiarios/pagadores/notas/hints de categoría y wallet.
      *  2. **Heurísticas deterministas** para lo que siga faltando: categoría por
      *     historial y atribución modal por concepto ([RetroAttributionEngine]).
@@ -265,7 +265,7 @@ class BankCaptureManager(
     /**
      * Evidencia por mención explícita: devuelve el id cuyo `displayName` (≥3
      * caracteres, sin acentos, case-insensitive) aparece dentro de la frase.
-     * Es deliberadamente conservador — mejor `null` (→ "Por decidir") que un
+     * Es deliberadamente conservador: mejor `null` (→ "Por decidir") que un
      * default silencioso equivocado.
      */
     private fun findMentioned(rawText: String, idToName: List<Pair<String, String>>): String? {
@@ -446,7 +446,7 @@ class BankCaptureManager(
 
     /**
      * Evidencia de historial: categoría modal entre los gastos POSTED cuyo
-     * concepto contiene el texto. SIN fallback — `null` si el historial no dice
+     * concepto contiene el texto. SIN fallback: `null` si el historial no dice
      * nada (la captura queda "Por decidir" en vez de asumir una categoría).
      */
     private suspend fun resolveCategoryFromHistory(merchant: String): String? {

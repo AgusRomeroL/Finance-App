@@ -1,4 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  La app es monolingüe (español de México, res/xml/locales_config.xml) y su texto
+  vive en el código a propósito: es más fácil de leer junto al composable que lo
+  muestra. Aquí solo va lo que TIENE que estar en recursos:
+
+  - app_name, porque el manifiesto y el lanzador lo necesitan;
+  - lo que lee un lector de pantalla y no aparece escrito en pantalla;
+  - los mensajes de error que se repiten en más de un sitio.
+-->
 <resources>
+    <string name="app_name">Presupuesto Familiar</string>
+
+    <!-- Widget de captura rápida (Glance). -->
     <string name="widget_capture_description">Captura rápida de gastos por voz</string>
+
+    <!-- Descripciones para lectores de pantalla. -->
+    <string name="cd_back">Volver</string>
+    <string name="cd_close_sheet">Cerrar hoja</string>
+    <string name="cd_open_profile">Perfil</string>
+    <string name="cd_capture_expense">Capturar gasto</string>
+    <string name="cd_previous_quincena">Quincena anterior</string>
+    <string name="cd_next_quincena">Quincena siguiente</string>
+
+    <!-- Estados que se anuncian al guardar un movimiento. -->
+    <string name="state_saving">Guardando el movimiento</string>
+    <string name="state_saved">Movimiento guardado</string>
+    <string name="state_missing_fields">Faltan datos para guardar</string>
+
+    <!-- Errores compartidos. -->
+    <string name="error_quincena_closed">La quincena %1$s está cerrada. Reábrela desde Inicio para modificar sus movimientos.</string>
+    <string name="error_no_active_quincena">No hay quincena activa para el hogar.</string>
+    <string name="error_pick_payment_method">Selecciona un método de pago.</string>
 </resources>

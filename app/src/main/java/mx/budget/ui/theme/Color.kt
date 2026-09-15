@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.Color
 // Esta es la paleta de RESPALDO: aplica cuando el color dinámico (Material You)
 // está desactivado o no disponible. Con dinámico ON, los roles M3 vienen del
 // wallpaper del usuario (ver Theme.kt). Los semánticos financieros NO viven aquí
-// — están en FinanceColors.kt, fuera del ColorScheme.
+//: están en FinanceColors.kt, fuera del ColorScheme.
 
 // ── Primary (Verde contable) ─────────────────────────────────────────────────
 val Primary = Color(0xFF006C44)

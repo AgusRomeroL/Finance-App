@@ -20,7 +20,7 @@ import mx.budget.ui.common.LocalReducedMotion
 import mx.budget.ui.common.rememberReducedMotion
 
 // ── Esquema de color claro ────────────────────────────────────────────────────
-// Modo default: light — los prototipos de referencia usan class="light"
+// Modo default: light, los prototipos de referencia usan class="light"
 private val LightColorScheme = lightColorScheme(
     primary = Primary,
     onPrimary = OnPrimary,
@@ -181,7 +181,7 @@ fun BudgetAppTheme(
         LocalReducedMotion provides reducedMotion,
     ) {
         // Nota de motion (M3 1.4.0 estable): `MaterialExpressiveTheme` y
-        // `MotionScheme.expressive()` siguen siendo `internal` en 1.4.0 — solo son
+        // `MotionScheme.expressive()` siguen siendo `internal` en 1.4.0: solo son
         // públicos en material3 1.5.x-alpha. Mientras se decide el override a alpha,
         // el sello expresivo se logra con: (1) BudgetShapes centralizadas aquí,
         // (2) los specs de BudgetMotion en los componentes custom. Al pasar a alpha,

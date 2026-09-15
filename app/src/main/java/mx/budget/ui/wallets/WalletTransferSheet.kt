@@ -147,7 +147,7 @@ fun WalletTransferSheet(
 
             if (overdraws && fromWallet != null && amountVal != null) {
                 Text(
-                    "Saldo insuficiente — ${fromWallet.displayName} quedará en " +
+                    "Saldo insuficiente: ${fromWallet.displayName} quedará en " +
                         "${(fromWallet.currentBalanceMxn - amountVal).toMxnSigned()}.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.financeColors.warning,

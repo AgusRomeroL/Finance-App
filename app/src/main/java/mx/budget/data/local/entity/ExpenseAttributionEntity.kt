@@ -16,7 +16,7 @@ import androidx.room.PrimaryKey
  * Cada expense tiene DOS particiones independientes en esta tabla.
  * Ambas deben sumar exactamente 10,000 basis points (= 100%).
  *
- * Ejemplo — "Seguro Pau, David, Agus" $3,500, Norma paga:
+ * Ejemplo: "Seguro Pau, David, Agus" $3,500, Norma paga:
  * ```
  * (expense, Pau,     BENEFICIARY, 3333 bps, $1,166.55)
  * (expense, David,   BENEFICIARY, 3333 bps, $1,166.55)

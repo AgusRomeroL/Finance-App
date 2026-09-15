@@ -27,7 +27,7 @@ import java.util.UUID
  * - Confianza < τ → encola una fila `PENDING` en `attribution_review`.
  *
  * **Decisiones del usuario se respetan siempre:** los (gasto, rol) con review
- * humana resuelta (REJECTED/CONFIRMED/EDITED) se saltan — lo rechazado no resurge.
+ * humana resuelta (REJECTED/CONFIRMED/EDITED) se saltan: lo rechazado no resurge.
  *
  * **Re-normalización:** en modo normal preserva los AUTO_APPLIED previos (los
  * gastos ya válidos se saltan). En modo `force` (botón "Re-normalizar historial")

@@ -39,7 +39,7 @@ import mx.budget.ui.common.youLabel
 import mx.budget.ui.theme.financeColors
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AttributionShareEditor — editor de % por miembro REUTILIZABLE
+// AttributionShareEditor: editor de % por miembro REUTILIZABLE
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Una dimensión de atribución (beneficiarios o pagadores): encabezado con el
@@ -49,7 +49,7 @@ import mx.budget.ui.theme.financeColors
 //
 // Extraído de CaptureBottomSheet para que tanto la Captura (Feature de registro)
 // como la pantalla "Revisión de atribuciones" (Feature B, Apéndice F.3.7) compartan
-// exactamente el mismo control de reparto — una sola fuente de verdad de UX.
+// exactamente el mismo control de reparto: una sola fuente de verdad de UX.
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

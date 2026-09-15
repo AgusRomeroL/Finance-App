@@ -41,7 +41,7 @@ data class AttributionReviewEntity(
     @ColumnInfo(name = "expense_id")
     val expenseId: String,
 
-    /** "BENEFICIARY" o "PAYER" — qué dimensión propone esta fila. */
+    /** "BENEFICIARY" o "PAYER": qué dimensión propone esta fila. */
     val role: String,
 
     /**

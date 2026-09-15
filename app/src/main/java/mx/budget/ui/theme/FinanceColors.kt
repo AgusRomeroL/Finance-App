@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.toArgb
 import com.google.android.material.color.MaterialColors
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FinanceColors — colores semánticos financieros FUERA del ColorScheme M3
+// FinanceColors: colores semánticos financieros FUERA del ColorScheme M3
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Brief §2.1: ingreso/gasto/alerta NO son roles M3 (primary/secondary/tertiary).
@@ -22,14 +22,14 @@ import com.google.android.material.color.MaterialColors
 //
 // IMPORTANTE: el color es solo UNA de las señales. El significado financiero
 // debe reforzarse SIEMPRE con redundancia no-cromática (signo +/−, ícono de
-// flecha, posición, etiqueta) — ver helpers en AmountSemantics.
+// flecha, posición, etiqueta): ver helpers en AmountSemantics.
 
 /**
  * Paleta semántica financiera estable, independiente del ColorScheme M3.
  *
  * @property income            Color de ingreso/positivo (verde contable).
  * @property expense           Color de gasto/negativo (rojo).
- * @property warning           Color de alerta (ámbar) — sobregiro, falta asignar.
+ * @property warning           Color de alerta (ámbar): sobregiro, falta asignar.
  * Cada rol trae su `on*` de alto contraste y su `*Container` tonal.
  */
 @Immutable

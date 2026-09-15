@@ -14,8 +14,8 @@ import mx.budget.ui.dashboard.DashboardViewModel
  * hacia los nodos acoplados vía [WearSnapshotBuilder].
  *
  * **Rendimiento:** [observe] DEBE invocarse dentro de `repeatOnLifecycle(STARTED)`
- * (ver `MainActivity`) para que la colección —y con ella los flujos Room del
- * dashboard, que usan `WhileSubscribed`— se detenga al pasar a segundo plano. El
+ * (ver `MainActivity`) para que la colección, y con ella los flujos Room del
+ * dashboard, que usan `WhileSubscribed`: se detenga al pasar a segundo plano. El
  * `debounce` coalesce ráfagas de emisiones (varios totales cambiando a la vez) en
  * un único push. El refresco con la app cerrada lo cubre `ReminderWorker` (~15 min).
  */

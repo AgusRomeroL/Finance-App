@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 
 
 /**
- * Período operativo quincenal — ancla de agregación temporal.
+ * Período operativo quincenal: ancla de agregación temporal.
  *
  * Cada quincena transita por el DFA:
  * PROVISIONED → ACTIVE → CLOSING_REVIEW → CLOSED

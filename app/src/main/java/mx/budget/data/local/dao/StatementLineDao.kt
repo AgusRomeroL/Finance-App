@@ -7,7 +7,7 @@ import androidx.room.Query
 import mx.budget.data.local.entity.StatementLineEntity
 
 /**
- * DAO de `statement_line` (Fase 5 — conciliación de estados de cuenta).
+ * DAO de `statement_line` (Fase 5, conciliación de estados de cuenta).
  *
  * La inserción usa IGNORE: el índice UNIQUE `(wallet_id, line_fingerprint)`
  * convierte un re-import del mismo PDF en un no-op fila a fila (idempotencia),

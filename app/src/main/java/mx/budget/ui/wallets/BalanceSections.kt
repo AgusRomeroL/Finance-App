@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -70,7 +72,7 @@ import java.text.NumberFormat
 import java.util.Locale
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MVP Fase 3 — Secciones de "hoja de balance" para WalletsScreen:
+// MVP Fase 3. Secciones de "hoja de balance" para WalletsScreen:
 // metas de ahorro, préstamos por cobrar y planes de cuotas (MSI).
 // Se insertan como slot al final del LazyColumn de la lista de wallets.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -382,6 +384,13 @@ private fun BalanceSectionHeader(label: String) {
     )
 }
 
+/**
+ * Fila de saldo. `heightIn` de 48 dp porque con una sola linea de contenido la
+ * fila medía 41 y quedaba por debajo del minimo tactil de Material (medido en
+ * el Fold, auditoria de la Fase 6a). `Role.Button` para que el lector de
+ * pantalla diga que se puede activar: un `clickable` a secas se anuncia como
+ * texto suelto.
+ */
 @Composable
 private fun BalanceRowCard(onClick: () -> Unit, content: @Composable () -> Unit) {
     Surface(
@@ -389,7 +398,8 @@ private fun BalanceRowCard(onClick: () -> Unit, content: @Composable () -> Unit)
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick),
     ) {
         Box(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) { content() }
     }
@@ -400,8 +410,9 @@ private fun AddRow(label: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

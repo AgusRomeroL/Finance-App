@@ -13,7 +13,7 @@ data class ScheduledInstallment(
 /**
  * Lógica **pura** (sin Android/Room) para proyectar el calendario de un plan a
  * meses. El modelo `installment_plan` guarda `startDate`, `currentInstallment`,
- * `totalInstallments`, `installmentAmountMxn`, pero NO la fecha de cada cuota — el
+ * `totalInstallments`, `installmentAmountMxn`, pero NO la fecha de cada cuota: el
  * DAO devuelve `nextDate = NULL`. Aquí se deriva: cada cuota cae un mes después de
  * la anterior, el día del mes = `dueDay` del wallet que la liquida (o el día de
  * `startDate` si no hay dueDay). Corrige el gap sin tocar SQL ni el esquema.

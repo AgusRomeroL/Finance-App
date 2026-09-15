@@ -105,6 +105,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1820,10 +1823,22 @@ private fun CaptureFooter(
                 .height(52.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(ctaBg)
-                .clickable(enabled = !isLoading, onClick = onRegister)
+                .clickable(
+                    enabled = !isLoading,
+                    role = Role.Button,
+                    onClick = onRegister,
+                )
+                // Region viva: al guardar, el estado cambia sin que nada aparezca
+                // escrito en pantalla, asi que el lector de pantalla tiene que
+                // anunciarlo. Polite y no assertive: no interrumpe lo que se este
+                // leyendo (auditoria de accesibilidad, Fase 6a).
                 .semantics {
-                    stateDescription = if (enabled) "Listo para guardar"
-                    else "Faltan $missingCount campos"
+                    liveRegion = LiveRegionMode.Polite
+                    stateDescription = when {
+                        isLoading -> "Guardando el movimiento"
+                        enabled -> "Listo para guardar"
+                        else -> "Faltan $missingCount campos"
+                    }
                 }
                 .padding(horizontal = 28.dp),
             contentAlignment = Alignment.Center

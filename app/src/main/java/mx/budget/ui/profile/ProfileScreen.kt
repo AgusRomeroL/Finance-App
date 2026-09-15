@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -890,7 +891,13 @@ private fun IdentityCard(
     }
 }
 
-/** Fila de ajuste con icono, título, subtítulo y chevron (o badge numérico). */
+/**
+ * Fila de ajuste con icono, título, subtítulo y chevron (o badge numérico).
+ *
+ * `Role.Button` y alto mínimo de 48 dp por la auditoría de accesibilidad de la
+ * Fase 6a: un `clickable` sin rol se anuncia como texto suelto, así que el lector
+ * de pantalla no dice que la fila se puede activar.
+ */
 @Composable
 internal fun SettingRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -908,8 +915,18 @@ internal fun SettingRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(18.dp))
-            .then(if (navigable) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(
+                if (navigable) {
+                    Modifier.clickable(
+                        role = androidx.compose.ui.semantics.Role.Button,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

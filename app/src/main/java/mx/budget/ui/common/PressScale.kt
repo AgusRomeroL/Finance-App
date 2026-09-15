@@ -31,7 +31,7 @@ import mx.budget.ui.theme.BudgetMotion
  * Comparte el MISMO [interactionSource] con el `clickable` para que el press se
  * detecte. Si el `clickable` no expone su source, pásale uno creado aquí a ambos.
  *
- * **Reduced-motion:** si [LocalReducedMotion] está activo, no anima (queda a 1f) —
+ * **Reduced-motion:** si [LocalReducedMotion] está activo, no anima (queda a 1f);
  * el movimiento es exactamente lo que reduced-motion pide quitar.
  *
  * @param pressedScale escala en press (Kowalski: sutil, 0.95–0.98). Default 0.97.

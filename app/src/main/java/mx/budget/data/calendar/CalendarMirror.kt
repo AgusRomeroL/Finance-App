@@ -128,7 +128,7 @@ class CalendarMirror(
         val values = ContentValues().apply {
             put(CalendarContract.Events.CALENDAR_ID, calId)
             put(CalendarContract.Events.TITLE, "${money.format(amount)} · $concept")
-            put(CalendarContract.Events.DESCRIPTION, "Gasto planeado — Presupuesto Familiar")
+            put(CalendarContract.Events.DESCRIPTION, "Gasto planeado de Presupuesto Familiar")
             put(CalendarContract.Events.DTSTART, startMillis)
             put(CalendarContract.Events.DTEND, startMillis + TimeUnit.HOURS.toMillis(1))
             put(CalendarContract.Events.EVENT_TIMEZONE, ZONE)

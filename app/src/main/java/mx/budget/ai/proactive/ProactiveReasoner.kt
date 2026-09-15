@@ -25,7 +25,7 @@ import java.time.temporal.ChronoUnit
  *
  * **Fallback obligatorio (§F.8.2):** si AICore no está disponible (emulador,
  * chip sin Tensor, cuota agotada) o el JSON es inválido/vacío, devuelve INTACTO
- * el ranking SQL recibido. La Capa 3 es un *enhancement*, nunca un requisito —
+ * el ranking SQL recibido. La Capa 3 es un *enhancement*, nunca un requisito;
  * la app se comporta exactamente como Feature C cuando el LLM no está.
  *
  * **Foreground-only:** AICore bloquea inferencia en background

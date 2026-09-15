@@ -15,7 +15,7 @@ import java.util.UUID
 /**
  * Proyecta las cuotas MSI restantes como gastos **PLANNED** en la quincena ACTIVA,
  * para que aparezcan en el calendario y disparen recordatorios (CalendarViewModel y
- * ReminderWorker ya operan sobre PLANNED — Confirmar/Editar/Posponer). No existe hoy
+ * ReminderWorker ya operan sobre PLANNED: Confirmar/Editar/Posponer). No existe hoy
  * ninguna proyección temporal de installments; esto la crea sin tocar el esquema.
  *
  * Idempotente por `(installment_plan_id, installment_number)`: si ya existe un gasto

@@ -43,7 +43,7 @@ import mx.budget.data.statements.WalletStatementStatus
 
 /**
  * Checklist "Estados del mes": una fila por tarjeta con su estado del ciclo
- * (✅ importado / ⏳ pendiente / — sin corte), progreso arriba, y CTA por fila que
+ * (✅ importado / ⏳ pendiente /, sin corte), progreso arriba, y CTA por fila que
  * abre el import con ese wallet preseleccionado. Encadena: al volver, la lista se
  * recalcula reactivamente y la tarjeta importada pasa a ✅.
  */
@@ -138,7 +138,7 @@ private fun WalletStatusRow(
         StatementCycleStatus.NO_CUTOFF -> Triple(
             Icons.Filled.HelpOutline,
             MaterialTheme.colorScheme.onSurfaceVariant,
-            "Sin corte conocido — impórtalo una vez",
+            "Sin corte conocido: impórtalo una vez",
         )
     }
     ElevatedCard(

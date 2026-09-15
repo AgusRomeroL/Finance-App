@@ -19,7 +19,7 @@ import mx.budget.BudgetApplication
  * La captura ya existe (creada síncrona por [BankCaptureManager.ingestText] con el
  * parser determinista y `enrich_status='ENRICHING'`, pintada como "creando…" con
  * acciones bloqueadas). Este worker completa categoría/atribución con heurísticas
- * y —solo si AICore está disponible— la pasada LLM rica, sin bloquear al usuario y
+ * y: solo si AICore está disponible: la pasada LLM rica, sin bloquear al usuario y
  * SIN cargar Gemma (la carga de 3.7 GB en el hilo de captura era la causa del
  * OOM-kill reportado tras dictar).
  *

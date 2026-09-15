@@ -59,7 +59,7 @@ import mx.budget.ui.theme.amountSemantic
 import mx.budget.ui.theme.financeColors
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AttributionReviewScreen — "Revisión de atribuciones" (Feature B, Apéndice F.3.7)
+// AttributionReviewScreen: "Revisión de atribuciones" (Feature B, Apéndice F.3.7)
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Sistema "The Architectural Ledger": capas tonales, radios 28dp, sin líneas.
@@ -429,7 +429,7 @@ private fun BasisLine(group: ReviewGroup) {
         Spacer(Modifier.width(6.dp))
         Text(
             if (sample > 0) "Basado en $sample gastos · ${confidencePct(group)} % de confianza"
-            else "Sin patrón claro — asígnalo manualmente",
+            else "Sin patrón claro: asígnalo manualmente",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -439,7 +439,7 @@ private fun BasisLine(group: ReviewGroup) {
 private fun confidencePct(group: ReviewGroup): Int = (group.confidence * 100).toInt()
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hoja de edición — reutiliza el editor de % compartido (AttributionDimension)
+// Hoja de edición: reutiliza el editor de % compartido (AttributionDimension)
 // ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)

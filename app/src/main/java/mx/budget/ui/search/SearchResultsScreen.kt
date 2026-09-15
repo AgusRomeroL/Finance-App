@@ -44,7 +44,7 @@ import mx.budget.ui.dashboard.TransactionRow
  * (paridad con la barra superior del dashboard, estilo Recorder/Contactos): botón
  * atrás + [SearchPill] editable. Antes vivía abajo en una BottomActionBar que, con la
  * app ya edge-to-edge, quedaba OCULTA tras la barra de navegación transparente e
- * impedía escribir — bug corregido aquí. Reutiliza [TransactionRow] y comparte los
+ * impedía escribir: bug corregido aquí. Reutiliza [TransactionRow] y comparte los
  * filtros por grupo con el dashboard ([DashboardViewModel]).
  */
 @Composable

@@ -18,7 +18,7 @@ import androidx.compose.ui.geometry.Rect
  *
  * Contrato de robustez: si un [TutorialKey] no está registrado (sección renombrada o borrada,
  * o target reciclado fuera de pantalla), [windowRectFor] devuelve `null` y el overlay degrada a
- * un globo centrado — el tour nunca crashea. Ver `TUTORIAL.md`.
+ * un globo centrado: el tour nunca crashea. Ver `TUTORIAL.md`.
  *
  * @param steps      guion del tour ([TutorialSpec.steps]).
  * @param onMarkSeen se invoca al terminar o saltar (persistir `has_seen_tutorial = true`).

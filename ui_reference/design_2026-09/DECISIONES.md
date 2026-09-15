@@ -19,10 +19,11 @@ no rediseños. Se implementan en la 6b tal cual.
 
 | Qué | Decisión | Origen |
 |---|---|---|
-| Pills de periodo de Analíticas | Subir el área táctil a 48 dp sin cambiar el aspecto, con relleno interno | Auditoría §2 |
-| Filas de saldo de Cuentas | Subir el área táctil a 48 dp | Auditoría §2 |
-| Clicables hechos a mano | Añadir `Role.Button` y, donde haga falta, `onClickLabel` | Auditoría §3 |
-| Cabeceras de sección | Marcar con `heading()` para que TalkBack navegue entre ellas | Auditoría §3 |
-| Guardado de un gasto | Región viva que anuncie el resultado | Auditoría §3 |
-| Textos que lee TalkBack y mensajes de error | Extraer a `strings.xml`, que hoy tiene una sola cadena | Plan §4, Fase 6 punto 7 |
-| Raya larga (U+2014) | Quitarla de los 12 textos visibles y de los 130 comentarios en Kotlin | Plan, hallazgo 26 |
+| Pills de periodo de Analíticas | Alto mínimo de 48 dp. Hecho | Auditoría §2 |
+| Filas del panel de deuda de Cuentas | Alto mínimo de 48 dp. Hecho | Auditoría §2 |
+| Chevrones de quincena del panel | Área táctil de 48 dp sin tocar el círculo pintado. Hecho | Auditoría §2 |
+| Clicables hechos a mano | `Role.Button` y, donde aporta, `onClickLabel`. Hecho | Auditoría §3 |
+| Guardado de un gasto | Región viva educada que anuncia el estado. Hecho | Auditoría §3 |
+| Textos que lee TalkBack y mensajes de error | Extraídos a `strings.xml`, que tenía una sola cadena. Hecho | Plan §4, Fase 6 punto 7 |
+| Raya larga (U+2014) | Fuera de los 12 textos visibles y de los 126 comentarios en Kotlin. Hecho | Plan, hallazgo 26 |
+| Cabeceras de sección con `heading()` | Entra con el rediseño de Perfil del brief 2, para no marcar dos veces | Auditoría §3 |

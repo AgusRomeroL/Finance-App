@@ -6,7 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Captura pendiente de confirmar — **bandeja unificada** (Apéndice G.1).
+ * Captura pendiente de confirmar: **bandeja unificada** (Apéndice G.1).
  *
  * Generaliza la antigua `pending_bank_capture` (Feature D) en una sola cola que
  * alimentan TODAS las fuentes de captura. El campo [source] discrimina el origen;
@@ -53,7 +53,7 @@ data class PendingCaptureEntity(
 
     /**
      * `ENRICHING` mientras el worker de enriquecimiento (atribución/categoría
-     * inferidas async) sigue trabajando — la tarjeta se muestra como "creando…"
+     * inferidas async) sigue trabajando: la tarjeta se muestra como "creando…"
      * con acciones bloqueadas; `READY` cuando ya se puede confirmar/descartar
      * (v12→v13). Las capturas que no pasan por enriquecimiento nacen READY.
      */
@@ -113,7 +113,7 @@ data class PendingCaptureEntity(
     @ColumnInfo(name = "place_label")
     val placeLabel: String? = null,
 
-    /** `CAPTURE | CONFIRM | MANUAL | NONE` — procedencia de la ubicación (§G.4.2). */
+    /** `CAPTURE | CONFIRM | MANUAL | NONE`: procedencia de la ubicación (§G.4.2). */
     @ColumnInfo(name = "location_source")
     val locationSource: String? = null,
 )

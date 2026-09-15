@@ -10,7 +10,7 @@ import mx.budget.data.local.entity.SyncQueueEntity
 import mx.budget.data.repository.LoanRepository
 
 /**
- * Implementación Room del [LoanRepository] — MVP Fase 3.5: cada escritura
+ * Implementación Room del [LoanRepository], MVP Fase 3.5: cada escritura
  * estampa `updated_at` y encola `LOAN` (UPSERT/DELETE) en `sync_queue` dentro
  * de la MISMA transacción (patrón TRANSFER). El pull escribe vía DAO directo.
  */

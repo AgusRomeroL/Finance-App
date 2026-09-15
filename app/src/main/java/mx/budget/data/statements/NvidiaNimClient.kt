@@ -251,7 +251,7 @@ class NvidiaNimClient(
             val categorias = it.categorias.joinToString("; ")
             "\nContexto del hogar (para categoriaSugerida y beneficiariosSugeridos):\n" +
                 "MIEMBROS (usa estos nombres exactos): $miembros\n" +
-                "CATEGORÍAS (código — nombre; usa el CÓDIGO exacto): $categorias\n"
+                "CATEGORÍAS (código y nombre; usa el CÓDIGO exacto): $categorias\n"
         }.orEmpty()
         val (accion, marca) = when (kind) {
             DocumentKind.BANK_STATEMENT -> "el siguiente estado de cuenta" to "ESTADO DE CUENTA"
@@ -419,7 +419,7 @@ class NvidiaNimClient(
                "movimientos": [].
         """.trimIndent()
 
-        /** Facturas CFDI (SAT descarga masiva) — texto/valores de los XML. */
+        /** Facturas CFDI (SAT descarga masiva): texto/valores de los XML. */
         val CFDI_PROMPT = """
             Eres un extractor de FACTURAS CFDI mexicanas (SAT). Recibes el texto/valores
             de uno o más comprobantes. Devuelve EXCLUSIVAMENTE un objeto JSON del mismo
@@ -481,6 +481,6 @@ enum class DocumentKind(val displayName: String) {
  */
 data class StatementLlmContext(
     val miembros: List<String>,
-    /** Cada entrada en formato "CODIGO — Nombre" (ej. "FOOD.DESPENSA — Despensa"). */
+    /** Cada entrada en formato "CODIGO: Nombre" (ej. "FOOD.DESPENSA, Despensa"). */
     val categorias: List<String>,
 )

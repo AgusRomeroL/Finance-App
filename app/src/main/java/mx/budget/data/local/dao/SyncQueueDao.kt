@@ -20,7 +20,7 @@ interface SyncQueueDao {
      * definitivas (dead-letter). Una fila con `attempts >= maxAttempts` se
      * considera venenosa (p. ej. doc rechazado por las reglas de Firestore):
      * deja de reintentarse y de bloquear al resto de la cola, pero NO se borra
-     * — el dato local sigue intacto en su tabla de origen y la fila queda como
+     * el dato local sigue intacto en su tabla de origen y la fila queda como
      * evidencia diagnosticable. No hay columna de estado: el criterio
      * dead-letter es el propio contador `attempts`, así el esquema Room no
      * cambia (sin migración).

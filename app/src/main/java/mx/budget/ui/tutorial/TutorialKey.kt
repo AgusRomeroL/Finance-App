@@ -5,7 +5,7 @@ package mx.budget.ui.tutorial
  *
  * **FUENTE ÚNICA DE VERDAD.** Cada `Modifier.tutorialTarget(...)` referencia una de estas
  * claves y cada [TutorialStep] apunta a una de ellas. Como es un `enum`, un tag que use una
- * clave inexistente NO compila — imposible que un target quede huérfano por un typo.
+ * clave inexistente NO compila: imposible que un target quede huérfano por un typo.
  *
  * MANTENIMIENTO (ver `TUTORIAL.md`): al **añadir / renombrar / borrar** una sección de la app
  * que el tour explica:

@@ -82,7 +82,7 @@ fun IncomeSourcesScreen(viewModel: IncomeSourcesMasterViewModel, onBack: () -> U
         val sessionId = LocalSessionMemberId.current
         sources.forEach { s ->
             val memberName = members.firstOrNull { it.id == s.memberId }
-                ?.let { youLabel(it.displayName, it.id, sessionId) } ?: "—"
+                ?.let { youLabel(it.displayName, it.id, sessionId) } ?: "Sin nombre"
             MasterRow(
                 title = "${s.label} · $${s.amountMxn.toLong()}",
                 subtitle = "$memberName · ${cadenceLabel(s.cadence)} · ${if (s.status == "POSTED") "Recibido" else "Planeado"}",

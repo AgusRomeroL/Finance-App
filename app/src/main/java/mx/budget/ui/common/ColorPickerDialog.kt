@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.google.android.material.color.MaterialColors
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ColorPickerDialog — paleta de 12 swatches armonizados al primary del tema
+// ColorPickerDialog: paleta de 12 swatches armonizados al primary del tema
 // (paquete A4). Reutilizable: color de categoría (detalle de gasto) y color de
 // fuentes de ingreso (Wallets/IncomeSheet).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ private fun Color.toHex(): String = String.format("#%06X", 0xFFFFFF and toArgb()
  * Diálogo M3 con 12 swatches **armonizados al primary del tema** (HCT/Blend con
  * tope ≤15°, mismo mecanismo que [mx.budget.ui.theme.FinanceColors]) y la opción
  * "Quitar color". El hex persistido es el del color YA armonizado (lo que el
- * usuario ve es lo que se guarda). Grid adaptable ([FlowRow]) — resiliente a
+ * usuario ve es lo que se guarda). Grid adaptable ([FlowRow]): resiliente a
  * fontScale alto + bold.
  *
  * @param title       Título del diálogo (ej. `Color de "Súper"`).

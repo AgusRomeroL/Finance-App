@@ -10,7 +10,7 @@ import mx.budget.data.local.result.InstallmentSummary
 import mx.budget.data.repository.InstallmentRepository
 
 /**
- * Lado nube (Firestore) del [InstallmentRepository] — MVP Fase 3.5: solo lo usa
+ * Lado nube (Firestore) del [InstallmentRepository], MVP Fase 3.5: solo lo usa
  * el SyncManager para empujar planes. Subcolección `households/{hh}/installment_plan`.
  * Lecturas no-op (la app SIEMPRE lee de Room; el pull lo hace RemotePullSync).
  */

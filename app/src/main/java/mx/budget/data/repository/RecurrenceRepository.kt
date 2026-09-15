@@ -11,7 +11,7 @@ interface RecurrenceRepository {
     /** Plantillas activas del household. */
     fun observeActive(householdId: String): Flow<List<RecurrenceTemplateEntity>>
 
-    /** Todas las plantillas (activas y pausadas) — gestión en la UI (Fase 4 inc. 2c). */
+    /** Todas las plantillas (activas y pausadas): gestión en la UI (Fase 4 inc. 2c). */
     fun observeAll(householdId: String): Flow<List<RecurrenceTemplateEntity>>
 
     suspend fun getById(id: String): RecurrenceTemplateEntity?

@@ -11,12 +11,12 @@ import androidx.compose.animation.core.spring
  * este objeto es la fuente única para que el sello expresivo sea coherente. Los
  * valores son EXACTAMENTE los que ya se usaban en el código, no nuevos:
  *
- * - [standard] `dampingRatio 0.8 / stiffness 380` — el 90% de los casos: toggles,
+ * - [standard] `dampingRatio 0.8 / stiffness 380`, el 90% de los casos: toggles,
  *   barras por miembro, KPI héroe, entrada/reordenamiento de listas, chevrons.
- * - [canvas] `dampingRatio 0.85 / stiffness 120` — barridos de gráficos dibujados
+ * - [canvas] `dampingRatio 0.85 / stiffness 120`: barridos de gráficos dibujados
  *   a mano (dona, gauge, líneas, [mx.budget.ui.dashboard.BudgetRing]); más lento
  *   para que el trazo se lea fluido.
- * - [press] `stiffness alto` — feedback de press (scale 0.97) de `Modifier.pressScale`;
+ * - [press] `stiffness alto`: feedback de press (scale 0.97) de `Modifier.pressScale`;
  *   debe asentar casi instantáneo (100-160ms de "feel" según Kowalski).
  *
  * Las funciones son genéricas porque `spring<T>()` se instancia con distintos tipos

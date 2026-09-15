@@ -14,7 +14,7 @@ import java.time.ZoneId
  * instalación (flag DataStore `template_curation_2026_07_done`), ANTES de la
  * materialización del arranque. Dos trabajos:
  *
- * 1. **Pausar las plantillas de consumo variable** sembradas por el ETL — conceptos
+ * 1. **Pausar las plantillas de consumo variable** sembradas por el ETL: conceptos
  *    "Walmart", "Comida Gatas", "Benji" y "Normita, David y Agus". Son gasto
  *    variable (super, comida, mesada), no obligaciones de fecha fija: no deben
  *    materializar PLANNED. La pausa (`is_active = 0`; el usuario puede
@@ -32,7 +32,7 @@ import java.time.ZoneId
  *    mismo PLANNED y el sync las multiplicó (×N). Se agrupan los PLANNED con
  *    `recurrence_template_id` por (plantilla, día de `occurred_at`); de cada grupo
  *    sobrevive la fila con `created_at` más antiguo y el resto se elimina vía el
- *    repo público — también cubre copias locales que nunca se pushearon (outbox
+ *    repo público: también cubre copias locales que nunca se pushearon (outbox
  *    atorado sin red): su DELETE encolado se vuelve un no-op remoto inofensivo.
  *    NO se tocan los PLANNED de MSI (`installment_plan_id`, ya deduplicados por
  *    plan+cuota) ni los manuales sin plantilla.
@@ -41,7 +41,7 @@ import java.time.ZoneId
  * escenario no se reproduce.
  *
  * El PASO 2 corre en CADA arranque (no solo la primera vez): es idempotente y
- * barato, y cubre a los rezagados que llegan tarde por el pull — p.ej. el
+ * barato, y cubre a los rezagados que llegan tarde por el pull: p.ej. el
  * dedupe local corrió antes de que el pull entregara la copia que la limpieza
  * remota conservó, dejando un par vivo hasta el siguiente arranque.
  */
@@ -67,7 +67,7 @@ class TemplateCurationInitializer(
         if (firstRun) {
             for (template in variableTemplates) {
                 // Repo público (NO DAO directo): estampa updated_at y encola el
-                // UPSERT — la pausa de curación debe propagar por el sync (v19).
+                // UPSERT: la pausa de curación debe propagar por el sync (v19).
                 runCatching { recurrenceRepository.pause(template.id) }
             }
         }
@@ -84,7 +84,7 @@ class TemplateCurationInitializer(
             }
         }
 
-        // (2) Dedupe por (plantilla, día) — CADA arranque (idempotente; ver KDoc).
+        // (2) Dedupe por (plantilla, día): CADA arranque (idempotente; ver KDoc).
         // MSI y curados arriba quedan fuera.
         val candidates = planned.filter {
             it.recurrenceTemplateId !in variableIds && it.installmentPlanId == null

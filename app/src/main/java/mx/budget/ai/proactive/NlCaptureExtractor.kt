@@ -28,15 +28,15 @@ data class CaptureContext(
  * Extractor de captura en lenguaje natural (Apéndice G.3, rediseño A2). Expone
  * dos fases SEPARADAS que antes vivían en un solo `extract()` bloqueante:
  *
- *  1. **[extractFast]** — parser determinista ([NaturalLanguageCaptureParser]),
+ *  1. **[extractFast]**: parser determinista ([NaturalLanguageCaptureParser]),
  *     el contrato **garantizado** (solo monto/concepto/fecha). Síncrono, <1 ms,
  *     sin LLM: es lo único que corre en el camino de creación inmediata de la
  *     captura (D1). Devuelve `null` si no hay monto.
- *  2. **[enrich]** — pasada LLM opcional y ASÍNCRONA (la llama
+ *  2. **[enrich]**: pasada LLM opcional y ASÍNCRONA (la llama
  *     [mx.budget.data.capture.EnrichCaptureWorker]): traduce la frase a un
  *     intent `ADD_EXPENSE` **rico** (beneficiarios, pagadores, notas, categoría,
  *     wallet). SOLO usa AICore/Gemini Nano ([HybridLlm.ensureAiCoreOnly]);
- *     **NUNCA** carga LiteRT-LM/Gemma aquí — cargar 3.7 GB en el camino de
+ *     **NUNCA** carga LiteRT-LM/Gemma aquí: cargar 3.7 GB en el camino de
  *     captura era la causa del OOM-kill reportado (crash tras dictar).
  *
  * El LLM **nunca** muta el ledger: solo enriquece la extracción. Ambos caminos
@@ -62,7 +62,7 @@ class NlCaptureExtractor(
     /**
      * Fase 2 (asíncrona, opcional): pasada LLM rica, SOLO si AICore está
      * disponible. Devuelve `null` si no hay motor, el prompt está vacío, el
-     * modelo no está listo o la salida es inválida — el caller conserva
+     * modelo no está listo o la salida es inválida: el caller conserva
      * entonces lo que ya extrajo [extractFast]. Nunca lanza.
      */
     suspend fun enrich(

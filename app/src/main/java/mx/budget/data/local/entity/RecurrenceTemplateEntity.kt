@@ -17,7 +17,7 @@ import androidx.room.PrimaryKey
  * crece monotónicamente con cada confirmación sin conflicto (EMA α=0.2),
  * se resetea al detectar cambio de atribución.
  *
- * **Contrato de sync — tabla SINCRONIZADA (paquete ANDROID-TEMPLATES, jul-2026;
+ * **Contrato de sync: tabla SINCRONIZADA (paquete ANDROID-TEMPLATES, jul-2026;
  * antes era local-only):** el CRUD de plantillas vive también en la web, así
  * que la tabla entra al contrato bidireccional estándar:
  *
@@ -30,7 +30,7 @@ import androidx.room.PrimaryKey
  *   directo (anti-eco) con gate LWW por [updatedAt]; los borrados llegan como
  *   REMOVED o como lápida (`deletedAt`), igual que savings/loan.
  * - **Seed:** `scripts/admin/purge_and_reseed.py` NO siembra esta colección
- *   (decisión vigente): los dispositivos convergen por sync — los ids son
+ *   (decisión vigente): los dispositivos convergen por sync, los ids son
  *   uuid5 deterministas del ETL, así que la misma plantilla creada en dos
  *   dispositivos colisiona en el mismo doc en vez de duplicarse.
  */
@@ -145,7 +145,7 @@ data class RecurrenceTemplateEntity(
     val defaultSettlementStatus: String = "NONE",
 
     /**
-     * Última modificación local (epoch ms) — LWW del sync bidireccional
+     * Última modificación local (epoch ms): LWW del sync bidireccional
      * (v18→v19). `0` = fila legada/sembrada que nunca pisa una edición local.
      */
     @ColumnInfo(name = "updated_at", defaultValue = "0")

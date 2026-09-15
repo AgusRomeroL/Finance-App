@@ -22,12 +22,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Anillo de progreso circular (estilo el anillo de cardio de Fitbit/Health) — el
+ * Anillo de progreso circular (estilo el anillo de cardio de Fitbit/Health): el
  * KPI héroe del dashboard. Es una primitiva **pura y reutilizable**: recibe una
  * [fraction] 0..1 y dibuja un arco animado sobre una pista; el [content] se centra
  * dentro (típicamente un porcentaje o un monto).
  *
- * Movimiento expresivo (obligatorio, CLAUDE.md): el barrido no salta — anima con un
+ * Movimiento expresivo (obligatorio, CLAUDE.md): el barrido no salta, anima con un
  * resorte espacial ([spring]) al montar y en cada cambio de [fraction].
  *
  * El significado no depende solo del color: el arco es una señal de magnitud por sí

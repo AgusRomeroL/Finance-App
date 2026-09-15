@@ -8,7 +8,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import mx.budget.R
 
-// ── Familias tipográficas — Google Sans Flex ──────────────────────────────────
+// ── Familias tipográficas: Google Sans Flex ──────────────────────────────────
 // Google liberó **Google Sans Flex** bajo licencia SIL Open Font (OFL) el
 // 2025-11-18; por eso se puede empacar legalmente en la app. Google Fonts NO
 // provee un único archivo variable para esta familia, así que se empacan
@@ -64,7 +64,7 @@ val BudgetTypography = Typography(
         letterSpacing = 0.sp
     ),
 
-    // Headline: montos de las SummaryCards ($105,000) — óptico display.
+    // Headline: montos de las SummaryCards ($105,000), óptico display.
     headlineLarge = TextStyle(
         fontFamily = DisplayFamily,
         fontWeight = FontWeight.Light,

@@ -38,7 +38,7 @@ interface RecurrenceTemplateDao {
     suspend fun getById(id: String): RecurrenceTemplateEntity?
 
     /**
-     * Plantillas (activas o pausadas) cuyo `concept` está en [concepts] — match
+     * Plantillas (activas o pausadas) cuyo `concept` está en [concepts]: match
      * exacto y case-sensitive (comparación TEXT default de SQLite). Usado por la
      * curación one-shot [mx.budget.data.recurrence.TemplateCurationInitializer].
      */

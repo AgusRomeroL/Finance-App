@@ -178,7 +178,7 @@ class CategoriesMasterViewModel(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CRUD de fuentes de ingreso (paquete B2). Sincronizable (IncomeRepositoryImpl
-// encola INCOME). Se administran las fuentes de la QUINCENA ACTIVA — el income
+// encola INCOME). Se administran las fuentes de la QUINCENA ACTIVA: el income
 // source es por quincena en el esquema. Alta como PLANNED (no mueve saldo hasta
 // postearse en Cuentas).
 // ─────────────────────────────────────────────────────────────────────────────

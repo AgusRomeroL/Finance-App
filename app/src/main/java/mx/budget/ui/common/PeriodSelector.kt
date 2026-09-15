@@ -1,6 +1,7 @@
 package mx.budget.ui.common
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.FilterChip
@@ -65,6 +66,11 @@ fun memberPeriodRangeMs(period: MemberPeriod, quincena: QuincenaEntity?): Pair<L
  *
  * `FlowRow` de `FilterChip` para que reflowen a otra linea con fontScale alto mas
  * bold, en vez de recortarse. El `FilterChip` ya anima su seleccion.
+ *
+ * Alto minimo de 48 dp porque el `FilterChip` mide 34 y ese es el minimo tactil
+ * de Material (medido en el Fold con la configuracion fiel, auditoria de la Fase
+ * 6a). `minimumInteractiveComponentSize` no sirve aqui: los chips estan exentos
+ * de la expansion automatica, asi que hay que pedir el alto.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -83,6 +89,7 @@ fun MemberPeriodPills(
                 selected = period == selected,
                 onClick = { onSelect(period) },
                 label = { Text(period.label, maxLines = 1) },
+                modifier = Modifier.heightIn(min = 48.dp),
             )
         }
     }

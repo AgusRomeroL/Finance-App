@@ -8,7 +8,7 @@ import mx.budget.data.local.result.WalletBalanceInfo
 import mx.budget.data.repository.AnalyticsRepository
 
 /**
- * Implementación Room (solo lectura) del [AnalyticsRepository] — MVP Fase 3.
+ * Implementación Room (solo lectura) del [AnalyticsRepository]: MVP Fase 3.
  * Delegación directa a [AnalyticsDao]; sin outbox (no hay escritura).
  */
 class AnalyticsRepositoryImpl(

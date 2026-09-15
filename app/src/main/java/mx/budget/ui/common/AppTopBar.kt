@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.dp
 /**
  * Barra superior compartida (estilo Recorder / Contactos de Google): un slot
  * [leading] flexible (pill de búsqueda o título de sección) + avatar de perfil a la
- * derecha. Aplica `statusBarsPadding()` — es la dueña del inset superior en las
+ * derecha. Aplica `statusBarsPadding()`: es la dueña del inset superior en las
  * pantallas top-level ahora que la app es edge-to-edge (el contenido dibuja bajo la
  * barra de estado transparente).
  *
@@ -131,7 +131,7 @@ fun SearchPill(
     readOnly: Boolean = false,
     onActivate: () -> Unit = {},
     placeholder: String = "Buscar movimientos",
-    // Cuando true (y editable), el campo pide foco y abre el teclado al aparecer —
+    // Cuando true (y editable), el campo pide foco y abre el teclado al aparecer;
     // así al entrar a la pantalla de búsqueda se puede escribir sin un tap extra.
     autoFocus: Boolean = false,
 ) {

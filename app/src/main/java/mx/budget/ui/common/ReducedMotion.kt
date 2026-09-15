@@ -24,7 +24,7 @@ import androidx.compose.ui.platform.LocalContext
  * del sheet, el stagger de listas) consultan este flag y, si está activo, saltan
  * al estado final sin animar.
  *
- * Default `false` (animar) — es el estado por defecto del sistema.
+ * Default `false` (animar): es el estado por defecto del sistema.
  */
 val LocalReducedMotion = staticCompositionLocalOf { false }
 

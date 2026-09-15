@@ -176,13 +176,13 @@ private fun IdleContent(
                 "Sube tu estado de cuenta en PDF o imagen. Se extrae el texto en tu " +
                     "teléfono y solo ese texto se envía a la IA para estructurarlo. " +
                     "Reconcilia corte, límite de pago y planes a meses; y si eliges la " +
-                    "cuenta, podrás reescribir los movimientos — nada se aplica sin tu " +
+                    "cuenta, podrás reescribir los movimientos. Nada se aplica sin tu " +
                     "confirmación."
             } else {
                 "Sube el archivo que exportaste (CSV, ZIP, XML o JSON). Se lee en tu " +
                     "teléfono; solo el texto (producto/monto/fecha) viaja a la IA para " +
                     "clasificar categoría y beneficiario por producto. Revisa y confirma " +
-                    "antes de aplicar — nada se guarda sin tu OK."
+                    "antes de aplicar. Nada se guarda sin tu OK."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -359,7 +359,7 @@ private fun PreviewContent(viewModel: StatementImportViewModel) {
         }
 
         Spacer(Modifier.height(20.dp))
-        // Fase 5: aplicar la conciliación (pre-match) — sin cuenta elegida no hay
+        // Fase 5: aplicar la conciliación (pre-match), sin cuenta elegida no hay
         // conciliación por línea posible, así que se bloquea.
         Button(
             onClick = viewModel::apply,

@@ -9,7 +9,7 @@ import kotlin.math.exp
 import kotlin.math.sqrt
 
 /**
- * Plantilla recurrente **sugerida** (no creada) a partir del historial — la
+ * Plantilla recurrente **sugerida** (no creada) a partir del historial: la
  * propuesta de la inferencia bajo autorización (Apéndice G.2, Fase 5).
  *
  * Lleva todo lo necesario para construir el `recurrence_template` SI el usuario

@@ -19,7 +19,7 @@ import mx.budget.ui.theme.BudgetMotion
  * composición de cada item: los items que ya existen al montar la lista animan;
  * los que se componen luego al hacer scroll (o tras marcar la carga como
  * consumida) renderizan directo en su estado final. Así el scroll nunca se siente
- * lento — la regla de Kowalski: el stagger es decorativo, jamás bloquea.
+ * lento, la regla de Kowalski: el stagger es decorativo, jamás bloquea.
  *
  * **Reduced-motion:** si [LocalReducedMotion] está activo, no anima.
  *
