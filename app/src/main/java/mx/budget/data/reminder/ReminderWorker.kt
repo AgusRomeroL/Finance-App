@@ -68,6 +68,26 @@ class ReminderWorker(
 
             settings.setReminderState(newState)
 
+            // Aviso de quincena pendiente de cierre (Fase 5, RF-32). Una sola vez
+            // por periodo: quien insiste es el aviso persistente del dashboard.
+            runCatching {
+                val pendientes = app.database.quincenaDao()
+                    .getByStatus(app.householdId, mx.budget.data.quincena.QuincenaLifecycle.CLOSING_REVIEW)
+                if (pendientes.isNotEmpty()) {
+                    val avisadas = settings.getQuincenaCloseNotified()
+                    val nuevas = pendientes.filter { it.id !in avisadas }
+                    nuevas.forEach {
+                        mx.budget.data.quincena.QuincenaCloseNotifier.notify(applicationContext, it)
+                    }
+                    if (nuevas.isNotEmpty()) {
+                        // Poda a lo que sigue pendiente: reabrir un periodo vuelve a
+                        // habilitar su aviso, que es lo que se espera.
+                        val vigentes = pendientes.mapTo(HashSet()) { it.id }
+                        settings.setQuincenaCloseNotified(avisadas.filterTo(HashSet()) { it in vigentes } + vigentes)
+                    }
+                }
+            }
+
             // Empuja el snapshot completo al reloj en cada corrida (~15 min), para
             // que los Tiles y el hub no queden obsoletos con la app cerrada (§G.3).
             // Best-effort: nunca falla el worker.
