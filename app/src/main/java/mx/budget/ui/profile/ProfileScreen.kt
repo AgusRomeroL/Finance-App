@@ -876,12 +876,17 @@ internal fun SettingRow(
     trailingBadge: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * `false` para filas que solo informan: sin chevron y sin clic, porque una
+     * flecha que no lleva a ningún lado es una promesa falsa.
+     */
+    navigable: Boolean = true,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick)
+            .then(if (navigable) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -915,7 +920,7 @@ internal fun SettingRow(
                     .background(MaterialTheme.colorScheme.primary)
                     .padding(horizontal = 9.dp, vertical = 3.dp)
             )
-        } else {
+        } else if (navigable) {
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight, null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp)

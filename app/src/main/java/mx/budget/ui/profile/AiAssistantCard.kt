@@ -129,6 +129,7 @@ fun AiAssistantCard(settings: AiAssistantSettings) {
             subtitle = engineLabel(settings.engine, state),
             trailingBadge = null,
             onClick = {},
+            navigable = false,
         )
         Spacer(Modifier.height(8.dp))
 

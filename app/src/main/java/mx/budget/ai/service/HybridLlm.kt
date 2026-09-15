@@ -40,18 +40,27 @@ class HybridLlm(
 
     private val _engine = MutableStateFlow(LlmEngine.NONE)
 
+    /** Deja rastro del motor elegido: sin esto, saber por que ruta respondio un
+     *  aparato concreto exige adivinar. */
+    private fun useEngine(engine: LlmEngine) {
+        if (_engine.value != engine) {
+            android.util.Log.i("HybridLlm", "motor activo: $engine")
+        }
+        _engine.value = engine
+    }
+
     /** Motor activo, para que la interfaz pueda decir la verdad sobre quién responde. */
     val engine: StateFlow<LlmEngine> = _engine.asStateFlow()
 
     override suspend fun ensureReady(): LlmReadiness {
         // 1) AICore primero (TPU/gratis).
         if (runCatching { aiCore.ensureReady() }.getOrNull() == AiCoreManager.Readiness.Available) {
-            _engine.value = LlmEngine.AICORE
+            useEngine(LlmEngine.AICORE)
             return LlmReadiness.Available
         }
         // 2) LiteRT-LM (modelo Gemma local). Available/Pending/Unavailable se propaga.
         val lite = runCatching { liteRtLm.ensureReady() }.getOrElse { LlmReadiness.Unavailable }
-        _engine.value = if (lite == LlmReadiness.Available) LlmEngine.LITERTLM else LlmEngine.NONE
+        useEngine(if (lite == LlmReadiness.Available) LlmEngine.LITERTLM else LlmEngine.NONE)
         return lite
     }
 
@@ -65,7 +74,7 @@ class HybridLlm(
     suspend fun ensureAiCoreOnly(): Boolean {
         val ok = runCatching { aiCore.ensureReady() }
             .getOrNull() == AiCoreManager.Readiness.Available
-        if (ok) _engine.value = LlmEngine.AICORE
+        if (ok) useEngine(LlmEngine.AICORE)
         return ok
     }
 
