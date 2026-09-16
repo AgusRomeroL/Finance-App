@@ -86,6 +86,19 @@ Verificado de punta a punta. El aviso del panel cabe sin cortes, la pantalla de 
 
 **Hallazgo 7.1 (abierto, severidad media).** La sección vive al final de Perfil: hay que pasar por siete tarjetas para llegar. Perfil se ha convertido en una lista larga de doce secciones sin jerarquía entre ellas.
 
+## 7 bis. Quick Tap (implementado en la 6b)
+
+Medido en FinanceFold, abriendo el panel con el enlace `mx.budget://capture`:
+
+| Situación | Tiempo hasta el panel |
+|---|---|
+| Proceso vivo | 4 a 19 ms |
+| Proceso muerto | 2.2 a 2.4 s |
+
+**Hallazgo 7bis.1 (abierto, severidad media).** Con el proceso vivo, el gesto cumple de sobra la meta de la especificación (P95 por debajo de 600 ms). Con el proceso muerto no se acerca: de esos 2.3 s, el punto de entrada solo usa 8 ms; el resto es el arranque de la aplicación, que resuelve el hogar, la identidad de sesión, el color dinámico y la bandera del tutorial con lecturas bloqueantes antes de dejar dibujar nada. Aligerar ese arranque es lo único que puede cerrar la brecha, y toca a toda la app, no a Quick Tap.
+
+**Resuelto durante la implementación.** El panel esperaba a que terminara la consulta del historial antes de existir, lo que metía segundos entre el gesto y el primer frame; ahora aparece vacío y se rellena. Y no se podía guardar cuando la cuenta no tenía dueño y la sesión era anónima, porque el gasto se quedaba sin pagador: el panel elige el primer adulto que paga, y si aún falta algo lo dice en vez de no responder.
+
 ## 8. Recorridos pendientes de auditar
 
 Estos tres necesitan datos o dispositivos que esta sesión no tiene:

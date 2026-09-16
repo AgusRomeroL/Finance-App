@@ -162,8 +162,11 @@ fun BudgetAppTheme(
     // status/nav bar con el tema Compose. Sin esto los íconos quedan oscuros
     // sobre superficie oscura en dark mode (framework Theme.Material.Light).
     val view = LocalView.current
-    if (!view.isInEditMode) {
-        val window = (view.context as Activity).window
+    // El cast tiene que ser seguro: el panel flotante de Quick Tap compone este
+    // tema dentro de un Service, donde no hay Activity ni ventana con barras que
+    // teñir. Con el cast duro, el overlay reventaba al primer frame.
+    val window = if (view.isInEditMode) null else (view.context as? Activity)?.window
+    if (window != null) {
         SideEffect {
             val controller = WindowCompat.getInsetsController(window, view)
             controller.isAppearanceLightStatusBars = !darkTheme

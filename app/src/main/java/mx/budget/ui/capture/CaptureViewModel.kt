@@ -863,6 +863,15 @@ class CaptureViewModel(
      *
      * @param key Carácter pulsado: '0'-'9', '.', o 'DEL' para borrar.
      */
+    /**
+     * Fija el importe de golpe, sin pasar por el teclado. La usa el panel de
+     * Quick Tap, donde el importe puede llegar ya escrito en el enlace o de una
+     * sugerencia que se toca entera.
+     */
+    fun setAmount(value: Double) {
+        _rawAmount.value = if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()
+    }
+
     fun onNumpadKey(key: String) {
         val current = _rawAmount.value
 

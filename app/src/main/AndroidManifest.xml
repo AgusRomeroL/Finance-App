@@ -19,6 +19,9 @@
          salga de la app. Tipo dataSync: no hay otro tipo que describa bajar datos. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Quick Tap: Android no tiene un tipo de servicio para "superposición de
+         captura", así que el panel flotante se declara como uso especial. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Dictado por voz en la barra de búsqueda (SpeechRecognizer) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -58,6 +61,9 @@
             android:exported="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden|density"
             android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -65,6 +71,45 @@
         </activity>
 
         <!-- Actividad de captura rápida (overlay transparente) -->
+        <!-- Alias del lanzador: es lo que hace que "Presupuesto Familiar: gasto
+             rápido" aparezca en la lista de Ajustes, Sistema, Gestos, Toque
+             rápido, "Abrir app". Sin alias, Quick Tap solo puede abrir la app
+             entera. -->
+        <activity-alias
+            android:name=".QuickCaptureAlias"
+            android:targetActivity=".ui.capture.QuickCaptureActivity"
+            android:exported="true"
+            android:label="@string/shortcut_quick_capture_short"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Mosaico de Ajustes rápidos: el mismo punto de entrada en los
+             teléfonos que no tienen Quick Tap. -->
+        <service
+            android:name=".ui.quicktap.QuickCaptureTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/quick_capture_tile"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Panel flotante de captura (spec 3.3, componente B). -->
+        <service
+            android:name=".ui.quicktap.OverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Panel flotante de captura de gastos invocado por el usuario" />
+        </service>
+
         <activity
             android:name=".ui.capture.QuickCaptureActivity"
             android:exported="true"
@@ -74,6 +119,18 @@
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Accion propia: la usan el mosaico y el acceso directo. -->
+            <intent-filter>
+                <action android:name="mx.budget.action.QUICK_CAPTURE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Enlace de captura (spec 3.5): mx.budget://capture?amount=&category= -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mx.budget" android:host="capture" />
             </intent-filter>
         </activity>
 

@@ -13,7 +13,7 @@ rehacer o corregir sin depender de la nube.
 | 2. Perfil con jerarquía | pendiente | | |
 | 3. Bloque héroe del panel | pendiente | | |
 | 4. Cierre de quincena | pendiente | | |
-| 5. Panel de Quick Tap | **listo para implementar** | https://claude.ai/artifact/SJUwQ4FwwgtkxRhshNfnjf | Tres artboards, no opciones: el panel flotante, la pantalla que precede al permiso y la degradación a hoja completa cuando no se concede. No hay alternativas que elegir porque la especificación §3.3 ya fija la forma. |
+| 5. Panel de Quick Tap | **implementado y verificado** | https://claude.ai/artifact/SJUwQ4FwwgtkxRhshNfnjf | Tres artboards, no opciones: el panel flotante, la pantalla que precede al permiso y la degradación a hoja completa cuando no se concede. No hay alternativas que elegir porque la especificación §3.3 ya fija la forma. |
 
 ## Decisiones ya tomadas sin lienzo
 

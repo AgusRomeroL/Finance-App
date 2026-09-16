@@ -11,6 +11,11 @@
 <resources>
     <string name="app_name">Presupuesto Familiar</string>
 
+    <!-- Captura rápida: acceso directo, alias del lanzador y mosaico. -->
+    <string name="shortcut_quick_capture_short">Gasto rápido</string>
+    <string name="shortcut_quick_capture_long">Anotar un gasto rápido</string>
+    <string name="quick_capture_tile">Capturar gasto</string>
+
     <!-- Widget de captura rápida (Glance). -->
     <string name="widget_capture_description">Captura rápida de gastos por voz</string>
 
