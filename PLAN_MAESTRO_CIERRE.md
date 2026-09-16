@@ -87,7 +87,7 @@ El orden respeta dependencias reales: primero se sanea el terreno, después se c
 | 3 | Wear OS terminado y verificado | 2 | 1 | **hecha** (2026-09-07) | `731a2e4` (último de contenido; el cierre documental es el commit siguiente, que actualiza esta tabla) |
 | 4 | IA on-device terminada (provisión del modelo, latencia, chat) | 2 | 1 | **código en `main`, sin verificar en dispositivo** | `0fdce65` (descarga del modelo, espera del asistente, límites del chat, golden suite; falta medir latencia en el Pixel 7 y AICore en el Pixel 10) |
 | 5 | Ciclo de quincena, exportación y respaldo | 1 | 1 | **hecha** (2026-09-15) | `e5f35e9` (último de contenido; el cierre documental es el commit siguiente, que actualiza esta tabla) |
-| 6 | Mejora de UX con `/design` y accesibilidad | 1, 5 | 2 (6a auditoría y diseño; 6b implementación) | **6a hecha** (2026-09-15); 6b **parcial**: accesibilidad y textos hechos, falta lo que depende de los lienzos y Quick Tap | `0e60d55` |
+| 6 | Mejora de UX con `/design` y accesibilidad | 1, 5 | 2 (6a auditoría y diseño; 6b implementación) | **6a hecha** (2026-09-15); 6b **casi**: accesibilidad, textos y **Quick Tap completo**; falta implementar la opción que se elija en los cuatro lienzos de rediseño | `c07e752` |
 | 7 | Calidad: pruebas, CI y observabilidad | 2, 5 | 1 | pendiente | |
 | 8 | Release firmado, publicación web y distribución | 3, 4, 6, 7 | 1 | pendiente | |
 | 9 | `main` público (opcional) | 8 | 0 | **cancelada** (2026-09-05: repo privado, sin `LICENSE`) | |
@@ -295,7 +295,7 @@ con fast-forward a main y norma y actualiza la sección 3 del plan.
 
 **Estado al 2026-09-15.** La 6a está hecha salvo la parte que exige la cuenta de Claude Design: la auditoría está medida (`ui_reference/design_2026-09/AUDITORIA.md`), `DESIGN.md` reescrito con los tokens del código, los cinco briefs redactados (`BRIEFS.md`) y el paquete de vistas previas listo en `design_system/`. Falta que Agustín ejecute `/design-login` y `/design`; `DesignSync` rechaza publicar sin esa autorización, que solo se concede desde una sesión interactiva.
 
-De la 6b ya está hecho lo que no dependía de un lienzo: los tres objetivos táctiles por debajo del mínimo, el rol de botón en los clicables hechos a mano, la región viva del guardado, `strings.xml` y el barrido de rayas largas del código. Queda lo que depende de la opción elegida en cada brief, más Quick Tap entero.
+De la 6b ya está hecho lo que no dependía de un lienzo: los tres objetivos táctiles por debajo del mínimo, el rol de botón en los clicables hechos a mano, la región viva del guardado, `strings.xml`, el barrido de rayas largas del código y **Quick Tap completo** (gesto, mosaico, acceso directo, enlace, panel flotante, pantalla de permiso y degradación a hoja completa), verificado en el emulador. Queda implementar la opción que Agustín elija en los cuatro lienzos de rediseño.
 
 **Dato que corrige el diagnóstico (hallazgo 20).** Los 199 objetivos táctiles por debajo de 48 dp eran tamaños de icono, no áreas táctiles: los reales eran tres. Y los 30 `contentDescription = null` son iconos decorativos junto a texto visible, que es donde la descripción nula es lo correcto; no hay un solo clicable sin etiqueta en las cinco pantallas principales. Medir con volcados de `uiautomator` desmintió las dos cifras.
 
