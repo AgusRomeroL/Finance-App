@@ -114,7 +114,7 @@ Los tags llevan el comentario `// TUTORIAL: <KEY>, ver TUTORIAL.md` en el códig
 | `DASH_ACTION_BAR` | dashboard | botón "+" (`CircleActionButton` del `FloatingNavBar` en compacto / FAB del `NavigationRailCustom` en expandido) | `ui/navigation/FloatingNavBar.kt` + `ui/dashboard/DashboardScreen.kt` |
 | `DASH_NAV` | dashboard | `NavigationRailCustom` / `FloatingNavBar` | `ui/navigation/MainShell.kt` |
 | `CAP_KIND_TOGGLE` | dashboard (hoja) | `CaptureHeader` (toggle Gasto/Ingreso) | `ui/capture/CaptureBottomSheet.kt` |
-| `CAP_AMOUNT_KEYPAD` | dashboard (hoja) | `AmountCard` | `ui/capture/CaptureBottomSheet.kt` |
+| `CAP_AMOUNT_KEYPAD` | dashboard (hoja) | `AmountCard` (el teclado propio nace abierto, así que el paso siempre lo encuentra; se retira al tocar otra cosa o al desplazar) | `ui/capture/CaptureBottomSheet.kt` |
 | `CAP_CATEGORY` | dashboard (hoja) | `CategoryCard` | `ui/capture/CaptureBottomSheet.kt` |
 | `CAP_ATTRIBUTION` | dashboard (hoja) | `BeneficiaryCard` | `ui/capture/CaptureBottomSheet.kt` |
 | `CAL_MONTH_GRID` | calendar | rejilla del mes | `ui/calendar/CalendarScreen.kt` |
@@ -127,7 +127,7 @@ Los tags llevan el comentario `// TUTORIAL: <KEY>, ver TUTORIAL.md` en el códig
 | `ANA_KPI_ROW` | analytics | fila de KPIs (Ahorro/Por cobrar/MSI) | `ui/analytics/AnalyticsScreen.kt` |
 | `ANA_WIDGETS` | analytics | primer `WidgetCard` (gráficas) | `ui/analytics/AnalyticsScreen.kt` |
 | `ANA_ASK_FAB` | analytics | FAB "Preguntar", lo usan DOS pasos: asistente y "Atajos que aprenden" (pills dinámicos) | `ui/analytics/AnalyticsScreen.kt` |
-| `PROFILE_STATEMENTS` | profile | `SettingRow` "Importar estado de cuenta" (con tag; el auto-scroll del target baja hasta la fila) | `ui/profile/ProfileScreen.kt` |
+| `PROFILE_STATEMENTS` | profile | `SettingRow` "Importar estado de cuenta", dentro de `EstadosDeCuentaCard` en el grupo plegable **Este mes** (con tag; Perfil abre ese grupo solo mientras el paso está activo, y el auto-scroll del target baja hasta la fila) | `ui/profile/ProfileScreen.kt` |
 | `ANA_LEDGER_ENTRY` | analytics | `IconButton` "Libro Mayor" del header, paso de transición: va DESPUÉS de Perfil y ANTES del bloque LED_* (orden del guion) | `ui/analytics/AnalyticsScreen.kt` |
 | `LED_FILTERS` | ledger | fila de FilterChips | `ui/ledger/LedgerScreen.kt` |
 | `LED_ROWS` | ledger | **primer** renglón de la lista (patrón `index == 0`). Fuera del tour ese renglón puede ser una transferencia; durante el tour siempre es un gasto de demo | `ui/ledger/LedgerScreen.kt` |

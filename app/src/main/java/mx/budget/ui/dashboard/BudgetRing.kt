@@ -41,12 +41,24 @@ fun BudgetRing(
     strokeWidth: Dp = 14.dp,
     trackColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
     progressColor: Color = MaterialTheme.colorScheme.primary,
+    // Segundo tramo, contiguo al primero (Fase 6b, brief 3): lo reservado en pagos
+    // planeados sobre el mismo ingreso. Por defecto no existe, así que el resto de
+    // los usos del anillo no cambian.
+    secondaryFraction: Float = 0f,
+    secondaryColor: Color = Color.Unspecified,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     val animated by animateFloatAsState(
         targetValue = fraction.coerceIn(0f, 1f),
         animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
         label = "budgetRingSweep",
+    )
+    // El segundo tramo nunca desborda la vuelta: si lo gastado ya se comió el
+    // ingreso, lo reservado no tiene sitio que ocupar.
+    val animatedSecondary by animateFloatAsState(
+        targetValue = secondaryFraction.coerceIn(0f, (1f - fraction).coerceAtLeast(0f)),
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+        label = "budgetRingSecondarySweep",
     )
     Box(modifier = modifier.size(ringSize), contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -64,6 +76,19 @@ fun BudgetRing(
                 size = arcSize,
                 style = Stroke(width = stroke, cap = StrokeCap.Round),
             )
+            // Segundo tramo primero, para que el cabo redondo del primero quede
+            // encima y la unión no se vea partida.
+            if (animatedSecondary > 0f && secondaryColor != Color.Unspecified) {
+                drawArc(
+                    color = secondaryColor,
+                    startAngle = -90f + animated * 360f,
+                    sweepAngle = animatedSecondary * 360f,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round),
+                )
+            }
             // Progreso: arranca a las 12 en punto (-90°) y barre en sentido horario.
             if (animated > 0f) {
                 drawArc(

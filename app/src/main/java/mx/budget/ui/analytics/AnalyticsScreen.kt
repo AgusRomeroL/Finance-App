@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.quincena.quincenaFigures
 import mx.budget.ui.common.MemberPeriod
@@ -67,6 +68,7 @@ import mx.budget.ui.tutorial.tutorialTarget
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.min
+import mx.budget.R
 
 /**
  * Pantalla Analíticas: hub dinámico de widgets (rediseño jul-2026).
@@ -133,7 +135,7 @@ fun AnalyticsScreen(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                     ScreenHeader(
                         eyebrow = quincena?.label,

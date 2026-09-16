@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import mx.budget.data.local.entity.LoanEntity
 import mx.budget.ui.common.AppLocale
 import mx.budget.ui.common.LocalSessionMemberId
@@ -69,6 +70,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import mx.budget.R
 
 private val mxn: NumberFormat = NumberFormat.getCurrencyInstance(AppLocale)
 private fun Double.toMxn(): String = mxn.format(this)
@@ -167,7 +169,7 @@ private fun Header(onBack: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.AutoMirrored.Filled.ArrowBack, "Volver",
+                Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back),
                 tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp),
             )
         }

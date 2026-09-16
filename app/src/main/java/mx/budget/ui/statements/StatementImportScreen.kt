@@ -56,11 +56,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import mx.budget.data.statements.DocumentKind
 import mx.budget.data.statements.StatementMovement
 import java.text.NumberFormat
 import java.util.Locale
+import mx.budget.R
 
 /**
  * Pantalla "Importar estado de cuenta" (Fase C, paquete C1).
@@ -102,7 +104,7 @@ fun StatementImportScreen(
                     .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(14.dp))
             Column {

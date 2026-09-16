@@ -60,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import mx.budget.data.local.entity.RecurrenceTemplateEntity
 import mx.budget.data.recurrence.RecurrenceSuggestion
 import mx.budget.ui.capture.AttributionDimension
@@ -67,6 +68,7 @@ import mx.budget.ui.common.LocalSessionMemberId
 import mx.budget.ui.common.youLabel
 import java.text.NumberFormat
 import java.util.Locale
+import mx.budget.R
 
 private val mxn: NumberFormat = NumberFormat.getIntegerInstance(Locale("es", "MX"))
 
@@ -123,7 +125,7 @@ fun TemplatesScreen(
                     modifier = Modifier.size(40.dp).clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh).clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp)) }
+                ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp)) }
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Text("RECURRENTES", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.6.sp)

@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.ui.theme.FinancialTone
 import mx.budget.ui.theme.amountSemantic
@@ -54,6 +55,7 @@ import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
+import mx.budget.R
 
 /**
  * Libro Mayor (MVP Fase 3): historial completo paginado por quincena, con
@@ -99,7 +101,7 @@ fun LedgerScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
             }
             ScreenHeader(
                 eyebrow = quincena?.label,
@@ -112,11 +114,11 @@ fun LedgerScreen(
             IconButton(
                 onClick = { if (idx > 0) viewModel.selectQuincena(ordered[idx - 1].id) },
                 enabled = idx > 0,
-            ) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Quincena anterior") }
+            ) { Icon(Icons.Filled.ChevronLeft, contentDescription = stringResource(R.string.cd_previous_quincena)) }
             IconButton(
                 onClick = { if (idx in 0 until ordered.lastIndex) viewModel.selectQuincena(ordered[idx + 1].id) },
                 enabled = idx in 0 until ordered.lastIndex,
-            ) { Icon(Icons.Filled.ChevronRight, contentDescription = "Quincena siguiente") }
+            ) { Icon(Icons.Filled.ChevronRight, contentDescription = stringResource(R.string.cd_next_quincena)) }
         }
 
         // Chips de filtro: categorías con gasto + wallets.

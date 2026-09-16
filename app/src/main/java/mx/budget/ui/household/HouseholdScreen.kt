@@ -57,9 +57,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import mx.budget.data.remote.MembershipRepository
 import mx.budget.ui.common.LocalSessionMemberId
 import mx.budget.ui.common.youLabel
+import mx.budget.R
 
 /**
  * Pantalla "Cuenta y grupos" (Fase B). Reúne, en una sola pantalla con scroll,
@@ -94,7 +96,7 @@ fun HouseholdScreen(
                     .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(14.dp))
             Column {

@@ -81,6 +81,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.TransferWithNames
@@ -93,6 +94,7 @@ import mx.budget.ui.theme.financeColors
 import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
 import java.util.Date
+import mx.budget.R
 
 // ── Helpers locales (el formato de montos vive en ui/common/MoneyFormat.kt) ──
 
@@ -478,7 +480,7 @@ private fun Header(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.AutoMirrored.Filled.ArrowBack, "Volver",
+                Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back),
                 tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp),
             )
         }

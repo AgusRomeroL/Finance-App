@@ -101,6 +101,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -113,6 +114,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.local.entity.CategoryEntity
@@ -144,6 +146,8 @@ import java.time.temporal.ChronoUnit
 import java.util.Date
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
+import mx.budget.R
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Formato y utilidades
@@ -156,6 +160,9 @@ private fun Double.toGrouped(): String = mxnInt.format(this.toLong())
 
 /** "$24,380", para montos en línea. */
 private fun Double.toMxn(): String = "$" + this.toGrouped()
+
+/** "$24,380" a partir de pesos ya redondeados, para una resta que tiene que cuadrar. */
+private fun Long.toMxnRedondeado(): String = "$" + mxnInt.format(this)
 
 private val isoDate: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 private val shortMonth = SimpleMonth()
@@ -1089,7 +1096,7 @@ internal fun NavigationRailCustom(
         ) {
             Icon(
                 Icons.Filled.Add,
-                contentDescription = "Capturar gasto",
+                contentDescription = stringResource(R.string.cd_capture_expense),
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.size(24.dp)
             )
@@ -1274,7 +1281,7 @@ private fun QuincenaNavChip(
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ChevronButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Quincena anterior", enabled = canViewOlder, tint = fg, onClick = nav.onOlder)
+        ChevronButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.cd_previous_quincena), enabled = canViewOlder, tint = fg, onClick = nav.onOlder)
         Text(
             label,
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
@@ -1285,7 +1292,7 @@ private fun QuincenaNavChip(
                 .clickable(enabled = !viewingActive, onClick = nav.onReset)
                 .padding(horizontal = 6.dp, vertical = 4.dp)
         )
-        ChevronButton(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Quincena siguiente", enabled = canViewNewer, tint = fg, onClick = nav.onNewer)
+        ChevronButton(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.cd_next_quincena), enabled = canViewNewer, tint = fg, onClick = nav.onNewer)
     }
 }
 
@@ -2466,11 +2473,17 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
         verticalAlignment = Alignment.CenterVertically
     ) {
             // Anillo: fracción del ingreso ya gastada; color por umbral (neutral/ámbar/rojo).
+            // Fase 6b (brief 3): un segundo tramo, contiguo, pinta lo que queda
+            // reservado en pagos planeados, así que la cifra grande deja de
+            // aparecer sin explicación.
             BudgetRing(
                 fraction = spendFraction,
                 ringSize = 126.dp,
                 strokeWidth = 13.dp,
                 progressColor = ringColor,
+                secondaryFraction = if (hasPlanned && showNet && income > 0.0)
+                    (reserved / income).toFloat() else 0f,
+                secondaryColor = warningC.color.copy(alpha = 0.55f),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
@@ -2501,23 +2514,34 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
                     // Cifra financiera: NUNCA recortar (un monto cortado es un dato
                     // falso). Auto-escala hasta caber a fontScale 1.3 + bold.
                     AutoSizeAmountText(
-                        text = animatedShown.toDouble().toGrouped(),
+                        // Redondeo, no truncado: es la misma cifra que cierra la
+                        // resta del desglose y las dos tienen que coincidir.
+                        text = mxnInt.format(animatedShown.toDouble().roundToLong()),
                         baseStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
                         maxFontSp = 24f,
                         minFontSp = 13f,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                Spacer(Modifier.height(12.dp))
-                StatTile(FinancialTone.INCOME, "Ingreso", income)
-                Spacer(Modifier.height(8.dp))
-                StatTile(FinancialTone.EXPENSE, "Gasto", spent)
-                if (hasPlanned) {
-                    Spacer(Modifier.height(8.dp))
-                    StatTile(FinancialTone.WARNING, "Reservado", planned)
-                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    if (hasPlanned && showNet) "Lo que entró, menos lo gastado y lo reservado"
+                    else "Lo que entró, menos lo gastado",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
+        // Desglose de dónde sale el disponible (brief 3): la resta escrita, en el
+        // mismo orden en que se lee el anillo.
+        Spacer(Modifier.height(14.dp))
+        DisponibleDesglose(
+            income = income,
+            spent = spent,
+            reserved = reserved,
+            planned = planned,
+            restaReservado = hasPlanned && showNet,
+        )
         if (hasPlanned) {
             Spacer(Modifier.height(14.dp))
             ReserveToggle(showNet = showNet, onChange = { showNet = it })
@@ -2579,6 +2603,122 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
  * no-cromática obligatoria (CLAUDE.md): ícono + signo + etiqueta, nunca solo color,
  * vía [amountSemantic].
  */
+/**
+ * La resta que produce el disponible, escrita (Fase 6b, brief 3).
+ *
+ * El KPI ya descontaba lo reservado, pero eso solo se entendía bajando a la
+ * tarjeta "Reservado", y una cifra grande sin su explicación invita a gastar de
+ * más. Aquí los cuatro términos van en el mismo orden que el anillo y con sus
+ * operadores, así que la relación se lee de un vistazo.
+ *
+ * El término reservado muestra lo **prorrateado por cadencia**, que es lo que de
+ * verdad se resta; si el compromiso completo es mayor, lo dice en una nota en
+ * vez de romper la aritmética.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DisponibleDesglose(
+    income: Double,
+    spent: Double,
+    reserved: Double,
+    planned: Double,
+    restaReservado: Boolean,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Los términos se redondean a pesos ANTES de restarse y el disponible sale
+        // de esa resta: si cada uno se redondeara por su cuenta, la línea podría
+        // no cuadrar por un peso, y una resta escrita que no cuadra destruye la
+        // confianza en la cifra que explica.
+        val entro = income.roundToLong()
+        val gastado = spent.roundToLong()
+        val reservadoRedondeado = if (restaReservado) reserved.roundToLong() else 0L
+        val disponible = entro - gastado - reservadoRedondeado
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
+            DesgloseTermino(FinancialTone.INCOME, "Entró", entro)
+            DesgloseOperador("−")
+            DesgloseTermino(FinancialTone.EXPENSE, "Gastado", gastado)
+            if (restaReservado) {
+                DesgloseOperador("−")
+                DesgloseTermino(FinancialTone.WARNING, "Reservado", reservadoRedondeado)
+            }
+            DesgloseOperador("=")
+            DesgloseTermino(FinancialTone.NEUTRAL, "Disponible", disponible, destacado = true)
+        }
+        if (restaReservado && planned > reserved + 0.5) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "De ${planned.roundToLong().toMxnRedondeado()} planeados, esta quincena " +
+                    "carga ${reservadoRedondeado.toMxnRedondeado()}; el resto pesa en la siguiente.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Un término de la resta: rótulo arriba, cifra abajo, con su tono y su signo. */
+@Composable
+private fun DesgloseTermino(
+    tone: FinancialTone,
+    label: String,
+    amount: Long,
+    destacado: Boolean = false,
+) {
+    val s = amountSemantic(tone)
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (destacado) MaterialTheme.colorScheme.surfaceContainerHighest else s.container)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (!destacado) {
+                s.icon?.let {
+                    Icon(
+                        it,
+                        contentDescription = s.description,
+                        tint = s.onContainer,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+            }
+            AutoSizeAmountText(
+                text = label,
+                baseStyle = MaterialTheme.typography.labelMedium,
+                maxFontSp = 12f,
+                minFontSp = 8f,
+                color = if (destacado) MaterialTheme.colorScheme.onSurfaceVariant else s.onContainer,
+            )
+        }
+        Spacer(Modifier.height(2.dp))
+        AutoSizeAmountText(
+            text = amount.toMxnRedondeado(),
+            baseStyle = MaterialTheme.typography.titleSmall.copy(
+                fontWeight = if (destacado) FontWeight.Bold else FontWeight.SemiBold
+            ),
+            maxFontSp = if (destacado) 18f else 16f,
+            minFontSp = 11f,
+            color = if (destacado) MaterialTheme.colorScheme.onSurface else s.onContainer,
+        )
+    }
+}
+
+/** El signo entre dos términos. No se lee en voz alta: la resta ya va en los rótulos. */
+@Composable
+private fun DesgloseOperador(signo: String) {
+    Text(
+        signo,
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.clearAndSetSemantics { },
+    )
+}
+
 @Composable
 private fun StatTile(tone: FinancialTone, label: String, amount: Double) {
     val s = amountSemantic(tone)

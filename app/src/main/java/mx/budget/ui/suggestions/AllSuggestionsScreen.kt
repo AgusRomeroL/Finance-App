@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import mx.budget.data.capture.toReviewMode
 import mx.budget.ui.capture.CaptureBottomSheet
 import mx.budget.ui.capture.CaptureField
@@ -43,6 +44,7 @@ import mx.budget.ui.capture.CaptureViewModel
 import mx.budget.ui.dashboard.DashboardViewModel
 import mx.budget.ui.dashboard.SmartSuggestionCard
 import mx.budget.ui.dashboard.buildSuggestionItems
+import mx.budget.R
 
 /**
  * Pantalla "Todas las sugerencias": lista completa de capturas bancarias (D) y
@@ -92,7 +94,7 @@ fun AllSuggestionsScreen(
                     .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(14.dp))
             Column {

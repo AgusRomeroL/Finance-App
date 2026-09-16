@@ -357,6 +357,46 @@ class CaptureViewModel(
         (recents + fill).take(RECENT_LIMIT)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    // ── Gastos que el hogar repite (Fase 6b, brief 1 opción C) ──────────────
+
+    private val _repeatSuggestions =
+        MutableStateFlow<List<mx.budget.ui.quicktap.QuickSuggestion>>(emptyList())
+
+    /**
+     * Hasta tres gastos completos (concepto, importe, categoría y cuenta) que el
+     * hogar repite a esta hora y este día. Son el camino corto de la hoja: un
+     * toque los guarda enteros, sin teclear. Se derivan del mismo motor que
+     * alimenta el panel de Quick Tap, así que las dos superficies proponen lo
+     * mismo y una se puede razonar desde la otra.
+     *
+     * Se calculan una vez al abrir la hoja: recorrer el historial en cada
+     * recomposición sería trabajo repetido para un dato que no cambia mientras
+     * se captura.
+     */
+    val repeatSuggestions: StateFlow<List<mx.budget.ui.quicktap.QuickSuggestion>> =
+        _repeatSuggestions.asStateFlow()
+
+    init {
+        val dao = expenseDao
+        if (dao != null) {
+            viewModelScope.launch {
+                _repeatSuggestions.value = runCatching {
+                    mx.budget.ui.quicktap.QuickSuggestions.forNow(dao, householdId)
+                }.getOrDefault(emptyList())
+            }
+        }
+    }
+
+    /**
+     * Aplica una sugerencia entera y registra el movimiento: es el "un toque y
+     * listo" del brief. Mismo comportamiento que el panel de Quick Tap, para que
+     * tocar una fila signifique lo mismo en las dos superficies.
+     */
+    fun applyAndRegister(suggestion: mx.budget.ui.quicktap.QuickSuggestion) {
+        suggestion.apply(this)
+        onRegisterAttempt()
+    }
+
     // ── Autocompletado de categoría anti-duplicados (A3) ────────────────────
 
     private val _categoryQuery = MutableStateFlow("")

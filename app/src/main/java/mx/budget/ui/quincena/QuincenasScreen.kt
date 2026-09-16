@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.quincena.QuincenaLifecycle
 import mx.budget.ui.common.AppLocale
@@ -39,6 +40,7 @@ import mx.budget.ui.common.pressScale
 import mx.budget.ui.common.rememberPressInteractionSource
 import mx.budget.ui.common.staggeredEntrance
 import java.text.NumberFormat
+import mx.budget.R
 
 /**
  * Lista de todas las quincenas del hogar con su estado. Es la puerta para cerrar
@@ -58,7 +60,7 @@ fun QuincenasScreen(
                 title = { Text("Quincenas") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
             )

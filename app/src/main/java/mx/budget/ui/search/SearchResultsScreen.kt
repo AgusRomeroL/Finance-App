@@ -33,11 +33,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import mx.budget.ui.common.SearchPill
 import mx.budget.ui.dashboard.DashboardViewModel
 import mx.budget.ui.dashboard.FilterBottomSheet
 import mx.budget.ui.dashboard.FilterPillsRow
 import mx.budget.ui.dashboard.TransactionRow
+import mx.budget.R
 
 /**
  * Pantalla de resultados de búsqueda. La barra de búsqueda editable vive ARRIBA
@@ -101,7 +103,7 @@ fun SearchResultsScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack, "Volver",
+                    Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back),
                     tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp)
                 )
             }

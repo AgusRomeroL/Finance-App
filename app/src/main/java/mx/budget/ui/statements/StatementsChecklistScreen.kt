@@ -38,8 +38,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import mx.budget.data.statements.StatementCycleStatus
 import mx.budget.data.statements.WalletStatementStatus
+import mx.budget.R
 
 /**
  * Checklist "Estados del mes": una fila por tarjeta con su estado del ciclo
@@ -70,7 +72,7 @@ fun StatementsChecklistScreen(
                 title = { Text("Estados del mes") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
             )

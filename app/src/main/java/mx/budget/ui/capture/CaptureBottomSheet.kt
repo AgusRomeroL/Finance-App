@@ -5,6 +5,7 @@ import mx.budget.ui.tutorial.tutorialTarget
 import mx.budget.ui.common.LocalReducedMotion
 import mx.budget.ui.common.AutoSizeAmountText
 import mx.budget.ui.common.pressScale
+import mx.budget.ui.common.staggeredEntrance
 import mx.budget.ui.common.rememberPressInteractionSource
 import mx.budget.ui.theme.AppShapes
 import mx.budget.ui.theme.BudgetMotion
@@ -21,6 +22,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
@@ -38,6 +41,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -102,8 +106,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -114,6 +123,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import mx.budget.R
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.data.local.entity.PaymentMethodEntity
@@ -201,6 +211,13 @@ fun CaptureBottomSheet(
     var showDatePicker by remember { mutableStateOf(false) }
     // F4: form de nueva cuenta apilado sobre el sheet de captura.
     var showWalletForm by remember { mutableStateOf(false) }
+    // Fase 6b (brief 1, opción A): el teclado propio nace abierto, porque lo
+    // primero que se hace al abrir la hoja es teclear el importe, y se retira en
+    // cuanto se toca cualquier otra cosa, devolviendo su alto al resto.
+    var keypadVisible by rememberSaveable { mutableStateOf(true) }
+    // Fase 6b (brief 1, opción C): los gastos que el hogar repite, enteros.
+    val repeatSuggestions by (viewModel?.repeatSuggestions
+        ?: dummyStateFlow(emptyList<mx.budget.ui.quicktap.QuickSuggestion>())).collectAsState()
 
     /** `true` si [field] debe resaltarse (hubo intento fallido y sigue faltando). */
     fun fieldMissing(field: CaptureField): Boolean =
@@ -289,12 +306,34 @@ fun CaptureBottomSheet(
                 // exactamente al espacio entre header y footer, alineando pintura y
                 // área táctil (con fill=false el scroll medía su alto intrínseco y
                 // creaba una zona muerta de touch en la parte baja del sheet).
+                val scrollDeLaHoja = rememberScrollState()
+                // Desplazar también retira el teclado: quien busca una categoría ya
+                // dejó de teclear el importe, y es justo el alto que necesita para
+                // que las recientes queden a la vista.
+                LaunchedEffect(scrollDeLaHoja.isScrollInProgress) {
+                    if (scrollDeLaHoja.isScrollInProgress) keypadVisible = false
+                }
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(scrollDeLaHoja)
                         .padding(horizontal = 24.dp)
                 ) {
+                    // Las de siempre: un toque guarda el gasto entero (brief 1,
+                    // opción C). Solo en alta de gasto: en un ingreso o en una
+                    // revisión de algo ya prellenado no tiene sentido repetir.
+                    if (captureKind == CaptureKind.EXPENSE &&
+                        mode is CaptureSheetMode.New &&
+                        repeatSuggestions.isNotEmpty()
+                    ) {
+                        RepeatRow(
+                            suggestions = repeatSuggestions,
+                            enabled = operationState !is CaptureOperationState.Loading,
+                            onPick = { viewModel?.applyAndRegister(it) },
+                        )
+                        Spacer(Modifier.height(14.dp))
+                    }
+
                     // TUTORIAL: CAP_AMOUNT_KEYPAD, ver TUTORIAL.md
                     Box(
                         Modifier
@@ -310,13 +349,21 @@ fun CaptureBottomSheet(
                             onKey = { viewModel?.onNumpadKey(it) },
                             amountPending = CaptureField.AMOUNT in unresolvedFields,
                             conceptPending = CaptureField.CONCEPT in unresolvedFields,
-                            missing = fieldMissing(CaptureField.AMOUNT)
+                            missing = fieldMissing(CaptureField.AMOUNT),
+                            keypadVisible = keypadVisible,
+                            onAmountFocus = { keypadVisible = true },
+                            onConceptFocus = { keypadVisible = false },
                         )
                     }
                     Spacer(Modifier.height(14.dp))
 
                     // Conmutación Gasto/Ingreso con resortes M3 (A3 §2).
                     AnimatedContent(
+                        // Tocar categoría, cuenta o beneficiario retira el teclado
+                        // del importe sin robarle el toque a lo que se tocó.
+                        modifier = Modifier.collapseKeypadOnTouch(enabled = keypadVisible) {
+                            keypadVisible = false
+                        },
                         targetState = captureKind,
                         transitionSpec = {
                             (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
@@ -579,7 +626,7 @@ private fun CaptureHeader(
                     .clickable(onClick = onClose),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.Close, "Cerrar", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.Close, stringResource(R.string.cd_close_sheet), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(14.dp))
             Column {
@@ -672,7 +719,12 @@ private fun AmountCard(
     onKey: (String) -> Unit,
     amountPending: Boolean = false,
     conceptPending: Boolean = false,
-    missing: Boolean = false
+    missing: Boolean = false,
+    // Fase 6b (brief 1, opción A): el teclado propio solo ocupa alto mientras el
+    // importe tiene el foco. Tocar la cifra lo devuelve.
+    keypadVisible: Boolean = true,
+    onAmountFocus: () -> Unit = {},
+    onConceptFocus: () -> Unit = {},
 ) {
     Card {
         Row(
@@ -694,9 +746,21 @@ private fun AmountCard(
             CapLabel("MXN")
         }
         Spacer(Modifier.height(8.dp))
-        // Cifra: entero en onSurface, decimales atenuados
+        // Cifra: entero en onSurface, decimales atenuados. Es también el modo de
+        // recuperar el teclado propio cuando se retiró, así que se anuncia como
+        // botón y dice qué hace al activarlo.
         val (intPart, decPart) = splitAmount(displayAmount)
-        Row(verticalAlignment = Alignment.Top) {
+        Row(
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = if (keypadVisible) "El teclado ya está abierto" else "Abrir el teclado del importe",
+                    onClick = onAmountFocus,
+                )
+        ) {
             Text(
                 "$",
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
@@ -738,7 +802,9 @@ private fun AmountCard(
         OutlinedTextField(
             value = concept,
             onValueChange = onConceptChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { if (it.isFocused) onConceptFocus() },
             placeholder = {
                 Text(
                     if (kind == CaptureKind.INCOME) "Etiqueta (ej. Sueldo, Honorarios)"
@@ -755,8 +821,100 @@ private fun AmountCard(
                 unfocusedContainerColor = MaterialTheme.colorScheme.surface
             )
         )
-        Spacer(Modifier.height(16.dp))
-        Keypad(onKey = onKey)
+        // Teclado propio bajo demanda (brief 1, opción A). A escala de fuente 1.3
+        // con negrita se llevaba 530 de los 2000 px visibles y empujaba las
+        // categorías recientes, que son el camino corto, por debajo del pliegue.
+        // Ahora ocupa ese alto solo mientras se teclea el importe.
+        val reducedMotion = LocalReducedMotion.current
+        AnimatedVisibility(
+            visible = keypadVisible,
+            enter = if (reducedMotion) fadeIn(animationSpec = snap())
+            else expandVertically(animationSpec = captureSpring()) + fadeIn(animationSpec = captureSpring()),
+            exit = if (reducedMotion) fadeOut(animationSpec = snap())
+            else shrinkVertically(animationSpec = captureSpring()) + fadeOut(animationSpec = captureSpring()),
+        ) {
+            Column {
+                Spacer(Modifier.height(16.dp))
+                Keypad(onKey = onKey)
+            }
+        }
+    }
+}
+
+/**
+ * Retira el teclado propio al primer toque dentro de este subárbol, sin
+ * consumirlo: el chip que se tocó recibe su clic igual. Se escucha en la pasada
+ * inicial, que va del contenedor hacia dentro, por eso llega antes que el
+ * `clickable` del hijo y no compite con él.
+ */
+@Composable
+private fun Modifier.collapseKeypadOnTouch(enabled: Boolean, onTouch: () -> Unit): Modifier =
+    if (!enabled) this else this.pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.type == PointerEventType.Press) onTouch()
+            }
+        }
+    }
+
+/**
+ * Las de siempre: los gastos que el hogar repite a esta hora, enteros. Un toque
+ * guarda concepto, importe, categoría y cuenta sin teclear nada, que es el caso
+ * común del hogar (brief 1, opción C). Es la misma lista y el mismo gesto que el
+ * panel de Quick Tap, para que las dos superficies signifiquen lo mismo.
+ */
+@Composable
+private fun RepeatRow(
+    suggestions: List<mx.budget.ui.quicktap.QuickSuggestion>,
+    enabled: Boolean,
+    onPick: (mx.budget.ui.quicktap.QuickSuggestion) -> Unit,
+) {
+    val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
+    Card {
+        CapLabel("LAS DE SIEMPRE, DE UN TOQUE")
+        Spacer(Modifier.height(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            suggestions.take(3).forEachIndexed { index, suggestion ->
+                val interaction = rememberPressInteractionSource()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .staggeredEntrance(index)
+                        .pressScale(interactionSource = interaction)
+                        .heightIn(min = 56.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                        .clickable(
+                            interactionSource = interaction,
+                            indication = LocalIndication.current,
+                            enabled = enabled,
+                            role = Role.Button,
+                            onClickLabel = "Guardar este gasto tal cual",
+                            onClick = { onPick(suggestion) },
+                        )
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        suggestion.concepto,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    AutoSizeAmountText(
+                        text = money.format(suggestion.montoMxn),
+                        baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
+                        maxFontSp = 20f,
+                        minFontSp = 13f,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1818,6 +1976,10 @@ private fun CaptureFooter(
             animationSpec = BudgetMotion.standard(),
             label = "captureCtaFg",
         )
+        // Los dos estados que anuncia la región viva viven en recursos, porque un
+        // lector de pantalla los dice y en pantalla no están escritos.
+        val guardando = stringResource(R.string.state_saving)
+        val faltan = stringResource(R.string.state_missing_fields)
         Box(
             modifier = Modifier
                 .height(52.dp)
@@ -1835,9 +1997,9 @@ private fun CaptureFooter(
                 .semantics {
                     liveRegion = LiveRegionMode.Polite
                     stateDescription = when {
-                        isLoading -> "Guardando el movimiento"
+                        isLoading -> guardando
                         enabled -> "Listo para guardar"
-                        else -> "Faltan $missingCount campos"
+                        else -> faltan
                     }
                 }
                 .padding(horizontal = 28.dp),

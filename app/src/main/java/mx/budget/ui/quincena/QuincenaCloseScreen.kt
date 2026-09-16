@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,6 +35,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -50,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.quincena.QuincenaLifecycle
 import mx.budget.ui.common.AppLocale
@@ -58,6 +61,7 @@ import mx.budget.ui.theme.BudgetMotion
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import mx.budget.R
 
 /**
  * Cierre manual de quincena (RF-32): resume lo que se va a congelar, obliga a
@@ -87,9 +91,22 @@ fun QuincenaCloseScreen(
                 title = { Text(state.quincena?.label ?: "Cierre de quincena") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
+            )
+        },
+        // Fase 6b (brief 4): la decisión masiva y la confirmación viven fuera del
+        // desplazamiento. Con 48 planeados sin ejecutar, el botón de cerrar
+        // quedaba a 25 gestos del inicio; ahora la lista es lo único que se
+        // recorre y el resumen de lo que se congela está siempre a la vista.
+        bottomBar = {
+            BarraDeCierre(
+                state = state,
+                money = money,
+                onCloseRequest = { confirmClose = true },
+                onReopen = viewModel::reopen,
+                onExportPdf = onExportPdf?.let { accion -> { accion(quincenaId) } },
             )
         },
     ) { padding ->
@@ -100,134 +117,142 @@ fun QuincenaCloseScreen(
             return@Scaffold
         }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Cabecera fija: el estado del periodo y la decisión masiva no se van
+            // con el desplazamiento de la lista.
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
                 EstadoDelPeriodo(state, fechaFmt)
-            }
-
-            state.figures?.let { cifras ->
-                item {
-                    TarjetaSeccion("LO QUE SE CONGELA") {
-                        FilaCifra("Ingreso del periodo", money.format(cifras.income))
-                        FilaCifra("Gasto ejecutado", money.format(cifras.spent))
-                        FilaCifra("Reservado en planeados", money.format(cifras.reserved))
-                        FilaCifra("Disponible", money.format(cifras.available), destacado = true)
-                        Spacer(Modifier.height(10.dp))
-                        LinearProgressIndicator(
-                            progress = { (cifras.executionPct / 100f).coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Spacer(Modifier.height(6.dp))
+                if (state.planned.isNotEmpty() && !state.isClosed && state.canManage) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Text(
-                            "${cifras.executionPct} % del presupuesto ejercido",
+                            if (state.pendingDecisions > 0)
+                                "${state.pendingDecisions} de ${state.planned.size} sin decidir"
+                            else "Todo decidido",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
                         )
-                    }
-                }
-            }
-
-            if (state.planned.isNotEmpty()) {
-                item {
-                    Column {
-                        Text(
-                            "PAGOS PLANEADOS SIN EJECUTAR",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
-                            letterSpacing = 1.6.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "Decide uno por uno. Nada se aplica hasta que confirmes el cierre.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (!state.isClosed && state.canManage) {
-                            Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(onClick = { viewModel.decideAll(PlannedDecision.MOVE) }) {
-                                    Text("Mover todos")
-                                }
-                                TextButton(onClick = { viewModel.decideAll(PlannedDecision.DISCARD) }) {
-                                    Text("Descartar todos")
-                                }
-                            }
+                        TextButton(onClick = { viewModel.decideAll(PlannedDecision.MOVE) }) {
+                            Text("Mover todos")
+                        }
+                        TextButton(onClick = { viewModel.decideAll(PlannedDecision.DISCARD) }) {
+                            Text("Descartar todos")
                         }
                     }
                 }
-                itemsIndexed(state.planned) { index, fila ->
-                    FilaPlaneado(
-                        fila = fila,
-                        index = index,
-                        decision = state.decisions[fila.expenseId],
-                        habilitado = !state.isClosed && state.canManage && !state.working,
-                        money = money,
-                        onDecide = { viewModel.decide(fila.expenseId, it) },
-                    )
-                }
             }
 
-            if (state.byCategory.any { it.actual > 0.0 }) {
-                item {
-                    TarjetaSeccion("GASTO POR CATEGORÍA") {
-                        state.byCategory.filter { it.actual > 0.0 }
-                            .sortedByDescending { it.actual }
-                            .take(12)
-                            .forEach { FilaCifra(it.categoryName, money.format(it.actual)) }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                state.figures?.let { cifras ->
+                    item {
+                        TarjetaSeccion("LO QUE SE CONGELA") {
+                            FilaCifra("Ingreso del periodo", money.format(cifras.income))
+                            FilaCifra("Gasto ejecutado", money.format(cifras.spent))
+                            FilaCifra("Reservado en planeados", money.format(cifras.reserved))
+                            FilaCifra("Disponible", money.format(cifras.available), destacado = true)
+                            Spacer(Modifier.height(10.dp))
+                            LinearProgressIndicator(
+                                progress = { (cifras.executionPct / 100f).coerceIn(0f, 1f) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "${cifras.executionPct} % del presupuesto ejercido",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
-            }
 
-            if (state.byBeneficiary.isNotEmpty()) {
-                item {
-                    TarjetaSeccion("QUIÉN CONSUMIÓ") {
-                        state.byBeneficiary.forEach { FilaCifra(it.memberName, money.format(it.totalMxn)) }
+                if (state.planned.isNotEmpty()) {
+                    item {
+                        Column {
+                            Text(
+                                "PAGOS PLANEADOS SIN EJECUTAR",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                letterSpacing = 1.6.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "Decide uno por uno, o resuélvelos todos desde arriba. " +
+                                    "Nada se aplica hasta que confirmes el cierre.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    itemsIndexed(state.planned) { index, fila ->
+                        FilaPlaneado(
+                            fila = fila,
+                            index = index,
+                            decision = state.decisions[fila.expenseId],
+                            habilitado = !state.isClosed && state.canManage && !state.working,
+                            money = money,
+                            onDecide = { viewModel.decide(fila.expenseId, it) },
+                        )
                     }
                 }
-            }
 
-            if (state.byPayer.isNotEmpty()) {
-                item {
-                    TarjetaSeccion("QUIÉN PAGÓ") {
-                        state.byPayer.forEach { FilaCifra(it.memberName, money.format(it.totalMxn)) }
+                if (state.byCategory.any { it.actual > 0.0 }) {
+                    item {
+                        TarjetaSeccion("GASTO POR CATEGORÍA") {
+                            state.byCategory.filter { it.actual > 0.0 }
+                                .sortedByDescending { it.actual }
+                                .take(12)
+                                .forEach { FilaCifra(it.categoryName, money.format(it.actual)) }
+                        }
                     }
                 }
-            }
 
-            if (state.balances.isNotEmpty()) {
-                item {
-                    TarjetaSeccion("SALDOS AL CIERRE") {
-                        state.balances.forEach { FilaCifra(it.displayName, money.format(it.balance)) }
+                if (state.byBeneficiary.isNotEmpty()) {
+                    item {
+                        TarjetaSeccion("QUIÉN CONSUMIÓ") {
+                            state.byBeneficiary.forEach { FilaCifra(it.memberName, money.format(it.totalMxn)) }
+                        }
                     }
                 }
-            }
 
-            item {
-                AnimatedVisibility(
-                    visible = state.error != null,
-                    enter = fadeIn(BudgetMotion.standard()),
-                    exit = fadeOut(BudgetMotion.standard()),
-                ) {
-                    Text(
-                        state.error.orEmpty(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                if (state.byPayer.isNotEmpty()) {
+                    item {
+                        TarjetaSeccion("QUIÉN PAGÓ") {
+                            state.byPayer.forEach { FilaCifra(it.memberName, money.format(it.totalMxn)) }
+                        }
+                    }
                 }
-            }
 
-            item {
-                AccionesDeCierre(
-                    state = state,
-                    onCloseRequest = { confirmClose = true },
-                    onReopen = viewModel::reopen,
-                    onExportPdf = onExportPdf?.let { accion -> { accion(quincenaId) } },
-                )
+                if (state.balances.isNotEmpty()) {
+                    item {
+                        TarjetaSeccion("SALDOS AL CIERRE") {
+                            state.balances.forEach { FilaCifra(it.displayName, money.format(it.balance)) }
+                        }
+                    }
+                }
+
+                item {
+                    AnimatedVisibility(
+                        visible = state.error != null,
+                        enter = fadeIn(BudgetMotion.standard()),
+                        exit = fadeOut(BudgetMotion.standard()),
+                    ) {
+                        Text(
+                            state.error.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
             }
         }
     }
@@ -383,6 +408,52 @@ private fun OpcionPlaneado(
         enabled = habilitado,
         label = { Text(texto) },
     )
+}
+
+/**
+ * Barra inferior fija: el resumen de lo que se congela y la confirmación.
+ *
+ * El resumen sigue delante antes de confirmar porque es lo que da confianza para
+ * una acción difícil de deshacer; lo que cambia es que ya no hay que recorrer la
+ * lista entera para llegar a él.
+ */
+@Composable
+private fun BarraDeCierre(
+    state: QuincenaCloseState,
+    money: NumberFormat,
+    onCloseRequest: () -> Unit,
+    onReopen: () -> Unit,
+    onExportPdf: (() -> Unit)?,
+) {
+    if (state.loading || state.quincena == null) return
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 3.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 14.dp)
+        ) {
+            state.figures?.let { cifras ->
+                Text(
+                    "Se congela: entró ${money.format(cifras.income)}, " +
+                        "gastado ${money.format(cifras.spent)}, " +
+                        "disponible ${money.format(cifras.available)}.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+            AccionesDeCierre(
+                state = state,
+                onCloseRequest = onCloseRequest,
+                onReopen = onReopen,
+                onExportPdf = onExportPdf,
+            )
+        }
+    }
 }
 
 @Composable

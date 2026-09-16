@@ -52,11 +52,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import mx.budget.data.local.entity.MemberEntity
 import mx.budget.ui.capture.AttributionDimension
 import mx.budget.ui.theme.FinancialTone
 import mx.budget.ui.theme.amountSemantic
 import mx.budget.ui.theme.financeColors
+import mx.budget.R
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AttributionReviewScreen: "Revisión de atribuciones" (Feature B, Apéndice F.3.7)
@@ -152,7 +154,7 @@ private fun Header(onBack: () -> Unit) {
                 .clickable(onClick = onBack),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(14.dp))
         Column {

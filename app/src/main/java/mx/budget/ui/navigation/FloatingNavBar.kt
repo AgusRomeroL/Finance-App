@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import mx.budget.ui.capture.VoiceCaptureActivity
 import mx.budget.ui.common.pressScale
 import mx.budget.ui.common.rememberPressInteractionSource
@@ -46,6 +47,7 @@ import mx.budget.ui.dashboard.navItems
 import mx.budget.ui.tutorial.TutorialController
 import mx.budget.ui.tutorial.TutorialKey
 import mx.budget.ui.tutorial.tutorialTarget
+import mx.budget.R
 
 /**
  * Barra inferior flotante estilo Google Photos / Pixel Screenshots: un **pill**
@@ -124,7 +126,7 @@ fun FloatingNavBar(
         CircleActionButton(
             container = MaterialTheme.colorScheme.primary,
             content = MaterialTheme.colorScheme.onPrimary,
-            contentDescription = "Capturar gasto",
+            contentDescription = stringResource(R.string.cd_capture_expense),
             icon = Icons.Filled.Add,
             onClick = onCapture,
             modifier = Modifier.tutorialTarget(TutorialKey.DASH_ACTION_BAR, tutorialController),

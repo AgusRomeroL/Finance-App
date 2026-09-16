@@ -9,11 +9,16 @@ rehacer o corregir sin depender de la nube.
 
 | Brief | Opción elegida | Enlace del lienzo | Por qué |
 |---|---|---|---|
-| 1. Hoja de captura | **por elegir entre A, B y C** | https://claude.ai/artifact/SgXHfSgnMJj7L4nqWJTPrp | Tres ejes distintos: retirar el teclado cuando estorba (A), quitarlo del todo (B), saltarse el formulario cuando el gasto se repite (C). Cada artboard lleva su nota con lo que gana y lo que arriesga. |
-| 2. Perfil con jerarquía | **por elegir entre A, B y C** | https://claude.ai/artifact/2Y9T9MywcV3xngUoBb7xPX | Cuatro artboards: el hub con su segunda pantalla de Ajustes (A), tres pestañas (B) y acordeón con buscador (C). Los tres llegan a cualquier ajuste en dos toques por caminos distintos: jerarquía nueva, agrupación plana o búsqueda. |
-| 3. Bloque héroe del panel | **por elegir entre A, B y C** | https://claude.ai/artifact/7rPHEns4k5DAeQuySAiiAY | Cifras reales de Q1 Julio 2026. A cambia el anillo por una barra apilada con leyenda, B parte el anillo en los tres pedazos reales, C escribe la resta con sus signos y añade cuánto se puede gastar por día. |
-| 4. Cierre de quincena | **por elegir entre A, B y C** | https://claude.ai/artifact/TAFJNjJdRzjuqer5YVFHfg | Cifras reales de Q2 Junio 2026 con 48 planeados sin ejecutar. A ancla resumen y confirmación y deja que solo la lista se desplace, B parte el flujo en decidir y confirmar (dos artboards), C deja la lista intacta y sube una hoja con todo lo que hace falta para cerrar. |
+| 1. Hoja de captura | **A + C, implementadas juntas** (2026-09-16) | https://claude.ai/artifact/SgXHfSgnMJj7L4nqWJTPrp | A quita del camino el teclado propio en cuanto deja de usarse (al tocar cualquier otra cosa o al desplazar) y C pone arriba los gastos que el hogar repite, enteros. Juntas cubren los dos casos: el que se repite se guarda de un toque y el que no, ya no pelea con el teclado. Se descartó B porque devolvía el teclado del sistema, que fue justo lo que llevó a construir el propio. |
+| 2. Perfil con jerarquía | **Acordeón de cuatro grupos** (2026-09-16) | sin lienzo: decidido sobre la evidencia de la auditoría | Con todo cerrado las doce secciones caben en una pantalla y cualquier ajuste queda a dos toques, sin rutas nuevas ni pasos de tutorial que reescribir. La ayuda y el estado de la sesión se quedan fuera de los grupos porque el aviso de sesión anónima no puede depender de que alguien abra algo. |
+| 3. Bloque héroe del panel | **Anillo por segmentos y la resta escrita** (2026-09-16) | sin lienzo: decidido sobre la evidencia de la auditoría | El anillo gana un segundo tramo con lo reservado y debajo va la resta completa, con el mismo orden y sus operadores. Se conserva el anillo, que es el sello del panel, y la cifra grande deja de aparecer sin explicación. |
+| 4. Cierre de quincena | **Barra inferior fija con el resumen** (2026-09-16) | sin lienzo: decidido sobre la evidencia de la auditoría | La decisión masiva sube a una cabecera fija con el conteo de lo que falta por decidir, el resumen de lo que se congela y el botón de cerrar viven en una barra inferior siempre visible, y la lista es lo único que se recorre. El resumen sigue delante antes de confirmar, que es lo que da confianza en una acción difícil de deshacer. |
 | 5. Panel de Quick Tap | **implementado y verificado** | https://claude.ai/artifact/SJUwQ4FwwgtkxRhshNfnjf | Tres artboards, no opciones: el panel flotante, la pantalla que precede al permiso y la degradación a hoja completa cuando no se concede. No hay alternativas que elegir porque la especificación §3.3 ya fija la forma. |
+
+Los briefs 2, 3 y 4 no llegaron a tener lienzo: `/design` exige `/design-login`, que
+solo se concede desde una sesión interactiva, y la fricción de los tres estaba medida
+con volcados y capturas. Agustín eligió entre opciones escritas el 2026-09-16 y esa
+elección es la que se implementó.
 
 ## Decisiones ya tomadas sin lienzo
 
@@ -29,4 +34,4 @@ no rediseños. Se implementan en la 6b tal cual.
 | Guardado de un gasto | Región viva educada que anuncia el estado. Hecho | Auditoría §3 |
 | Textos que lee TalkBack y mensajes de error | Extraídos a `strings.xml`, que tenía una sola cadena. Hecho | Plan §4, Fase 6 punto 7 |
 | Raya larga (U+2014) | Fuera de los 12 textos visibles y de los 126 comentarios en Kotlin. Hecho | Plan, hallazgo 26 |
-| Cabeceras de sección con `heading()` | Entra con el rediseño de Perfil del brief 2, para no marcar dos veces | Auditoría §3 |
+| Cabeceras de sección con `heading()` | Marcadas con el rediseño de Perfil: la cabecera de cada grupo es un encabezado y dice si está abierta o cerrada, y los rótulos de tarjeta también. Hecho | Auditoría §3 |
