@@ -10,15 +10,15 @@ rehacer o corregir sin depender de la nube.
 | Brief | Opción elegida | Enlace del lienzo | Por qué |
 |---|---|---|---|
 | 1. Hoja de captura | **A + C, implementadas juntas** (2026-09-16) | https://claude.ai/artifact/SgXHfSgnMJj7L4nqWJTPrp | A quita del camino el teclado propio en cuanto deja de usarse (al tocar cualquier otra cosa o al desplazar) y C pone arriba los gastos que el hogar repite, enteros. Juntas cubren los dos casos: el que se repite se guarda de un toque y el que no, ya no pelea con el teclado. Se descartó B porque devolvía el teclado del sistema, que fue justo lo que llevó a construir el propio. |
-| 2. Perfil con jerarquía | **Acordeón de cuatro grupos** (2026-09-16) | sin lienzo: decidido sobre la evidencia de la auditoría | Con todo cerrado las doce secciones caben en una pantalla y cualquier ajuste queda a dos toques, sin rutas nuevas ni pasos de tutorial que reescribir. La ayuda y el estado de la sesión se quedan fuera de los grupos porque el aviso de sesión anónima no puede depender de que alguien abra algo. |
-| 3. Bloque héroe del panel | **Anillo por segmentos y la resta escrita** (2026-09-16) | sin lienzo: decidido sobre la evidencia de la auditoría | El anillo gana un segundo tramo con lo reservado y debajo va la resta completa, con el mismo orden y sus operadores. Se conserva el anillo, que es el sello del panel, y la cifra grande deja de aparecer sin explicación. |
-| 4. Cierre de quincena | **Barra inferior fija con el resumen** (2026-09-16) | sin lienzo: decidido sobre la evidencia de la auditoría | La decisión masiva sube a una cabecera fija con el conteo de lo que falta por decidir, el resumen de lo que se congela y el botón de cerrar viven en una barra inferior siempre visible, y la lista es lo único que se recorre. El resumen sigue delante antes de confirmar, que es lo que da confianza en una acción difícil de deshacer. |
+| 2. Perfil con jerarquía | **C, el acordeón, sin el buscador** (2026-09-16) | https://claude.ai/artifact/2Y9T9MywcV3xngUoBb7xPX | Cuatro grupos plegables, uno abierto a la vez: con todo cerrado las doce secciones caben en una pantalla y cualquier ajuste queda a dos toques, sin rutas nuevas ni pasos de tutorial que reescribir. Se descartó A (hub con segunda pantalla) por las rutas que añadía y B (pestañas) porque reparte mal doce secciones desiguales. El buscador del lienzo C queda fuera por ahora: con los grupos cerrados no hay nada que buscar que no esté a la vista. La ayuda y el estado de la sesión se quedan fuera de los grupos porque el aviso de sesión anónima no puede depender de que alguien abra algo. |
+| 3. Bloque héroe del panel | **B y C juntas: el anillo partido y la resta escrita** (2026-09-16) | https://claude.ai/artifact/7rPHEns4k5DAeQuySAiiAY | El anillo gana un segundo tramo con lo reservado (B) y debajo va la resta completa con sus operadores (C), que reemplaza a los tres tiles de colores. Se descartó A porque retiraba el anillo, que es el sello del panel. El "por día" que C añadía ya vive en la tarjeta de ritmo, justo debajo, así que no se duplica. |
+| 4. Cierre de quincena | **A, resumen y confirmación ancladas** (2026-09-16) | https://claude.ai/artifact/TAFJNjJdRzjuqer5YVFHfg | La decisión masiva sube a una cabecera fija con el conteo de lo que falta por decidir, el resumen de lo que se congela y el botón de cerrar viven en una barra inferior siempre visible, y la lista es lo único que se recorre. Se descartó B porque añadía un paso a una pantalla que ya es larga, y C porque escondía el resumen tras una hoja que hay que abrir. |
 | 5. Panel de Quick Tap | **implementado y verificado** | https://claude.ai/artifact/SJUwQ4FwwgtkxRhshNfnjf | Tres artboards, no opciones: el panel flotante, la pantalla que precede al permiso y la degradación a hoja completa cuando no se concede. No hay alternativas que elegir porque la especificación §3.3 ya fija la forma. |
 
-Los briefs 2, 3 y 4 no llegaron a tener lienzo: `/design` exige `/design-login`, que
-solo se concede desde una sesión interactiva, y la fricción de los tres estaba medida
-con volcados y capturas. Agustín eligió entre opciones escritas el 2026-09-16 y esa
-elección es la que se implementó.
+Los cinco lienzos están en `artboards/`, así que se rehacen o se corrigen sin depender
+de la nube. Las elecciones de los briefs 1 a 4 las tomó Agustín el 2026-09-16 y son las
+que se implementaron ese mismo día, verificadas en FinanceFold con la configuración fiel
+del Fold (capturas en `capturas/2026-09-16-*.png`).
 
 ## Decisiones ya tomadas sin lienzo
 
