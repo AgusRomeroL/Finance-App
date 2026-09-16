@@ -1,0 +1,39 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 640, "h": 980, "title": "Opcion A - Perfil como hub" },
+    { "file": "Ajustes.dc.html", "x": 760, "y": 0, "w": 640, "h": 980, "title": "Opcion A - la segunda pantalla" },
+    { "file": "OpcionB.dc.html", "x": 1520, "y": 0, "w": 640, "h": 980, "title": "Opcion B - Tres pestanias" },
+    { "file": "OpcionC.dc.html", "x": 2280, "y": 0, "w": 640, "h": 980, "title": "Opcion C - Acordeon con buscador" }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -340,
+      "w": 700,
+      "text": "El problema medido\n\nPerfil apila doce secciones con el mismo peso visual: ayuda, cuenta, grupos, administrar, apariencia, inteligencia, automatizacion, estados de cuenta, exportar y respaldar, recordatorios, calendario y ubicacion. Llegar a la ultima exige siete gestos de desplazamiento (hallazgo 7.1).\n\nEncargo: que cualquier ajuste quede a dos toques, separando lo que se toca una vez y se olvida de lo que se usa cada quincena.\n\nTodo esta pintado en el estado real: modo oscuro, escala de fuente 1.3 con negrita."
+    },
+    {
+      "id": "nota-a",
+      "x": 0,
+      "y": 1040,
+      "w": 700,
+      "text": "A. Perfil deja de ser una lista de ajustes y pasa a ser un tablero de lo que hay que hacer. Arriba, las tres tareas de la quincena con su estado escrito (cerrar el periodo, estados sin subir, ultimo respaldo). Abajo, dos puertas: el hogar y una unica pantalla de Ajustes con buscador.\n\nA favor: lo que se usa cada quincena deja de competir con lo que se configura una vez al ano, y el estado se ve sin entrar. Doce secciones caben en una pantalla sin desplazar.\nEn contra: mete un nivel de navegacion nuevo, asi que un ajuste raro pasa de un toque a dos. El buscador tiene que existir de verdad o la pantalla de Ajustes hereda el mismo problema."
+    },
+    {
+      "id": "nota-b",
+      "x": 1520,
+      "y": 1040,
+      "w": 700,
+      "text": "B. Tres pestanias dentro de Perfil: Esta quincena, El hogar, Ajustes. El punto rojo marca donde hay algo pendiente. El aviso de sesion sin cuenta vive fuera de las pestanias porque no se puede esconder detras de una que nadie abre.\n\nA favor: dos toques exactos a cualquier fila, sin pantallas nuevas, y el nombre de cada pestania ya dice cuando entrar.\nEn contra: una pestania es cara en un Fold casi cuadrado, y con font 1.3 las tres etiquetas van justas de ancho. Ademas esconde dos tercios del contenido a quien no sepa que hay pestanias."
+    },
+    {
+      "id": "nota-c",
+      "x": 2280,
+      "y": 1040,
+      "w": 700,
+      "text": "C. La lista se queda, pero doce secciones se colapsan en cinco acordeones con una sola abierta a la vez, y el buscador de arriba es el camino corto a cualquiera de los cuarenta ajustes sueltos.\n\nA favor: es el cambio mas barato de implementar y no cambia el modelo mental de nadie. Buscar da un toque, no dos.\nEn contra: sigue siendo una lista larga cuando algo esta abierto, y un acordeon oculta el estado (cuantos estados faltan, cuando fue el ultimo respaldo) hasta que lo abres."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      background: #14150F;
+      color: #E5E2D9;
+      font-family: "Google Sans Flex Text", "Google Sans", system-ui, sans-serif;
+      font-size: 20.8px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+    }
+    .etq { font-size: 13px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: #C5C8B6; }
+    .grupo { background: #202118; border-radius: 22px; padding: 4px 20px; }
+    .cab { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 15px 0; }
+    .fila { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 12px 0 12px 58px; }
+    .ic { width: 44px; height: 44px; border-radius: 999px; background: #2A2B22; display: grid; place-items: center; flex-shrink: 0; }
+    .titulo { font-size: 19px; font-weight: 600; line-height: 1.2; }
+    .sub { font-size: 15px; font-weight: 500; color: #C5C8B6; line-height: 1.25; }
+    .div { height: 1px; background: #2A2B22; }
+    .chev { color: #8B8E7C; flex-shrink: 0; }
+    .insignia { font-size: 14px; font-weight: 700; padding: 5px 12px; border-radius: 999px; background: #93000A; color: #FFDAD6; white-space: nowrap; }
+  </style>
+</helmet>
+
+<div style="width: 640px; height: 980px; display: flex; flex-direction: column; gap: 14px; background: #1C1D17; padding: 22px 20px; box-sizing: border-box; overflow: hidden;">
+
+  <div>
+    <div class="etq">Tu hogar</div>
+    <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 34px; line-height: 1.1;">Perfil</div>
+  </div>
+
+  <!-- El buscador es la ruta corta a cualquiera de los cuarenta ajustes -->
+  <div style="display: flex; align-items: center; gap: 12px; background: #2A2B22; border-radius: 999px; padding: 0 20px; height: 56px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C5C8B6" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7.2"/><path d="M16.3 16.3L21 21"/></svg>
+    <div style="font-size: 18px; color: #8B8E7C;">Buscar: respaldo, calendario, color...</div>
+  </div>
+
+  <!-- Doce secciones colapsadas en cinco. Solo una abierta a la vez. -->
+  <div class="grupo" style="background: #1A2A20;">
+    <div class="cab">
+      <div class="ic" style="background: #005233;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#92F7B4" stroke-width="2.2" stroke-linecap="round"><path d="M9 11l3 3 7-7"/><path d="M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>
+      </div>
+      <div style="flex-grow: 1;"><div class="titulo">Esta quincena</div><div class="sub">Cerrar, estados, exportar</div></div>
+      <div class="insignia">3</div>
+      <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 9l7 7 7-7"/></svg>
+    </div>
+    <div class="div"></div>
+    <div class="fila"><div style="flex-grow: 1;"><div class="titulo">Cerrar la quincena</div><div class="sub">Q2 Junio vencio el 30</div></div><svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></div>
+    <div class="fila"><div style="flex-grow: 1;"><div class="titulo">Estados del mes</div><div class="sub">2 sin subir</div></div><svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></div>
+    <div class="fila"><div style="flex-grow: 1;"><div class="titulo">Exportar y respaldar</div><div class="sub">Ultimo respaldo: hace 3 dias</div></div><svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></div>
+  </div>
+
+  <div class="grupo">
+    <div class="cab">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.2 2.9-5.6 6.5-5.6s6.5 2.4 6.5 5.6"/><path d="M17 8.2a3 3 0 010 5.6"/></svg></div>
+      <div style="flex-grow: 1;"><div class="titulo">El hogar</div><div class="sub">Miembros, categorias, ingresos, cuentas, grupos</div></div>
+      <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+    </div>
+  </div>
+
+  <div class="grupo">
+    <div class="cab">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9.2"/><path d="M12 7v5l3 2"/></svg></div>
+      <div style="flex-grow: 1;"><div class="titulo">Avisos</div><div class="sub">Recordatorios, notificaciones del banco</div></div>
+      <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+    </div>
+  </div>
+
+  <div class="grupo">
+    <div class="cab">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1M18.7 18.7l-2.1-2.1M7.4 7.4L5.3 5.3"/></svg></div>
+      <div style="flex-grow: 1;"><div class="titulo">Como funciona la app</div><div class="sub">Apariencia, inteligencia, calendario, ubicacion</div></div>
+      <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+    </div>
+  </div>
+
+  <div class="grupo" style="background: #2A1E1E;">
+    <div class="cab">
+      <div class="ic" style="background: #93000A;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFDAD6" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 17h.01"/><path d="M10.3 3.8L2.5 18a2 2 0 001.7 3h15.6a2 2 0 001.7-3L13.7 3.8a2 2 0 00-3.4 0z"/></svg></div>
+      <div style="flex-grow: 1;"><div class="titulo">Tu cuenta</div><div class="sub">Sesion sin cuenta: vincula Google</div></div>
+      <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

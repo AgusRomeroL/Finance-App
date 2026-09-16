@@ -1,0 +1,38 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 640, "h": 620, "title": "Opcion A - Una barra y su leyenda" },
+    { "file": "OpcionB.dc.html", "x": 760, "y": 0, "w": 640, "h": 620, "title": "Opcion B - El anillo partido en tres" },
+    { "file": "OpcionC.dc.html", "x": 1520, "y": 0, "w": 640, "h": 620, "title": "Opcion C - La resta escrita" }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -320,
+      "w": 700,
+      "text": "El problema medido\n\nEl anillo dice 0 por ciento gastado y el KPI dice 54,206 pesos, sin decir que esa cifra ya descuenta lo reservado en pagos planeados. La tarjeta que lo explica esta mas abajo, fuera de la primera pantalla (hallazgo 5.1). Una cifra grande sin su explicacion invita a gastar de mas.\n\nEncargo: que la relacion entre lo que entro, lo gastado, lo apartado y lo disponible se lea de un vistazo, sin convertirlo en una tabla. El anillo puede quedarse o irse.\n\nCifras reales de Q1 Julio 2026: entraron 75,000, van gastados 17,223, hay 3,571 apartados y quedan 54,206."
+    },
+    {
+      "id": "nota-a",
+      "x": 0,
+      "y": 680,
+      "w": 700,
+      "text": "A. El anillo se va y lo sustituye una barra apilada de un renglon: lo que entro se reparte en gastado, apartado y libre. Debajo, las tres cifras con una linea que dice de donde sale cada una.\n\nA favor: la proporcion y los numeros estan en el mismo sitio, y la barra crece a lo ancho, que es lo que sobra en un Fold casi cuadrado. A font 1.3 con negrita no hay nada que recortar.\nEn contra: pierde el anillo, que es la firma visual del panel y lo que la gente reconoce al abrir la app."
+    },
+    {
+      "id": "nota-b",
+      "x": 760,
+      "y": 680,
+      "w": 700,
+      "text": "B. El anillo se queda, pero deja de ser un solo arco de progreso: se parte en los tres pedazos reales, con la leyenda al lado y no debajo.\n\nA favor: conserva la firma visual y el centro sigue siendo la cifra que importa. El arco apagado del apartado hace evidente que ese dinero ya tiene dueno.\nEn contra: tres arcos en un anillo de 250 px se leen mal cuando uno vale 5 por ciento, y ese pedazo casi desaparece. Ocupa el doble de alto que la barra para decir lo mismo."
+    },
+    {
+      "id": "nota-c",
+      "x": 1520,
+      "y": 680,
+      "w": 700,
+      "text": "C. Ni anillo ni barra como protagonista: la resta escrita como resta, con sus signos. Cierra con cuanto se puede gastar por dia en lo que queda de quincena, que es la pregunta que la cifra grande no contesta.\n\nA favor: no hay nada que interpretar, y el reparto por dia convierte un saldo en una decision. Es lo que mas se parece a como Norma lo pensaba en el Excel.\nEn contra: cuatro renglones de cifras grandes ocupan toda la primera pantalla y empujan el resto del panel. Se lee, pero no se siente como un panel."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

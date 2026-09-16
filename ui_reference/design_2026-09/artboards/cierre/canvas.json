@@ -1,0 +1,39 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 640, "h": 980, "title": "Opcion A - Resumen y confirmacion ancladas" },
+    { "file": "OpcionB.dc.html", "x": 760, "y": 0, "w": 640, "h": 980, "title": "Opcion B - Paso 1: la pregunta primero" },
+    { "file": "OpcionBPaso2.dc.html", "x": 1520, "y": 0, "w": 640, "h": 980, "title": "Opcion B - Paso 2: lo que se congela" },
+    { "file": "OpcionC.dc.html", "x": 2280, "y": 0, "w": 640, "h": 980, "title": "Opcion C - Hoja de confirmacion" }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -340,
+      "w": 700,
+      "text": "El problema medido\n\nCon 48 pagos planeados sin ejecutar, el boton de cerrar queda a 25 gestos de desplazamiento del inicio de la pantalla. Mover todos existe, pero confirmar sigue exigiendo llegar al fondo (hallazgo 6.1).\n\nEncargo: que la decision masiva y la confirmacion esten siempre a la vista y la lista sea lo unico que se recorre. El resumen de lo que se congela tiene que seguir siendo visible antes de confirmar: es lo que da confianza para una accion dificil de deshacer.\n\nCifras reales de Q2 Junio 2026: entraron 75,000, se gastaron 72,575 en 24 movimientos, sobraron 2,425."
+    },
+    {
+      "id": "nota-a",
+      "x": 0,
+      "y": 1040,
+      "w": 700,
+      "text": "A. Tres zonas fijas y una que se mueve. Arriba el resumen anclado con las tres cifras; debajo la decision masiva junto al encabezado de la lista; abajo la confirmacion, que dice cuantos pagos faltan por decidir y no se deja tocar mientras falte alguno. La lista es lo unico que se desplaza.\n\nA favor: no cambia el modelo de la pantalla ni parte el flujo en dos, y el estado de cada fila se lee al lado de su importe. El boton apagado con su cuenta explica por que no se puede cerrar todavia, en vez de fallar al tocarlo.\nEn contra: a font 1.3 con negrita las tres zonas fijas se comen mas de la mitad del alto y dejan cinco filas visibles. Es mucha pantalla congelada para un aparato casi cuadrado."
+    },
+    {
+      "id": "nota-b",
+      "x": 760,
+      "y": 1040,
+      "w": 1400,
+      "text": "B. Dos pasos. El primero hace la pregunta de golpe, antes de ensenar ninguna lista: que pasa con los 48, con cuatro respuestas de las que una es decidir uno por uno. El segundo ensena lo que se congela, ya sin filas pendientes, y ahi se confirma.\n\nA favor: el caso comun (todos a la quincena activa) se resuelve en dos toques sin desplazar nada, y la revision final cabe entera porque ya no compite con la lista. Separa decidir de confirmar, que son dos cosas distintas.\nEn contra: mete una pantalla mas en un flujo que hoy es uno solo, y quien si quiere revisar fila por fila pasa por un paso que no le sirve. Volver atras desde el paso 2 tiene que conservar las decisiones o se vuelve insufrible."
+    },
+    {
+      "id": "nota-c",
+      "x": 2280,
+      "y": 1040,
+      "w": 700,
+      "text": "C. La pantalla sigue siendo la lista completa, con un boton persistente abajo. Al tocarlo sube una hoja que trae las tres cifras, la decision masiva y la confirmacion juntas. Cerrar nunca esta a mas de un toque, se este donde se este en la lista.\n\nA favor: es el cambio mas pequeno sobre lo que ya funciona y la lista conserva todo el alto. La hoja es el unico sitio donde se confirma, asi que no hay dos caminos.\nEn contra: el resumen deja de estar a la vista mientras se recorre la lista, que es justo lo que el encargo pedia conservar. Y una hoja modal sobre una lista larga invita a cerrar sin haber revisado."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

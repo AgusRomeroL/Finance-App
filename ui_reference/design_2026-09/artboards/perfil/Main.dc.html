@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      background: #14150F;
+      color: #E5E2D9;
+      font-family: "Google Sans Flex Text", "Google Sans", system-ui, sans-serif;
+      /* Escala de fuente 1.3 con negrita: asi la usa Norma en su Fold. */
+      font-size: 20.8px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+    }
+    .etq {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: #C5C8B6;
+    }
+    .tarjeta { background: #202118; border-radius: 22px; padding: 18px 20px; }
+    .fila {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-height: 48px;
+      padding: 12px 0;
+    }
+    .ic {
+      width: 44px; height: 44px; border-radius: 999px;
+      background: #2A2B22; display: grid; place-items: center; flex-shrink: 0;
+    }
+    .titulo { font-size: 19px; font-weight: 600; line-height: 1.2; }
+    .sub { font-size: 15px; font-weight: 500; color: #C5C8B6; line-height: 1.25; }
+    .insignia {
+      font-size: 14px; font-weight: 700; padding: 5px 12px;
+      border-radius: 999px; background: #93000A; color: #FFDAD6; white-space: nowrap;
+    }
+    .insignia.ok { background: #005233; color: #92F7B4; }
+    .chev { color: #8B8E7C; flex-shrink: 0; }
+  </style>
+</helmet>
+
+<div style="width: 640px; height: 980px; display: flex; flex-direction: column; gap: 14px; background: #1C1D17; padding: 22px 20px; box-sizing: border-box; overflow: hidden;">
+
+  <div>
+    <div class="etq">Tu hogar</div>
+    <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 34px; line-height: 1.1;">Perfil</div>
+  </div>
+
+  <!-- Identidad: se queda arriba porque el aviso de sesion anonima no es descartable -->
+  <div class="tarjeta" style="display: flex; align-items: center; gap: 14px; background: #2A1E1E;">
+    <div class="ic" style="background: #93000A;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFDAD6" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 17h.01"/><path d="M10.3 3.8L2.5 18a2 2 0 001.7 3h15.6a2 2 0 001.7-3L13.7 3.8a2 2 0 00-3.4 0z"/></svg>
+    </div>
+    <div style="flex-grow: 1;">
+      <div class="titulo">Sesion sin cuenta</div>
+      <div class="sub">Vincula Google para no perder el hogar al cambiar de telefono</div>
+    </div>
+  </div>
+
+  <!-- Lo del mes: tres cosas que se hacen cada quincena, arriba y con su estado -->
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div class="etq">Lo de esta quincena</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+      <div class="tarjeta" style="display: flex; flex-direction: column; gap: 10px; background: #1A2A20;">
+        <div class="ic" style="background: #005233;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#92F7B4" stroke-width="2.2" stroke-linecap="round"><path d="M9 11l3 3 7-7"/><path d="M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>
+        </div>
+        <div class="titulo">Cerrar quincena</div>
+        <div class="insignia">Q2 Junio pendiente</div>
+      </div>
+      <div class="tarjeta" style="display: flex; flex-direction: column; gap: 10px;">
+        <div class="ic">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18"/></svg>
+        </div>
+        <div class="titulo">Estados del mes</div>
+        <div class="insignia">2 sin subir</div>
+      </div>
+    </div>
+    <div class="tarjeta" style="display: flex; align-items: center; gap: 14px;">
+      <div class="ic">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+      </div>
+      <div style="flex-grow: 1;">
+        <div class="titulo">Exportar y respaldar</div>
+        <div class="sub">Ultimo respaldo: hace 3 dias</div>
+      </div>
+      <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+    </div>
+  </div>
+
+  <!-- El hogar: lo que se administra de vez en cuando -->
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div class="etq">El hogar</div>
+    <div class="tarjeta" style="padding: 6px 20px;">
+      <div class="fila">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.2 2.9-5.6 6.5-5.6s6.5 2.4 6.5 5.6"/><path d="M17 8.2a3 3 0 010 5.6"/></svg></div>
+        <div style="flex-grow: 1;"><div class="titulo">Miembros, categorias, ingresos y cuentas</div></div>
+        <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+      </div>
+      <div style="height: 1px; background: #2A2B22;"></div>
+      <div class="fila">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div>
+        <div style="flex-grow: 1;"><div class="titulo">Grupos e invitaciones</div></div>
+        <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Todo lo que se toca una vez y se olvida, detras de una sola puerta -->
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div class="etq">La app</div>
+    <div class="tarjeta" style="display: flex; align-items: center; gap: 14px;">
+      <div class="ic">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1M18.7 18.7l-2.1-2.1M7.4 7.4L5.3 5.3"/></svg>
+      </div>
+      <div style="flex-grow: 1;">
+        <div class="titulo">Ajustes</div>
+        <div class="sub">Apariencia, recordatorios, inteligencia, calendario, ubicacion, automatizacion</div>
+      </div>
+      <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+    </div>
+    <div class="tarjeta" style="display: flex; align-items: center; gap: 14px;">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9.2"/><path d="M9.6 9.4a2.5 2.5 0 114 2.3c-.9.6-1.6 1-1.6 2.1M12 17.2h.01"/></svg></div>
+      <div style="flex-grow: 1;"><div class="titulo">Ver el recorrido guiado</div></div>
+      <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

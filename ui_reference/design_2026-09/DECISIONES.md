@@ -10,9 +10,9 @@ rehacer o corregir sin depender de la nube.
 | Brief | Opción elegida | Enlace del lienzo | Por qué |
 |---|---|---|---|
 | 1. Hoja de captura | **por elegir entre A, B y C** | https://claude.ai/artifact/SgXHfSgnMJj7L4nqWJTPrp | Tres ejes distintos: retirar el teclado cuando estorba (A), quitarlo del todo (B), saltarse el formulario cuando el gasto se repite (C). Cada artboard lleva su nota con lo que gana y lo que arriesga. |
-| 2. Perfil con jerarquía | pendiente | | |
-| 3. Bloque héroe del panel | pendiente | | |
-| 4. Cierre de quincena | pendiente | | |
+| 2. Perfil con jerarquía | **por elegir entre A, B y C** | https://claude.ai/artifact/2Y9T9MywcV3xngUoBb7xPX | Cuatro artboards: el hub con su segunda pantalla de Ajustes (A), tres pestañas (B) y acordeón con buscador (C). Los tres llegan a cualquier ajuste en dos toques por caminos distintos: jerarquía nueva, agrupación plana o búsqueda. |
+| 3. Bloque héroe del panel | **por elegir entre A, B y C** | https://claude.ai/artifact/7rPHEns4k5DAeQuySAiiAY | Cifras reales de Q1 Julio 2026. A cambia el anillo por una barra apilada con leyenda, B parte el anillo en los tres pedazos reales, C escribe la resta con sus signos y añade cuánto se puede gastar por día. |
+| 4. Cierre de quincena | **por elegir entre A, B y C** | https://claude.ai/artifact/TAFJNjJdRzjuqer5YVFHfg | Cifras reales de Q2 Junio 2026 con 48 planeados sin ejecutar. A ancla resumen y confirmación y deja que solo la lista se desplace, B parte el flujo en decidir y confirmar (dos artboards), C deja la lista intacta y sube una hoja con todo lo que hace falta para cerrar. |
 | 5. Panel de Quick Tap | **implementado y verificado** | https://claude.ai/artifact/SJUwQ4FwwgtkxRhshNfnjf | Tres artboards, no opciones: el panel flotante, la pantalla que precede al permiso y la degradación a hoja completa cuando no se concede. No hay alternativas que elegir porque la especificación §3.3 ya fija la forma. |
 
 ## Decisiones ya tomadas sin lienzo

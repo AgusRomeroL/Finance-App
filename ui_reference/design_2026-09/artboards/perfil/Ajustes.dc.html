@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      background: #14150F;
+      color: #E5E2D9;
+      font-family: "Google Sans Flex Text", "Google Sans", system-ui, sans-serif;
+      font-size: 20.8px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+    }
+    .etq {
+      font-size: 13px; font-weight: 700; letter-spacing: 1.6px;
+      text-transform: uppercase; color: #C5C8B6;
+    }
+    .tarjeta { background: #202118; border-radius: 22px; padding: 4px 20px; }
+    .fila { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 13px 0; }
+    .titulo { font-size: 19px; font-weight: 600; line-height: 1.2; }
+    .sub { font-size: 15px; font-weight: 500; color: #C5C8B6; line-height: 1.25; }
+    .div { height: 1px; background: #2A2B22; }
+    .chev { color: #8B8E7C; flex-shrink: 0; }
+    .sw { width: 54px; height: 32px; border-radius: 999px; background: #005233; position: relative; flex-shrink: 0; }
+    .sw::after { content: ""; position: absolute; right: 4px; top: 4px; width: 24px; height: 24px; border-radius: 999px; background: #92F7B4; }
+    .sw.off { background: #3A3B30; }
+    .sw.off::after { left: 4px; right: auto; background: #8B8E7C; }
+  </style>
+</helmet>
+
+<div style="width: 640px; height: 980px; display: flex; flex-direction: column; gap: 16px; background: #1C1D17; padding: 22px 20px; box-sizing: border-box; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <div style="width: 48px; height: 48px; border-radius: 999px; background: #2A2B22; display: grid; place-items: center;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.4" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </div>
+    <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 34px; line-height: 1.1;">Ajustes</div>
+  </div>
+
+  <!-- Un buscador convierte doce secciones en un solo campo: dos toques a cualquier ajuste -->
+  <div style="display: flex; align-items: center; gap: 12px; background: #2A2B22; border-radius: 999px; padding: 0 20px; height: 56px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C5C8B6" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7.2"/><path d="M16.3 16.3L21 21"/></svg>
+    <div style="font-size: 18px; color: #8B8E7C;">Buscar un ajuste</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div class="etq">Como se ve</div>
+    <div class="tarjeta">
+      <div class="fila">
+        <div style="flex-grow: 1;"><div class="titulo">Color del sistema</div><div class="sub">Toma el color del fondo de pantalla</div></div>
+        <div class="sw"></div>
+      </div>
+      <div class="div"></div>
+      <div class="fila">
+        <div style="flex-grow: 1;"><div class="titulo">Recorrido guiado</div><div class="sub">Volver a verlo desde el principio</div></div>
+        <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div class="etq">Que te avisa</div>
+    <div class="tarjeta">
+      <div class="fila">
+        <div style="flex-grow: 1;"><div class="titulo">Antelacion de recordatorios</div><div class="sub">Avisar 2 dias antes de cada pago planeado</div></div>
+        <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+      </div>
+      <div class="div"></div>
+      <div class="fila">
+        <div style="flex-grow: 1;"><div class="titulo">Leer notificaciones del banco</div><div class="sub">Desactivado</div></div>
+        <div class="sw off"></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div class="etq">Lo que se configura una vez</div>
+    <div class="tarjeta">
+      <div class="fila">
+        <div style="flex-grow: 1;"><div class="titulo">Espejo al calendario</div><div class="sub">Desactivado</div></div>
+        <div class="sw off"></div>
+      </div>
+      <div class="div"></div>
+      <div class="fila">
+        <div style="flex-grow: 1;"><div class="titulo">Ubicacion del gasto</div><div class="sub">Solo al usar la app</div></div>
+        <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+      </div>
+      <div class="div"></div>
+      <div class="fila">
+        <div style="flex-grow: 1;"><div class="titulo">Asistente y clave del servicio</div><div class="sub">Para leer estados de cuenta</div></div>
+        <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+      </div>
+      <div class="div"></div>
+      <div class="fila">
+        <div style="flex-grow: 1;"><div class="titulo">Mantenimiento del historial</div><div class="sub">Revisar atribuciones y renormalizar conceptos</div></div>
+        <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1;"></div>
+  <div class="sub" style="text-align: center;">Presupuesto Familiar 1.0</div>
+
+</div>
+</x-dc>
+</body>
+</html>

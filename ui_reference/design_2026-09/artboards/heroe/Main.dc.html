@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      background: #14150F;
+      color: #E5E2D9;
+      font-family: "Google Sans Flex Text", "Google Sans", system-ui, sans-serif;
+      font-size: 20.8px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+    }
+    .etq { font-size: 13px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: #C5C8B6; }
+    .display { font-family: "Google Sans Flex Display", system-ui, sans-serif; font-weight: 300; line-height: 1; }
+    .clave { font-size: 15px; font-weight: 600; color: #C5C8B6; }
+    .valor { font-size: 21px; font-weight: 600; }
+  </style>
+</helmet>
+
+<div style="width: 640px; height: 620px; background: #1C1D17; border-radius: 28px; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <div class="etq" style="flex-grow: 1;">Q1 Julio 2026 &middot; del 1 al 15</div>
+    <div style="font-size: 15px; font-weight: 700; padding: 6px 14px; border-radius: 999px; background: #005233; color: #92F7B4;">Dia 7 de 15</div>
+  </div>
+
+  <!-- La cifra grande sigue siendo el disponible, pero ya no llega sola -->
+  <div>
+    <div class="etq">Puedes gastar</div>
+    <div class="display" style="font-size: 76px; margin-top: 6px;">$54,206</div>
+  </div>
+
+  <!-- Una sola barra cuenta la resta completa: lo que entro se reparte en tres -->
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="display: flex; height: 26px; border-radius: 999px; overflow: hidden; background: #2A2B22;">
+      <div style="width: 23%; background: #FFB4AB;"></div>
+      <div style="width: 5%; background: #6E6B4F;"></div>
+      <div style="flex-grow: 1; background: #92F7B4;"></div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 14px; height: 14px; border-radius: 4px; background: #FFB4AB; flex-shrink: 0;"></div>
+        <div style="flex-grow: 1;">
+          <div class="valor">Ya gastado</div>
+          <div class="clave">16 movimientos ejecutados</div>
+        </div>
+        <div class="valor">$17,223</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 14px; height: 14px; border-radius: 4px; background: #6E6B4F; flex-shrink: 0;"></div>
+        <div style="flex-grow: 1;">
+          <div class="valor">Apartado para pagos</div>
+          <div class="clave">Hipoteca, Escuela David y 4 mas</div>
+        </div>
+        <div class="valor">$3,571</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 14px; height: 14px; border-radius: 4px; background: #92F7B4; flex-shrink: 0;"></div>
+        <div style="flex-grow: 1;">
+          <div class="valor" style="color: #92F7B4;">Te queda</div>
+          <div class="clave">Libre de compromisos</div>
+        </div>
+        <div class="valor" style="color: #92F7B4;">$54,206</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 1px; background: #2A2B22;"></div>
+
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C5C8B6" stroke-width="2.2" stroke-linecap="round" style="flex-shrink: 0;"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+    <div class="clave" style="flex-grow: 1;">Entro esta quincena</div>
+    <div class="valor">$75,000</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

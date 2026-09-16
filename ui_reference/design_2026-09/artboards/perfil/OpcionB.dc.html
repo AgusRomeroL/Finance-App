@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      background: #14150F;
+      color: #E5E2D9;
+      font-family: "Google Sans Flex Text", "Google Sans", system-ui, sans-serif;
+      font-size: 20.8px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+    }
+    .etq { font-size: 13px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: #C5C8B6; }
+    .tarjeta { background: #202118; border-radius: 22px; padding: 4px 20px; }
+    .fila { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 13px 0; }
+    .ic { width: 44px; height: 44px; border-radius: 999px; background: #2A2B22; display: grid; place-items: center; flex-shrink: 0; }
+    .titulo { font-size: 19px; font-weight: 600; line-height: 1.2; }
+    .sub { font-size: 15px; font-weight: 500; color: #C5C8B6; line-height: 1.25; }
+    .div { height: 1px; background: #2A2B22; }
+    .chev { color: #8B8E7C; flex-shrink: 0; }
+    .seg {
+      flex: 1 1 0; text-align: center; padding: 14px 8px; border-radius: 999px;
+      font-size: 17px; font-weight: 700; color: #C5C8B6; white-space: nowrap;
+    }
+    .seg.on { background: #005233; color: #92F7B4; }
+    .punto {
+      width: 10px; height: 10px; border-radius: 999px; background: #FFB4AB;
+      display: inline-block; margin-left: 6px; vertical-align: middle;
+    }
+    .insignia { font-size: 14px; font-weight: 700; padding: 5px 12px; border-radius: 999px; background: #93000A; color: #FFDAD6; white-space: nowrap; }
+  </style>
+</helmet>
+
+<div style="width: 640px; height: 980px; display: flex; flex-direction: column; gap: 16px; background: #1C1D17; padding: 22px 20px; box-sizing: border-box; overflow: hidden;">
+
+  <div>
+    <div class="etq">Tu hogar</div>
+    <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 34px; line-height: 1.1;">Perfil</div>
+  </div>
+
+  <!-- Tres grupos, no doce secciones. El punto marca donde hay algo que hacer. -->
+  <div style="display: flex; gap: 6px; background: #202118; border-radius: 999px; padding: 6px;">
+    <div class="seg on">Esta quincena<span class="punto"></span></div>
+    <div class="seg">El hogar</div>
+    <div class="seg">Ajustes</div>
+  </div>
+
+  <div class="tarjeta">
+    <div class="fila">
+      <div class="ic" style="background: #005233;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#92F7B4" stroke-width="2.2" stroke-linecap="round"><path d="M9 11l3 3 7-7"/><path d="M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>
+      </div>
+      <div style="flex-grow: 1;">
+        <div class="titulo">Cerrar la quincena</div>
+        <div class="sub">Q2 Junio 2026 vencio el 30 de junio</div>
+      </div>
+      <div class="insignia">Pendiente</div>
+    </div>
+    <div class="div"></div>
+    <div class="fila">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18"/></svg></div>
+      <div style="flex-grow: 1;">
+        <div class="titulo">Estados del mes</div>
+        <div class="sub">Banamex Clasica y Klar sin subir</div>
+      </div>
+      <div class="insignia">2</div>
+    </div>
+    <div class="div"></div>
+    <div class="fila">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg></div>
+      <div style="flex-grow: 1;">
+        <div class="titulo">Exportar y respaldar</div>
+        <div class="sub">Ultimo respaldo: hace 3 dias</div>
+      </div>
+      <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+    </div>
+    <div class="div"></div>
+    <div class="fila">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.4V12l3 2"/></svg></div>
+      <div style="flex-grow: 1;">
+        <div class="titulo">Quincenas anteriores</div>
+        <div class="sub">Ver el resumen de un periodo cerrado o reabrirlo</div>
+      </div>
+      <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+    </div>
+  </div>
+
+  <!-- El aviso de identidad no vive en ninguna pestania: no se puede esconder -->
+  <div style="display: flex; align-items: center; gap: 14px; background: #2A1E1E; border-radius: 22px; padding: 16px 20px;">
+    <div class="ic" style="background: #93000A;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFDAD6" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 17h.01"/><path d="M10.3 3.8L2.5 18a2 2 0 001.7 3h15.6a2 2 0 001.7-3L13.7 3.8a2 2 0 00-3.4 0z"/></svg>
+    </div>
+    <div style="flex-grow: 1;">
+      <div class="titulo">Sesion sin cuenta</div>
+      <div class="sub">Vincula Google para no perder el hogar</div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1;"></div>
+
+  <div class="sub" style="line-height: 1.4;">
+    Las otras dos pestanias: <b style="color: #E5E2D9;">El hogar</b> tiene miembros, categorias, ingresos, cuentas y grupos.
+    <b style="color: #E5E2D9;">Ajustes</b> tiene apariencia, recordatorios, inteligencia, automatizacion, calendario y ubicacion.
+    Cualquiera de esas filas queda a dos toques: la pestania y la fila.
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
