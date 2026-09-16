@@ -1,0 +1,38 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 640, "h": 900, "title": "Opcion A - Teclado bajo demanda" },
+    { "file": "OpcionB.dc.html", "x": 760, "y": 0, "w": 640, "h": 900, "title": "Opcion B - Una fila por decision" },
+    { "file": "OpcionC.dc.html", "x": 1520, "y": 0, "w": 640, "h": 900, "title": "Opcion C - Repetir antes que capturar" }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -300,
+      "w": 640,
+      "text": "El problema medido\n\nEn el Fold de Norma, con escala de fuente 1.3 y negrita, el teclado numerico se lleva 530 de los 2000 px visibles y empuja las categorias recientes (el camino corto) por debajo del pliegue. Hay que desplazar para hacer lo mas comun.\n\nLas tres opciones atacan ejes distintos: retirar el teclado cuando estorba, quitarlo del todo, o saltarse el formulario cuando el gasto se repite."
+    },
+    {
+      "id": "nota-a",
+      "x": 0,
+      "y": 960,
+      "w": 640,
+      "text": "A. El teclado aparece mientras el foco esta en el monto y se retira al tocar cualquier chip, devolviendo ese alto al resto. Recientes y las tres decisiones que faltan quedan siempre a la vista.\n\nA favor: conserva el teclado propio, que existe porque el del sistema tapaba la hoja. Es el cambio mas pequeno sobre lo que ya funciona.\nEn contra: la hoja cambia de altura util al enfocar y desenfocar; si eso se anima mal, marea."
+    },
+    {
+      "id": "nota-b",
+      "x": 760,
+      "y": 960,
+      "w": 640,
+      "text": "B. Sin teclado propio: el monto usa el del sistema y todo lo demas es una lista de filas densas que dicen en que quedo cada decision. Cabe entero porque una fila de 64 px sustituye a una tarjeta de 200.\n\nA favor: se lee como un recibo, cada dato esta escrito y nada se adivina. Las categorias recientes viven dentro de su fila, sin robar alto.\nEn contra: vuelve el teclado del sistema, que fue justo lo que llevo a construir el propio. Habria que medir si hoy sigue tapando."
+    },
+    {
+      "id": "nota-c",
+      "x": 1520,
+      "y": 960,
+      "w": 640,
+      "text": "C. Primero los gastos que el hogar repite, completos: concepto, categoria, cuenta y reparto ya resueltos. Un toque y listo. El formulario existe debajo para lo que no se repite.\n\nA favor: el caso comun pasa de siete interacciones a una, y la app ya tiene el motor que predice esos candidatos.\nEn contra: si la prediccion falla, la hoja se siente vacia y hay que bajar. Exige que las sugerencias sean buenas de verdad."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

@@ -1,0 +1,38 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 420, "h": 900, "title": "Panel flotante" },
+    { "file": "Permiso.dc.html", "x": 540, "y": 0, "w": 420, "h": 900, "title": "Antes de pedir el permiso" },
+    { "file": "SinPermiso.dc.html", "x": 1080, "y": 0, "w": 420, "h": 900, "title": "Sin permiso: hoja completa" }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -320,
+      "w": 560,
+      "text": "Quick Tap: dos golpes en la espalda del telefono y el gasto queda anotado sin salir de lo que estabas haciendo.\n\nRestriccion dura del brief: guardar tiene que ser posible en un solo toque despues de teclear el importe. Si el diseno exige elegir categoria, no sirve.\n\nLa especificacion pide aspecto de notificacion expandida, superficie surfaceContainerHighest, radio 28, foco inicial en el importe, categoria, cuenta y beneficiario predichos, tres sugerencias recientes y cierre automatico a los seis segundos."
+    },
+    {
+      "id": "nota-panel",
+      "x": 0,
+      "y": 960,
+      "w": 420,
+      "text": "El panel encima de la app que estuviera abierta. El importe tiene el cursor desde el primer frame. Lo predicho son chips, no campos: si esta bien, no se toca; si no, un toque cambia cada cosa.\n\nLas tres sugerencias de abajo guardan el gasto entero de un toque, sin teclear nada.\n\nLa barra de seis segundos se ve pero no alarma: si el gesto fue accidental, el panel se va solo."
+    },
+    {
+      "id": "nota-permiso",
+      "x": 540,
+      "y": 960,
+      "w": 420,
+      "text": "Pantalla previa al permiso de mostrarse sobre otras apps. Ensena el panel antes de pedir nada, dice los tres pasos con las palabras que Norma va a ver en Ajustes, y cierra con lo que la gente teme de ese permiso: que la app mire lo que hay en pantalla.\n\n\"Ahora no\" no es un callejon: el gasto rapido sigue funcionando como hoja completa."
+    },
+    {
+      "id": "nota-sinpermiso",
+      "x": 1080,
+      "y": 960,
+      "w": 420,
+      "text": "Sin permiso de superposicion, el mismo gesto abre esta pantalla completa. Es la degradacion, no un error: mismo contenido, mismo camino corto, solo que ocupa el telefono entero.\n\nEl aviso de abajo explica la diferencia y ofrece el permiso, sin bloquear la captura."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

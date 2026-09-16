@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      background: #14150F;
+      color: #E5E2D9;
+      font-family: "Google Sans Flex Text", "Google Sans", "Product Sans", system-ui, sans-serif;
+      font-size: 20.8px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: #77DA9A; }
+    a:hover { color: #92F7B4; }
+    .etq {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: #C5C8B6;
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 48px; padding: 0 16px; border-radius: 999px;
+      background: #2A2B22; font-size: 17px; font-weight: 600;
+    }
+  </style>
+</helmet>
+
+<div style="width: 420px; height: 900px; position: relative; background: #0B0C08; overflow: hidden;">
+
+  <!-- Sin permiso de superposicion: la hoja completa, a pantalla entera -->
+  <div style="position: absolute; inset: 0; display: flex; flex-direction: column; background: #1C1D17;">
+
+    <div style="display: flex; align-items: center; gap: 12px; padding: 54px 20px 14px 20px;">
+      <div style="width: 48px; height: 48px; border-radius: 999px; background: #2A2B22; display: grid; place-items: center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </div>
+      <div style="flex-grow: 1;">
+        <div class="etq">Gasto rápido</div>
+        <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 28px; line-height: 1.1;">Capturar gasto</div>
+      </div>
+    </div>
+
+    <div style="margin: 0 20px; padding: 18px 20px; border-radius: 22px; background: #202118; border-bottom: 3px solid #77DA9A; display: flex; align-items: baseline; gap: 10px;">
+      <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 52px; line-height: 1;">$1,950</div>
+      <div style="width: 3px; height: 44px; background: #77DA9A; align-self: center;"></div>
+      <div style="flex-grow: 1;"></div>
+      <div class="etq">MXN</div>
+    </div>
+
+    <div style="margin: 16px 20px 0 20px; display: flex; gap: 8px; flex-wrap: wrap;">
+      <div class="chip">Despensa</div>
+      <div class="chip">Banamex</div>
+      <div class="chip">Todos</div>
+    </div>
+
+    <div style="margin: 20px 20px 0 20px; display: flex; flex-direction: column; gap: 8px;">
+      <div class="etq">Las de siempre a esta hora</div>
+      <div style="display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 16px; border-radius: 16px; background: #202118;">
+        <div style="flex-grow: 1; font-size: 18px; font-weight: 600;">Despensa</div>
+        <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 24px;">$1,950</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 16px; border-radius: 16px; background: #202118;">
+        <div style="flex-grow: 1; font-size: 18px; font-weight: 600;">Gasolina</div>
+        <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 24px;">$1,400</div>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1;"></div>
+
+    <!-- El aviso que explica por que esto no es el panel flotante -->
+    <div style="margin: 0 20px 16px 20px; display: flex; gap: 12px; align-items: flex-start; padding: 16px; border-radius: 18px; background: #2A2B22;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFB95C" stroke-width="2" stroke-linecap="round" style="flex: none; margin-top: 2px;"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+      <div style="font-size: 16px; font-weight: 500; line-height: 1.45; color: #C5C8B6;">
+        Sin el permiso para mostrarse sobre otras apps, el gasto rápido abre esta pantalla completa en vez del panel flotante.
+        <span style="color: #77DA9A; font-weight: 600;">Dar el permiso</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 16px; padding: 14px 20px 26px 20px; background: #202118;">
+      <div style="flex-grow: 1; min-width: 0;">
+        <div class="etq">Resumen</div>
+        <div style="font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Despensa &middot; $1,950 &middot; Banamex</div>
+      </div>
+      <div style="height: 56px; padding: 0 28px; border-radius: 999px; background: #77DA9A; color: #002111; font-size: 18px; font-weight: 700; display: grid; place-items: center;">Guardar</div>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

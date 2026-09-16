@@ -4,13 +4,16 @@ Contrato de la sub-fase 6b: aquí se anota, por cada brief de `BRIEFS.md`, la op
 elegida, el enlace del lienzo y el porqué. Lo que no esté escrito aquí no se
 implementa.
 
+Las fuentes de cada lienzo viven en `artboards/`, así que un lienzo se puede
+rehacer o corregir sin depender de la nube.
+
 | Brief | Opción elegida | Enlace del lienzo | Por qué |
 |---|---|---|---|
-| 1. Hoja de captura | pendiente | | |
+| 1. Hoja de captura | **por elegir entre A, B y C** | https://claude.ai/artifact/SgXHfSgnMJj7L4nqWJTPrp | Tres ejes distintos: retirar el teclado cuando estorba (A), quitarlo del todo (B), saltarse el formulario cuando el gasto se repite (C). Cada artboard lleva su nota con lo que gana y lo que arriesga. |
 | 2. Perfil con jerarquía | pendiente | | |
 | 3. Bloque héroe del panel | pendiente | | |
 | 4. Cierre de quincena | pendiente | | |
-| 5. Panel de Quick Tap | pendiente | | |
+| 5. Panel de Quick Tap | **listo para implementar** | https://claude.ai/artifact/SJUwQ4FwwgtkxRhshNfnjf | Tres artboards, no opciones: el panel flotante, la pantalla que precede al permiso y la degradación a hoja completa cuando no se concede. No hay alternativas que elegir porque la especificación §3.3 ya fija la forma. |
 
 ## Decisiones ya tomadas sin lienzo
 

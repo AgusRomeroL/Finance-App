@@ -1,0 +1,144 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      background: #14150F;
+      color: #E5E2D9;
+      font-family: "Google Sans Flex Text", "Google Sans", "Product Sans", system-ui, sans-serif;
+      /* Escala de fuente 1.3 con negrita: asi la usa Norma en su Fold. */
+      font-size: 20.8px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: #77DA9A; }
+    a:hover { color: #92F7B4; }
+    .etq {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: #C5C8B6;
+    }
+    .tarjeta { background: #202118; border-radius: 20px; padding: 18px 20px; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 48px;
+      padding: 0 18px;
+      border-radius: 999px;
+      background: #2A2B22;
+      color: #E5E2D9;
+      font-size: 18px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .chip.on { background: #005233; color: #92F7B4; }
+    .tecla {
+      height: 56px;
+      border-radius: 18px;
+      background: #2A2B22;
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      font-weight: 600;
+      color: #E5E2D9;
+    }
+  </style>
+</helmet>
+
+<div style="width: 640px; height: 900px; display: flex; flex-direction: column; background: #1C1D17; border-radius: 28px 28px 0 0; overflow: hidden;">
+
+  <!-- Cabecera -->
+  <div style="display: flex; align-items: center; gap: 14px; padding: 20px 20px 12px 20px;">
+    <div style="width: 48px; height: 48px; border-radius: 999px; background: #2A2B22; display: grid; place-items: center;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </div>
+    <div style="flex-grow: 1;">
+      <div class="etq">Nuevo movimiento</div>
+      <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 30px; line-height: 1.1;">Capturar gasto</div>
+    </div>
+    <div style="display: flex; background: #2A2B22; border-radius: 999px; padding: 4px;">
+      <div style="padding: 10px 18px; border-radius: 999px; background: #93000A; color: #FFDAD6; font-size: 17px; font-weight: 700;">Gasto</div>
+      <div style="padding: 10px 18px; border-radius: 999px; color: #C5C8B6; font-size: 17px; font-weight: 600;">Ingreso</div>
+    </div>
+  </div>
+
+  <!-- Monto: el teclado solo existe mientras el foco esta aqui -->
+  <div style="margin: 0 20px; display: flex; flex-direction: column; gap: 14px;">
+    <div class="tarjeta" style="display: flex; align-items: baseline; gap: 14px;">
+      <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 58px; line-height: 1; color: #E5E2D9;">$1,950</div>
+      <div style="flex-grow: 1;"></div>
+      <div class="etq" style="align-self: flex-start;">MXN</div>
+    </div>
+
+    <!-- Recientes: el camino corto, a la vista y a un toque del monto -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div class="etq">Lo de siempre</div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <div class="chip on">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#92F7B4" stroke-width="2" stroke-linecap="round"><path d="M3 9h18M5 9V6a2 2 0 012-2h10a2 2 0 012 2v3M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9"/></svg>
+          Despensa
+        </div>
+        <div class="chip">Gasolina</div>
+        <div class="chip">Restaurante</div>
+        <div class="chip">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C5C8B6" stroke-width="2" stroke-linecap="round"><path d="M11 3a8 8 0 105.3 14l4.4 4.4M11 3a8 8 0 018 8"/></svg>
+          Buscar
+        </div>
+      </div>
+    </div>
+
+    <!-- Una fila para las tres decisiones que faltan -->
+    <div class="tarjeta" style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <div class="chip">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C5C8B6" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10.5h19"/></svg>
+          Banamex
+        </div>
+        <div class="chip">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C5C8B6" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/></svg>
+          Todos
+        </div>
+        <div class="chip">Hoy</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Teclado: ocupa lo que sobra y se retira al tocar cualquier chip -->
+  <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; padding: 14px 20px 0 20px;">
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px;">
+      <div class="tecla">1</div><div class="tecla">2</div><div class="tecla">3</div>
+      <div class="tecla" style="background: #35362C;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2" stroke-linecap="round"><path d="M9 5h10a2 2 0 012 2v10a2 2 0 01-2 2H9L3 12z"/><path d="M12 9.5l5 5M17 9.5l-5 5"/></svg>
+      </div>
+      <div class="tecla">4</div><div class="tecla">5</div><div class="tecla">6</div><div class="tecla">.</div>
+      <div class="tecla">7</div><div class="tecla">8</div><div class="tecla">9</div><div class="tecla">000</div>
+      <div class="tecla" style="grid-column: span 3;">0</div>
+      <div class="tecla" style="background: #35362C;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C5C8B6" stroke-width="2" stroke-linecap="round"><path d="M4 8h16M4 8l4-4M4 8l4 4"/><path d="M20 16H4M20 16l-4 4M20 16l-4-4"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra de guardar, siempre visible -->
+  <div style="display: flex; align-items: center; gap: 16px; padding: 14px 20px 20px 20px; background: #202118; margin-top: 14px;">
+    <div style="flex-grow: 1; min-width: 0;">
+      <div class="etq">Resumen</div>
+      <div style="font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Despensa &middot; $1,950 &middot; Banamex</div>
+    </div>
+    <div style="height: 56px; padding: 0 30px; border-radius: 999px; background: #77DA9A; color: #002111; font-size: 19px; font-weight: 700; display: grid; place-items: center;">Guardar</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      background: #0B0C08;
+      color: #E5E2D9;
+      font-family: "Google Sans Flex Text", "Google Sans", "Product Sans", system-ui, sans-serif;
+      font-size: 20.8px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: #77DA9A; }
+    a:hover { color: #92F7B4; }
+    .etq {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: #C5C8B6;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 48px;
+      padding: 0 16px;
+      border-radius: 999px;
+      background: #202118;
+      color: #E5E2D9;
+      font-size: 17px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+  </style>
+</helmet>
+
+<!-- Fondo: lo que hubiera en pantalla cuando llega el doble golpe -->
+<div style="width: 420px; height: 900px; position: relative; background: linear-gradient(165deg, #1a2b22 0%, #0B0C08 60%); overflow: hidden;">
+
+  <div style="position: absolute; inset: 0; padding: 60px 22px; opacity: 0.35;">
+    <div style="height: 22px; width: 55%; border-radius: 6px; background: #45483B;"></div>
+    <div style="height: 22px; width: 80%; border-radius: 6px; background: #45483B; margin-top: 14px;"></div>
+    <div style="height: 180px; border-radius: 18px; background: #35362C; margin-top: 26px;"></div>
+    <div style="height: 22px; width: 70%; border-radius: 6px; background: #45483B; margin-top: 26px;"></div>
+    <div style="height: 22px; width: 45%; border-radius: 6px; background: #45483B; margin-top: 14px;"></div>
+  </div>
+
+  <!-- El panel: aspecto de notificacion expandida, no de pantalla -->
+  <div style="position: absolute; top: 90px; left: 14px; right: 14px; background: #35362C; border-radius: 28px; padding: 20px; box-shadow: 0 18px 48px rgba(0,0,0,.55); display: flex; flex-direction: column; gap: 16px;">
+
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="width: 34px; height: 34px; border-radius: 999px; background: #005233; display: grid; place-items: center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#92F7B4" stroke-width="2.2" stroke-linecap="round"><path d="M13 2L4.5 13H11l-1 9 8.5-11H12z"/></svg>
+      </div>
+      <div class="etq" style="flex-grow: 1;">Gasto rápido</div>
+      <div style="width: 34px; height: 34px; border-radius: 999px; background: #45483B; display: grid; place-items: center;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C5C8B6" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </div>
+    </div>
+
+    <!-- El monto tiene el foco desde el primer frame -->
+    <div style="display: flex; align-items: baseline; gap: 10px; padding-bottom: 12px; border-bottom: 3px solid #77DA9A;">
+      <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 52px; line-height: 1; color: #E5E2D9;">$</div>
+      <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 52px; line-height: 1; color: #8F9184;">0</div>
+      <div style="width: 3px; height: 44px; background: #77DA9A; align-self: center;"></div>
+      <div style="flex-grow: 1;"></div>
+      <div class="etq">MXN</div>
+    </div>
+
+    <!-- Lo predicho, editable de un toque cada cosa -->
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <div class="chip">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#C5C8B6" stroke-width="2" stroke-linecap="round"><path d="M3 9h18M5 9V6a2 2 0 012-2h10a2 2 0 012 2v3M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9"/></svg>
+        Despensa
+      </div>
+      <div class="chip">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#C5C8B6" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10.5h19"/></svg>
+        Banamex
+      </div>
+      <div class="chip">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#C5C8B6" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/></svg>
+        Todos
+      </div>
+    </div>
+
+    <!-- Las tres ultimas de esta franja horaria: un toque y guardado -->
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div class="etq">Las de siempre a esta hora</div>
+      <div style="display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 14px; border-radius: 16px; background: #202118;">
+        <div style="flex-grow: 1; font-size: 18px; font-weight: 600;">Despensa</div>
+        <div style="font-size: 16px; color: #C5C8B6;">Banamex</div>
+        <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 24px;">$1,950</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 14px; border-radius: 16px; background: #202118;">
+        <div style="flex-grow: 1; font-size: 18px; font-weight: 600;">Gasolina</div>
+        <div style="font-size: 16px; color: #C5C8B6;">Efectivo</div>
+        <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 24px;">$1,400</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 14px; border-radius: 16px; background: #202118;">
+        <div style="flex-grow: 1; font-size: 18px; font-weight: 600;">Netflix</div>
+        <div style="font-size: 16px; color: #C5C8B6;">Banamex Clásica</div>
+        <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 24px;">$329</div>
+      </div>
+    </div>
+
+    <!-- Guardar sin elegir nada mas: la restriccion dura del brief -->
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <div style="flex-grow: 1;">
+        <div style="font-size: 15px; font-weight: 500; color: #8F9184;">Se cierra solo en 6 s</div>
+        <div style="height: 4px; border-radius: 999px; background: #45483B; margin-top: 6px; overflow: hidden;">
+          <div style="width: 62%; height: 100%; background: #8F9184;"></div>
+        </div>
+      </div>
+      <div style="height: 52px; padding: 0 26px; border-radius: 999px; background: #77DA9A; color: #002111; font-size: 18px; font-weight: 700; display: grid; place-items: center;">Guardar</div>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

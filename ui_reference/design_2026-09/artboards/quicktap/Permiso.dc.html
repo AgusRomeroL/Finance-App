@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body {
+      margin: 0;
+      background: #14150F;
+      color: #E5E2D9;
+      font-family: "Google Sans Flex Text", "Google Sans", "Product Sans", system-ui, sans-serif;
+      font-size: 20.8px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: #77DA9A; }
+    a:hover { color: #92F7B4; }
+    .etq {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: #C5C8B6;
+    }
+    .paso { display: flex; gap: 16px; align-items: flex-start; }
+    .paso .num {
+      width: 36px; height: 36px; border-radius: 999px; flex: none;
+      background: #005233; color: #92F7B4;
+      display: grid; place-items: center;
+      font-size: 17px; font-weight: 700;
+    }
+    .paso .cuerpo { font-size: 18px; font-weight: 500; line-height: 1.45; color: #C5C8B6; }
+    .paso .cuerpo b { color: #E5E2D9; font-weight: 600; }
+  </style>
+</helmet>
+
+<div style="width: 420px; height: 900px; display: flex; flex-direction: column; background: #14150F; padding: 0 24px;">
+
+  <div style="height: 56px;"></div>
+
+  <div style="width: 48px; height: 48px; border-radius: 999px; background: #2A2B22; display: grid; place-items: center;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5E2D9" stroke-width="2.2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>
+  </div>
+
+  <div style="height: 28px;"></div>
+
+  <div class="etq">Gasto rápido</div>
+  <div style="font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 36px; line-height: 1.15; margin-top: 6px;">Dos golpes<br>en la espalda<br>del teléfono</div>
+
+  <div style="height: 24px;"></div>
+
+  <!-- Muestra el panel antes de pedir nada -->
+  <div style="border-radius: 24px; background: linear-gradient(165deg, #1a2b22 0%, #0B0C08 70%); padding: 18px; position: relative; overflow: hidden;">
+    <div style="opacity: .3; display: flex; flex-direction: column; gap: 10px;">
+      <div style="height: 14px; width: 60%; border-radius: 4px; background: #45483B;"></div>
+      <div style="height: 14px; width: 40%; border-radius: 4px; background: #45483B;"></div>
+    </div>
+    <div style="margin-top: 14px; background: #35362C; border-radius: 20px; padding: 14px; box-shadow: 0 12px 30px rgba(0,0,0,.5);">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 26px; height: 26px; border-radius: 999px; background: #005233; display: grid; place-items: center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#92F7B4" stroke-width="2.4" stroke-linecap="round"><path d="M13 2L4.5 13H11l-1 9 8.5-11H12z"/></svg>
+        </div>
+        <div class="etq" style="font-size: 11px;">Gasto rápido</div>
+      </div>
+      <div style="margin-top: 10px; font-family: 'Google Sans Flex Display', system-ui, sans-serif; font-weight: 300; font-size: 32px; color: #E5E2D9;">$1,950</div>
+      <div style="display: flex; gap: 6px; margin-top: 10px;">
+        <div style="height: 32px; padding: 0 12px; border-radius: 999px; background: #202118; font-size: 14px; font-weight: 600; display: grid; place-items: center;">Despensa</div>
+        <div style="height: 32px; padding: 0 12px; border-radius: 999px; background: #202118; font-size: 14px; font-weight: 600; display: grid; place-items: center;">Banamex</div>
+        <div style="flex-grow: 1;"></div>
+        <div style="height: 32px; padding: 0 14px; border-radius: 999px; background: #77DA9A; color: #002111; font-size: 14px; font-weight: 700; display: grid; place-items: center;">Guardar</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 26px;"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 18px;">
+    <div class="paso">
+      <div class="num">1</div>
+      <div class="cuerpo">Android necesita tu permiso para que la app <b>se muestre encima de otras</b>. Es lo único que se pide.</div>
+    </div>
+    <div class="paso">
+      <div class="num">2</div>
+      <div class="cuerpo">Después, en Ajustes, <b>Sistema</b>, <b>Gestos</b>, <b>Toque rápido</b>, eliges abrir Presupuesto Familiar.</div>
+    </div>
+    <div class="paso">
+      <div class="num">3</div>
+      <div class="cuerpo">Listo: dos golpes en la espalda y anotas el gasto <b>sin salir de lo que estabas haciendo</b>.</div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1;"></div>
+
+  <div style="font-size: 16px; font-weight: 500; color: #8F9184; line-height: 1.45;">El panel solo aparece cuando tú lo llamas y se cierra solo a los seis segundos. No lee nada de lo que tengas en pantalla.</div>
+
+  <div style="height: 18px;"></div>
+
+  <div style="height: 56px; border-radius: 999px; background: #77DA9A; color: #002111; font-size: 19px; font-weight: 700; display: grid; place-items: center;">Dar el permiso</div>
+  <div style="height: 12px;"></div>
+  <div style="height: 56px; border-radius: 999px; display: grid; place-items: center; font-size: 19px; font-weight: 600; color: #C5C8B6;">Ahora no</div>
+
+  <div style="height: 28px;"></div>
+
+</div>
+</x-dc>
+</body>
+</html>
