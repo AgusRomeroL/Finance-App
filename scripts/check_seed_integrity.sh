@@ -58,7 +58,7 @@ if [ "$asset_hash" != "$golden_hash" ]; then
 fi
 
 # 3) El asset DEBE declarar user_version=1 (si no, Room corre onCreate en fresh
-#    install y crashea — ver CLAUDE.md §Room). Solo si hay sqlite3 en el host.
+#    install y crashea; ver CLAUDE.md §Room). Solo si hay sqlite3 en el host.
 if command -v sqlite3 >/dev/null 2>&1; then
   uv="$(sqlite3 "$ASSET" 'PRAGMA user_version;')"
   [ "$uv" = "1" ] || fail "el asset tiene user_version=$uv (debe ser 1). Ver CLAUDE.md §Room."

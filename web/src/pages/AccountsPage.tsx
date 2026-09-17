@@ -27,12 +27,12 @@ import type {
 } from '../lib/types'
 
 /* ---------------------------------------------------------------------------
- * Cuentas (/cuentas) — OWNER | PAYER.
+ * Cuentas (/cuentas): OWNER | PAYER.
  *
  * Hoja de balance del hogar como la pantalla Cuentas de la app: wallets por
  * secciones (kind) con saldo, CRUD de wallets, transferencias entre cuentas
  * (RF-41), reconciliar saldo, metas de ahorro (con abonos), préstamos por
- * cobrar (con abonos) y planes MSI (sin materializar cuotas — eso lo hace el
+ * cobrar (con abonos) y planes MSI (sin materializar cuotas; eso lo hace el
  * teléfono). Todas las escrituras van por el repository (writeBatch camelCase
  * con updatedAt, campos obligatorios de FirestoreMappers.kt).
  * ------------------------------------------------------------------------- */
@@ -172,7 +172,7 @@ export default function AccountsPage() {
     }
   }, [hid, reloadKey])
 
-  // Identidad de sesión: el map ya lleva "(Tú)" — titular del wallet, deudor
+  // Identidad de sesión: el map ya lleva "(Tú)": titular del wallet, deudor
   // del préstamo y título del modal de abono lo heredan.
   const memberMap = useMemo(
     () => new Map((data?.members ?? []).map((m) => [m.id, youLabel(m.displayName, m.id, linkedMemberId)])),
@@ -1219,7 +1219,7 @@ export default function AccountsPage() {
 /** "termina jul 2026" a partir de startDate + total de mensualidades. */
 function planEndLabel(startDate: string, totalInstallments: number): string {
   const [y, m] = startDate.split('-').map(Number)
-  if (!y || !m || totalInstallments <= 0) return '—'
+  if (!y || !m || totalInstallments <= 0) return 'sin fecha'
   const end = new Date(y, m - 1 + (totalInstallments - 1), 1)
   return end.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })
 }

@@ -22,7 +22,7 @@ import type { CategoryWithId, ExpenseWithId, ProposalWithId, QuincenaWithId } fr
  * ACCEPTED (resolveProposal). El contrato de ExpenseInput NO admite
  * settlementStatus/externalPayerMemberId y la propuesta no trae wallet ni
  * atribuciones, así que el gasto real lo materializa el teléfono desde su
- * bandeja pending_capture — se explica en el subtexto de la sección.
+ * bandeja pending_capture: se explica en el subtexto de la sección.
  * ------------------------------------------------------------------------- */
 
 interface PanelData {

@@ -11,7 +11,7 @@ import type {
 } from '../lib/types'
 
 /* ---------------------------------------------------------------------------
- * Captura real (OWNER | PAYER) — espejo web de la captura Android.
+ * Captura real (OWNER | PAYER): espejo web de la captura Android.
  * Monto héroe + keypad (mismo patrón/px que ProposePage), toggle Gasto/Ingreso,
  * categoría con recientes + búsqueda, wallet con saldo, fecha, notas, y
  * atribución en dos dimensiones: "Beneficia a" visible con % editable
@@ -535,7 +535,7 @@ export default function CapturePage() {
         </p>
       )}
 
-      {/* Notas (opcional, solo gasto — income_source no tiene campo de notas) */}
+      {/* Notas (opcional, solo gasto; income_source no tiene campo de notas) */}
       {mode === 'expense' && (
         <Field label="Notas (opcional)">
           <textarea
@@ -622,7 +622,7 @@ export default function CapturePage() {
         >
           <Eyebrow>Pagó</Eyebrow>
           <span className="text-sm font-medium text-on-surface">
-            {payer ? youLabel(payer.displayName, payer.id, linkedMemberId) : '—'} · 100%
+            {payer ? youLabel(payer.displayName, payer.id, linkedMemberId) : 'sin pagador'} · 100%
             <span className="ml-2 text-xs text-on-surface-variant">{payerOpen ? '▲' : '▼'}</span>
           </span>
         </button>

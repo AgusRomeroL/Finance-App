@@ -45,7 +45,7 @@ function shouldFallbackToRedirect(code: string): boolean {
 /**
  * Crea/actualiza users/{uid} tras un login exitoso, SIN convertir un fallo de
  * escritura en un fallo de login: si el popup/redirect ya autenticó al usuario
- * pero el upsert falla (reglas, red), se loguea y se continúa — el usuario SÍ
+ * pero el upsert falla (reglas, red), se loguea y se continúa: el usuario SÍ
  * inició sesión y el doc se reintentará en el siguiente login.
  */
 async function upsertUserSafe(user: User): Promise<void> {
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function signInWithGoogle() {
-    // Webview embebido: el popup no es viable — redirect directo.
+    // Webview embebido: el popup no es viable, redirect directo.
     if (isLikelyEmbeddedWebView()) {
       await signInWithRedirect(auth, googleProvider)
       return // la página navega; el resultado llega vía getRedirectResult.

@@ -1,0 +1,146 @@
+# Integracion continua (Fase 7 del plan de cierre).
+#
+# Corre en cada push y pull request a develop y main. Cinco trabajos
+# independientes para que un fallo senale su causa de un vistazo:
+#
+#   em-dash   la regla "cero U+2014": el diff no introduce ninguna y el codigo
+#             sigue limpio (scripts/ci/check_em_dash.sh)
+#   android   compileDebugKotlin de :app y :wear y las pruebas JVM de :app
+#   seed      el asset sembrado es identico al golden y declara user_version 1
+#   web       type-check, pruebas Vitest y build de produccion de la PWA
+#   rules     firestore.rules contra el emulador de Firestore (scripts/rules)
+#
+# Las pruebas instrumentadas (migraciones sobre el asset real, tema,
+# complications del reloj) viven en instrumented.yml y se lanzan a mano por
+# costo de emulador.
+#
+# Gotchas heredados del repositorio:
+#  - El wrapper de Gradle esta gitignorado, asi que aqui se usa la distribucion
+#    8.13 que instala setup-gradle, la misma que fija gradle-wrapper.properties.
+#  - gradle.properties fija org.gradle.java.home a la ruta de Android Studio en
+#    Windows; el gradle.properties del usuario del runner lo sobrescribe con el
+#    JDK 21 del trabajo.
+#  - app/google-services.json esta versionado (config publica de cliente), asi
+#    que el plugin de Google Services no necesita secretos.
+
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  em-dash:
+    name: Cero rayas largas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolver el rango a revisar
+        id: range
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+      - name: El diff no introduce U+2014 y el codigo sigue limpio
+        run: bash scripts/ci/check_em_dash.sh "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}"
+
+  android:
+    name: Compilar y pruebas JVM
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Apuntar Gradle al JDK del runner
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.java.home=$JAVA_HOME" >> ~/.gradle/gradle.properties
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+      - name: compileDebugKotlin (:app y :wear)
+        run: gradle --no-daemon --console=plain :app:compileDebugKotlin :wear:compileDebugKotlin
+      - name: testDebugUnitTest (:app)
+        run: gradle --no-daemon --console=plain :app:testDebugUnitTest
+      - name: Publicar el reporte de pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-pruebas-jvm
+          path: app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+
+  seed:
+    name: Integridad de la semilla
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: sqlite3 para verificar user_version
+        run: sudo apt-get update -q && sudo apt-get install -y -q sqlite3
+      - run: bash scripts/check_seed_integrity.sh
+
+  web:
+    name: Web (type-check, Vitest, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  rules:
+    name: Reglas de Firestore
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts/rules
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: scripts/rules/package-lock.json
+      - name: Cache del emulador de Firestore
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ hashFiles('scripts/rules/package-lock.json') }}
+      - run: npm ci
+      - name: Copiar las reglas de la raiz
+        run: cp ../../firestore.rules .
+      - run: npm test

@@ -12,7 +12,7 @@ export default defineConfig({
       manifest: {
         name: 'Presupuesto Familiar',
         short_name: 'Presupuesto',
-        description: 'Presupuesto familiar quincenal — consulta y propuestas para colaboradores',
+        description: 'Presupuesto familiar quincenal: consulta y propuestas para colaboradores',
         lang: 'es-MX',
         start_url: '/',
         scope: '/',
@@ -35,7 +35,7 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/__/],
         // NO se cachean firestore.googleapis.com ni identitytoolkit.googleapis.com:
         // Workbox solo intercepta lo que declara runtimeCaching, y aquí no se
-        // declara ninguna ruta — el SDK de Firebase gestiona su propia
+        // declara ninguna ruta; el SDK de Firebase gestiona su propia
         // persistencia (persistentLocalCache en src/lib/firebase.ts).
         // Tampoco hay Google Fonts que cachear (la web usa el stack de sistema).
         runtimeCaching: [],

@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
- * Tokens "Architectural Ledger" — escala tonal derivada del verde sembrado
+ * Tokens "Architectural Ledger": escala tonal derivada del verde sembrado
  * #016E3E de la app Android. Tripletas RGB (espacios) para que Tailwind pueda
  * aplicar alpha con `rgb(var(--c-x) / <alpha-value>)`.
  * Modo oscuro por `prefers-color-scheme` (superficies tonales, no negro puro).

@@ -61,22 +61,22 @@ import { normalizeRole } from './types'
 type FirestoreData = Record<string, unknown>
 
 /** Lee un campo probando primero camelCase y luego snake_case. */
-function pick<T>(data: FirestoreData, camel: string, snake: string): T | undefined {
+export function pick<T>(data: FirestoreData, camel: string, snake: string): T | undefined {
   const v = data[camel] !== undefined && data[camel] !== null ? data[camel] : data[snake]
   return v === undefined || v === null ? undefined : (v as T)
 }
 
-function pickNum(data: FirestoreData, camel: string, snake: string): number | undefined {
+export function pickNum(data: FirestoreData, camel: string, snake: string): number | undefined {
   const v = pick<unknown>(data, camel, snake)
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined
 }
 
-function pickStr(data: FirestoreData, camel: string, snake: string): string | undefined {
+export function pickStr(data: FirestoreData, camel: string, snake: string): string | undefined {
   const v = pick<unknown>(data, camel, snake)
   return typeof v === 'string' ? v : undefined
 }
 
-function round2(x: number): number {
+export function round2(x: number): number {
   return Math.round(x * 100) / 100
 }
 
@@ -84,7 +84,7 @@ function round2(x: number): number {
  * Formato del código de invitación
  * ---------------------------------------------------------------------------
  * Formato ACTUAL (opaco): el dueño comparte SOLO el código de 8 chars A-Z0-9
- * (ej. `7QX4K2AB`), sin el household id — el hogar se resuelve leyendo la
+ * (ej. `7QX4K2AB`), sin el household id: el hogar se resuelve leyendo la
  * colección global `invite_codes/{code}` (así lo compartido no filtra el id
  * del hogar, p. ej. `default_household`).
  *
@@ -159,7 +159,7 @@ export async function listUserHouseholds(uid: string): Promise<HouseholdWithId[]
 /**
  * Crea un household nuevo, el rol OWNER y el espejo en users/{uid}/households.
  * Las reglas exigen `createdBy == auth.uid` en el create del household, y solo
- * permiten crear el rol OWNER si el household quedó a tu nombre — por eso el
+ * permiten crear el rol OWNER si el household quedó a tu nombre, por eso el
  * doc del hogar se escribe PRIMERO.
  */
 export async function createHousehold(uid: string, name: string, displayName: string): Promise<string> {
@@ -289,7 +289,7 @@ export async function joinByCode(
   // Crea el rol en el household. `inviteCode` es OBLIGATORIO para las reglas:
   // el create de un rol no-OWNER solo pasa si existe invites/{inviteCode} y su
   // `role` coincide con el que el usuario se asigna. En invites v2 NOMINADOS
-  // las reglas además exigen que `linkedMemberId` coincida con el del invite —
+  // las reglas además exigen que `linkedMemberId` coincida con el del invite;
   // se copia tal cual (y se omite si el invite no lo trae, como los legacy).
   const roleDoc: HouseholdRole = { role: rawRole, displayName, inviteCode: code }
   if (invite.linkedMemberId) roleDoc.linkedMemberId = invite.linkedMemberId
@@ -299,7 +299,7 @@ export async function joinByCode(
   const mirror: UserHouseholdRef = { role: rawRole, joinedAt: Date.now() }
   await setDoc(doc(db, 'users', user.uid, 'households', hid), mirror)
 
-  // Incrementa el contador de usos (atómico) — en AMBOS docs si el código se
+  // Incrementa el contador de usos (atómico), en AMBOS docs si el código se
   // resolvió por el índice global.
   await updateDoc(inviteRef, { uses: increment(1) })
   if (globalCodeRef) {
@@ -311,7 +311,7 @@ export async function joinByCode(
 
 /* -------------------------------- Categories ------------------------------ */
 
-function normCategory(id: string, data: FirestoreData): CategoryWithId {
+export function normCategory(id: string, data: FirestoreData): CategoryWithId {
   return {
     id,
     displayName: pickStr(data, 'displayName', 'display_name') ?? '(sin nombre)',
@@ -328,7 +328,7 @@ function normCategory(id: string, data: FirestoreData): CategoryWithId {
 /**
  * Categorías del hogar. SIN `orderBy` en el servidor: Firestore EXCLUYE del
  * resultado los docs que no tienen el campo del orderBy, y los docs sembrados
- * en snake_case no tienen `sortOrder` — un orderBy('sortOrder') los haría
+ * en snake_case no tienen `sortOrder`: un orderBy('sortOrder') los haría
  * desaparecer. Se ordena en cliente con fallback dual.
  */
 export async function listCategories(hid: string): Promise<CategoryWithId[]> {
@@ -341,7 +341,7 @@ export async function listCategories(hid: string): Promise<CategoryWithId[]> {
 
 /* -------------------------------- Members --------------------------------- */
 
-function normMember(id: string, data: FirestoreData): MemberWithId {
+export function normMember(id: string, data: FirestoreData): MemberWithId {
   return {
     id,
     displayName: pickStr(data, 'displayName', 'display_name') ?? '(sin nombre)',
@@ -366,7 +366,7 @@ export async function listMembers(hid: string): Promise<MemberWithId[]> {
 
 /* -------------------------------- Wallets --------------------------------- */
 
-function normWallet(id: string, data: FirestoreData): WalletWithId {
+export function normWallet(id: string, data: FirestoreData): WalletWithId {
   return {
     id,
     displayName: pickStr(data, 'displayName', 'display_name') ?? '(sin nombre)',
@@ -407,7 +407,7 @@ function walletBalanceUpdate(existing: FirestoreData, newBalance: number): Fires
 
 /* -------------------------------- Quincenas ------------------------------- */
 
-function normQuincena(id: string, data: FirestoreData): QuincenaWithId {
+export function normQuincena(id: string, data: FirestoreData): QuincenaWithId {
   return {
     id,
     year: pickNum(data, 'year', 'year') ?? 0,
@@ -458,7 +458,7 @@ const MX_DATE_FMT = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 })
 
-function epochToMxDateStr(epochMs: number): string {
+export function epochToMxDateStr(epochMs: number): string {
   return MX_DATE_FMT.format(new Date(epochMs))
 }
 
@@ -466,7 +466,7 @@ function epochToMxDateStr(epochMs: number): string {
  * Normaliza un límite de quincena a "YYYY-MM-DD": Room lo persiste como string
  * ISO; docs muy legados podrían traer epoch ms (se convierte en zona MX).
  */
-function toDateStr(v: string | number): string | null {
+export function toDateStr(v: string | number): string | null {
   if (typeof v === 'string') return v.length >= 10 ? v.slice(0, 10) : null
   if (typeof v === 'number' && Number.isFinite(v) && v > 0) return epochToMxDateStr(v)
   return null
@@ -474,7 +474,7 @@ function toDateStr(v: string | number): string | null {
 
 /**
  * Resuelve la quincena cuyo rango [startDate, endDate] contiene el occurredAt
- * (comparación de fechas calendario en America/Mexico_City — los límites son
+ * (comparación de fechas calendario en America/Mexico_City; los límites son
  * fechas, no instantes). Lanza error claro si ninguna quincena contiene la
  * fecha: el gasto NO debe crearse con quincenaId inventado.
  */
@@ -498,7 +498,7 @@ async function findQuincenaForDate(hid: string, occurredAtMs: number): Promise<Q
 
 /* -------------------------------- Expenses -------------------------------- */
 
-function normExpense(id: string, data: FirestoreData): ExpenseWithId {
+export function normExpense(id: string, data: FirestoreData): ExpenseWithId {
   return {
     id,
     concept: pickStr(data, 'concept', 'concept') ?? '',
@@ -519,7 +519,7 @@ function normExpense(id: string, data: FirestoreData): ExpenseWithId {
 }
 
 /** ¿El doc es una lápida (soft-delete)? Las lecturas deben excluirlo. */
-function isTombstoned(e: ExpenseWithId): boolean {
+export function isTombstoned(e: ExpenseWithId): boolean {
   return (e.deletedAt ?? 0) > 0
 }
 
@@ -528,7 +528,7 @@ function isTombstoned(e: ExpenseWithId): boolean {
  *
  * La query del servidor filtra SOLO por status (campo con el mismo nombre en
  * ambas variantes); la quincena se filtra en CLIENTE leyendo quincenaId con
- * fallback dual — un where('quincenaId'==...) no matchearía los docs seed que
+ * fallback dual: un where('quincenaId'==...) no matchearía los docs seed que
  * solo traen `quincena_id`. Los volúmenes por hogar son chicos (cientos de
  * docs), así que el filtro en cliente es aceptable.
  */
@@ -540,7 +540,7 @@ export async function listPostedExpenses(hid: string, quincenaId: string): Promi
     .map((d) => normExpense(d.id, d.data() as FirestoreData))
     // Lápidas fuera: una lápida "limpia" ni siquiera matchea el where de
     // status, pero una zombi (campos vivos + deletedAt por un merge posterior)
-    // sí llegaría — el filtro en cliente cubre ambos casos.
+    // sí llegaría; el filtro en cliente cubre ambos casos.
     .filter((e) => e.quincenaId === quincenaId && !isTombstoned(e))
   // Ordenamos en cliente para no exigir un índice compuesto de Firestore.
   return rows.sort((a, b) => (b.occurredAt ?? 0) - (a.occurredAt ?? 0))
@@ -562,7 +562,7 @@ export async function listExpensesByQuincena(hid: string, quincenaId: string): P
 }
 
 /**
- * TODOS los gastos PLANNED del hogar (pagos futuros, cruzan quincenas — los
+ * TODOS los gastos PLANNED del hogar (pagos futuros, cruzan quincenas; los
  * usa el Calendario para pintar y confirmar planeados de cualquier mes).
  */
 export async function listPlannedExpenses(hid: string): Promise<ExpenseWithId[]> {
@@ -601,13 +601,13 @@ export async function listExpenseAttributions(hid: string, expenseId: string): P
 }
 
 /* ---------------------------------------------------------------------------
- * Captura real del titular (OWNER) — contrato con el pull de Android
+ * Captura real del titular (OWNER): contrato con el pull de Android
  * ---------------------------------------------------------------------------
  * El pull de Android (RemotePullSync.applyExpenseChange) aplica un expense
  * remoto SOLO si su `updatedAt` es estrictamente mayor que el local (LWW), y
  * al recibirlo hace un get() de la subcolección `attributions` del gasto para
  * reflejarla en Room. Por eso:
- *   - `updatedAt` SIEMPRE > 0 (Date.now()) — es la llave del LWW.
+ *   - `updatedAt` SIEMPRE > 0 (Date.now()): es la llave del LWW.
  *   - Doc principal + subcolección attributions + ajuste del wallet van en UN
  *     writeBatch atómico: Android nunca ve un gasto sin sus atribuciones ya
  *     escritas (el snapshot listener dispara tras el commit del batch).
@@ -669,7 +669,7 @@ function buildAttributionRows(expenseId: string, amountMxn: number, input: Expen
  * writeBatch atómico. Devuelve el id del gasto.
  *
  * Con `opts.planned = true` (modo "Planear", fecha futura) el gasto nace con
- * status PLANNED y NO toca el saldo del wallet — se descuenta al confirmarlo
+ * status PLANNED y NO toca el saldo del wallet: se descuenta al confirmarlo
  * (confirmPlanned aquí o el flujo del calendario en el teléfono).
  */
 export async function createExpense(
@@ -817,7 +817,7 @@ export async function updateExpense(hid: string, expenseId: string, input: Expen
 }
 
 /**
- * Borra un gasto con LÁPIDA (tombstone): el doc principal NO se borra — se
+ * Borra un gasto con LÁPIDA (tombstone): el doc principal NO se borra: se
  * reemplaza por una lápida mínima ({ id, householdId, deletedAt, updatedAt })
  * para que un dispositivo offline prolongado, que ya no vería el REMOVED en su
  * cache, reciba la lápida como ADDED y borre localmente en vez de resucitar el
@@ -1005,7 +1005,7 @@ export async function listPendingProposals(hid: string): Promise<ProposalWithId[
 }
 
 /**
- * Resuelve una propuesta (OWNER|PAYER — las reglas rechazan a cualquier
+ * Resuelve una propuesta (OWNER|PAYER; las reglas rechazan a cualquier
  * otro): escribe ACCEPTED/REJECTED + resolvedAt. NO crea el gasto: si el
  * titular la acepta y quiere materializarla, llama después a createExpense
  * con los datos de la propuesta (la app Android hace lo propio con su bandeja
@@ -1019,7 +1019,7 @@ export async function resolveProposal(hid: string, proposalId: string, accept: b
 }
 
 /* ===========================================================================
- * WEB-WAVE2 — hoja de balance (Cuentas / Deudas / Analíticas)
+ * WEB-WAVE2: hoja de balance (Cuentas / Deudas / Analíticas)
  * ===========================================================================
  * Mismo contrato que createExpense/createIncome: toda escritura es un
  * writeBatch atómico en camelCase con `updatedAt: Date.now()` (llave del LWW
@@ -1029,17 +1029,17 @@ export async function resolveProposal(hid: string, proposalId: string, accept: b
  * descarta docs sin ellos.
  * ------------------------------------------------------------------------- */
 
-function camelToSnake(key: string): string {
+export function camelToSnake(key: string): string {
   return key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)
 }
 
 /**
  * Espejo snake_case en EDICIONES (patrón walletBalanceUpdate generalizado):
  * por cada campo camelCase del update, si el doc existente traía la variante
- * snake_case (docs seed), también se actualiza — para no dejar un valor viejo
+ * snake_case (docs seed), también se actualiza, para no dejar un valor viejo
  * divergente en el mismo doc. `last4` es idéntico en ambas variantes.
  */
-function mirrorSnake(existing: FirestoreData, update: FirestoreData): FirestoreData {
+export function mirrorSnake(existing: FirestoreData, update: FirestoreData): FirestoreData {
   const out: FirestoreData = { ...update }
   for (const [k, v] of Object.entries(update)) {
     const snake = camelToSnake(k)
@@ -1085,7 +1085,7 @@ export async function createWallet(hid: string, input: WalletInput): Promise<str
 
 /**
  * Edita un wallet existente (displayName, kind, ownerMemberId, creditLimitMxn,
- * isActive). NO toca saldos — para eso está [reconcileWalletBalance]. Campos
+ * isActive). NO toca saldos: para eso está [reconcileWalletBalance]. Campos
  * opcionales vaciados se escriben null (el mapper de Android los trata como
  * ausentes).
  */
@@ -1188,7 +1188,7 @@ export async function createWalletTransfer(hid: string, input: TransferInput): P
 
 /* ------------------------------ Metas de ahorro --------------------------- */
 
-function normSavingsGoal(id: string, data: FirestoreData): SavingsGoalWithId {
+export function normSavingsGoal(id: string, data: FirestoreData): SavingsGoalWithId {
   return {
     id,
     name: pickStr(data, 'name', 'name') ?? '(sin nombre)',
@@ -1275,7 +1275,7 @@ export async function addToSavingsGoal(hid: string, goalId: string, amountMxn: n
 
 /* --------------------------- Préstamos por cobrar ------------------------- */
 
-function normLoan(id: string, data: FirestoreData): LoanWithId {
+export function normLoan(id: string, data: FirestoreData): LoanWithId {
   return {
     id,
     debtorMemberId: pickStr(data, 'debtorMemberId', 'debtor_member_id') ?? '',
@@ -1374,7 +1374,7 @@ export async function applyLoanPayment(hid: string, loanId: string, amountMxn: n
 
 /* --------------------------------- MSI ------------------------------------ */
 
-function normInstallmentPlan(id: string, data: FirestoreData): InstallmentPlanWithId {
+export function normInstallmentPlan(id: string, data: FirestoreData): InstallmentPlanWithId {
   return {
     id,
     displayName: pickStr(data, 'displayName', 'display_name') ?? '(sin nombre)',
@@ -1466,7 +1466,7 @@ export async function upsertInstallmentPlan(
 
 /**
  * Gastos POSTED pendientes de reembolso (`settlementStatus =
- * 'PENDING_REIMBURSEMENT'`) — la semántica EXACTA de "el hogar le debe" de
+ * 'PENDING_REIMBURSEMENT'`): la semántica EXACTA de "el hogar le debe" de
  * MemberBalancesViewModel en Android: gastos que un tercero adelantó,
  * agrupables por `externalPayerMemberId`. Query del servidor solo por status
  * (mismo criterio que listPostedExpenses); settlement y lápidas en cliente
@@ -1516,7 +1516,7 @@ export async function markExpenseReimbursed(hid: string, expenseId: string): Pro
 
 /* --------------------------- Ingresos (lectura) ---------------------------- */
 
-function normIncome(id: string, data: FirestoreData): IncomeSourceWithId {
+export function normIncome(id: string, data: FirestoreData): IncomeSourceWithId {
   return {
     id,
     quincenaId: pickStr(data, 'quincenaId', 'quincena_id') ?? '',

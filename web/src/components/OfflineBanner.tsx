@@ -33,7 +33,7 @@ export default function OfflineBanner() {
       className="fixed inset-x-0 bottom-0 z-50 bg-surface-3/95 px-4 pt-2 text-center text-xs font-medium text-on-surface backdrop-blur"
       style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
-      Sin conexión — los cambios se guardarán al reconectar
+      Sin conexión: los cambios se guardarán al reconectar
     </div>
   )
 }

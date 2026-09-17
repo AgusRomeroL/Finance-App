@@ -11,37 +11,67 @@ no tiene el permiso `firebaserules.rulesets.test`.
 ## Correr
 
 Necesita Node y un JDK en el PATH. En este equipo el JDK es el de Android Studio,
-que **no** está en el PATH por defecto, así que hay que ponerlo:
+que **no** está en el PATH por defecto, así que hay que ponerlo. Además `npm ci`
+falla sobre el volumen de Google Drive (`G:`): copia esta carpeta a un disco NTFS
+(por ejemplo `C:\dev\finance-rules`) y corre ahí.
 
 ```bash
-cd scripts/rules
-npm install
-JAVA_HOME="C:/Program Files/Android/Android Studio/jbr" PATH="$JAVA_HOME/bin:$PATH" npm test
+cp -r scripts/rules/. /c/dev/finance-rules/ && cp firestore.rules /c/dev/finance-rules/
+cd /c/dev/finance-rules
+npm ci
+PATH="/c/Program Files/Android/Android Studio/jbr/bin:$PATH" npm test
 ```
 
 En PowerShell:
 
 ```powershell
-$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
-$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+$env:PATH = "C:\Program Files\Android\Android Studio\jbr\bin;$env:PATH"
 npm test
 ```
 
-El emulador lee `firestore.rules` desde `scripts/rules/`, así que antes de correr
-hay que copiar el de la raíz:
+El emulador lee `firestore.rules` desde la carpeta de la prueba, así que antes de
+correr hay que copiar el de la raíz (arriba ya va en el `cp`). El
+`package-lock.json` está versionado a propósito (el `.gitignore` global lo
+excluye, se añadió con `git add -f`) para que `npm ci` sea reproducible aquí y
+en CI.
 
-```bash
-cp ../../firestore.rules .
-```
+## Qué cubre (Fase 7 del cierre)
 
-## Qué cubre (Fase 2 del cierre)
+395 casos en `test.mjs`:
 
-60 casos: qué lee y escribe cada rol (Dueño, Administrador, Colaborador), que un
-Colaborador NO lee ninguna colección del ledger ni las atribuciones, que sí lee
-lo que necesita para proponer, que quien no pertenece al hogar no lee nada, y que
-una colección no declarada nace cerrada (lo que el comodín retirado abría).
+- **Matriz rol × colección × operación.** Cinco identidades (Dueño,
+  Administrador, Colaborador, el alias legacy `COLLABORATOR` y un miembro de
+  otro hogar) contra las doce colecciones de datos del hogar, con `get`, `list`,
+  `create`, `update` y `delete` cada una, más las atribuciones que cuelgan del
+  gasto. El Colaborador lee solo `members`, `categories` y `wallets`; el ledger
+  (`expenses`, `quincenas`, `income_source`, `wallet_transfer`, `savings_goal`,
+  `loan`, `installment_plan`, `recurrence_template`, `statement_import`) queda
+  para Dueño y Administrador, que son los únicos que escriben.
+- **Sin sesión:** nada se lee ni se escribe.
+- **Documento del hogar:** solo el Dueño lo edita o borra; un hogar sin
+  `createdBy` lo reclama el primer autenticado a su nombre y ya no se vuelve a
+  reclamar; nadie roba un hogar con dueño reescribiendo `createdBy`.
+- **`roles/{uid}`:** el fundador se auto-asigna `OWNER` solo en el hogar que
+  fundó; cualquier otro rol exige un invite real del hogar con el mismo rol y el
+  mismo miembro nominado; nadie cambia su propio rol (ni el Dueño); solo el
+  Dueño administra y expulsa.
+- **`invites/{code}`:** cualquier autenticado lee uno por código pero nadie los
+  enumera salvo el Dueño; el canje solo incrementa `uses`.
+- **`proposals`:** cualquier miembro crea y lee; solo Dueño y Administrador
+  resuelven o borran.
+- **`users/{uid}/**`:** solo el propio uid.
+- **`invite_codes/{code}`:** lectura por código para cualquier autenticado, sin
+  enumeración; solo el Dueño del hogar apuntado crea o borra; el canje solo toca
+  `uses`.
+- **Sin comodín final:** una colección no declarada nace cerrada.
 
-Al añadir una colección al sync hay que añadir su regla y su caso aquí.
+Al añadir una colección al sync hay que añadirla a `MEMBER_READABLE` o a
+`LEDGER_ONLY` en `test.mjs` y la matriz la cubre sola.
+
+## En CI
+
+El trabajo `rules` de `.github/workflows/ci.yml` corre exactamente esto en cada
+push y pull request a `develop` y `main`.
 
 ## Despliegue
 

@@ -37,6 +37,7 @@ npm run dev        # servidor de desarrollo (http://localhost:5173)
 npm run build      # type-check (tsc -b) + build de producción -> web/dist
 npm run preview    # sirve el build de producción localmente
 npm run lint       # solo type-check (tsc --noEmit)
+npm test           # Vitest: normalizacion dual camelCase/snake_case y rutas por rol
 ```
 
 ## Configuración de Firebase

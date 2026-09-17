@@ -16,7 +16,7 @@ línea, y no es regenerable honestamente:
   ciclo de desarrollo, así que KSP jamás emitió su JSON.
 - La numeración **divergió** con la rama `expressive-ux`: en aquella línea sí
   existió un `17.json` (recuperable en el commit `7a416d2`), pero describe un
-  esquema DISTINTO — ya traía `installment_plan.funding_payment_method_id` y
+  esquema DISTINTO: ya traía `installment_plan.funding_payment_method_id` y
   las columnas de reembolso de `recurrence_template` (que aquí añade
   `MIGRATION_17_18`) y **no** tenía la tabla `statement_line` (que aquí nace
   en v15→v16). Restaurar ese archivo mentiría sobre la v17 de esta cadena;

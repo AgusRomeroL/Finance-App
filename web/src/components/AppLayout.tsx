@@ -2,43 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useHousehold } from '../context/HouseholdContext'
 import { ROLE_LABELS } from '../lib/types'
-
-interface NavItem {
-  to: string
-  label: string
-  end: boolean
-}
-
-/**
- * Nav de ACCESO COMPLETO (OWNER "Dueño" | PAYER "Administrador"): administra
- * el presupuesto real desde la web. Ola 2: Cuentas (hoja de balance), Deudas
- * (entre miembros) y Analíticas (agregados deterministas).
- */
-const NAV_FULL: NavItem[] = [
-  { to: '/panel', label: 'Panel', end: false },
-  { to: '/capturar', label: 'Capturar', end: false },
-  { to: '/calendario', label: 'Calendario', end: false },
-  { to: '/ledger', label: 'Historial', end: false },
-  { to: '/cuentas', label: 'Cuentas', end: false },
-  { to: '/deudas', label: 'Deudas', end: false },
-  { to: '/analiticas', label: 'Analíticas', end: false },
-  { to: '/', label: 'Grupos', end: true },
-]
-
-/**
- * Nav del colaborador (MEMBER). SIN "Resumen" (/dashboard): el colaborador no
- * debe ver el estado financiero del hogar desde la web — solo propone gastos y
- * consulta sus propias propuestas. App.tsx además redirige /dashboard →
- * /proponer si un MEMBER navega ahí a mano.
- */
-const NAV_MEMBER: NavItem[] = [
-  { to: '/', label: 'Grupos', end: true },
-  { to: '/proponer', label: 'Proponer', end: false },
-  { to: '/mis-propuestas', label: 'Mis propuestas', end: false },
-]
-
-/** Mientras el rol carga (o no hay hogar activo) solo se ofrece Grupos. */
-const NAV_MINIMAL: NavItem[] = [{ to: '/', label: 'Grupos', end: true }]
+import { navForRole } from '../lib/access'
 
 /** Isotipo del "Architectural Ledger" (tres líneas de asiento contable). */
 function BrandMark({ className = 'h-10 w-10' }: { className?: string }) {
@@ -62,8 +26,7 @@ export default function AppLayout() {
   const { user, signOut } = useAuth()
   const { active, myRole } = useHousehold()
 
-  const nav =
-    myRole === 'OWNER' || myRole === 'PAYER' ? NAV_FULL : myRole === 'MEMBER' ? NAV_MEMBER : NAV_MINIMAL
+  const nav = navForRole(myRole)
   const roleLabel = myRole ? ROLE_LABELS[myRole] : null
 
   return (

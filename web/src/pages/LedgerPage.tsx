@@ -23,12 +23,12 @@ import type {
 } from '../lib/types'
 
 /* ---------------------------------------------------------------------------
- * Historial (/ledger) — OWNER | PAYER.
+ * Historial (/ledger): OWNER | PAYER.
  *
  * Selector de quincena (todas, desc) + gastos POSTED y PLANNED de la quincena
  * con filtros en CLIENTE (categoría / miembro / texto), tabla en escritorio
  * (lg+) y cards en móvil. Acciones por fila: Confirmar (PLANNED → POSTED con
- * descuento del wallet), Editar (monto/concepto/categoría/fecha/notas — las
+ * descuento del wallet), Editar (monto/concepto/categoría/fecha/notas; las
  * atribuciones existentes se reenvían tal cual porque updateExpense REEMPLAZA
  * la subcolección) y Eliminar (lápida + reversión de saldo, con confirmación).
  *
@@ -396,7 +396,7 @@ export default function LedgerPage() {
                         {catMap.get(e.categoryId) ?? 'Sin categoría'}
                       </td>
                       <td className="max-w-[10rem] truncate px-4 py-3 text-on-surface-variant">
-                        {(e.paymentMethodId && walletMap.get(e.paymentMethodId)) ?? '—'}
+                        {(e.paymentMethodId && walletMap.get(e.paymentMethodId)) ?? 'sin cuenta'}
                       </td>
                       <td className="tnum whitespace-nowrap px-4 py-3 text-right font-semibold text-expense">
                         −{formatMxn(e.amountMxn)}

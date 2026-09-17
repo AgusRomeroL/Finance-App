@@ -12,11 +12,11 @@ import { formatDate, formatMxn, youLabel } from '../lib/format'
 import type { ExpenseWithId, LoanWithId } from '../lib/types'
 
 /* ---------------------------------------------------------------------------
- * Deudas entre miembros (/deudas) — OWNER | PAYER.
+ * Deudas entre miembros (/deudas): OWNER | PAYER.
  *
  * Réplica EXACTA de la semántica de MemberBalancesViewModel (Android):
  * deudas EXPLÍCITAS y opt-in en dos sentidos, por miembro, SIN netear
- * (decisión de producto — nada de derivar deudas de las atribuciones):
+ * (decisión de producto: nada de derivar deudas de las atribuciones):
  *
  *  - "El hogar le debe" (por pagar): gastos POSTED con settlementStatus =
  *    PENDING_REIMBURSEMENT, agrupados por externalPayerMemberId (un tercero

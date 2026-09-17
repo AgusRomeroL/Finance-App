@@ -21,7 +21,7 @@ const DATE_FMT = new Intl.DateTimeFormat('es-MX', {
 
 /** Recibe epoch millis, devuelve fecha legible en zona MX. */
 export function formatDate(epochMs: number): string {
-  if (!Number.isFinite(epochMs)) return '—'
+  if (!Number.isFinite(epochMs)) return 'sin fecha'
   return DATE_FMT.format(new Date(epochMs))
 }
 

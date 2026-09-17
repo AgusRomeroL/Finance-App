@@ -12,7 +12,7 @@
  * Fechas (occurredAt/createdAt/expiresAt/updatedAt) = epoch millis (number).
  * Excepción: quincena.startDate/endDate y quincena.half viajan como los
  * persiste Room (startDate/endDate = "YYYY-MM-DD" string, half = "H1"/"H2"),
- * aunque docs legados podrían traer numbers — por eso los tipos son uniones.
+ * aunque docs legados podrían traer numbers, por eso los tipos son uniones.
  * Montos en MXN (number).
  */
 
@@ -24,7 +24,7 @@
  *     es 'COLLABORATOR'; se normaliza al leer con [normalizeRole].
  *
  * En el WIRE (roles/{uid}, invites, espejo users/…/households) el campo `role`
- * es un string crudo que puede traer el valor legacy — por eso esos interfaces
+ * es un string crudo que puede traer el valor legacy, por eso esos interfaces
  * lo tipan como `string` y la app normaliza en el borde de lectura.
  */
 export type Role = 'OWNER' | 'PAYER' | 'MEMBER'
@@ -93,14 +93,14 @@ export interface HouseholdRole {
   /**
    * Member del hogar al que este usuario queda vinculado. En invites v2
    * nominados las reglas exigen que coincida con el `linkedMemberId` del
-   * invite canjeado — el canje DEBE copiarlo.
+   * invite canjeado: el canje DEBE copiarlo.
    */
   linkedMemberId?: string
   displayName: string
   /**
    * Código de invite usado al unirse. Las reglas de Firestore validan al
    * CREAR un rol no-OWNER que exista households/{hid}/invites/{inviteCode}
-   * y que su `role` coincida — sin este campo el create es rechazado.
+   * y que su `role` coincida; sin este campo el create es rechazado.
    */
   inviteCode?: string
 }
@@ -118,7 +118,7 @@ export interface Invite {
 }
 
 /**
- * invite_codes/{code} — índice GLOBAL de códigos de invitación OPACOS.
+ * invite_codes/{code}: índice GLOBAL de códigos de invitación OPACOS.
  * Mapea el código de 8 chars (el id del doc) al household, para poder canjear
  * sin conocer (ni exponer al compartir) el household id. Lo escribe el OWNER
  * al generar el invite; el canje solo puede incrementar `uses` (reglas).
@@ -449,7 +449,7 @@ export type ProposalKind = 'EXPENSE' | 'FUTURE_PAYMENT'
 /**
  * Estado del ciclo de vida de una propuesta. La web (colaborador) solo escribe
  * PENDING; ACCEPTED/REJECTED los escribe el titular (desde la app Android o
- * desde la web vía resolveProposal — las reglas solo lo permiten al OWNER).
+ * desde la web vía resolveProposal; las reglas solo lo permiten al OWNER).
  */
 export type ProposalStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
 

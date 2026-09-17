@@ -8,7 +8,7 @@ import { dateInputToEpochMs, epochMsToDateInput } from '../lib/format'
 import type { CategoryWithId, ProposalKind } from '../lib/types'
 
 /* ---------------------------------------------------------------------------
- * Teclado numérico en pantalla — el monto es un string crudo ("123.45") que
+ * Teclado numérico en pantalla: el monto es un string crudo ("123.45") que
  * se construye tecla a tecla: dígitos, un solo ".", máx. 2 decimales, borrar.
  * ------------------------------------------------------------------------- */
 const KEYPAD: string[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del']

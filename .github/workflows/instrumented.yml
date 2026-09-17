@@ -1,0 +1,123 @@
+# Pruebas instrumentadas (Fase 7). Manual por costo: cada corrida levanta uno o
+# dos emuladores en el runner y tarda de 15 a 30 minutos.
+#
+#   app    BudgetDatabaseMigrationTest (la cadena 1→21 sobre el asset real y las
+#          rutas desde v16, v17 y v18) y AmountSemanticsTest, en un emulador de
+#          telefono API 34.
+#   wear   ComplicationDataTest, en un emulador Wear OS API 33.
+#
+# Se instala con adb y se corre con `am instrument`, no con
+# connectedDebugAndroidTest: contra los AVD de Wear esa tarea falla al recoger
+# los resultados de UTP aunque las pruebas pasen (Fase 3). La salida de
+# `am instrument -w` se revisa a mano: "OK (N tests)" pasa, "FAILURES!!!" o un
+# proceso caido fallan.
+
+name: Pruebas instrumentadas
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_app:
+        description: "Telefono: migraciones y tema"
+        type: boolean
+        default: true
+      run_wear:
+        description: "Reloj: complications"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: Telefono (migraciones y tema)
+    if: ${{ inputs.run_app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Habilitar KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Apuntar Gradle al JDK del runner
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.java.home=$JAVA_HOME" >> ~/.gradle/gradle.properties
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+      - name: Construir la app y su APK de pruebas
+        run: gradle --no-daemon --console=plain :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Correr en el emulador
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/ci/run_instrumented.sh app
+      - name: Guardar la salida de am instrument
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumentadas-app
+          path: build/instrumented/app.txt
+          if-no-files-found: ignore
+
+  wear:
+    name: Reloj (complications)
+    if: ${{ inputs.run_wear }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Habilitar KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Apuntar Gradle al JDK del runner
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.java.home=$JAVA_HOME" >> ~/.gradle/gradle.properties
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+      - name: Construir el reloj y su APK de pruebas
+        run: gradle --no-daemon --console=plain :wear:assembleDebug :wear:assembleDebugAndroidTest
+      - name: Correr en el emulador Wear
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: android-wear
+          arch: x86_64
+          profile: wearos_small_round
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/ci/run_instrumented.sh wear
+      - name: Guardar la salida de am instrument
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumentadas-wear
+          path: build/instrumented/wear.txt
+          if-no-files-found: ignore

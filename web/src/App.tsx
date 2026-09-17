@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { HouseholdProvider, useHousehold } from './context/HouseholdContext'
 import { EmptyState, LoadingState } from './components/ui'
 import AppLayout from './components/AppLayout'
+import { hasFullAccess } from './lib/access'
 import LoginPage from './pages/LoginPage'
 import GroupsPage from './pages/GroupsPage'
 import DashboardPage from './pages/DashboardPage'
@@ -19,7 +20,7 @@ import AnalyticsPage from './pages/AnalyticsPage'
 
 /**
  * Guard de las rutas de ACCESO COMPLETO (rol v2): pasan OWNER ("Dueño") y
- * PAYER ("Administrador" — escribe el ledger igual que el dueño). Un MEMBER
+ * PAYER ("Administrador", que escribe el ledger igual que el dueño). Un MEMBER
  * (colaborador) es redirigido a Proponer; sin hogar activo se pide elegir uno.
  */
 function RequireFullAccess({ children }: { children: ReactNode }) {
@@ -34,13 +35,13 @@ function RequireFullAccess({ children }: { children: ReactNode }) {
     )
   }
   if (myRole === 'MEMBER') return <Navigate to="/proponer" replace />
-  if (myRole !== 'OWNER' && myRole !== 'PAYER') return <LoadingState label="Verificando tu rol…" />
+  if (!hasFullAccess(myRole)) return <LoadingState label="Verificando tu rol…" />
   return <>{children}</>
 }
 
 /**
  * Guard de /dashboard (Resumen): el MEMBER no debe ver el resumen financiero
- * del hogar — se le redirige a Proponer. OWNER y PAYER conservan el acceso
+ * del hogar: se le redirige a Proponer. OWNER y PAYER conservan el acceso
  * (navegación manual), igual que antes.
  *
  * TODO(rules-collaborator): esto solo oculta la UI. Falta endurecer las

@@ -625,27 +625,12 @@ class CaptureViewModel(
     }
 
     /** Convierte un mapa memberId→bps (suma 10,000) a memberId→% (suma 100). */
-    private fun bpsToPercent(distribution: Map<String, Int>): Map<String, Int> {
-        val entries = distribution.entries.toList()
-        if (entries.isEmpty()) return emptyMap()
-        var assigned = 0
-        return entries.mapIndexed { i, (memberId, bps) ->
-            val pct = if (i == entries.lastIndex) 100 - assigned
-            else (bps / 100).also { assigned += it }
-            memberId to pct
-        }.toMap()
-    }
+    private fun bpsToPercent(distribution: Map<String, Int>): Map<String, Int> =
+        AttributionShares.bpsToPercent(distribution)
 
     /** Reparte 100% equitativamente entre [ids], con el resto en el último. */
-    private fun equalSplit(ids: Collection<String>): Map<String, Int> {
-        val list = ids.toList()
-        if (list.isEmpty()) return emptyMap()
-        val base = 100 / list.size
-        val remainder = 100 - base * list.size
-        return list.mapIndexed { i, id ->
-            id to if (i == list.lastIndex) base + remainder else base
-        }.toMap()
-    }
+    private fun equalSplit(ids: Collection<String>): Map<String, Int> =
+        AttributionShares.equalSplit(ids)
 
     // ── Estado de la operación de registro ────────────────────────────────
 
@@ -1157,13 +1142,10 @@ class CaptureViewModel(
                     throw IllegalArgumentException("La atribución de pagadores debe sumar 100%.")
                 }
 
-                // % → basis points; el último absorbe el resto para sumar 10,000 exacto.
-                fun buildRows(shares: Map<String, Int>, role: String): List<ExpenseAttributionEntity> {
-                    val entries = shares.entries.toList()
-                    var assigned = 0
-                    return entries.mapIndexed { i, (memberId, pct) ->
-                        val bps = if (i == entries.lastIndex) 10_000 - assigned
-                        else (pct * 100).also { assigned += it }
+                // % → basis points; el último absorbe el resto para sumar 10,000 exacto
+                // (AttributionShares.percentToBps, probado en la JVM).
+                fun buildRows(shares: Map<String, Int>, role: String): List<ExpenseAttributionEntity> =
+                    AttributionShares.percentToBps(shares).map { (memberId, bps) ->
                         ExpenseAttributionEntity(
                             id = UUID.randomUUID().toString(),
                             expenseId = expenseId,
@@ -1173,7 +1155,6 @@ class CaptureViewModel(
                             shareAmountMxn = amount * bps / 10_000.0
                         )
                     }
-                }
 
                 val attributions = buildRows(beneficiaryShares, "BENEFICIARY") +
                     buildRows(payerShares, "PAYER")

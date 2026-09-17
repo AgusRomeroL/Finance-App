@@ -41,7 +41,7 @@ export const auth = getAuth(app)
  * sin red y las escrituras se encolan y suben solas al reconectar.
  * `persistentMultipleTabManager` coordina el cache entre pestañas abiertas.
  * Si el navegador no soporta IndexedDB (o la inicialización falla), se cae al
- * cache en memoria por defecto de `getFirestore` — la app sigue funcionando
+ * cache en memoria por defecto de `getFirestore`; la app sigue funcionando
  * online, solo sin persistencia entre sesiones.
  */
 function createFirestore(): Firestore {

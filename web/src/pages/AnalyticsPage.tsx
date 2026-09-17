@@ -11,7 +11,7 @@ import { formatMxn } from '../lib/format'
 import type { CategoryWithId, ExpenseWithId, IncomeSourceWithId, QuincenaWithId } from '../lib/types'
 
 /* ---------------------------------------------------------------------------
- * Analíticas (/analiticas) — OWNER | PAYER. CERO IA: todo es agregación
+ * Analíticas (/analiticas): OWNER | PAYER. CERO IA: todo es agregación
  * determinista en cliente sobre los mismos reads del repository.
  *
  *  - KPIs de la quincena seleccionada: gastado (POSTED), ingreso recibido

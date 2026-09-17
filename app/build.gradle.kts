@@ -34,6 +34,16 @@ android {
         // porque es la forma compatible con la configuration cache.
         versionCode = providers.gradleProperty("budget.versionCode").get().toInt()
         versionName = providers.gradleProperty("budget.versionName").get()
+        // Pruebas instrumentadas (Fase 7). El runner propio arranca una
+        // Application vacia en vez de BudgetApplication, para que la prueba de
+        // migraciones no compita con Room, Firebase ni los workers de la app.
+        testInstrumentationRunner = "mx.budget.testing.PlainAppRunner"
+    }
+
+    sourceSets {
+        // La prueba de migraciones valida cada version contra su schemas/N.json,
+        // que MigrationTestHelper lee como asset del APK de prueba.
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 
     signingConfigs {
@@ -93,8 +103,31 @@ dependencies {
 
     // Tests JVM puros (src/test): parser NL determinista sin deps de Android.
     testImplementation("junit:junit:4.13.2")
+    // Fase 7: motores puros con sus DAO y repos simulados.
+    testImplementation("io.mockk:mockk:1.13.17")
+    // org.json real: el android.jar de los tests JVM solo trae stubs que lanzan
+    // "Stub!", y el materializador de recurrencias parsea JSON con org.json.
+    testImplementation("org.json:json:20250107")
+    // La golden suite del asistente resuelve alias contra la semilla real
+    // (app/src/main/assets/budget_database.db) sin pasar por Room.
+    testImplementation("org.xerial:sqlite-jdbc:3.47.2.0")
 
     val room_version = "2.7.2"
+
+    // Pruebas instrumentadas (Fase 7): migraciones sobre el asset real y las
+    // senales no cromaticas de AmountSemantics, que solo existen en composicion.
+    androidTestImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.room:room-testing:$room_version")
+    // ActivityScenario para componer el tema en una Activity vacia. A proposito
+    // SIN ui-test-junit4: su regla sincroniza con Espresso, y Espresso (3.5.0 y
+    // 3.6.1) revienta en el Pixel 7 con Android 16 con NoSuchMethodException
+    // InputManager.getInstance al esperar la composicion.
+    androidTestImplementation("androidx.test:core:1.6.1")
+    // Declara androidx.activity.ComponentActivity en el manifest de debug para
+    // que ActivityScenario pueda lanzarla.
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
     ksp("androidx.room:room-compiler:$room_version")
