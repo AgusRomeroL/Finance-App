@@ -146,11 +146,11 @@ def main():
         name = gp.stem
         npth = nvd_dir / f"{name}.json"
         if not npth.exists():
-            rows.append((name, "— sin NVIDIA —"))
+            rows.append((name, "sin NVIDIA"))
             continue
         g, n = load(gp), load(npth)
         if not g or not n:
-            rows.append((name, "— error de lectura —"))
+            rows.append((name, "error de lectura"))
             continue
         gc, nc = charges(g, False), charges(n, True)
         pairs, missing, spurious = match_movements(gc, nc)
@@ -187,11 +187,11 @@ def main():
             continue
         lines.append(f"| {name} | {r['g']} | {r['n']} | {r['tp']} | "
                      f"{r['prec']:.2f} | {r['rec']:.2f} | {r['f1']:.2f} | "
-                     f"{r['msi_ok']}/{r['tp']} | {r['hdr']} | {', '.join(r['hdr_fail']) or '—'} |")
+                     f"{r['msi_ok']}/{r['tp']} | {r['hdr']} | {', '.join(r['hdr_fail']) or 'n/a'} |")
     P = tot["tp"] / tot["n"] if tot["n"] else 0
     R = tot["tp"] / tot["g"] if tot["g"] else 0
     F = 2 * P * R / (P + R) if (P + R) else 0
-    lines.append(f"\n**TOTAL** — movimientos gold {tot['g']}, NVIDIA {tot['n']}, "
+    lines.append(f"\n**TOTAL**: movimientos gold {tot['g']}, NVIDIA {tot['n']}, "
                  f"emparejados {tot['tp']} · **Precision {P:.3f} · Recall {R:.3f} · F1 {F:.3f}** · "
                  f"MSI {tot['msi_ok']}/{tot['msi_n']} · "
                  f"cabecera {tot['hdr_ok']}/{tot['hdr_n']} ({tot['hdr_ok']/tot['hdr_n']*100:.0f}%) · "

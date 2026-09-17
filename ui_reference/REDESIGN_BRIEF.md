@@ -1,4 +1,4 @@
-# Brief de rediseño UI — Finance-App (para Claude Design)
+# Brief de rediseño UI: Finance-App (para Claude Design)
 
 > Versión final consolidada y basada en evidencia. Reemplaza el brief preliminar.
 > Síntesis de cinco informes de investigación (dos internos + tres externos de ChatGPT/Gemini) sobre el rediseño de dos pantallas de una app Android de presupuesto familiar quincenal para Pixel 9 Pro Fold.
@@ -24,7 +24,7 @@ App Android de **presupuesto familiar quincenal** de un hogar mexicano (un solo 
 
 **Dispositivo target:** Pixel 9 Pro Fold.
 - Pantalla externa plegada ≈ 6.3" → ventana **compacta** (`< 600dp`, una columna + navegación inferior).
-- Pantalla interna desplegada ≈ 8" → ventana **expandida** **casi cuadrada** (≈ **884 × 1104 dp** a densidad ~2.0 [Inferencia]; relación de aspecto ≈ 1.04:1). Hay una discrepancia factual entre las fuentes sobre la resolución física exacta (`1768 × 2208 px` en el contexto de proyecto vs. `2152 × 2076 px` en la ficha oficial de Google según F3/F5); para layout esto es irrelevante porque la conclusión —display casi cuadrado, no tablet apaisada— es robusta en ambos casos. Pide mockups para **ambos** estados.
+- Pantalla interna desplegada ≈ 8" → ventana **expandida** **casi cuadrada** (≈ **884 × 1104 dp** a densidad ~2.0 [Inferencia]; relación de aspecto ≈ 1.04:1). Hay una discrepancia factual entre las fuentes sobre la resolución física exacta (`1768 × 2208 px` en el contexto de proyecto vs. `2152 × 2076 px` en la ficha oficial de Google según F3/F5); para layout esto es irrelevante porque la conclusión (display casi cuadrado, no tablet apaisada) es robusta en ambos casos. Pide mockups para **ambos** estados.
 
 **Implementación:** Jetpack Compose + Material 3 (Expressive). Los diseños deben ser **construibles con Compose** (componentes M3 reales, formas, tonal layering). Si propones un efecto difícil en Compose, anótalo.
 
@@ -34,7 +34,7 @@ App Android de **presupuesto familiar quincenal** de un hogar mexicano (un solo 
 
 ## 2. Sistema de diseño a respetar (resumen; el detalle vive en DESIGN.md)
 
-- **Color base — DINÁMICO (Material You), no fijo (decisión nueva, ver §2.1):** los roles cromáticos M3 (`primary/secondary/tertiary` + containers, superficies, `outline`) se derivan del **wallpaper/colores del usuario** como las apps de Google. El verde `#016e3e` deja de ser el primario fijo y pasa a ser la **semilla de respaldo** (cuando no hay color dinámico). Semánticos protegidos: ingreso `#0F5A2E`, gasto/error `#BA1A1A`, warning `#8B5A00`.
+- **Color base: DINÁMICO (Material You), no fijo (decisión nueva, ver §2.1):** los roles cromáticos M3 (`primary/secondary/tertiary` + containers, superficies, `outline`) se derivan del **wallpaper/colores del usuario** como las apps de Google. El verde `#016e3e` deja de ser el primario fijo y pasa a ser la **semilla de respaldo** (cuando no hay color dinámico). Semánticos protegidos: ingreso `#0F5A2E`, gasto/error `#BA1A1A`, warning `#8B5A00`.
 - **Para los mockups:** Claude Design debe **renderizar con la paleta verde sembrada** (la de respaldo, para que se vea concreta y de marca), pero **anotar qué roles son dinámicos** (cambiarían con el wallpaper) vs fijos. No "hardcodees" el verde como única verdad; es el estado fallback.
 - **Superficies (jerarquía por capas, NO por líneas):** `surface #f9f9f9` → `surface_container_low #f3f4f4` (zonas estructurales/nav) → `surface_container #edeeee` → `surface_container_lowest #ffffff` (tarjetas de datos) → `surface_container_highest #e0e3e4` (overlays). Esta decisión de separar por capas tonales en lugar de líneas de 1 px está **alineada con la dirección oficial de M3** (surface container roles, tone-based surfaces) (F3, mío).
 - **Regla "No-Line":** prohibido bordes/divisores sólidos de 1 px. Separar con cambios tonales de superficie y espacio en blanco (gutters ≥ 24 dp; ítems de lista separados con 8–16 dp). Con No-Line, **la jerarquía visual recae enteramente en el espaciado** (F5): respétalo religiosamente.
@@ -44,7 +44,7 @@ App Android de **presupuesto familiar quincenal** de un hogar mexicano (un solo 
 - **CTAs:** gradiente 135° `primary → primary_dim`. Elementos flotantes pueden usar glassmorphism (70% opacidad + blur 24px).
 - **Layout del Fold:** "Side-Car" de navegación a la izquierda + "Bento-Box" de datos a la derecha, asimétrico, con mucho espacio negativo.
 
-### 2.1 Color dinámico (Material You) — estrategia (research F6)
+### 2.1 Color dinámico (Material You): estrategia (research F6)
 
 Decisión: la app adopta **color dinámico estilo Material You** (la paleta se adapta al wallpaper/colores del usuario), conservando marca y semántica. Reglas para el diseño:
 
@@ -84,27 +84,27 @@ Lo que **todas o casi todas** las fuentes recomiendan. Estos puntos pueden trata
 
 Donde las fuentes difieren. Cada una se cierra con una recomendación concreta para Claude Design.
 
-### D1 — Mitigación de la rail de iconos (cómo, no si)
+### D1: Mitigación de la rail de iconos (cómo, no si)
 
 Las fuentes convergen en que la rail-solo-iconos daña descubribilidad (C3), pero divergen en la mitigación: F1 propone `WideNavigationRail`/`ModalWideNavigationRail` con etiqueta + tooltips + `contentDescription`; F3 sugiere añadir un drawer textual invocable si la IA crece más allá de 5 destinos; F5 sugiere micro-badges de notificación para dar contexto diferencial a los glifos.
 
 > **Recomendación:** mantener la **rail delgada de iconos (~72–80 dp)** como decisión tomada, y mitigar en **tres capas acumulativas**: (1) `contentDescription` robusto + tooltips en cada item (mínimo viable, siempre); (2) **etiqueta visible bajo el icono del item seleccionado** y/o título de pantalla muy claro en el header del Bento; (3) reservar para fase futura un `ModalWideNavigationRail` invocable desde un icono de menú si los destinos pasan de 5. Los badges de F5 son aceptables como refuerzo, no como sustituto de la etiqueta. Con solo 3–5 destinos muy familiares usados quincenalmente, la memoria muscular compensa, pero las capas 1–2 no son opcionales.
 
-### D2 — Contenedor de captura en el display interno expandido
+### D2: Contenedor de captura en el display interno expandido
 
 Divergencia conocida: **F1** (interno) sugiere **diálogo centrado** con `widthIn(max=…)` o panel `extra`; **F3** (ChatGPT) sugiere **hoja modal con ancho restringido** (~2/3 del body, máx ~640–720 dp); **F5** (Gemini) sugiere **hoja inferior con ancho acotado a máx ~640 dp**, comportándose como elemento flotante anclado al eje vertical central, con un argumento ergonómico fuerte (zonas de alcance del pulgar de Hoober). La decisión de producto ya fija "bottom sheet" para captura.
 
-> **Recomendación (reconciliada):** conservar **`ModalBottomSheet`** en ambos estados para coherencia de patrón con el flujo de captura ya decidido, pero **en expandido acotarla a un ancho máximo de ~640 dp**, anclada al centro horizontal con márgenes laterales transparentes, comportándose visualmente como una hoja flotante (no un rectángulo de borde a borde). Esto integra el ancho de Gemini (640 dp, el más respaldado por la guía adaptativa de M3 y por ergonomía del pulgar) con la prudencia de ChatGPT, y evita el cambio de patrón a diálogo que propone F1 —el diálogo es defendible pero rompe la continuidad del gesto de captura y añade una segunda variante de layout a mantener. Implementar con `ModalBottomSheet` + `contentWindowInsets` consciente; CTA "Registrar" pegado al borde inferior seguro, nunca oculto por IME ni system bars. **Punto abierto para fase 2:** Gemini propone un **numpad numérico custom embebido en la hoja** (3×4, teclas 56 dp) en vez del IME del sistema, para evitar el redimensionamiento abrupto de ventana al abrir el teclado; es una sola fuente pero ergonómicamente sólida para captura repetitiva de montos —vale la pena pedirlo como variante, ya que la captura actual ya usa numpad propio.
+> **Recomendación (reconciliada):** conservar **`ModalBottomSheet`** en ambos estados para coherencia de patrón con el flujo de captura ya decidido, pero **en expandido acotarla a un ancho máximo de ~640 dp**, anclada al centro horizontal con márgenes laterales transparentes, comportándose visualmente como una hoja flotante (no un rectángulo de borde a borde). Esto integra el ancho de Gemini (640 dp, el más respaldado por la guía adaptativa de M3 y por ergonomía del pulgar) con la prudencia de ChatGPT, y evita el cambio de patrón a diálogo que propone F1: el diálogo es defendible pero rompe la continuidad del gesto de captura y añade una segunda variante de layout a mantener. Implementar con `ModalBottomSheet` + `contentWindowInsets` consciente; CTA "Registrar" pegado al borde inferior seguro, nunca oculto por IME ni system bars. **Punto abierto para fase 2:** Gemini propone un **numpad numérico custom embebido en la hoja** (3×4, teclas 56 dp) en vez del IME del sistema, para evitar el redimensionamiento abrupto de ventana al abrir el teclado; es una sola fuente pero ergonómicamente sólida para captura repetitiva de montos; vale la pena pedirlo como variante, ya que la captura actual ya usa numpad propio.
 
-### D3 — Proporción de paneles del dashboard en pantalla casi cuadrada
+### D3: Proporción de paneles del dashboard en pantalla casi cuadrada
 
 Divergencia conocida: **60/40** (brief preliminar, sugerido), **balanceado / división vertical** vs **rejilla Bento 12 columnas**. Las fuentes: F1 propone rejilla **12 columnas** con celdas asimétricas + supporting pane ~60–66/34–40; F3 propone **7/5 columnas** (≈ 58/42) con hero arriba-izq, distribución abajo-izq y transacciones como columna alta a la derecha, gutter 24 dp; F5 propone **65/35** anclado con `PaneExpansionAnchor.Proportion`, gutter ampliado a **32 dp** para que los radios de 28 dp no se asfixien.
 
-> **Recomendación (reconciliada):** **rejilla de 12 columnas** como sistema base (es el marco, no compite con las proporciones), con el divisor macro del `SupportingPaneScaffold` anclado en **~62/38** vía `PaneExpansionAnchor.Proportion` (`Saveable`, arrastrable por el usuario con `Modifier.paneExpansionDraggable`). El **pane principal (~7–8 columnas)** aloja la **salud financiera** dividida verticalmente: KPI héroe + ritmo de quincena arriba, distribución por miembro (barras horizontales) abajo. El **pane de apoyo (~4–5 columnas)** aloja **transacciones recientes** como columna alta y estrecha que emula la proporción de un teléfono anidado —esto resuelve el problema de "dos columnas idénticas que compiten" (F3, F5) y da a las transacciones la verticalidad que una lista quiere. **Gutter 24 dp por defecto, 32 dp entre los dos panes macro** (compromiso entre F1/F3 a 24 y F5 a 32: la separación mayor solo donde el radio de 28 dp lo exige). Margen perimetral 24–32 dp; padding interno por tarjeta 16 dp. La proporción exacta debe quedar **arrastrable y persistida**, no congelada.
+> **Recomendación (reconciliada):** **rejilla de 12 columnas** como sistema base (es el marco, no compite con las proporciones), con el divisor macro del `SupportingPaneScaffold` anclado en **~62/38** vía `PaneExpansionAnchor.Proportion` (`Saveable`, arrastrable por el usuario con `Modifier.paneExpansionDraggable`). El **pane principal (~7–8 columnas)** aloja la **salud financiera** dividida verticalmente: KPI héroe + ritmo de quincena arriba, distribución por miembro (barras horizontales) abajo. El **pane de apoyo (~4–5 columnas)** aloja **transacciones recientes** como columna alta y estrecha que emula la proporción de un teléfono anidado; esto resuelve el problema de "dos columnas idénticas que compiten" (F3, F5) y da a las transacciones la verticalidad que una lista quiere. **Gutter 24 dp por defecto, 32 dp entre los dos panes macro** (compromiso entre F1/F3 a 24 y F5 a 32: la separación mayor solo donde el radio de 28 dp lo exige). Margen perimetral 24–32 dp; padding interno por tarjeta 16 dp. La proporción exacta debe quedar **arrastrable y persistida**, no congelada.
 >
 > Nota sobre "izquierda vs derecha" (pregunta abierta del brief preliminar): coloca **salud financiera en el pane principal** (mayor, izquierda junto a la rail) por ser el contexto crítico para decidir, y **transacciones recientes a la derecha** como columna de acción. F3 y F5 convergen en esta asignación; F2/F4 son agnósticos al lado pero exigen que salud financiera tenga la cifra dominante.
 
-### D4 — Distribución por miembro: barras simples vs apiladas con toggle
+### D4: Distribución por miembro: barras simples vs apiladas con toggle
 
 Matiz entre fuentes: F2 recomienda **barras horizontales agrupadas/ordenadas** (apiladas solo si el total es el mensaje y miembros ≤5); F4 propone **barras horizontales apiladas con toggle beneficiario/pagador**.
 
@@ -112,19 +112,19 @@ Matiz entre fuentes: F2 recomienda **barras horizontales agrupadas/ordenadas** (
 
 ---
 
-## 5. Pantalla A — Dashboard (estado actual y rediseño)
+## 5. Pantalla A: Dashboard (estado actual y rediseño)
 
 **Captura:** `brief_dashboard.png`.
 
 **Estructura actual (expandido):**
 - Izquierda: `PermanentNavigationDrawer` de **256 dp** con ítems de texto (Dashboard, Libro Mayor, Cuentas, Analíticas, Perfil).
-- Centro: panel "Transacciones Recientes" — lista de tarjetas (avatar con iniciales, concepto, método de pago tipo "EFECTIVO", chip de categoría, fecha, monto).
-- Derecha: panel "Salud Financiera" — tarjeta con 3 KPIs (Presupuesto / Gastado / Disponible) + "Distribución por Miembro" (barras).
+- Centro: panel "Transacciones Recientes", lista de tarjetas (avatar con iniciales, concepto, método de pago tipo "EFECTIVO", chip de categoría, fecha, monto).
+- Derecha: panel "Salud Financiera", tarjeta con 3 KPIs (Presupuesto / Gastado / Disponible) + "Distribución por Miembro" (barras).
 - Header: "Presupuesto Familiar" + etiqueta de quincena. FAB verde abajo-derecha.
 
-**Problemas (usuario):** (1) el drawer de 256 dp roba demasiado ancho, apretando ambos paneles; (2) no se ve bonito — tarjetas con bordes/divisores visibles, aire insuficiente, viola No-Line.
+**Problemas (usuario):** (1) el drawer de 256 dp roba demasiado ancho, apretando ambos paneles; (2) no se ve bonito: tarjetas con bordes/divisores visibles, aire insuficiente, viola No-Line.
 
-**Rediseño — especificación:**
+**Rediseño (especificación):**
 
 - **Navegación:** sustituir el drawer por **`NavigationSuiteScaffold` forzado a `NavigationSuiteType.NavigationRail`** (~72–80 dp) en interno, `NavigationBar` en externo (C2). Mitigación de descubribilidad según D1.
 - **Macro-layout:** `SupportingPaneScaffold` con divisor ~62/38 arrastrable, rejilla 12-col, gutters 24/32 dp (D3). Salud financiera = pane principal (izq); transacciones = pane de apoyo (der, columna alta).
@@ -139,7 +139,7 @@ Matiz entre fuentes: F2 recomienda **barras horizontales agrupadas/ordenadas** (
 
 ---
 
-## 6. Pantalla B — Registro de gasto / Quick Capture (estado actual y rediseño)
+## 6. Pantalla B: Registro de gasto / Quick Capture (estado actual y rediseño)
 
 **Captura:** `brief_capture.png`. Es un `ModalBottomSheet`.
 
@@ -147,17 +147,17 @@ Matiz entre fuentes: F2 recomienda **barras horizontales agrupadas/ordenadas** (
 
 **Problema (usuario):** la categoría con 20+ pills abruma y ralentiza.
 
-**Rediseño — especificación:**
+**Rediseño (especificación):**
 
 - **Contenedor:** `ModalBottomSheet` con `skipPartiallyExpanded` según convenga; en interno, acotado a ~640 dp centrado (D2). Gestionar `contentWindowInsets`/`imePadding` para que el campo enfocado nunca quede tras el teclado.
 - **Monto:** un solo campo, foco automático al abrir, teclado decimal (`KeyboardOptions`, `inputmode="decimal"` equivalente). Cifra grande, símbolo MXN contextual no editable. Formateo **on-blur**, valor crudo almacenado (normalizar punto/coma internamente). Considerar el **numpad custom embebido** de D2 como variante.
 - **Divulgación progresiva (C11):** monto + categoría arriba; concepto, fuente de pago, atribución detallada (%), fecha y notas detrás de "Más". Campos mínimos para guardar: monto, categoría y un reparto válido; concepto y fuente con defaults editables.
-- **Categoría (DECIDIDO — acordeón inline + búsqueda en el mismo sheet, C10):**
-  1. **Fila de recientes/frecuentes** (3–8 chips, **aditiva**, NO reordena el catálogo completo — preserva memoria espacial).
+- **Categoría (DECIDIDO: acordeón inline + búsqueda en el mismo sheet, C10):**
+  1. **Fila de recientes/frecuentes** (3–8 chips, **aditiva**, NO reordena el catálogo completo; preserva memoria espacial).
   2. **Campo de búsqueda con autocompletado** (4–8 sugerencias, resalta la **porción predictiva**, no el término tecleado; tolera sinónimos coloquiales mexicanos y faltas comunes). Usar `OutlinedTextField` embebido + lista filtrada; **evitar `SearchBar`** porque sigue marcada experimental y su patrón de búsqueda expandida abre vistas completas que rompen la permanencia en la hoja (F3, decisión técnica).
   3. **Grupos colapsables (acordeón)** por categoría padre (6–8 grupos máx, ancho > profundo), colapsados por defecto. Agrupación sugerida: *Suscripciones, Colegiaturas, Servicios del hogar, Despensa/Comida, Transporte, Otros*. La transición colapsado→expandido se orquesta con shape morphing / resorte suave (C6).
 - **Atribución (beneficiario vs. pagador, C12):** estructura narrativa, NO dos bloques idénticos de controles. Primero "Quién pagó", luego "Quién se benefició", y una **oración resumen viva**: "Pagó: Ana 100%. Beneficia a: Ana 50%, Luis 50%". Ofrecer **plantillas rápidas** ("Yo pagué / yo consumí", "Yo pagué / compartido 50-50", "Cuenta común / todos", "Mamá pagó / hijo consume"), originadas por recencia/frecuencia por categoría. Editor porcentual completo solo bajo demanda. `FilterChip`/`ButtonGroup` para atajos.
-- **Validación y recuperación (C14):** validar **on-blur**, inline, específica y no modal. Si el reparto no suma 100%: "Faltan 20% por asignar" / "Excede 15%" como error text bajo el campo (sustituye supporting text, sin layout shift). Conservar lo escrito ante error. Tras guardar, **snackbar con "Deshacer"** (y opcional "Editar reparto") — el error más común es de prisa, no de sistema. Confirmar solo montos atípicamente grandes; no abusar de diálogos ("cry wolf").
+- **Validación y recuperación (C14):** validar **on-blur**, inline, específica y no modal. Si el reparto no suma 100%: "Faltan 20% por asignar" / "Excede 15%" como error text bajo el campo (sustituye supporting text, sin layout shift). Conservar lo escrito ante error. Tras guardar, **snackbar con "Deshacer"** (y opcional "Editar reparto"): el error más común es de prisa, no de sistema. Confirmar solo montos atípicamente grandes; no abusar de diálogos ("cry wolf").
 - **Estilo de input (DESIGN.md):** fondo `surface_container_highest`, stroke inferior 2 dp `primary` al enfocar, esquinas superiores 28 dp.
 - **CTA:** "Registrar" con énfasis expresivo y confirmación con resorte breve (`MotionScheme.standard()` para el flujo; `MotionScheme.expressive()` reservado a la micro-celebración de guardado, C6/C7).
 - **Persistencia:** borrador a `rememberSaveable`/`SavedStateHandle` para sobrevivir plegado (C13). Interceptar dismissal accidental si el formulario está "sucio".

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Repara roles/espejos dañados por el bug de auto-canje (2026-07-10).
 
-El bug: `joinByCode` hacía `set` plano sobre `roles/{uid}` sin guard — el
+El bug: `joinByCode` hacía `set` plano sobre `roles/{uid}` sin guard: el
 dueño que canjeaba su propio código se degradaba OWNER→COLLABORATOR y el
 espejo `users/{uid}/households/{hid}` quedaba con displayName = hid.
 

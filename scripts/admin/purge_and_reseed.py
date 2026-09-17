@@ -4,7 +4,7 @@
 Contexto (auditoría runtime 2026-07-09): Firestore acumuló basura de
 generaciones anteriores de semilla (imports de estados viejos, quincenas UUID
 huérfanas, snapshots de saldo absurdos). Como Auth estuvo deshabilitado hasta
-el 2026-07-09, NINGÚN dispositivo real llegó a subir datos propios — todo lo
+el 2026-07-09, NINGÚN dispositivo real llegó a subir datos propios; todo lo
 remoto proviene de seeds admin viejos y de QA, y es reproducible. Este script:
 
 1. Borra los docs de las colecciones de DATOS del household (expenses con su
@@ -89,11 +89,11 @@ def seed(db, hid: str) -> None:
     push("loan", "loan", where_household=False)
     push("installment_plan", "installment_plan", where_household=False)
     # recurrence_template NO se siembra (decisión vigente aunque desde v19 la
-    # tabla SÍ se sincroniza — CRUD también en la web): los dispositivos
+    # tabla SÍ se sincroniza, CRUD también en la web): los dispositivos
     # convergen por sync y los ids del ETL son uuid5 deterministas, así que la
     # misma plantilla acaba en el mismo doc sin necesidad de seed admin.
     # Tampoco se purga (no está en DATA_COLLECTIONS): las plantillas remotas
-    # son ediciones reales de los dispositivos, no basura de seeds viejos —
+    # son ediciones reales de los dispositivos, no basura de seeds viejos;
     # purgarlas propagaría el borrado a todos los clientes vía pull.
 
     # expenses + attributions (subcolección)

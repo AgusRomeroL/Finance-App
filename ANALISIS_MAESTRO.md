@@ -111,14 +111,14 @@ Existen **dos plantillas** de hoja: **A** (quincena 16-fin) y **B** (quincena 1-
 |---|---|---|---|
 | **Adulto-pagador** | Benjamín | Benji, Benjamin | $45,000 MXN quincenal |
 | **Adulto-pagador** | Norma | Normita | $60,000 MXN quincenal |
-| **Dependiente** | Pau | Paulina | Estudiante — mesada + seguro |
+| **Dependiente** | Pau | Paulina | Estudiante: mesada + seguro |
 | **Dependiente** | David | David | Mesada $8,000–$15,000/mes |
 | **Dependiente** | Agustín | Agus, Agustin | Seguro grupal |
 | **Dependiente** | Santiago | Santi | Teléfono + inscripciones + mesada |
-| Externo-servicio | Araceli | — | Empleada del hogar |
-| Externo-acreedor | Omar | — | Préstamo personal (10 cuotas × $5,500) |
+| Externo-servicio | Araceli | ninguno | Empleada del hogar |
+| Externo-acreedor | Omar | ninguno | Préstamo personal (10 cuotas × $5,500) |
 | Externo-deudor | Jaudiel | jaudiel | Préstamo otorgado por el hogar |
-| Externo-servicio | Mary | — | No determinado |
+| Externo-servicio | Mary | ninguno | No determinado |
 
 ### 3.2 Métodos de pago identificados
 
@@ -498,7 +498,7 @@ Respuesta renderizada + trazabilidad
 
 ## 8. Flujos de Usuario Principales
 
-### 8.1 Captura de gastos — jerarquía por velocidad
+### 8.1 Captura de gastos: jerarquía por velocidad
 
 | Ranking | Superficie | Trigger | Latencia | Dispositivo |
 |---|---|---|---|---|
@@ -621,12 +621,12 @@ La captura desde Watch es siempre **offline-first** con cola hasta pareo BT/Wi-F
 
 | Módulo | Visualización | Datos |
 |---|---|---|
-| **A — Flujo de capital** | Diagrama Sankey | Ingresos → Categorías de gasto |
-| **B — Gasto por miembro** | Stacked bar + Treemap | Costo per cápita del hogar |
-| **C — Pagos por intereses** | Barras horizontales + timeline de amortización | Intereses por wallet, desglose capital/interés |
-| **D — Varianza histórica** | Z-score table + line chart con banda σ + waterfall + heatmap | Quincena actual vs mediana 6Q |
-| **E — Concentración deuda** | Donut + barras de utilización | Deuda por wallet vs límite |
-| **F — Timeline del household** | Lista cronológica con KPIs por quincena | Histórico completo |
+| **A: Flujo de capital** | Diagrama Sankey | Ingresos → Categorías de gasto |
+| **B: Gasto por miembro** | Stacked bar + Treemap | Costo per cápita del hogar |
+| **C: Pagos por intereses** | Barras horizontales + timeline de amortización | Intereses por wallet, desglose capital/interés |
+| **D: Varianza histórica** | Z-score table + line chart con banda σ + waterfall + heatmap | Quincena actual vs mediana 6Q |
+| **E: Concentración deuda** | Donut + barras de utilización | Deuda por wallet vs límite |
+| **F: Timeline del household** | Lista cronológica con KPIs por quincena | Histórico completo |
 
 ### 10.3 Alertas proactivas (5 reglas)
 
@@ -667,21 +667,21 @@ La captura desde Watch es siempre **offline-first** con cola hasta pareo BT/Wi-F
 
 | Token | Color | Uso |
 |---|---|---|
-| `success` | `#1B6E3F` | Verde oscuro — operación exitosa |
-| `warning` | `#8B5A00` | Ámbar — atención |
-| `expense` | `#BA1A1A` | Rojo — gasto |
-| `income` | `#0F5A2E` | Verde — ingreso |
-| `overBudget` | `#B3261E` | Rojo peligro — sobre presupuesto |
-| `underBudget` | `#2E7D32` | Verde — bajo presupuesto |
+| `success` | `#1B6E3F` | Verde oscuro: operación exitosa |
+| `warning` | `#8B5A00` | Ámbar: atención |
+| `expense` | `#BA1A1A` | Rojo: gasto |
+| `income` | `#0F5A2E` | Verde: ingreso |
+| `overBudget` | `#B3261E` | Rojo peligro: sobre presupuesto |
+| `underBudget` | `#2E7D32` | Verde: bajo presupuesto |
 
 ### 11.3 Layouts adaptativos del Fold
 
 | Postura | Display | Layout |
 |---|---|---|
-| Plegado | Outer 6.3" | `COMPACT` — bottom sheet, accordion de categorías |
-| Desplegado apaisado | Inner 8.0" | `EXPANDED` — dual-pane (lista 40% + detalle 60%) |
-| Desplegado retrato | Inner 8.0" | `EXPANDED` — top chat 55% + contenido 45% |
-| Tabletop (bisagra 90°) | Inner 8.0" | `MEDIUM` — gráfica arriba, controles abajo |
+| Plegado | Outer 6.3" | `COMPACT`: bottom sheet, accordion de categorías |
+| Desplegado apaisado | Inner 8.0" | `EXPANDED`: dual-pane (lista 40% + detalle 60%) |
+| Desplegado retrato | Inner 8.0" | `EXPANDED`: top chat 55% + contenido 45% |
+| Tabletop (bisagra 90°) | Inner 8.0" | `MEDIUM`: gráfica arriba, controles abajo |
 
 ### 11.4 Gestos específicos del Fold
 
@@ -692,9 +692,9 @@ La captura desde Watch es siempre **offline-first** con cola hasta pareo BT/Wi-F
 
 ### 11.5 Densidades por contexto
 
-- **Fold plegado**: `Density.Comfortable` — touch targets amplios.
-- **Fold desplegado**: `Density.Compact` — aprovecha real estate.
-- **Wear OS**: `Density.Spacious` — areas tappable >= 48x48 dp.
+- **Fold plegado**: `Density.Comfortable`: touch targets amplios.
+- **Fold desplegado**: `Density.Compact`: aprovecha real estate.
+- **Wear OS**: `Density.Spacious`: areas tappable >= 48x48 dp.
 
 ---
 
@@ -939,7 +939,7 @@ Estas decisiones están implícitas en los docs pero vale la pena hacerlas expl�
 
 Basada en las prioridades documentadas (P0 bloqueante, P1 adopción, P2 diferenciador):
 
-### Fase 1 — Paridad con Excel (P0)
+### Fase 1: Paridad con Excel (P0)
 
 > Objetivo: que el hogar pueda dejar de usar Excel completamente.
 
@@ -954,7 +954,7 @@ Basada en las prioridades documentadas (P0 bloqueante, P1 adopción, P2 diferenc
 - [ ] Importador del XLSX existente
 - [ ] Préstamos otorgados (CRUD + saldo)
 
-### Fase 2 — Captura Acelerada + Wear (P0-P1)
+### Fase 2: Captura Acelerada + Wear (P0-P1)
 
 > Objetivo: que registrar un gasto sea más rápido que abrir Excel.
 
@@ -966,7 +966,7 @@ Basada en las prioridades documentadas (P0 bloqueante, P1 adopción, P2 diferenc
 - [ ] Sync Watch - Phone via Data Layer API
 - [ ] Widget Android homescreen
 
-### Fase 3 — Analíticas y Visualización (P0-P1)
+### Fase 3: Analíticas y Visualización (P0-P1)
 
 > Objetivo: que la app aporte más insight que el Excel.
 
@@ -980,7 +980,7 @@ Basada en las prioridades documentadas (P0 bloqueante, P1 adopción, P2 diferenc
 - [ ] Alertas proactivas (5 reglas)
 - [ ] Exportación PDF/XLSX/CSV
 
-### Fase 4 — IA On-Device (P2)
+### Fase 4: IA On-Device (P2)
 
 > Objetivo: consultas en lenguaje natural sobre el presupuesto.
 
@@ -994,7 +994,7 @@ Basada en las prioridades documentadas (P0 bloqueante, P1 adopción, P2 diferenc
 - [ ] Pantalla de transparencia y privacidad
 - [ ] Sistema de degradación grácil
 
-### Fase 5 — Web + Multi-usuario (P1-P2)
+### Fase 5: Web + Multi-usuario (P1-P2)
 
 > Objetivo: acceso desde cualquier dispositivo + captura concurrente.
 
@@ -1012,6 +1012,6 @@ Basada en las prioridades documentadas (P0 bloqueante, P1 adopción, P2 diferenc
 ---
 
 **Documentos fuente**:
-- [ESPECIFICACION_PRESUPUESTO_APP.md](file:///g:/My%20Drive/Apps/Finance%20App/ESPECIFICACION_PRESUPUESTO_APP.md) — Modelo de datos, diagnóstico Excel, requerimientos
-- [ESPECIFICACION_UX_HARDWARE_APP.md](file:///g:/My%20Drive/Apps/Finance%20App/ESPECIFICACION_UX_HARDWARE_APP.md) — UX, hardware, captura, Wear OS, analíticas, motor determinista
-- [ADENDA_IA_ON_DEVICE.md](file:///g:/My%20Drive/Apps/Finance%20App/ADENDA_IA_ON_DEVICE.md) — Gemini Nano, RAG local, tool calling, chat layout
+- [ESPECIFICACION_PRESUPUESTO_APP.md](file:///g:/My%20Drive/Apps/Finance%20App/ESPECIFICACION_PRESUPUESTO_APP.md): Modelo de datos, diagnóstico Excel, requerimientos
+- [ESPECIFICACION_UX_HARDWARE_APP.md](file:///g:/My%20Drive/Apps/Finance%20App/ESPECIFICACION_UX_HARDWARE_APP.md): UX, hardware, captura, Wear OS, analíticas, motor determinista
+- [ADENDA_IA_ON_DEVICE.md](file:///g:/My%20Drive/Apps/Finance%20App/ADENDA_IA_ON_DEVICE.md): Gemini Nano, RAG local, tool calling, chat layout

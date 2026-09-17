@@ -10,7 +10,7 @@ sembrados en Firestore.
 Estrategia: agrupa `expenses` con status=PLANNED y recurrence_template_id
 no-nulo por (template, día de occurred_at); conserva el doc de created_at más
 antiguo y TOMBSTONEA el resto (deleted_at + updatedAt, borrando su
-subcolección attributions) — la lápida propaga el borrado a todos los
+subcolección attributions); la lápida propaga el borrado a todos los
 dispositivos sin resurrección (mecanismo verificado E2E).
 
 ORDEN CRÍTICO: correr DESPUÉS de instalar el APK con ids deterministas en los

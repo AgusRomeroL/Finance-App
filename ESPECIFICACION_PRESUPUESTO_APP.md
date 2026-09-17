@@ -29,8 +29,8 @@ Dos **plantillas estructurales** coexisten:
 
 | Plantilla | Cols | Filas | Uso | Pistas de identificación |
 |---|---|---|---|---|
-| **A — Quincena par (16-fin)** | 16–21 | 126–127 | Quincenas "de fin de mes" | Título `PRESUPUESTO QUINCENAL DEL 16 AL ...` · contiene `TAXES` en H35 · sub-bloques `AHORRO`/`FALTA GASTAR` |
-| **B — Quincena impar (1-15)** | 30 | 118–120 | Quincenas "de principio de mes" | Contiene `SCHOOL` en G35 · bloque `PERSONAL CARE` posicionado distinto · extiende columnas hasta AD |
+| **A: Quincena par (16-fin)** | 16–21 | 126–127 | Quincenas "de fin de mes" | Título `PRESUPUESTO QUINCENAL DEL 16 AL ...` · contiene `TAXES` en H35 · sub-bloques `AHORRO`/`FALTA GASTAR` |
+| **B: Quincena impar (1-15)** | 30 | 118–120 | Quincenas "de principio de mes" | Contiene `SCHOOL` en G35 · bloque `PERSONAL CARE` posicionado distinto · extiende columnas hasta AD |
 
 Ambas plantillas comparten el esqueleto analítico; divergen en columnas auxiliares, nombre de una categoría (`TAXES` ↔ `SCHOOL`) y en el bloque de balance bancario.
 
@@ -49,7 +49,7 @@ Filas 68–88  BLOQUE DE CONCILIACIÓN MANUAL (balances bancarios libres)
 Filas 90–127 BLOQUE HISTÓRICO (Ahorro Efectivo por quincena · préstamos)
 ```
 
-### 1.3 Bloque de cabecera (filas 4–10) — Dashboard quincenal
+### 1.3 Bloque de cabecera (filas 4–10): Dashboard quincenal
 
 | Celda | Contenido | Fórmula/Valor típico | Significado operativo |
 |---|---|---|---|
@@ -63,7 +63,7 @@ Filas 90–127 BLOQUE HISTÓRICO (Ahorro Efectivo por quincena · préstamos)
 | `H6/K6` | `FALTA GASTAR` | `=E10 - K64` | Presupuesto aún no ejecutado |
 | `H8/K8` | `AHORRO` | `=E6 - E10` | Ahorro implícito = Ingreso − Presupuesto total |
 
-### 1.4 Bloque de totales (filas 62–67) — KPI principales
+### 1.4 Bloque de totales (filas 62–67): KPI principales
 
 ```
 K62 · Total de gasto quincenal  (proyectado) = suma Projected Cost de todas las tablas
@@ -71,11 +71,11 @@ K64 · Total gastado actual       (ejecutado)  = suma de columnas Norma/Benjamin
 K66/K67 · TOTAL DIFERENCIA       (varianza)   = K62 - K64  (o E5 - K63 en versión reciente)
 ```
 
-### 1.5 Tablas de categoría — Modelo de columnas
+### 1.5 Tablas de categoría: Modelo de columnas
 
 Las 10 categorías estables se instancian como **tablas nombradas de Excel** (structured references). Cada una emplea uno de **tres patrones de columnas**:
 
-#### Patrón P1 — "Atribución por pagador"  
+#### Patrón P1: "Atribución por pagador"  
 Aplica a: `HOUSING`, `ENTERTAINMENT`, `TRANSPORTATION`, `PERSONAL/INSURANCE`, `FOOD`, `PETS`, `TAXES`
 
 | Col | Header | Semántica |
@@ -87,7 +87,7 @@ Aplica a: `HOUSING`, `ENTERTAINMENT`, `TRANSPORTATION`, `PERSONAL/INSURANCE`, `F
 
 Las columnas `Norma` y `Benjamin` son **columnas de atribución de pagador**, no beneficiarios. El pagador queda capturado automáticamente con una regla de complemento.
 
-#### Patrón P2 — "Seguimiento proyectado vs. real"  
+#### Patrón P2: "Seguimiento proyectado vs. real"  
 Aplica a: `LOANS`, `SAVINGS`, `GIFTS`, `LEGAL`, `PERSONAL CARE`, `OTHERS`
 
 | Col | Header | Semántica |
@@ -97,7 +97,7 @@ Aplica a: `LOANS`, `SAVINGS`, `GIFTS`, `LEGAL`, `PERSONAL CARE`, `OTHERS`
 | 3 | `Actual Cost` | Ejecutado |
 | 4 | `Difference` | `= Projected − Actual` (fórmula) |
 
-#### Patrón P3 — "Transferencia por persona" (caso TAXES mal etiquetado)
+#### Patrón P3: "Transferencia por persona" (caso TAXES mal etiquetado)
 La categoría `TAXES` **no contiene impuestos**. Contiene transferencias a miembros del hogar (mesadas, pensiones, colegiaturas):
 
 ```
@@ -148,7 +148,7 @@ El usuario **incrementa manualmente** el contador copiando y editando cada quinc
 
 La hoja `Quincena 16 al 31 Ene` contiene `=#REF!` en `C91` apuntando a `Quincena 1 al 15 noviembre` (hoja inexistente, borrada o renombrada).
 
-### 1.7 Columnas auxiliares N–U — Libros de conciliación manual
+### 1.7 Columnas auxiliares N–U: Libros de conciliación manual
 
 Las hojas de la Plantilla A usan columnas N–U como **scratchpad de reconciliación bancaria**. El contenido es semi-libre y varía por hoja:
 
@@ -159,7 +159,7 @@ Las hojas de la Plantilla A usan columnas N–U como **scratchpad de reconciliac
 
 Estas columnas **no tienen esquema consistente**. Representan el principal caso de uso sin formalizar: **conciliación por método de pago**.
 
-### 1.8 Bloque histórico (filas 90–127) — Ahorro efectivo
+### 1.8 Bloque histórico (filas 90–127): Ahorro efectivo
 
 ```
 B90  "Ahorro Efectivo"
@@ -188,14 +188,14 @@ El hogar **presta dinero a terceros**: `jaudiel` (persona) y `oficinas` (entidad
 |---|---|---|---|
 | Adulto-pagador | **Benjamin (Benji)** | 33/33 hojas | Ingreso fijo 45,000 MXN (o 0) |
 | Adulto-pagador | **Norma (Normita)** | 33/33 hojas | Ingreso fijo 60,000 MXN |
-| Beneficiario | **Pau** | 32/33 | Estudiante/hijo/a — mesada + seguro |
-| Beneficiario | **David** | 26/33 | Estudiante/hijo — mesada mensual 8,000–15,000 MXN |
-| Beneficiario | **Agus / Agustín** | 33/33 (en "Pau, David, Agus") | Hijo — seguro grupal |
-| Beneficiario | **Santi / Santiago** | 33/33 | Estudiante — teléfono + inscripciones + mesada |
+| Beneficiario | **Pau** | 32/33 | Estudiante/hijo/a: mesada + seguro |
+| Beneficiario | **David** | 26/33 | Estudiante/hijo: mesada mensual 8,000–15,000 MXN |
+| Beneficiario | **Agus / Agustín** | 33/33 (en "Pau, David, Agus") | Hijo: seguro grupal |
+| Beneficiario | **Santi / Santiago** | 33/33 | Estudiante: teléfono + inscripciones + mesada |
 | Tercero | **Araceli** | 2/33 (bajo PETS) | Probablemente empleada del hogar (pago por servicios) |
 | Tercero | **Omar** | 8/33 (prestamos) | Acreedor de préstamo personal amortizado |
 | Tercero | **jaudiel** | 2/33 | Deudor del hogar (préstamo otorgado) |
-| Tercero | **Mary** | 3/33 | No determinado — posible empleada o beneficiaria |
+| Tercero | **Mary** | 3/33 | No determinado (posible empleada o beneficiaria) |
 
 ### 1.11 Inventario de métodos de pago (cuentas)
 
@@ -208,7 +208,7 @@ Deducidos del archivo:
 - **Liverpool** (tarjeta departamental)
 - **Sears** (tarjeta departamental)
 - **Walmart** (tarjeta departamental)
-- **Mercado libre** (crédito a plazos — BNPL)
+- **Mercado libre** (crédito a plazos, BNPL)
 - **Klar** (tarjeta digital)
 - **Efectivo**
 - **Ahorro empresa** (fondo de ahorro del empleador)
@@ -219,15 +219,15 @@ Deducidos del archivo:
 
 ### 2.1 Principios de diseño
 
-1. **Un solo log inmutable de `Expense`** — todas las hojas colapsan en una colección indexable por fecha.
-2. **Normalización total** — categorías, beneficiarios, pagadores y métodos de pago son tablas separadas, no strings embebidos.
-3. **Relaciones N:M para atribución** — un gasto puede tener múltiples beneficiarios y múltiples pagadores (reparto proporcional).
-4. **Recurrencia como entidad de primer orden** — plantillas de gasto recurrente con generación proactiva de instancias esperadas.
-5. **Agnostic de frontend** — esquemas válidos para SQLite (Android), Room, Firestore/BQ (web) y proto de Wear OS.
+1. **Un solo log inmutable de `Expense`**: todas las hojas colapsan en una colección indexable por fecha.
+2. **Normalización total**: categorías, beneficiarios, pagadores y métodos de pago son tablas separadas, no strings embebidos.
+3. **Relaciones N:M para atribución**: un gasto puede tener múltiples beneficiarios y múltiples pagadores (reparto proporcional).
+4. **Recurrencia como entidad de primer orden**: plantillas de gasto recurrente con generación proactiva de instancias esperadas.
+5. **Agnostic de frontend**: esquemas válidos para SQLite (Android), Room, Firestore/BQ (web) y proto de Wear OS.
 
 ### 2.2 Esquemas de colecciones (notación TypeScript/Zod-compatible)
 
-#### 2.2.1 `Household` — raíz del aislamiento de datos
+#### 2.2.1 `Household`: raíz del aislamiento de datos
 
 ```ts
 Household {
@@ -241,7 +241,7 @@ Household {
 }
 ```
 
-#### 2.2.2 `Member` — miembros del hogar + terceros
+#### 2.2.2 `Member`: miembros del hogar + terceros
 
 ```ts
 Member {
@@ -262,7 +262,7 @@ Member {
 }
 ```
 
-#### 2.2.3 `Category` — taxonomía jerárquica
+#### 2.2.3 `Category`: taxonomía jerárquica
 
 ```ts
 Category {
@@ -304,7 +304,7 @@ INGRESOS > {Sueldo Benjamin, Sueldo Norma, Extras}
 PRESTAMOS_OTORGADOS > {jaudiel, oficinas}
 ```
 
-#### 2.2.4 `PaymentMethod` — cuentas, tarjetas, efectivo
+#### 2.2.4 `PaymentMethod`: cuentas, tarjetas, efectivo
 
 ```ts
 PaymentMethod {
@@ -332,7 +332,7 @@ PaymentMethod {
 }
 ```
 
-#### 2.2.5 `Expense` — registro atómico de gasto (evento inmutable)
+#### 2.2.5 `Expense`: registro atómico de gasto (evento inmutable)
 
 ```ts
 Expense {
@@ -364,7 +364,7 @@ Expense {
 }
 ```
 
-#### 2.2.6 `ExpenseAttribution` — tabla puente (1 Expense → N Members beneficiarios)
+#### 2.2.6 `ExpenseAttribution`: tabla puente (1 Expense → N Members beneficiarios)
 
 ```ts
 ExpenseAttribution {
@@ -379,7 +379,7 @@ ExpenseAttribution {
 
 **Regla de integridad**: para cada `expense_id`, `SUM(share_bps) = 10000` tanto para `role=BENEFICIARY` como para `role=PAYER` (dos agregaciones independientes).
 
-Ejemplo — el gasto `"Seguro Pau, David, Agus"` de 3,500 MXN pagado 100% por Norma:
+Ejemplo: el gasto `"Seguro Pau, David, Agus"` de 3,500 MXN pagado 100% por Norma:
 
 ```
 expense:      { amount: 3500, concept: "Seguro médico", category: SEGUROS }
@@ -391,7 +391,7 @@ attributions: [
 ]
 ```
 
-#### 2.2.7 `Quincena` — período operativo (ancla de agregación)
+#### 2.2.7 `Quincena`: período operativo (ancla de agregación)
 
 ```ts
 Quincena {
@@ -411,7 +411,7 @@ Quincena {
 }
 ```
 
-#### 2.2.8 `RecurrenceTemplate` — plantilla de gasto recurrente
+#### 2.2.8 `RecurrenceTemplate`: plantilla de gasto recurrente
 
 ```ts
 RecurrenceTemplate {
@@ -436,12 +436,12 @@ RecurrenceTemplate {
     [member_id: UUID]: int           // basis points
   }
   is_active: boolean
-  confidence_score: decimal          // 0.0–1.0 — qué tan seguros estamos
+  confidence_score: decimal          // 0.0–1.0, qué tan seguros estamos
   learned_from_expense_ids: UUID[]   // trazabilidad del aprendizaje
 }
 ```
 
-#### 2.2.9 `InstallmentPlan` — plan de pagos con intereses
+#### 2.2.9 `InstallmentPlan`: plan de pagos con intereses
 
 ```ts
 InstallmentPlan {
@@ -461,7 +461,7 @@ InstallmentPlan {
 }
 ```
 
-#### 2.2.10 `Loan` — préstamos otorgados por el hogar
+#### 2.2.10 `Loan`: préstamos otorgados por el hogar
 
 ```ts
 Loan {
@@ -478,7 +478,7 @@ Loan {
 }
 ```
 
-#### 2.2.11 `SavingsGoal` — metas de ahorro
+#### 2.2.11 `SavingsGoal`: metas de ahorro
 
 ```ts
 SavingsGoal {
@@ -757,13 +757,13 @@ function inferBeneficiariesFromConcept(concept: string, household: Household) ->
   return suggestions
 ```
 
-**El parser nunca escribe directo al modelo.** Siempre presenta un cuadro de diálogo de confirmación ("Detectamos: Santi. ¿Correcto?") — RF-62.
+**El parser nunca escribe directo al modelo.** Siempre presenta un cuadro de diálogo de confirmación ("Detectamos: Santi. ¿Correcto?"), RF-62.
 
-### 4.3 Motor de recurrencia — detección + memorización
+### 4.3 Motor de recurrencia: detección + memorización
 
 El objetivo es que **cada gasto repetido se convierta automáticamente en una plantilla** después de umbrales de confianza. Especificación algorítmica:
 
-#### 4.3.1 Fase A — Identificación de candidatos
+#### 4.3.1 Fase A: Identificación de candidatos
 
 ```python
 def detect_recurrence_candidates(expenses: List[Expense]) -> List[Candidate]:
@@ -817,7 +817,7 @@ def detect_recurrence_candidates(expenses: List[Expense]) -> List[Candidate]:
     return candidates
 ```
 
-#### 4.3.2 Fase B — Memorización de atribución
+#### 4.3.2 Fase B: Memorización de atribución
 
 Para cada candidato, se calcula la distribución modal de beneficiarios y pagadores:
 
@@ -849,11 +849,11 @@ def learn_attribution(candidate: Candidate) -> AttributionDefaults:
     return AttributionDefaults(default_beneficiaries, default_payer_split)
 ```
 
-#### 4.3.3 Fase C — Proposición al usuario
+#### 4.3.3 Fase C: Proposición al usuario
 
 Cuando `confidence >= 0.75`, la app propone convertir el patrón en plantilla. El usuario confirma/edita y la plantilla queda activa. Cada nuevo gasto que coincida con una plantilla actualizará el `confidence_score` incrementalmente (EMA con α = 0.2).
 
-#### 4.3.4 Fase D — Autogeneración al iniciar quincena
+#### 4.3.4 Fase D: Autogeneración al iniciar quincena
 
 ```python
 def bootstrap_quincena(q: Quincena):
@@ -874,7 +874,7 @@ def bootstrap_quincena(q: Quincena):
             materialize_attributions(planned_expense, t)
 ```
 
-### 4.4 Motor de cuotas (installments) — contador automático
+### 4.4 Motor de cuotas (installments): contador automático
 
 Reemplaza la numeración manual `Préstamo Omar 3 → 4 → 5 → ...`:
 
@@ -927,7 +927,7 @@ Esto habilita la analítica "distribución del pago de intereses" (§5.3).
 | **Deuda revolvente total** | `Σ PaymentMethod.current_balance WHERE kind IN (CREDIT_CARD, DEPARTMENT_STORE_CARD)` | Tiempo real |
 | **Compromisos de cuotas pendientes** | `Σ installment_amount * (total − current) sobre planes ACTIVE` | Tiempo real |
 
-### 5.2 Consultas analíticas — ejemplos SQL ejecutables
+### 5.2 Consultas analíticas: ejemplos SQL ejecutables
 
 #### 5.2.1 Fugas de capital (gastos sin atribución explícita o anómalos)
 
@@ -1101,7 +1101,7 @@ ORDER BY mes, total_mes DESC;
 
 Mapeo directo **fricción detectada → solución de producto**.
 
-### 6.1 Fricción #1 — Creación manual de hoja por quincena
+### 6.1 Fricción #1: Creación manual de hoja por quincena
 
 **Síntoma observado**: 33 hojas duplicadas, con typos (`febrereo`), inconsistencias ortográficas y referencias rotas (`#REF!`).
 
@@ -1110,7 +1110,7 @@ Mapeo directo **fricción detectada → solución de producto**.
 - Plantillas recurrentes materializan gastos `PLANNED` sin intervención.
 - La UI nunca expone el concepto de "hoja". El usuario ve "Quincena actual", "Próxima quincena", "Histórico".
 
-### 6.2 Fricción #2 — Atribución textual en el nombre del concepto
+### 6.2 Fricción #2: Atribución textual en el nombre del concepto
 
 **Síntoma observado**: `"Telefono Santi"`, `"Pau, David, Agus"`, `"David Febrero y 3000 Marzo"` obligan al usuario a codificar metadatos en strings.
 
@@ -1119,7 +1119,7 @@ Mapeo directo **fricción detectada → solución de producto**.
 - Parser textual (§4.2) como **sugerencia**, nunca canon.
 - Búsqueda y agregación por beneficiario sin regex.
 
-### 6.3 Fricción #3 — Numeración manual de cuotas
+### 6.3 Fricción #3: Numeración manual de cuotas
 
 **Síntoma observado**: `Prestamo Omar 3, 4, 5, 6, 7, 8, 9, 10` tecleado cada vez.
 
@@ -1127,7 +1127,7 @@ Mapeo directo **fricción detectada → solución de producto**.
 - Entidad `InstallmentPlan` con contador automático.
 - UI siempre muestra `3/10` y calcula saldo restante.
 
-### 6.4 Fricción #4 — Conciliación bancaria en columnas libres
+### 6.4 Fricción #4: Conciliación bancaria en columnas libres
 
 **Síntoma observado**: Columnas N–U con listas de cargos por banco sin esquema.
 
@@ -1136,15 +1136,15 @@ Mapeo directo **fricción detectada → solución de producto**.
 - Vista "Estado de cuenta" por método: lista cronológica de cargos/abonos, saldo corriente y conciliación manual con import de estado de cuenta.
 - Importador de XML SAT / CSV de banco.
 
-### 6.5 Fricción #5 — `TAXES` mal etiquetado como transferencias familiares
+### 6.5 Fricción #5: `TAXES` mal etiquetado como transferencias familiares
 
-**Síntoma observado**: La tabla `TAXES` contiene pagos a David, Santiago, Pau, Coche — no impuestos.
+**Síntoma observado**: La tabla `TAXES` contiene pagos a David, Santiago, Pau, Coche; no impuestos.
 
 **Solución**:
 - Categoría `TRANSFERENCIAS_FAMILIARES` explícita, con subcategorías por miembro destinatario.
 - Migración del XLSX reclasifica automáticamente estos registros.
 
-### 6.6 Fricción #6 — Agregación intertemporal imposible
+### 6.6 Fricción #6: Agregación intertemporal imposible
 
 **Síntoma observado**: Imposible responder "¿cuánto gastamos en David en 2025?" sin abrir cada hoja manualmente.
 
@@ -1153,7 +1153,7 @@ Mapeo directo **fricción detectada → solución de producto**.
 - Queries parametrizadas con ventanas temporales arbitrarias.
 - Dashboard anual y comparador quincena vs quincena.
 
-### 6.7 Fricción #7 — Inmediatez del registro
+### 6.7 Fricción #7: Inmediatez del registro
 
 **Síntoma observado**: Las hojas deben llenarse "cuando tocas Excel", no cuando ocurre el gasto. Alto riesgo de olvido.
 
@@ -1162,7 +1162,7 @@ Mapeo directo **fricción detectada → solución de producto**.
 - Widget Android con los 4 gastos recurrentes más probables para el momento del día.
 - Parser de notificaciones bancarias (con permiso explícito).
 
-### 6.8 Fricción #8 — Falta de visualización sobre el plano
+### 6.8 Fricción #8: Falta de visualización sobre el plano
 
 **Síntoma observado**: El libro no tiene gráficas; todo es numérico tabular.
 
@@ -1170,7 +1170,7 @@ Mapeo directo **fricción detectada → solución de producto**.
 - Heatmap diario · donut por categoría · stacked bar por miembro · line chart de tendencia.
 - En foldable, layout dual con tabla + gráfica simultáneas.
 
-### 6.9 Fricción #9 — Sin estado de plan vs ejecutado granular
+### 6.9 Fricción #9: Sin estado de plan vs ejecutado granular
 
 **Síntoma observado**: Las columnas `Projected` y `Norma/Benjamin/Actual` confunden plan con realidad.
 
@@ -1179,7 +1179,7 @@ Mapeo directo **fricción detectada → solución de producto**.
 - UI diferencia visualmente gastos planeados (outline) de ejecutados (sólidos).
 - Botón "confirmar gasto" colapsa PLANNED → POSTED.
 
-### 6.10 Fricción #10 — Pérdida de contexto de método de pago
+### 6.10 Fricción #10: Pérdida de contexto de método de pago
 
 **Síntoma observado**: El método de pago se deduce de la columna auxiliar N–U pero no está ligado al registro de gasto de la tabla principal.
 
@@ -1187,7 +1187,7 @@ Mapeo directo **fricción detectada → solución de producto**.
 - `payment_method_id` como campo obligatorio en cada `Expense`.
 - Autocomplete del último método usado para el concepto.
 
-### 6.11 Fricción #11 — Préstamos otorgados subdocumentados
+### 6.11 Fricción #11: Préstamos otorgados subdocumentados
 
 **Síntoma observado**: `"Prestamo oficinas · jaudiel · 105000 · 50000"` en filas 116-120 sin trazabilidad ni recordatorio.
 
@@ -1195,7 +1195,7 @@ Mapeo directo **fricción detectada → solución de producto**.
 - Entidad `Loan` con deudor, saldo, intereses acordados, recordatorios.
 - Dashboard "Me deben / Debo" separado del gasto.
 
-### 6.12 Fricción #12 — Ausencia de vista familiar
+### 6.12 Fricción #12: Ausencia de vista familiar
 
 **Síntoma observado**: No hay lugar para que Benjamín y Norma vean el mismo presupuesto colaborativamente.
 

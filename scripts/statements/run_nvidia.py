@@ -27,17 +27,17 @@ MIEMBROS = ["Benjamín", "Norma", "Normita", "David", "Agustín", "Santiago"]
 
 # Subconjunto de categorías hoja del catálogo del ETL, relevantes a compras.
 CATEGORIAS = [
-    "FOOD.COMIDA — Comida", "FOOD.DESPENSA — Despensa", "FOOD.LIMPIEZA — Limpieza",
-    "TRANSPORTATION.GASOLINA — Gasolina", "TRANSPORTATION.MAINTENANCE — Mantenimiento",
-    "ENTERTAINMENT.DIVERSION — Diversión", "ENTERTAINMENT.NETFLIX — Netflix",
-    "ENTERTAINMENT.SPOTIFY — Spotify", "ENTERTAINMENT.DISNEY — Disney+",
-    "ENTERTAINMENT.PRIME — Amazon Prime", "ENTERTAINMENT.HBO — HBO",
-    "ENTERTAINMENT.YOUTUBE_PREMIUM — YouTube Premium", "ENTERTAINMENT.MELI_PLUS — Meli+",
-    "HOUSING.INTERNET — Internet", "HOUSING.TELEFONO — Teléfono", "HOUSING.MUEBLES — Muebles",
-    "PETS.COMIDA — Comida gatas", "PETS.VETERINARIO — Veterinario",
-    "PERSONAL_CARE — Cuidado personal", "ESCUELA — Escuela / Colegiaturas",
-    "GIFTS — Regalos y donaciones", "SERVICIOS_EXTERNOS — Servicios externos",
-    "OTHER — Otros",
+    "FOOD.COMIDA: Comida", "FOOD.DESPENSA: Despensa", "FOOD.LIMPIEZA: Limpieza",
+    "TRANSPORTATION.GASOLINA: Gasolina", "TRANSPORTATION.MAINTENANCE: Mantenimiento",
+    "ENTERTAINMENT.DIVERSION: Diversión", "ENTERTAINMENT.NETFLIX: Netflix",
+    "ENTERTAINMENT.SPOTIFY: Spotify", "ENTERTAINMENT.DISNEY: Disney+",
+    "ENTERTAINMENT.PRIME: Amazon Prime", "ENTERTAINMENT.HBO: HBO",
+    "ENTERTAINMENT.YOUTUBE_PREMIUM: YouTube Premium", "ENTERTAINMENT.MELI_PLUS: Meli+",
+    "HOUSING.INTERNET: Internet", "HOUSING.TELEFONO: Teléfono", "HOUSING.MUEBLES: Muebles",
+    "PETS.COMIDA: Comida gatas", "PETS.VETERINARIO: Veterinario",
+    "PERSONAL_CARE: Cuidado personal", "ESCUELA: Escuela / Colegiaturas",
+    "GIFTS: Regalos y donaciones", "SERVICIOS_EXTERNOS: Servicios externos",
+    "OTHER: Otros",
 ]
 
 SYSTEM_PROMPT_IMPROVED = """
@@ -144,7 +144,7 @@ def user_prompt(text: str, with_context: bool) -> str:
         household = (
             "\nContexto del hogar (para categoriaSugerida y beneficiariosSugeridos):\n"
             f"MIEMBROS (usa estos nombres exactos): {', '.join(MIEMBROS)}\n"
-            f"CATEGORÍAS (código — nombre; usa el CÓDIGO exacto): {'; '.join(CATEGORIAS)}\n"
+            f"CATEGORÍAS (código: nombre; usa el CÓDIGO exacto): {'; '.join(CATEGORIAS)}\n"
         )
     return (
         "Analiza el siguiente estado de cuenta y devuelve SOLO el JSON del esquema.\n"

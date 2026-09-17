@@ -12,7 +12,7 @@ dist-ssr
 *.local
 *.tsbuildinfo
 
-# Env — solo se commitea .env.example
+# Env: solo se commitea .env.example
 .env
 .env.local
 .env.*.local

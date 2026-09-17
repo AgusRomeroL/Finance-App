@@ -1,4 +1,4 @@
-# Presupuesto Familiar — Web de colaboradores (paquete B4)
+# Presupuesto Familiar: Web de colaboradores (paquete B4)
 
 Web SPA que permite a **colaboradores** (miembros invitados por código, sin la app Android)
 participar en el presupuesto familiar: iniciar sesión con Google, unirse a un grupo,
@@ -83,7 +83,7 @@ El dueño comparte **un solo string**:
 ```
 
 - `{hid}` = id del documento del household (autogenerado por Firestore).
-- `{code}` = el secreto de **8 caracteres A-Z0-9** — es el id del doc `invites/{code}` y ES el secreto.
+- `{code}` = el secreto de **8 caracteres A-Z0-9**: es el id del doc `invites/{code}` y ES el secreto.
 - Separador: un **punto** (`.`). La web parte por el **último** punto (tolera hids con puntos).
 
 Ejemplo: `AbC123xy.7QK9M2ZP`.

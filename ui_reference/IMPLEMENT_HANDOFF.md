@@ -1,4 +1,4 @@
-# Handoff — Implementar el rediseño de Claude Design en la app
+# Handoff: Implementar el rediseño de Claude Design en la app
 
 Documento de traspaso para continuar en un chat nuevo de Claude Code. Objetivo: tomar el diseño generado en Claude Design (archivo `Presupuesto Hogar.dc.html`) e implementarlo como UI real en Jetpack Compose, sobre la arquitectura existente.
 
@@ -27,13 +27,13 @@ Traducir el diseño a Jetpack Compose Material 3 sobre el código existente. Map
 | Captura: hoja ~640dp; categoría = recientes/frecuentes + búsqueda + acordeón; atribución beneficiario/pagador | `app/src/main/java/mx/budget/ui/capture/CaptureBottomSheet.kt` |
 | Tema: color dinámico (Material You) + verde fallback + semánticos protegidos | `app/src/main/java/mx/budget/ui/theme/` (Color.kt, Theme.kt) |
 
-## 4. Restricciones y decisiones — NO reinventar (leer primero)
+## 4. Restricciones y decisiones: NO reinventar (leer primero)
 
 En el repo, antes de codificar:
-- `ui_reference/REDESIGN_BRIEF.md` — brief final consolidado y basado en evidencia (convergencias C1–C14, divergencias resueltas D1–D4, specs por pantalla mapeadas a componentes Compose, y la §2.1 de color dinámico).
-- `ui_reference/research/01..06_*.md` — los 6 informes (Material 3/foldable ×3, fintech ×2, color dinámico ×1).
-- `ui_reference/veridian_ledger/DESIGN.md` — sistema de diseño "The Architectural Ledger".
-- `CLAUDE.md` — arquitectura, toolchain, estado de implementación.
+- `ui_reference/REDESIGN_BRIEF.md`: brief final consolidado y basado en evidencia (convergencias C1–C14, divergencias resueltas D1–D4, specs por pantalla mapeadas a componentes Compose, y la §2.1 de color dinámico).
+- `ui_reference/research/01..06_*.md`: los 6 informes (Material 3/foldable ×3, fintech ×2, color dinámico ×1).
+- `ui_reference/veridian_ledger/DESIGN.md`: sistema de diseño "The Architectural Ledger".
+- `CLAUDE.md`: arquitectura, toolchain, estado de implementación.
 
 Puntos no negociables: `NavigationSuiteScaffold` forzado a rail de iconos en expandido (con mitigación de descubribilidad: `contentDescription`/tooltips/etiqueta del item activo); `SupportingPaneScaffold` + Bento con `LazyVerticalGrid`; barras horizontales ordenadas (NO dona); color dinámico con verde `#016E3E` como fallback + semánticos (`FinanceColors` fuera del `ColorScheme`, armonizados con tope bajo) + redundancia no-cromática (signo/ícono/etiqueta); categoría = recientes + búsqueda + acordeón (NO rejilla de pills); separación sin líneas (capas tonales); radios 28 dp.
 
@@ -41,7 +41,7 @@ Puntos no negociables: `NavigationSuiteScaffold` forzado a rail de iconos en exp
 
 - **Room = fuente de verdad** (offline-first); la UI lee de los ViewModels (`DashboardViewModel`, `CaptureViewModel`) vía sus factories en `MainActivity`. No conectes la UI a Firestore directamente.
 - **`householdId` se resuelve dinámicamente** (`(application as BudgetApplication).householdId`); NO hardcodear `"default_household"`.
-- **NO usar `fallbackToDestructiveMigration()`** — borraría los 793 gastos sembrados. Cualquier cambio de esquema exige migración (ver CLAUDE.md, esquema actual v2).
+- **NO usar `fallbackToDestructiveMigration()`**: borraría los 793 gastos sembrados. Cualquier cambio de esquema exige migración (ver CLAUDE.md, esquema actual v2).
 - Datos reales presentes: 793 gastos, quincena ACTIVE (jun-2026, 2ª mitad).
 - **M3 Expressive en alpha** (`material3 1.5.0-alpha`, `@OptIn(ExperimentalMaterial3ExpressiveApi)`): estable es 1.4.0. Aislar lo Expressive tras wrappers o usar `MaterialTheme` estable en flujos críticos; subir la dependencia es decisión consciente.
 

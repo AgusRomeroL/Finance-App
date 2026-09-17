@@ -1,12 +1,12 @@
 # Adenda Técnica: Capa de Inteligencia Proactiva y Normalización Retroactiva
 
 **Sección complementaria a `ESPECIFICACION_PRESUPUESTO_APP.md`, `ESPECIFICACION_UX_HARDWARE_APP.md` y `ADENDA_IA_ON_DEVICE.md`.**
-**Ámbito**: la app deja de ser reactiva (esperar a que el usuario registre) y pasa a ser **proactiva** — aprende del historial para sugerir atribución, anticipa qué se quiere registrar, normaliza la base histórica y captura gastos desde notificaciones del banco.
+**Ámbito**: la app deja de ser reactiva (esperar a que el usuario registre) y pasa a ser **proactiva**: aprende del historial para sugerir atribución, anticipa qué se quiere registrar, normaliza la base histórica y captura gastos desde notificaciones del banco.
 **Superficie primaria**: Pixel 9 Pro Fold + módulo Wear OS (Pixel Watch).
-**Restricción dura heredada**: cero red para inferencia; **Room sigue siendo la única fuente de verdad** (ver `CLAUDE.md` §"Capa de datos — offline-first"). La IA solo propone; el motor determinista y el usuario confirman.
+**Restricción dura heredada**: cero red para inferencia; **Room sigue siendo la única fuente de verdad** (ver `CLAUDE.md` §"Capa de datos: offline-first"). La IA solo propone; el motor determinista y el usuario confirman.
 **Posición en la especificación**: se integra como **Apéndice F**, sin modificar el Apéndice E (asistente de consultas en lenguaje natural) ni secciones existentes.
 
-> **Inspiración explícita — Pixel Journal.** Lo que se traslada de Journal es **la idea de proactividad** (sugerir contenido oportuno basado en contexto e historial, de forma ignorable y no invasiva), **no sus APIs** (que son exclusivas de Pixel y no están disponibles para apps de terceros). La investigación confirmó que Journal usa señales — fotos, Maps, Health Connect, mood — accesibles solo a apps de sistema. Nuestra proactividad se construye **únicamente con APIs públicas de Android** (WorkManager, hora/día del sistema, el propio historial en Room) y, opcionalmente, Gemini Nano on-device.
+> **Inspiración explícita: Pixel Journal.** Lo que se traslada de Journal es **la idea de proactividad** (sugerir contenido oportuno basado en contexto e historial, de forma ignorable y no invasiva), **no sus APIs** (que son exclusivas de Pixel y no están disponibles para apps de terceros). La investigación confirmó que Journal usa señales (fotos, Maps, Health Connect, mood) accesibles solo a apps de sistema. Nuestra proactividad se construye **únicamente con APIs públicas de Android** (WorkManager, hora/día del sistema, el propio historial en Room) y, opcionalmente, Gemini Nano on-device.
 
 ---
 
@@ -14,12 +14,12 @@
 
 - [F.1 Principios rectores de la proactividad](#f1-principios-rectores-de-la-proactividad)
 - [F.2 Inventario de features y orden de construcción](#f2-inventario-de-features-y-orden-de-construcción)
-- [F.3 FEATURE B — Normalización y atribución retroactiva](#f3-feature-b--normalización-y-atribución-retroactiva)  ⟵ **foco de este chat**
-- [F.4 FEATURE A — Sugerencia de atribución al capturar (chip inline)](#f4-feature-a--sugerencia-de-atribución-al-capturar-chip-inline)
-- [F.5 FEATURE C — Sugerencia proactiva al abrir la app](#f5-feature-c--sugerencia-proactiva-al-abrir-la-app)
-- [F.6 FEATURE D — Captura desde notificaciones bancarias](#f6-feature-d--captura-desde-notificaciones-bancarias)
-- [F.7 Superficie cross-cutting — Widget Glance + Pixel Watch](#f7-superficie-cross-cutting--widget-glance--pixel-watch)
-- [F.8 Capa 3 — Gemini Nano (Prompt API alpha) para razonamiento proactivo](#f8-capa-3--gemini-nano-prompt-api-alpha-para-razonamiento-proactivo)
+- [F.3 FEATURE B: Normalización y atribución retroactiva](#f3-feature-b-normalización-y-atribución-retroactiva)  ⟵ **foco de este chat**
+- [F.4 FEATURE A: Sugerencia de atribución al capturar (chip inline)](#f4-feature-a-sugerencia-de-atribución-al-capturar-chip-inline)
+- [F.5 FEATURE C: Sugerencia proactiva al abrir la app](#f5-feature-c-sugerencia-proactiva-al-abrir-la-app)
+- [F.6 FEATURE D: Captura desde notificaciones bancarias](#f6-feature-d-captura-desde-notificaciones-bancarias)
+- [F.7 Superficie cross-cutting: Widget Glance + Pixel Watch](#f7-superficie-cross-cutting-widget-glance--pixel-watch)
+- [F.8 Capa 3: Gemini Nano (Prompt API alpha) para razonamiento proactivo](#f8-capa-3-gemini-nano-prompt-api-alpha-para-razonamiento-proactivo)
 - [F.9 Hallazgos de investigación que fundamentan estas decisiones](#f9-hallazgos-de-investigación-que-fundamentan-estas-decisiones)
 
 ---
@@ -29,7 +29,7 @@
 1. **El historial propio es el modelo.** Para ~800 gastos con conceptos repetitivos en español, una agregación SQL sobre Room (distribución histórica de atribución por concepto canónico) da el 80% del valor con 0% de complejidad de ML. ML real (TFLite, Gemini Nano) solo entra donde SQL no alcanza (conceptos nuevos, razonamiento contextual). **No introducir ML donde una query basta.**
 2. **Proactividad ignorable, nunca invasiva.** Toda sugerencia vive **dentro de la app** como un chip/banner descartable (estilo autocompletado del teclado), no como notificación push intrusiva. La excepción es Feature D (notificaciones bancarias), donde la notificación silenciosa es el patrón correcto porque el evento (cargo bancario) ocurrió fuera de la app.
 3. **Propose-then-confirm.** La IA nunca escribe estado del hogar de forma silenciosa con baja confianza. Propone un borrador; el usuario confirma con un tap. La excepción es la auto-aplicación retroactiva de alta confianza (§F.3.6), que siempre queda auditada y es reversible.
-4. **La no-selección es señal negativa implícita.** Cuando el usuario ignora una sugerencia y captura algo distinto, eso es feedback. Se registra sin fricción (sin "thumbs down") y degrada la confianza futura de esa sugerencia. (Fundamento verificado en investigación — ver §F.9.)
+4. **La no-selección es señal negativa implícita.** Cuando el usuario ignora una sugerencia y captura algo distinto, eso es feedback. Se registra sin fricción (sin "thumbs down") y degrada la confianza futura de esa sugerencia. (Fundamento verificado en investigación; ver §F.9.)
 5. **Redundancia no-cromática y explicabilidad.** Toda sugerencia muestra **por qué** se propuso ("Basado en tus últimos 18 gastos de 'Despensa'") y su nivel de confianza, coherente con `AmountSemantics.kt` y la pantalla de transparencia del Apéndice E.5.3.
 6. **Degradación grácil.** Sin AICore, sin permiso de notificaciones, sin historial suficiente (cold start) o con la feature desactivada, la app sigue 100% funcional con captura manual. Cada feature declara su comportamiento de fallback.
 7. **Room es la verdad; el sync no se rompe.** Todo lo que escriba la capa proactiva pasa por los repos públicos (que encolan en `sync_queue`) **salvo** los procesos batch internos, que deben respetar la regla anti-eco del Apéndice de datos. Las tablas nuevas de esta adenda que no deban sincronizarse (cola de revisión, sugerencias efímeras, telemetría) se marcan como **locales-only** y no se suben a Firestore.
@@ -40,11 +40,11 @@
 
 | Cód. | Feature | Capa técnica | Depende de | Estado |
 |---|---|---|---|---|
-| **B** | Normalización + atribución retroactiva de los ~800 gastos | SQL + WorkManager + pantalla de revisión | — | **Este chat (spec build-ready)** |
+| **B** | Normalización + atribución retroactiva de los ~800 gastos | SQL + WorkManager + pantalla de revisión | ninguna | **Este chat (spec build-ready)** |
 | **A** | Sugerencia de atribución al teclear concepto (chip inline en captura) | SQL (motor de B) | B | Otro chat |
 | **C** | Sugerencia proactiva al abrir la app (chip en dashboard + señal de quincena) | SQL + WorkManager | B | Otro chat |
 | **D** | Captura automática desde notificaciones bancarias | `NotificationListenerService` + motor de B | B (atribución) | Otro chat |
-| — | Widget Glance + espejo en Pixel Watch (captura rápida cross-device) | Glance + Wear Data Layer | A | Otro chat |
+| n/a | Widget Glance + espejo en Pixel Watch (captura rápida cross-device) | Glance + Wear Data Layer | A | Otro chat |
 | **Capa 3** | Razonamiento proactivo con Gemini Nano (Prompt API alpha) | ML Kit GenAI | C | Otro chat (alpha) |
 
 **Orden confirmado: B → A → C → D.** Razón: A, C y D consumen el **motor de canonicalización + distribución histórica de atribución** que construye B. Sin una base histórica normalizada y confiable, las sugerencias de A/C/D heredan ruido. B es el cimiento.
@@ -53,13 +53,13 @@
 
 ---
 
-## F.3 FEATURE B — Normalización y atribución retroactiva
+## F.3 FEATURE B: Normalización y atribución retroactiva
 
 **Objetivo:** procesar los ~800 gastos históricos (sembrados desde el Excel) para (1) **agrupar conceptos equivalentes escritos distinto** ("Colegiatura Santi" ≡ "Santiago Colegiatura"), (2) **inferir la atribución BENEFICIARY/PAYER faltante o inconsistente** desde el patrón histórico, y (3) dejar las inferencias de **baja confianza en una cola de revisión** para que el usuario las confirme. Todo en background, sin bloquear la UI, sin romper el sync ni el esquema congelado del asset.
 
 ### F.3.1 Por qué es el cimiento
 
-La atribución dual (BENEFICIARY = quién consume, PAYER = quién paga) en basis points que suman 10,000 es el modelo central de la app (`ExpenseAttributionEntity`). El ETL sembró atribuciones, pero con la "mugre" heredada del Excel (typos, beneficiarios embebidos en el concepto, categorías mal etiquetadas — ver `scripts/etl/attribution_rules.json`). Si A/C/D aprenden de esa base sin normalizar, propagan el ruido. B la limpia una vez.
+La atribución dual (BENEFICIARY = quién consume, PAYER = quién paga) en basis points que suman 10,000 es el modelo central de la app (`ExpenseAttributionEntity`). El ETL sembró atribuciones, pero con la "mugre" heredada del Excel (typos, beneficiarios embebidos en el concepto, categorías mal etiquetadas; ver `scripts/etl/attribution_rules.json`). Si A/C/D aprenden de esa base sin normalizar, propagan el ruido. B la limpia una vez.
 
 ### F.3.2 Deduplicación difusa de conceptos (canonicalización)
 
@@ -97,7 +97,7 @@ salida:   canonicalKey (ej. "colegiatura|m:santi")
 
 > **Decisión:** la canonicalización es **determinista y auditable**, no ML. Con ~800 registros y nombres propios conocidos del hogar (Benjamín, Norma, Pau, David, Agustín, Santi, Omar…), las reglas + aliases + Jaro-Winkler superan a cualquier modelo entrenable con tan pocos datos (ver contraevidencia §F.9).
 
-### F.3.3 Cambios de esquema (ZONA DE PELIGRO — leer `CLAUDE.md` §Room)
+### F.3.3 Cambios de esquema (ZONA DE PELIGRO: leer `CLAUDE.md` §Room)
 
 B requiere persistir la clave canónica y la cola de revisión. El asset `budget_database.db` está **congelado en schema v1**; el código está en **v2** con `MIGRATION_1_2`. B sube a **v3** siguiendo el protocolo exacto: subir `version`, escribir `MIGRATION_2_3`, y que su SQL coincida **literal** con el `createSql` que KSP genere en `app/schemas/3.json` (compilar primero, copiar de ahí). **Prohibido `fallbackToDestructiveMigration()`** (borraría los 793 gastos).
 
@@ -156,9 +156,9 @@ Dos workers encadenados, idempotentes, en `Dispatchers.IO`, observables por la U
 - **Disparo:** una sola vez, tras el primer arranque post-actualización (flag en DataStore `retro_labeling_done`). Re-ejecutable manualmente desde Perfil → "Re-normalizar historial".
 - **Batching:** procesar en lotes de ~100 dentro de `db.withTransaction {}` para no mantener una transacción gigante. Progreso reportado vía `setProgress`.
 - **Constraints:** `setRequiresBatteryNotLow(true)`. No requiere red (es 100% local).
-- **Anti-eco / sync:** la auto-aplicación de atribuciones **sí** debe propagarse a Firestore (es un cambio real de datos del usuario), así que pasa por `ExpenseRepository`/`ExpenseAttributionDao` con encolado normal en `sync_queue`. La escritura en `attribution_review` es **local-only** (no se sincroniza). Cuidado: si el batch escribe miles de filas, encolar miles en `sync_queue` — considerar un encolado agregado o un flag de "bulk migration" que el `SyncManager` drene en background sin saturar.
+- **Anti-eco / sync:** la auto-aplicación de atribuciones **sí** debe propagarse a Firestore (es un cambio real de datos del usuario), así que pasa por `ExpenseRepository`/`ExpenseAttributionDao` con encolado normal en `sync_queue`. La escritura en `attribution_review` es **local-only** (no se sincroniza). Cuidado: si el batch escribe miles de filas, encolar miles en `sync_queue`; considerar un encolado agregado o un flag de "bulk migration" que el `SyncManager` drene en background sin saturar.
 
-### F.3.5 `RetroAttributionEngine` — el motor reutilizable (lo consumen A/C/D)
+### F.3.5 `RetroAttributionEngine`: el motor reutilizable (lo consumen A/C/D)
 
 API central. Dado un concepto canónico y un rol, devuelve la distribución histórica más probable con su confianza.
 
@@ -209,15 +209,15 @@ class RetroAttributionEngine(
 | ≥ 5 muestras y ≥ 80% de acuerdo | **alta (≥ 0.7)** | Auto-aplica a `expense_attribution` (propaga a sync). |
 | 3–4 muestras, o acuerdo 50–80% | **media (0.4–0.7)** | A `attribution_review` (PENDING). |
 | < 3 muestras o sin historial | **nula/baja** | A `attribution_review` (PENDING) o se omite (cold start). |
-| Atribución existente y consistente | — | No tocar (respeta lo del usuario/seed). |
+| Atribución existente y consistente | n/a | No tocar (respeta lo del usuario/seed). |
 
 El umbral τ = 0.7 es configurable. La auto-aplicación **siempre** registra provenance/auditoría para ser reversible desde la pantalla de revisión.
 
 ### F.3.7 Pantalla "Revisión de atribuciones"
 
-Nueva pantalla (ruta `attribution_review`, hoy `ledger`/`analytics` son placeholders — ver `CLAUDE.md` §Navegación). Entrada desde Perfil y desde un badge en el dashboard ("12 gastos por revisar").
+Nueva pantalla (ruta `attribution_review`, hoy `ledger`/`analytics` son placeholders; ver `CLAUDE.md` §Navegación). Entrada desde Perfil y desde un badge en el dashboard ("12 gastos por revisar").
 
-Patrón de UX — **agrupar por concepto canónico**, no gasto por gasto (reduce fricción):
+Patrón de UX: **agrupar por concepto canónico**, no gasto por gasto (reduce fricción):
 
 ```
 ┌ Revisión de atribuciones ───────────────────────────────┐
@@ -230,10 +230,10 @@ Patrón de UX — **agrupar por concepto canónico**, no gasto por gasto (reduce
 │     [ Aplicar a los 12 ]   [ Editar ]   [ Ignorar ]     │
 │                                                          │
 │  ▸ "Despensa"                        34 gastos · alta ✓  │
-│     (auto-aplicado — toca para revertir)                 │
+│     (auto-aplicado, toca para revertir)                  │
 │                                                          │
 │  ▸ "WALMART"                          8 gastos · baja    │
-│     Sin patrón claro — asignar manualmente              │
+│     Sin patrón claro: asignar manualmente               │
 │     [ Asignar ]                                          │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -247,7 +247,7 @@ Patrón de UX — **agrupar por concepto canónico**, no gasto por gasto (reduce
 1. Declarar `AttributionReviewEntity`, subir `@Database` a v3, escribir `MIGRATION_2_3` (SQL copiado de `schemas/3.json` tras compilar).
 2. `ConceptCanonicalizer` (+ tests informales con pares reales del Excel).
 3. DAOs nuevos (`AttributionReviewDao`, métodos en `ExpenseDao`/`ExpenseAttributionDao`).
-4. `RetroAttributionEngine` (reutilizable — exponerlo desde `BudgetApplication` para A/C/D).
+4. `RetroAttributionEngine` (reutilizable; exponerlo desde `BudgetApplication` para A/C/D).
 5. `CanonicalizeConceptsWorker` + `RetroAttributionWorker` con `WorkContinuation`.
 6. Disparo idempotente (flag DataStore) + acción manual en Perfil.
 7. Pantalla "Revisión de atribuciones" + ruta en `BudgetNavGraph` + badge en dashboard.
@@ -255,14 +255,14 @@ Patrón de UX — **agrupar por concepto canónico**, no gasto por gasto (reduce
 
 ---
 
-## F.4 FEATURE A — Sugerencia de atribución al capturar (chip inline)
+## F.4 FEATURE A: Sugerencia de atribución al capturar (chip inline)
 
 **Objetivo:** mientras el usuario teclea el concepto en el `CaptureBottomSheet`, sugerir la atribución BENEFICIARY/PAYER aprendida del historial, como un **chip inline visible pero ignorable**.
 
 **Arquitectura (consume el motor de B):**
 - En `CaptureViewModel`, observar `_concept` con `debounce(250ms)` → llamar `RetroAttributionEngine.suggest(concept, "BENEFICIARY")` y `(…, "PAYER")`.
 - Exponer `attributionSuggestion: StateFlow<AttributionSuggestion?>`.
-- La UI muestra un chip bajo el campo de concepto: *"Beneficia a Santi 100% · Pagó Norma — basado en 12 gastos"* con `[Aplicar]`.
+- La UI muestra un chip bajo el campo de concepto: *"Beneficia a Santi 100% · Pagó Norma, basado en 12 gastos"* con `[Aplicar]`.
 - **Aplicar** rellena `beneficiaryShares`/`payerShares` (que ya existen, §`CaptureViewModel`).
 - **Ignorar** (capturar algo distinto) = no-selección → señal negativa implícita (registrar para degradar confianza). Sin "thumbs down".
 
@@ -275,9 +275,9 @@ Patrón de UX — **agrupar por concepto canónico**, no gasto por gasto (reduce
 
 ---
 
-## F.5 FEATURE C — Sugerencia proactiva al abrir la app
+## F.5 FEATURE C: Sugerencia proactiva al abrir la app
 
-**Objetivo:** la experiencia tipo Journal — al abrir la app, un chip en el dashboard sugiere **qué gasto se va a querer registrar ahora**, según hora, día de semana y **día de quincena** (la señal diferenciadora de esta app).
+**Objetivo:** la experiencia tipo Journal: al abrir la app, un chip en el dashboard sugiere **qué gasto se va a querer registrar ahora**, según hora, día de semana y **día de quincena** (la señal diferenciadora de esta app).
 
 ### F.5.1 Señales contextuales (solo APIs públicas)
 | Señal | Fuente | Permiso |
@@ -287,7 +287,7 @@ Patrón de UX — **agrupar por concepto canónico**, no gasto por gasto (reduce
 | **Día de quincena** (1/16 = inicio) | quincena activa en Room | ninguno |
 | Patrón histórico por franja+día | query SQL sobre `expense` | ninguno |
 
-> No se usa ubicación, `UsageStatsManager` general ni `SCHEDULE_EXACT_ALARM` (la investigación confirmó que están restringidos/penalizados por Play Store en Android 14+ — ver §F.9). WorkManager (`PeriodicWorkRequest`, piso 15 min, exento de las restricciones de background de Android 14) es el mecanismo de pre-cómputo.
+> No se usa ubicación, `UsageStatsManager` general ni `SCHEDULE_EXACT_ALARM` (la investigación confirmó que están restringidos/penalizados por Play Store en Android 14+; ver §F.9). WorkManager (`PeriodicWorkRequest`, piso 15 min, exento de las restricciones de background de Android 14) es el mecanismo de pre-cómputo.
 
 ### F.5.2 Lógica
 - Query: gastos POSTED con mismo `dayOfWeek` y franja horaria ±2h, ordenados por recencia/frecuencia → top candidatos por concepto canónico.
@@ -309,7 +309,7 @@ Chip/banner en el tope del dashboard, descartable, redundante con color+texto:
 
 ---
 
-## F.6 FEATURE D — Captura desde notificaciones bancarias
+## F.6 FEATURE D: Captura desde notificaciones bancarias
 
 **Objetivo:** interceptar notificaciones de apps de banco (BBVA, Citibanamex, etc.), extraer monto/comercio/fecha y proponer un gasto pre-llenado y pre-atribuido (vía motor de B) para confirmar con un tap.
 
@@ -336,23 +336,23 @@ StatusBarNotification (de un package en la allowlist)
 
 ---
 
-## F.7 Superficie cross-cutting — Widget Glance + Pixel Watch
+## F.7 Superficie cross-cutting: Widget Glance + Pixel Watch
 
 **Objetivo:** captura rápida desde fuera de la app, con el **Pixel Watch reflejando los mismos widgets** que el teléfono.
 
 - **Widget (Jetpack Glance):** monto + confirmar; al teclear monto, el motor de A/B sugiere concepto y atribución. Un tap registra.
 - **Pixel Watch (Wear):** el reloj muestra el mismo quick-capture y **delega al teléfono** vía Wear Data Layer (ya existen `WearSyncManager.kt`, `WearPaths.kt`, `BudgetWearListenerService.kt`). Modelo: el reloj envía la intención → el teléfono ejecuta la inserción real (con el motor de atribución) y devuelve confirmación. Esto evita duplicar la lógica de Room/atribución en el reloj.
-- **Pendiente de plataforma:** el módulo `wear/` hoy **no compila** (sin `AndroidManifest`, fuera de `settings.gradle.kts` — ver `CLAUDE.md` §Estado). Habilitar el módulo Wear es prerequisito de la parte del reloj.
+- **Pendiente de plataforma:** el módulo `wear/` hoy **no compila** (sin `AndroidManifest`, fuera de `settings.gradle.kts`; ver `CLAUDE.md` §Estado). Habilitar el módulo Wear es prerequisito de la parte del reloj.
 
 **Estado:** especificado a contrato. Construir tras A.
 
 ---
 
-## F.8 Capa 3 — Gemini Nano (Prompt API alpha) para razonamiento proactivo
+## F.8 Capa 3: Gemini Nano (Prompt API alpha) para razonamiento proactivo
 
-**Objetivo:** la versión "inteligente" de C — en vez de un ranking SQL, Gemini Nano razona sobre {hora, día, día de quincena, últimos N gastos} y devuelve una sugerencia priorizada con explicación en lenguaje natural.
+**Objetivo:** la versión "inteligente" de C: en vez de un ranking SQL, Gemini Nano razona sobre {hora, día, día de quincena, últimos N gastos} y devuelve una sugerencia priorizada con explicación en lenguaje natural.
 
-### F.8.1 Estado de la API (hallazgos verificados — §F.9)
+### F.8.1 Estado de la API (hallazgos verificados, §F.9)
 - **AICore corre 100% on-device**, sin red para inferencia. ✓
 - Las **GenAI APIs no listan "clasificación estructurada"** como tarea nombrada; hacen generación (prompt, summarize, rewrite, etc.). Para obtener un label/JSON hay que usarlas en modo generación con structured output (igual que el Apéndice E.4).
 - **ML Kit GenAI Prompt API** (alpha, oct-2025) permite prompts arbitrarios a Gemini Nano on-device → es la vía para esto.
@@ -361,7 +361,7 @@ StatusBarNotification (de un package en la allowlist)
 ### F.8.2 Diseño
 - Reutiliza toda la infraestructura del Apéndice E: `AiCoreManager`/`AiCoreService`, structured output por JSON schema, `GenerationConfig` cuasi-determinista (T=0.05).
 - Nuevo intent de "sugerencia proactiva": entrada = contexto serializado compacto (franja, día, día-quincena, top conceptos por contexto); salida = `{"suggestion": "...", "canonicalKey": "...", "reason": "..."}`.
-- **Foreground-only** (AICore bloquea background — `BACKGROUND_USE_BLOCKED`): la inferencia ocurre al abrir el dashboard, no en un worker. El pre-cómputo de candidatos (SQL) sí puede ir en worker; solo el "razonamiento" final es foreground.
+- **Foreground-only** (AICore bloquea background: `BACKGROUND_USE_BLOCKED`): la inferencia ocurre al abrir el dashboard, no en un worker. El pre-cómputo de candidatos (SQL) sí puede ir en worker; solo el "razonamiento" final es foreground.
 - **Fallback obligatorio:** sin AICore o con cuota agotada, C cae a la versión SQL de §F.5. La Capa 3 es un *enhancement*, nunca un requisito.
 
 ### F.8.3 Riesgo
@@ -373,19 +373,19 @@ Construida y **validada en un Pixel 9 Pro físico (Tensor G4)**. El camino no fu
 
 **Arquitectura final = híbrido de 3 niveles** (`mx.budget.ai.service`):
 - Interfaz común **`OnDeviceLlm`** (`ensureReady(): LlmReadiness`, `generate(prompt): Result<String>`, `close()`) + sellada `LlmReadiness { Available | Unavailable | Pending }`.
-- **`AiCoreManager`** — Gemini Nano vía **ML Kit GenAI Prompt API** (`com.google.mlkit:genai-prompt`). TPU, gratis, sin almacenamiento. Solo donde Google provisiona el feature.
-- **`LiteRtLmManager`** — modelo Gemma `.litertlm` local vía **LiteRT-LM** (`com.google.ai.edge.litertlm:litertlm-android`). CPU/GPU, independiente de AICore.
-- **`HybridLlm`** — coordina: **AICore → LiteRT-LM → SQL**. `ProactiveReasoner` toma `OnDeviceLlm`.
+- **`AiCoreManager`**: Gemini Nano vía **ML Kit GenAI Prompt API** (`com.google.mlkit:genai-prompt`). TPU, gratis, sin almacenamiento. Solo donde Google provisiona el feature.
+- **`LiteRtLmManager`**: modelo Gemma `.litertlm` local vía **LiteRT-LM** (`com.google.ai.edge.litertlm:litertlm-android`). CPU/GPU, independiente de AICore.
+- **`HybridLlm`**: coordina **AICore → LiteRT-LM → SQL**. `ProactiveReasoner` toma `OnDeviceLlm`.
 
 **Cronología de hallazgos (todos verificados en hardware):**
 1. **Bug del Context (commit `00f66e1`):** el viejo SDK `com.google.ai.edge.aicore` exige el `Context` DENTRO de `generationConfig { context = ... }`. Sin él, en emulador se enmascaraba como `UnsupportedDevice`; en Tensor real lanzaba `Context is required`. **La Capa 3 LLM nunca había corrido.**
-2. **AICore experimental = callejón sin salida en Pixel 9:** tras el fix, el SDK `aicore` daba `PERMISSION_DENIED` (canal de terceros sin allowlist por-app). Se **migró a ML Kit GenAI Prompt API** (vía GA, sin allowlist) — commit `9a01d44`.
-3. **El Prompt API no está en Tensor G4:** ML Kit `checkStatus()` lanza `GenAiException 606-FEATURE_NOT_FOUND ("Feature 636 not available")` en Pixel 9 — el Gemini Nano nuevo del Prompt API llegó primero a **Pixel 10**; en Pixel 9/Fold Google **aún no lo habilita** (device-side, fuera de nuestro control). La AI Edge Gallery de Google también muestra "Gemini Nano via AICore" solo en Pixel 10, no en Pixel 9.
+2. **AICore experimental = callejón sin salida en Pixel 9:** tras el fix, el SDK `aicore` daba `PERMISSION_DENIED` (canal de terceros sin allowlist por-app). Se **migró a ML Kit GenAI Prompt API** (vía GA, sin allowlist), commit `9a01d44`.
+3. **El Prompt API no está en Tensor G4:** ML Kit `checkStatus()` lanza `GenAiException 606-FEATURE_NOT_FOUND ("Feature 636 not available")` en Pixel 9: el Gemini Nano nuevo del Prompt API llegó primero a **Pixel 10**; en Pixel 9/Fold Google **aún no lo habilita** (device-side, fuera de nuestro control). La AI Edge Gallery de Google también muestra "Gemini Nano via AICore" solo en Pixel 10, no en Pixel 9.
 4. **LiteRT-LM SÍ corre en Tensor G4 (commits `f0e7c15`, `9b2c18f`):** corre un modelo Gemma local, independiente de AICore. **Validado en Pixel 9:** `gemma-4-E4B-it.litertlm` (3.7GB) carga el engine en ~20s e infiere en ~5s (respuesta corta), devolviendo texto real. **PRIMERA vez que la Capa 3 razona en el target.** Correrá igual en el Fold de Norma (mismo chip).
 
 **Gotchas de LiteRT-LM (críticos):**
 - **Backend `CPU`**, no `GPU`: `Backend.GPU()` da `INTERNAL` al compilar el modelo en Pixel 9; `Backend.CPU()` funciona (más lento).
-- **El archivo del modelo debe ser propiedad de la app** (`getExternalFilesDir`/`filesDir`): el `open()` nativo de LiteRT-LM da `PERMISSION_DENIED` si lo colocó otro uid (p. ej. `shell` por adb) — se arregló en pruebas con `chmod 666`; **en producción la app lo descarga a su propia carpeta** (sin el problema).
+- **El archivo del modelo debe ser propiedad de la app** (`getExternalFilesDir`/`filesDir`): el `open()` nativo de LiteRT-LM da `PERMISSION_DENIED` si lo colocó otro uid (p. ej. `shell` por adb): se arregló en pruebas con `chmod 666`; **en producción la app lo descarga a su propia carpeta** (sin el problema).
 - `NativeLibraryLoader` es `internal` (no se llama; la lib se auto-carga).
 - API exacta de litertlm sacada por **`javap` del AAR**, no de la doc (incompleta).
 
@@ -393,7 +393,7 @@ Construida y **validada en un Pixel 9 Pro físico (Tensor G4)**. El camino no fu
 - ML Kit + LiteRT-LM traen **metadata Kotlin 2.2** (proyecto en 2.0.21) → `freeCompilerArgs += "-Xskip-metadata-version-check"` en `kotlinOptions`.
 - Ese flag **corrompe la compilación incremental** ("Couldn't load KotlinClass" flaky) → `kotlin.incremental=false`.
 - LiteRT-LM trae **bytecode Java 21** que Jetifier no procesa → `android.jetifier.ignorelist=litertlm-android`.
-- LiteRT-LM añade ~50MB de `.so` (APK debug ~135MB) y **dispara el warning de 16 KB** (sus libs no están alineadas; debug-only, no afecta release — ver pendientes).
+- LiteRT-LM añade ~50MB de `.so` (APK debug ~135MB) y **dispara el warning de 16 KB** (sus libs no están alineadas; debug-only, no afecta release; ver pendientes).
 
 **Estado:** **funcional y validado en hardware.** El `ProactiveReasoner` (re-ranker sobre candidatos SQL, §F.8.2) ya enruta al híbrido.
 

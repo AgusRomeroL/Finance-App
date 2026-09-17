@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
- excel_to_room_etl.py  —  Puente de datos: Excel quincenal → Room SQLite
+ excel_to_room_etl.py, puente de datos: Excel quincenal → Room SQLite
 ================================================================================
 
 Lee el Excel de presupuesto quincenal (hojas manuales con layout
@@ -12,18 +12,18 @@ para ``mx.budget.data.local.BudgetDatabase`` (version = 1).
 
 Entidades pobladas
 ------------------
-  1. household                 — singleton del hogar
-  2. member                    — Benjamín, Norma, Pau, David, Agustín, Santi, …
-  3. category                  — árbol de categorías jerárquico
-  4. payment_method            — Banamex, BBVA, Mercado Pago, Efectivo, …
-  5. quincena                  — 33 períodos quincenales (Ene 2025 → Jun 2026)
-  6. income_source             — ingresos quincenales de Benjamín y Norma
-  7. expense                   — una fila por cada línea presupuestada > 0
-  8. expense_attribution       — reparto BENEFICIARY / PAYER en basis points
-  9. installment_plan          — planes MSI reales (Mercado Libre, Buró)
- 10. recurrence_template       — plantillas de obligaciones fijas recurrentes
- 11. loan                      — préstamo a Jaudiel
- 12. savings_goal              — Ahorro Empresa como meta seed
+  1. household:                  singleton del hogar
+  2. member:                     Benjamín, Norma, Pau, David, Agustín, Santi, …
+  3. category:                   árbol de categorías jerárquico
+  4. payment_method:             Banamex, BBVA, Mercado Pago, Efectivo, …
+  5. quincena:                   33 períodos quincenales (Ene 2025 → Jun 2026)
+  6. income_source:              ingresos quincenales de Benjamín y Norma
+  7. expense:                    una fila por cada línea presupuestada > 0
+  8. expense_attribution:        reparto BENEFICIARY / PAYER en basis points
+  9. installment_plan:           planes MSI reales (Mercado Libre, Buró)
+ 10. recurrence_template:        plantillas de obligaciones fijas recurrentes
+ 11. loan:                       préstamo a Jaudiel
+ 12. savings_goal:               Ahorro Empresa como meta seed
 
 Robustez frente a datos sucios
 ------------------------------
@@ -81,7 +81,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 from zoneinfo import ZoneInfo
 
-import pandas as pd  # noqa: F401  — se usa para analítica de los conteos finales.
+import pandas as pd  # noqa: F401 (se usa para analítica de los conteos finales).
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -98,7 +98,7 @@ _UUID_NAMESPACE = uuid.UUID("b0d9e7a0-1234-5678-9abc-def012345678")
 
 
 def did(key: str) -> str:
-    """UUID determinístico — `uuid5` sobre el namespace fijo."""
+    """UUID determinístico: `uuid5` sobre el namespace fijo."""
     return str(uuid.uuid5(_UUID_NAMESPACE, key))
 
 
@@ -163,7 +163,7 @@ MEMBERS: tuple[MemberSeed, ...] = (
                ("jaudiel",)),
     MemberSeed("araceli",  "Araceli",   "EXTERNAL_SERVICE",
                ("araceli",)),
-    # Deudor de la cuenta por cobrar "Deben $3,600 — Medicina + rotafolio"
+    # Deudor de la cuenta por cobrar "Deben $3,600" (Medicina + rotafolio)
     # (notas del Excel oct-dic 2025). Norma sabe quién es; renombrar en la app.
     MemberSeed("deudor_pendiente", "Por identificar", "EXTERNAL_DEBTOR",
                ("deudor",)),
@@ -316,7 +316,7 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("SAVINGS.INVESTMENT",       "Inversión",        "SAVINGS",        "SAVINGS",           None),
     CategorySeed("SAVINGS.EFECTIVO",         "Ahorro efectivo",  "SAVINGS",        "SAVINGS",           None),
     # Caja Chica es un ahorro para todos (confirmado por Agustín 2026-07-07),
-    # no un gasto "Otros" — vive bajo SAVINGS.
+    # no un gasto "Otros": vive bajo SAVINGS.
     CategorySeed("SAVINGS.CAJA_CHICA",       "Caja Chica",       "SAVINGS",        "SAVINGS",           None),
 
     CategorySeed("SERVICIOS_EXTERNOS.ARACELI","Araceli",         "SERVICIOS_EXTERNOS", "EXPENSE_FIXED",  None),
@@ -1011,7 +1011,7 @@ class AttributionRule:
 def load_attribution_rules(rules_path: Path) -> list[AttributionRule]:
     """Lee attribution_rules.json y devuelve las reglas en orden de prioridad."""
     if not rules_path.exists():
-        LOG.warning("No se encontro archivo de reglas: %s — usando heuristicas puras.", rules_path)
+        LOG.warning("No se encontro archivo de reglas: %s; se usan heuristicas puras.", rules_path)
         return []
     with open(rules_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -1132,7 +1132,7 @@ def resolve_payment_method(line: BudgetLine) -> str:
         if needle in concept_norm:
             return PAYMENT_METHODS_BY_KEY[key].id
 
-    # Quien paga determina el default — la mayoria paga con efectivo
+    # Quien paga determina el default: la mayoria paga con efectivo
     return PAYMENT_METHODS_BY_KEY["efectivo"].id
 
 
@@ -1269,7 +1269,7 @@ CANONICAL_CONCEPT_RULES: tuple[CanonicalConceptRule, ...] = (
     CanonicalConceptRule(r"BERNA(RDO)?", "Bernardo"),
 
     # DiDi: la tarjeta de credito DiDi aparece como "Didi", "Didi Card" y
-    # "Didi tarjeta" — es el mismo cargo.
+    # "Didi tarjeta": es el mismo cargo.
     CanonicalConceptRule(r"DIDI( CARD| TARJETA)?", "DiDi"),
 
     # Escuela: colegiaturas/inscripciones/libros con mes o beneficiario
@@ -1280,7 +1280,7 @@ CANONICAL_CONCEPT_RULES: tuple[CanonicalConceptRule, ...] = (
     CanonicalConceptRule(r".*", "Escuela Normita",  category_filter="ESCUELA.PAU"),
 
     # Transferencias a Normita (Pau) que NO son colegiatura (el "Pau" de $800
-    # en OTHER y "Pau Raul" — Raul es el novio de Normita, el gasto es de ella).
+    # en OTHER y "Pau Raul"; Raul es el novio de Normita, el gasto es de ella).
     CanonicalConceptRule(r"PAU RAUL", "Normita",
                          note="gasto de Normita (Pau); Raúl es su novio"),
     CanonicalConceptRule(r"PAU", "Normita",
@@ -1295,7 +1295,7 @@ CANONICAL_CONCEPT_RULES: tuple[CanonicalConceptRule, ...] = (
 
     # Cochecito: "COCHECITO" (quincenas 1-15) y "GASOLINA CHOCHECITO"
     # (quincenas 16-fin) son el MISMO cargo de gasolina con nombre
-    # inconsistente — verificado DISJUNTOS por quincena en el Excel
+    # inconsistente, verificado DISJUNTOS por quincena en el Excel
     # (2026-07-07: nunca coinciden en la misma hoja). Se unifican.
     CanonicalConceptRule(r"(GASOLINA CHOCHECITO|COCHECITO)", "Gasolina Cochecito",
                          section_filter="TRANSPORTATION"),
@@ -1372,7 +1372,7 @@ def canonicalize_concept(
 # concepto cada mes". Las lineas de telefono que agrupan a varias personas
 # ("Telefono Pau y David", "Telefono Movistar") se parten en N gastos hijos,
 # uno por persona, con montos repartidos equitativamente (residuo de
-# centavos al ultimo — el total exacto se preserva) y beneficiario 100% el
+# centavos al ultimo; el total exacto se preserva) y beneficiario 100% el
 # miembro respectivo. Los ids son deterministas (id del padre + member_key).
 
 @dataclass(frozen=True)
@@ -1438,7 +1438,7 @@ def split_amount_mxn(total: float, count: int) -> list[float]:
 # Criterio (curación jul-2026): SOLO obligaciones de fecha fija producen plantilla;
 # el consumo variable no materializa PLANNED. Por eso se quitaron "Walmart",
 # "Comida Gatas", "Benji" y "Normita, David y Agus" (super/comida/mesada de monto
-# y frecuencia variables) — en instalaciones ya sembradas las pausa el one-shot
+# y frecuencia variables); en instalaciones ya sembradas las pausa el one-shot
 # TemplateCurationInitializer de la app.
 RECURRENCE_TEMPLATE_CONCEPTS: tuple[str, ...] = (
     "Hipoteca", "Internet", "Agua", "Electricidad",
@@ -1507,7 +1507,7 @@ class EtlPipeline:
             self.db_path.unlink()  # reinicio limpio
 
         with sqlite3.connect(self.db_path) as conn:
-            # PRAGMA foreign_keys se activa por sesión — la app lo hace al
+            # PRAGMA foreign_keys se activa por sesión; la app lo hace al
             # abrir la DB; aquí lo dejamos desactivado durante la inserción
             # para evitar bloqueos de orden. Se reactivará al final.
             conn.execute("PRAGMA foreign_keys = OFF")
@@ -1668,7 +1668,7 @@ class EtlPipeline:
 
         # 3.1 · Extraer montos fijos de ingresos (celdas E4 y E5).
         # Fieles al Excel: si la celda está vacía NO se inventa un fallback al
-        # default del miembro — un E4 vacío significa que ese ingreso ya no
+        # default del miembro: un E4 vacío significa que ese ingreso ya no
         # existe (Benjamín deja de percibir sueldo desde oct-2025) y un E5
         # cambiante refleja los aumentos reales de Norma (60k → 75k → 85k).
         # `_insert_income` ya descarta montos <= 0, así que la quincena queda
@@ -1776,7 +1776,7 @@ class EtlPipeline:
 
         # 3.6 · Acumular el ahorro empresa ya apartado (celda E9): alimenta
         # el current_mxn de la meta "Ahorro Empresa anual" en _finalize.
-        # Solo cuentan períodos ya iniciados — lo futuro aún no está apartado.
+        # Solo cuentan períodos ya iniciados; lo futuro aún no está apartado.
         if period.start_date <= TODAY:
             self._ahorro_empresa_mxn += _as_float(ws["E9"].value) or 0.0
 
@@ -1841,7 +1841,7 @@ class EtlPipeline:
 
         # CERO gastos PLANNED sembrados (Agustín, 2026-07-07): la semilla solo
         # persiste lo ya ocurrido (POSTED). Los pagos futuros de la quincena
-        # activa (p. ej. jul 8-15) NO se materializan aquí — los genera la app
+        # activa (p. ej. jul 8-15) NO se materializan aquí; los genera la app
         # en runtime desde las plantillas de recurrencia (recurrence_template).
         # Esto también cubre los hijos de split, porque el split se resuelve
         # después de este punto.
@@ -1935,7 +1935,7 @@ class EtlPipeline:
         """
         Emite N gastos hijos a partir de una linea compartida del Excel.
         Cada hijo: id determinista (padre + member_key), monto equitativo
-        (residuo de centavos al ultimo — el total exacto se preserva),
+        (residuo de centavos al ultimo; el total exacto se preserva),
         beneficiario 100% el miembro respectivo, y nota de trazabilidad.
         """
         amounts = split_amount_mxn(line.projected, len(split.children))
@@ -2040,14 +2040,14 @@ class EtlPipeline:
         # Los montos del Excel ocasionalmente llegan en negativo cuando el
         # autor anotó un "ajuste" o devolución (p.ej. Benjamin = -200). Para
         # efectos del reparto PAYER esos valores no representan una fracción
-        # real del pago — se clampean a 0. Conservar el signo propagaría el
+        # real del pago: se clampean a 0. Conservar el signo propagaría el
         # error a la división n/total y rompería el invariante de 10_000 bps.
         n = max(line.paid_by_norma or 0.0, 0.0)
         b = max(line.paid_by_benjamin or 0.0, 0.0)
         total = n + b
 
         if total <= 0:
-            # Asume Norma al 100% — es la pagadora principal del hogar.
+            # Asume Norma al 100%: es la pagadora principal del hogar.
             return [(norma_id, 10_000, amount)]
 
         # Normaliza por el total declarado (no por `projected`): las columnas
@@ -2084,7 +2084,7 @@ class EtlPipeline:
            (Liverpool/Sears/Despensa/Pau) ya existen como líneas del
            presupuesto. Los actuales de la quincena se ajustan (dejan de ser
            == projected: hubo gasto extra real cubierto por el aguinaldo).
-        2. Cuenta por cobrar "Deben $3,600 — Medicina + rotafolio" (oct-2025),
+        2. Cuenta por cobrar "Deben $3,600" (Medicina + rotafolio, oct-2025),
            reducida a $1,900 en dic-2025/ene-2026 → loan por cobrar con
            deudor "Por identificar" (Norma lo renombra en la app).
         """
@@ -2178,7 +2178,7 @@ class EtlPipeline:
                        NULL, ?)""",
             (did("loan:deben_medicina_rotafolio"), HOUSEHOLD_ID,
              MEMBERS_BY_KEY["deudor_pendiente"].id,
-             "Cuenta por cobrar de las notas del Excel: 'Deben $3,600 — "
+             "Cuenta por cobrar de las notas del Excel: 'Deben $3,600: "
              "Medicina + rotafolio' (oct-2025); para dic-2025/ene-2026 la "
              "nota baja a $1,900. Deudor por identificar/renombrar en la app."),
         )
@@ -2221,7 +2221,7 @@ class EtlPipeline:
           * cadence_detail: {"day_of_month": <1-31>}. El materializador lo
             coacciona a 1-15 (primera mitad) / 16-fin (segunda) según cadencia.
           * default_beneficiary_ids: JSON array ["<member_id>", ...] (reparto
-            equitativo — formato histórico que parsea parseBeneficiaries()).
+            equitativo; formato histórico que parsea parseBeneficiaries()).
           * default_payer_split: JSON object {"<member_id>": <bps>} (parsePayerSplit()).
         """
         cur = conn.cursor()
@@ -2323,7 +2323,7 @@ class EtlPipeline:
         current_installment (pagos POSTED ≤ hoy), status (ACTIVE/PAID),
         start_date (primer pago) y la tarjeta real (card_key). El
         funding_payment_method_id (cuenta que liquida la tarjeta) NO se siembra:
-        es columna nueva de v17 y el asset queda en schema v1 — Norma lo fija
+        es columna nueva de v17 y el asset queda en schema v1; Norma lo fija
         desde el editor de MSI.
 
         NO se siembran Walmart/Coppel/Sears/Liverpool/Banamex como

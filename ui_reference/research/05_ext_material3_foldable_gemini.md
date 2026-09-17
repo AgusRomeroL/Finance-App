@@ -110,7 +110,7 @@ La decisión preaprobada del proyecto establece que la categorización del gasto
 
 ## **8\. Recomendaciones Accionables y Patrones Mapeables en Compose**
 
-A fin de traducir estos complejos principios heurísticos en una topología arquitectónica procesable por el desarrollador líder —y asimilable por los asistentes de generación de código basados en IA—, se estructuran a continuación los patrones composables correspondientes a las revisiones más avanzadas de las librerías al año 2026 (Compose 1.4/1.5 y Navigation 3):
+A fin de traducir estos complejos principios heurísticos en una topología arquitectónica procesable por el desarrollador líder (y asimilable por los asistentes de generación de código basados en IA), se estructuran a continuación los patrones composables correspondientes a las revisiones más avanzadas de las librerías al año 2026 (Compose 1.4/1.5 y Navigation 3):
 
 ### **Orquestación del Dashboard Bento Asimétrico**
 

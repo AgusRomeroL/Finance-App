@@ -70,4 +70,4 @@ PRÉSTAMOS POR COBRAR
 | Deudor | Principal | Saldo | Nota |
 |---|---:|---:|---|
 | Jaudiel | 105,000 | 105,000 | Préstamo histórico registrado en Excel (R116) |
-| Por identificar | 3,600 | 1,900 | Cuenta por cobrar de las notas del Excel: 'Deben $3,600 — Medicina + rotafolio'  |
+| Por identificar | 3,600 | 1,900 | Cuenta por cobrar de las notas del Excel: 'Deben $3,600: Medicina + rotafolio'  |

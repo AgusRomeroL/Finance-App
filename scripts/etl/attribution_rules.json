@@ -2,7 +2,7 @@
   "_doc": "Reglas de clasificación generadas a partir del cuestionario del usuario (2026-04-21). Cada regla se aplica por match de concepto normalizado. Las reglas se evalúan en orden: la primera que matchea gana.",
   "rules": [
     {
-      "_comment": "=== HOUSING — Teléfonos → OTHER.TELEFONO ===",
+      "_comment": "=== HOUSING: Teléfonos → OTHER.TELEFONO ===",
       "id": "tel_norma",
       "concept_pattern": "TELEFONO NORMA",
       "match_type": "contains",
@@ -23,7 +23,7 @@
     },
     {
       "id": "tel_pau",
-      "_comment": "TELEFONO PAU solo (1x, $218) es SOLO de Pau — corrige la regla vieja tel_pau_david que le ponía David 50%",
+      "_comment": "TELEFONO PAU solo (1x, $218) es SOLO de Pau; corrige la regla vieja tel_pau_david que le ponía David 50%",
       "concept_pattern": "TELEFONO PAU",
       "match_type": "exact_normalized",
       "section_filter": null,
@@ -70,7 +70,7 @@
     },
 
     {
-      "_comment": "=== HOUSING — servicios del hogar → beneficiarios = todos ===",
+      "_comment": "=== HOUSING: servicios del hogar → beneficiarios = todos ===",
       "id": "agua",
       "concept_pattern": "AGUA",
       "match_type": "exact_normalized",
@@ -108,7 +108,7 @@
     },
 
     {
-      "_comment": "=== TRANSPORTATION — gasolinas ===",
+      "_comment": "=== TRANSPORTATION: gasolinas ===",
       "id": "gasolina_camioneta",
       "concept_pattern": "GASOLINA CAMIONETA",
       "match_type": "contains",
@@ -148,7 +148,7 @@
     },
 
     {
-      "_comment": "=== SEGUROS MEDICOS — solo Benji es seguro real, el resto son mesadas ===",
+      "_comment": "=== SEGUROS MEDICOS: solo Benji es seguro real, el resto son mesadas ===",
       "id": "seguro_benji",
       "concept_pattern": "BENJI",
       "match_type": "contains",
@@ -190,7 +190,7 @@
     },
 
     {
-      "_comment": "=== FOOD — beneficiarios = todos ===",
+      "_comment": "=== FOOD: beneficiarios = todos ===",
       "id": "comida",
       "concept_pattern": "COMIDA",
       "match_type": "exact_normalized",
@@ -219,7 +219,7 @@
     },
 
     {
-      "_comment": "=== PETS — beneficiarios = todos ===",
+      "_comment": "=== PETS: beneficiarios = todos ===",
       "id": "comida_gatas",
       "concept_pattern": "COMIDA GATAS",
       "match_type": "contains",
@@ -353,7 +353,7 @@
     },
     {
       "id": "spotify",
-      "_comment": "Beneficia a todos (tabla de Agustín 2026-07-07); el PAGADOR sigue siendo Benjamín — lo garantiza la derivación fiel del Excel (pre oct-2025) y la excepción Spotify de la regla de pagador del ETL (post oct-2025)",
+      "_comment": "Beneficia a todos (tabla de Agustín 2026-07-07); el PAGADOR sigue siendo Benjamín; lo garantiza la derivación fiel del Excel (pre oct-2025) y la excepción Spotify de la regla de pagador del ETL (post oct-2025)",
       "concept_pattern": "SPOTIFY",
       "match_type": "contains",
       "section_filter": null,
@@ -430,7 +430,7 @@
     },
     {
       "id": "sears",
-      "_comment": "Sears se queda Norma 100% — decisión explícita de Agustín (2026-07-07), NO pasar a todos",
+      "_comment": "Sears se queda Norma 100%: decisión explícita de Agustín (2026-07-07), NO pasar a todos",
       "concept_pattern": "SEARS",
       "match_type": "contains",
       "section_filter": "LOANS",
@@ -642,7 +642,7 @@
     },
 
     {
-      "_comment": "=== OTHERS — reclasificaciones ===",
+      "_comment": "=== OTHERS: reclasificaciones ===",
       "id": "psicologa_otros",
       "concept_pattern": "PSICOLOGA",
       "match_type": "contains",
@@ -672,9 +672,9 @@
     },
 
     {
-      "_comment": "=== Reglas 2026-07 — reseed con Excel presupuesto 2.5 (37 hojas, ene-2025 → ago-2026) ===",
+      "_comment": "=== Reglas 2026-07: reseed con Excel presupuesto 2.5 (37 hojas, ene-2025 → ago-2026) ===",
       "id": "klar_pago_tarjeta",
-      "_comment2": "Klar en ENTERTAINMENT es el pago de la tarjeta Klar, no entretenimiento. Categoría LOANS.KLAR (creada 2026-07-07). Wallet klar (existe en PAYMENT_METHODS), a diferencia de las otras tarjetas que se pagan desde efectivo — decisión pedida explícitamente.",
+      "_comment2": "Klar en ENTERTAINMENT es el pago de la tarjeta Klar, no entretenimiento. Categoría LOANS.KLAR (creada 2026-07-07). Wallet klar (existe en PAYMENT_METHODS), a diferencia de las otras tarjetas que se pagan desde efectivo; decisión pedida explícitamente.",
       "concept_pattern": "KLAR",
       "match_type": "exact_normalized",
       "section_filter": null,
@@ -794,7 +794,7 @@
     },
     {
       "id": "cochecito_other",
-      "_comment": "BAJA CONFIANZA: 'Cochecito' suelto en OTHERS (8,000 jun-2026) — monto muy alto para gasolina, se asume mantenimiento del coche de los hijos",
+      "_comment": "BAJA CONFIANZA: 'Cochecito' suelto en OTHERS (8,000 jun-2026): monto muy alto para gasolina, se asume mantenimiento del coche de los hijos",
       "concept_pattern": "COCHECITO",
       "match_type": "contains",
       "section_filter": "OTHER",

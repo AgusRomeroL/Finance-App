@@ -8,7 +8,7 @@ en formato Markdown, listando CADA concepto único encontrado con:
   - Sección ETL actual
   - Monto proyectado (rango min-max visto)
   - Frecuencia (en cuántas quincenas apareció)
-  - Quién paga (Norma / Benjamín / Ambos — según columnas del Excel)
+  - Quién paga (Norma / Benjamín / Ambos, según columnas del Excel)
 
 El cuestionario se organiza por sección ETL para facilitar la revisión.
 """
@@ -28,7 +28,7 @@ from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CONSTANTES — replicadas del ETL principal para coherencia
+# CONSTANTES: replicadas del ETL principal para coherencia
 # ──────────────────────────────────────────────────────────────────────────────
 
 EXCEL_SECTION_TO_CATEGORY: dict[str, str] = {
@@ -64,7 +64,7 @@ SECTION_DISPLAY: dict[str, str] = {
     "OTHER":                          "📦 Otros (OTHERS)",
 }
 
-# Categorías hijas conocidas — para mostrar la asignación actual del ETL
+# Categorías hijas conocidas, para mostrar la asignación actual del ETL
 KNOWN_CHILDREN: dict[str, list[tuple[str, str]]] = {
     "HOUSING": [
         ("HOUSING.HIPOTECA", "Hipoteca"),
@@ -405,7 +405,7 @@ def generate_questionnaire(registry: dict[str, ConceptRecord]) -> str:
     lines.append("| `dav` | David | Dependiente |")
     lines.append("| `agu` | Agustín | Dependiente |")
     lines.append("| `san` | Santiago | Dependiente |")
-    lines.append("| `todos` | Todos los anteriores | — |")
+    lines.append("| `todos` | Todos los anteriores | n/a |")
     lines.append("")
     lines.append("## Categorías disponibles")
     lines.append("*(Si necesitas crear una nueva, escríbela como `NUEVA: nombre`)*")
@@ -527,9 +527,9 @@ def generate_questionnaire(registry: dict[str, ConceptRecord]) -> str:
             else:
                 payer_info = "Sin dato"
 
-            # Variantes — mostrar solo si hay diferencias reales
+            # Variantes: mostrar solo si hay diferencias reales
             variants_clean = sorted(rec.variants - {rec.concept})
-            variants_str = ", ".join(f"`{v}`" for v in variants_clean[:3]) if variants_clean else "—"
+            variants_str = ", ".join(f"`{v}`" for v in variants_clean[:3]) if variants_clean else "n/a"
             if len(variants_clean) > 3:
                 variants_str += f" _(+{len(variants_clean)-3})_"
 
@@ -548,7 +548,7 @@ def generate_questionnaire(registry: dict[str, ConceptRecord]) -> str:
                 f"`{current_cat}`",
                 current_benef,
                 current_pay,
-                "",  # ✏️ Cat. Correcta — usuario rellena
+                "",  # ✏️ Cat. Correcta (usuario rellena)
                 "",  # ✏️ Beneficiarios Correctos
                 "",  # ✏️ Metodo Pago Correcto
             ]

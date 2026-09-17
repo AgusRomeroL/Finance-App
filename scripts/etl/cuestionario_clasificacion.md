@@ -32,7 +32,7 @@
 |6|**Telefono Pau y David**|15|$444|Norma|`HOUSING.TELEFONO`|pau, dav|`OTHER.TELEFONO`|pau, dav|efectivo|
 |7|**Telefono Santi**|15|$199|Norma|`HOUSING.TELEFONO`|san|`OTHER.TELEFONO`|san|efectivo|
 |8|**Telefono Benji**|8|$760|Benji|`HOUSING.TELEFONO`|ben|`OTHER.TELEFONO`|ben|efectivo|
-|9|**David** *(en sección HOUSING — ¿teléfono?)*|1|$249|Norma|`HOUSING`|dav|`OTHER.TELEFONO`|dav|efectivo|
+|9|**David** *(en sección HOUSING, ¿teléfono?)*|1|$249|Norma|`HOUSING`|dav|`OTHER.TELEFONO`|dav|efectivo|
 |10|**Telefono Movistar**|1|$894|Norma|`HOUSING.TELEFONO`|nor, ben (default)|`OTHER.TELEFONO`|dav, nor, pau, san|efectivo|
 
 \---
@@ -44,7 +44,7 @@
 |11|**Gasolina Camioneta**|17|$1,240–$2,600|Norma|`TRANSPORTATION.GASOLINA`|nor, ben (default)|`TRANSPORTATION.GASOLINA`|nor|efectivo|
 |12|**Gasolina Chochecito**|17|$1,400–$1,600|Norma|`TRANSPORTATION.GASOLINA`|nor, ben (default)|`TRANSPORTATION.GASOLINA`|agu, dav, pau|efectivo|
 |13|**Cochecito** *(¿es la misma gasolina con nombre distinto?)<br /><br />R=Si es la misma "Gasolina Chochecito"*|16|$1,400–$1,600|Norma|`TRANSPORTATION`|nor, ben (default)|`TRANSPORTATION.GASOLINA`|agu, dav, pau|efectivo|
-|14|**Gasolina** *(genérica — ¿camioneta o cochecito?)<br /><br />R=Es "Gasolina Camioneta"*|16|$1,000–$2,600|Norma|`TRANSPORTATION.GASOLINA`|nor, ben (default)|`TRANSPORTATION.GASOLINA`|nor|efectivo|
+|14|**Gasolina** *(genérica, ¿camioneta o cochecito?)<br /><br />R=Es "Gasolina Camioneta"*|16|$1,000–$2,600|Norma|`TRANSPORTATION.GASOLINA`|nor, ben (default)|`TRANSPORTATION.GASOLINA`|nor|efectivo|
 
 \---
 
@@ -78,7 +78,7 @@ R= debe ser `TRANSFERENCIAS\_FAMILIARES.NOMBRE`, a excepción del 18, de Benji, 
 |N°|Concepto|Quincenas|Monto|Quién paga|Cat. ETL actual|Benef. ETL actual|✏️ Cat. Correcta|✏️ Beneficiarios Correctos|✏️ Método Pago|
 |-|-|-|-|-|-|-|-|-|-|
 |22|**Comida Gatas**|33|$980|Norma|`PETS.COMIDA`|nor, ben (default)|`PETS.COMIDA`|todos|efectivo|
-|23|**Psicologa** *(en sección PETS — ¿error de hoja?)*|1|$900|Norma|`PETS` ❌|nor, ben (default)|`OTHER.SALUD`|nor|efectivo|
+|23|**Psicologa** *(en sección PETS, ¿error de hoja?)*|1|$900|Norma|`PETS` ❌|nor, ben (default)|`OTHER.SALUD`|nor|efectivo|
 
 \---
 
@@ -159,9 +159,9 @@ R=Ya lo cambié a `ESCUELA.NOMBRE`
 |-|-|-|-|-|-|-|-|-|-|
 |73|**Psicologa** *(aparece también en PETS por error de hoja)*|19|$900|Norma|`OTHER` ❌→❓|nor, ben (default)|`OTHER.SALUD`|nor|efectivo|
 |74|**Buro de credito 1 de 3**|1|$4,300|Norma|`OTHER` ❓|nor, ben (default)|`LOANS.BURO`|nor|efectivo|
-|75|**Hawaiano** *(duplicado — también en ENTERTAINMENT)*|1|$350|Norma|`OTHER` ❌|nor, ben (default)|`OTHER.HAWAIANO`|pau|efectivo|
-|76|**Inscripcion Santi** *(duplicado — también en TRANSFERENCIAS)*|1|$9,600|Norma|`OTHER` ❌|san|`ESCUELA.SANTIAGO`|san|efectivo|
-|77|**Pau** *(duplicado — también en TRANSFERENCIAS)*|1|$800|Norma|`OTHER` ❌|pau|`TRANSFERENCIAS\_FAMILIARES.PAU`|pau|efectivo|
+|75|**Hawaiano** *(duplicado, también en ENTERTAINMENT)*|1|$350|Norma|`OTHER` ❌|nor, ben (default)|`OTHER.HAWAIANO`|pau|efectivo|
+|76|**Inscripcion Santi** *(duplicado, también en TRANSFERENCIAS)*|1|$9,600|Norma|`OTHER` ❌|san|`ESCUELA.SANTIAGO`|san|efectivo|
+|77|**Pau** *(duplicado, también en TRANSFERENCIAS)*|1|$800|Norma|`OTHER` ❌|pau|`TRANSFERENCIAS\_FAMILIARES.PAU`|pau|efectivo|
 |78|**Prestamo 1 Omar**|1|$5,500|Norma|`OTHER` ❌→`LOANS.OMAR`|nor, ben (default)|`LOANS.OMAR`|nor|efectivo|
 |79|**Prestamo 2 (Omar)**|1|$5,500|Norma|`OTHER` ❌→`LOANS.OMAR`|nor, ben (default)|`LOANS.OMAR`|nor|efectivo|
 
@@ -171,7 +171,7 @@ R=Ya lo cambié a `ESCUELA.NOMBRE`
 
 Responde estas preguntas claves que afectan muchos registros:
 
-### Q1 — Gasolinas
+### Q1: Gasolinas
 
 > Los conceptos \*\*Gasolina Camioneta\*\*, \*\*Gasolina Chochecito\*\*, \*\*Cochecito\*\* y \*\*Gasolina\*\* (genérica) están todos bajo `TRANSPORTATION.GASOLINA` con beneficiarios `Norma, Benjamín (default)`.
 > - ¿\*\*Gasolina Camioneta\*\* → beneficiario es solo \*\*Norma\*\*?
@@ -180,7 +180,7 @@ Responde estas preguntas claves que afectan muchos registros:
 
 **Tu respuesta: Camioneta si es de Norma, Cochecito es de Agustín, David y Pau, genérica es Camioneta**
 
-### Q2 — Servicios del hogar (Agua, Internet, Electricidad)
+### Q2: Servicios del hogar (Agua, Internet, Electricidad)
 
 > Actualmente el ETL asigna `Norma, Benjamín (default)` como beneficiarios.
 > - ¿Deberían ser \*\*todos los miembros del hogar\*\* (`todos`)?
@@ -188,14 +188,14 @@ Responde estas preguntas claves que afectan muchos registros:
 
 **Tu respuesta: Todos los miembros del hogar**
 
-### Q3 — Hipoteca
+### Q3: Hipoteca
 
 > Actualmente: beneficiarios = `Norma, Benjamín`.
 > - ¿Es correcto, o solo es de \*\*Benjamín y Norma\*\* (ya está bien)?
 
 **Tu respuesta: Si, 'adultos' nada más.**
 
-### Q4 — "Pau, David, Agus" en Seguros Médicos
+### Q4: "Pau, David, Agus" en Seguros Médicos
 
 > El ETL detecta correctamente → `SEGUROS\_MEDICOS.HIJOS`.
 > - En la conversación anterior mencionaste que "Seguro hijos" es \*\*mesada\*\*, no seguro médico.
@@ -204,7 +204,7 @@ Responde estas preguntas claves que afectan muchos registros:
 
 **Tu respuesta: Exactamente, todos esos (menos el único registro de Benjamín) son mesadas y "Pau, David, Agus" se divide entre los 3, estas van como** `TRANSFERENCIAS\_FAMILIARES.NOMBRE`
 
-### Q5 — Psicóloga
+### Q5: Psicóloga
 
 > Aparece 19 veces en `OTHERS` y 1 vez en `PETS` (por error de hoja). $900/quincena, paga Norma.
 > - ¿A quién es la psicóloga? ¿De quién es el gasto? (¿Norma? ¿un hijo?)
@@ -212,13 +212,13 @@ Responde estas preguntas claves que afectan muchos registros:
 
 **Tu respuesta: Es de norma, lo puse como salud, no es PETS, eso ha de haber sido un error.**
 
-### Q6 — "Suscripcion nivel 6"
+### Q6: "Suscripcion nivel 6"
 
 > $129–$130/quincena, 17 veces. ¿Qué servicio es este?
 
 **Tu respuesta: Meli+.**
 
-### Q7 — "Didi tarjeta" vs "Didi"
+### Q7: "Didi tarjeta" vs "Didi"
 
 > - \*\*Didi\*\* (en LOANS, 18 quincenas, $778–$1,049): ¿es el pago de la Didi Card?
 > - \*\*Didi tarjeta\*\* (en ENTERTAINMENT, 6 quincenas, $4,840–$6,500): ¿es el pago del saldo total de la Didi Card?
@@ -226,20 +226,20 @@ Responde estas preguntas claves que afectan muchos registros:
 
 **Tu respuesta: Ambos son tarjetas, es LOANS.**
 
-### Q8 — "Mary"
+### Q8: "Mary"
 
 > Aparece 3 veces en LOANS, $2,404, sin dato de quién paga. ¿Quién o qué es Mary?
 
 **Tu respuesta: Una conocida de Norma.**
 
-### Q9 — Comida, Despensa, Limpieza
+### Q9: Comida, Despensa, Limpieza
 
 > Las 3 tienen beneficiarios `Norma, Benjamín (default)`.
 > - ¿Deberían ser \*\*todos\*\* (`todos`)?
 
 **Tu respuesta: Si, deberían ser todos.**
 
-### Q10 — Alimentación de las gatas
+### Q10: Alimentación de las gatas
 
 > `PETS.COMIDA`, beneficiarias actuales: `Norma, Benjamín`.
 > - ¿Correcto o debería ser `todos` o solo `adultos`?
@@ -261,7 +261,7 @@ Responde estas preguntas claves que afectan muchos registros:
 |Préstamos/Tarjetas|21|6.9|
 |Transferencias Familiares|14|3.8|
 |Otros|7|3.4|
-|**TOTAL**|**79**|—|
+|**TOTAL**|**79**|n/a|
 
 
 

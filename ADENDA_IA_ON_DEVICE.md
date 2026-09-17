@@ -14,13 +14,13 @@
 - [E.1 Principios rectores](#e1-principios-rectores)
 - [E.2 Capa de Servicio AICore](#e2-capa-de-servicio-aicore)
 - [E.3 Pipeline de RAG Local](#e3-pipeline-de-rag-local)
-- [E.4 Definición de Funciones — Tool Calling Local](#e4-definición-de-funciones--tool-calling-local)
+- [E.4 Definición de Funciones: Tool Calling Local](#e4-definición-de-funciones-tool-calling-local)
 - [E.5 Protocolo de Privacidad y Seguridad](#e5-protocolo-de-privacidad-y-seguridad)
 - [E.6 Optimización de Interfaz para el Fold](#e6-optimización-de-interfaz-para-el-fold)
 - [E.7 Contratos de latencia y degradación grácil](#e7-contratos-de-latencia-y-degradación-grácil)
 - [E.8 Casos de prueba canónicos](#e8-casos-de-prueba-canónicos)
-- [Apéndice E.A — Catálogo completo de intents](#apéndice-ea--catálogo-completo-de-intents)
-- [Apéndice E.B — Ejemplo extremo-a-extremo](#apéndice-eb--ejemplo-extremo-a-extremo)
+- [Apéndice E.A: Catálogo completo de intents](#apéndice-ea-catálogo-completo-de-intents)
+- [Apéndice E.B: Ejemplo extremo-a-extremo](#apéndice-eb-ejemplo-extremo-a-extremo)
 
 ---
 
@@ -66,7 +66,7 @@ dependencies {
 
 El flag `required="false"` es crítico: permite que la app se instale en dispositivos sin AICore y degrade gráficamente al pipeline determinista puro (ver §E.7).
 
-### E.2.2 Clase `AiCoreService` — punto único de acceso
+### E.2.2 Clase `AiCoreService`: punto único de acceso
 
 La app centraliza la interacción con AICore en un servicio singleton expuesto como `AiCoreService`. Ningún otro módulo instancia `GenerativeModel`.
 
@@ -170,7 +170,7 @@ class AiCoreService @Inject constructor(
 }
 ```
 
-### E.2.3 Parámetros de `GenerationConfig` — justificación para datos tabulares financieros
+### E.2.3 Parámetros de `GenerationConfig`: justificación para datos tabulares financieros
 
 Los valores fijados en `AiCoreService.ensureReady()` están calibrados específicamente para el perfil de la app (consultas contables sobre datos tabulares). La tabla documenta la elección y contrasta contra defaults genéricos.
 
@@ -181,7 +181,7 @@ Los valores fijados en `AiCoreService.ensureReady()` están calibrados específi
 | `topP` | 0.95 | **0.90** | Recorte adicional de nucleus. No se bajó más para no degradar el parsing de montos textuales como "mil doscientos". |
 | `maxOutputTokens` | 1024 | **240** | El schema de intent cabe en ~180 tokens. El tope de 240 deja margen para explicación en `"reason"` sin arriesgar truncamiento. Salidas < 256 tokens son el régimen de rendimiento óptimo de Nano-2 (≤1.4 s P50). |
 | `candidateCount` | 1 | **1** | Batch siempre `n=1`: el dispatcher no necesita alternativas; si falla el schema, se dispara fallback determinista, no re-muestreo. |
-| `stopSequences` | — | `["\n\n## END"]` | Centinela para forzar cierre si el modelo insiste en verbosidad. |
+| `stopSequences` | ninguno | `["\n\n## END"]` | Centinela para forzar cierre si el modelo insiste en verbosidad. |
 
 Latencia observada con esta configuración en Pixel 9 Pro Fold (inner display, foreground, Nano-2 cargado):
 
@@ -257,7 +257,7 @@ Usuario escribe pregunta
     Respuesta al usuario + trazabilidad
 ```
 
-### E.3.2 Retriever — queries SQL deterministas
+### E.3.2 Retriever: queries SQL deterministas
 
 La "fase R" del RAG no usa embeddings ni similitud vectorial. Las entidades del dominio son estructuradas y numéricas; una búsqueda semántica sobre descripciones aportaría ruido. En su lugar, el retriever ejecuta un **conjunto fijo de consultas SQL parametrizables** que cubren las seis dimensiones de información utilizables por el modelo:
 
@@ -434,12 +434,12 @@ La ventana de Nano-2 admite hasta ~4,000 tokens de entrada. El presupuesto del p
 | JSON schema embebido | 520 | Comprimido con `ensureAscii=false` |
 | Contexto RAG | 2,400 | Truncado por prioridad si excede |
 | Pregunta del usuario | 400 | Hard-capped; preguntas más largas se rechazan con mensaje amigable |
-| Buffer de seguridad | 300 | — |
+| Buffer de seguridad | 300 | n/a |
 | **Total entrada** | **~4,000** | |
 
 Si el contexto serializado excede 2,400 tokens, `ContextSerializer` aplica truncamiento por prioridad: se descartan bloques en orden `ULTIMAS_QUINCENAS_CERRADAS → GASTOS_DESTACADOS → CUOTAS_ACTIVAS → ...` hasta caber. La estimación de tokens usa la heurística `chars/3.6` para el español (suficientemente precisa para este propósito; no justifica cargar un tokenizador completo).
 
-### E.3.5 Prompt assembler — plantilla canónica
+### E.3.5 Prompt assembler: plantilla canónica
 
 ```kotlin
 class PromptAssembler @Inject constructor(
@@ -476,7 +476,7 @@ El `systemPrompt` (asset `system_prompt.es.txt`) instruye al modelo sobre:
 
 ---
 
-## E.4 Definición de Funciones — Tool Calling Local
+## E.4 Definición de Funciones: Tool Calling Local
 
 ### E.4.1 Estrategia sin tool calling nativo
 
@@ -541,16 +541,16 @@ Este patrón es forward-compatible: cuando Gemini Nano 4 entregue tool calling n
 | Intent | Pregunta típica | Argumentos requeridos | Función del motor invocada |
 |---|---|---|---|
 | `GET_CATEGORY_REMAINING` | "¿Cuánto presupuesto queda para gasolina?" | `category_code` | `AnalyticsUseCase.remainingForCategory()` |
-| `GET_TOP_SPENDER` | "¿Quién ha gastado más en esta quincena?" | — | `AnalyticsUseCase.topBeneficiary()` |
+| `GET_TOP_SPENDER` | "¿Quién ha gastado más en esta quincena?" | ninguno | `AnalyticsUseCase.topBeneficiary()` |
 | `GET_SPEND_BY_MEMBER` | "¿Cuánto lleva David este mes?" | `member_alias` | `AnalyticsUseCase.spendByMember()` |
 | `GET_WALLET_BALANCE` | "¿Cuánto tengo en Banamex?" | `wallet_name` | `WalletRepository.balance()` |
 | `GET_INSTALLMENT_STATUS` | "¿En qué cuota voy con Omar?" | `plan_name` | `InstallmentRepository.status()` |
 | `PROJECT_SAVINGS_IF` | "¿Cuánto ahorro si no gasto más en entretenimiento?" | `hypothetical_cut_category` | `ForecastUseCase.savingsIfCategoryFrozen()` |
 | `COMPARE_QUINCENAS` | "¿Gasto más que la quincena pasada?" | `baseline_quincenas?` | `VarianceUseCase.compareVsBaseline()` |
 | `EXPLAIN_VARIANCE` | "¿Por qué gasté más en comida?" | `category_code` | `VarianceUseCase.explainCategory()` |
-| `LIST_UPCOMING_INSTALLMENTS` | "¿Qué cuotas vienen?" | — | `InstallmentRepository.upcoming()` |
-| `SUMMARIZE_QUINCENA` | "Resúmeme esta quincena" | — | `AnalyticsUseCase.snapshotSummary()` |
-| `UNKNOWN` | pregunta fuera de dominio | — | fallback amigable |
+| `LIST_UPCOMING_INSTALLMENTS` | "¿Qué cuotas vienen?" | ninguno | `InstallmentRepository.upcoming()` |
+| `SUMMARIZE_QUINCENA` | "Resúmeme esta quincena" | ninguno | `AnalyticsUseCase.snapshotSummary()` |
+| `UNKNOWN` | pregunta fuera de dominio | ninguno | fallback amigable |
 
 ### E.4.4 Dispatcher
 
@@ -653,7 +653,7 @@ class IntentDispatcher @Inject constructor(
 
 La regla inviolable: **el dispatcher nunca devuelve texto crudo del modelo al usuario**. Siempre ejecuta la función determinista correspondiente y renderiza el resultado con plantillas de UI locales. El único lugar donde el texto original del modelo aparece es en el tooltip de trazabilidad ("¿Por qué me respondió esto?").
 
-### E.4.5 `AliasResolver` — puente entre lenguaje natural y IDs del dominio
+### E.4.5 `AliasResolver`: puente entre lenguaje natural y IDs del dominio
 
 El modelo puede referirse a "David", "Dave", "el niño de Norma" o incluso errar con "Davi". El `AliasResolver` traduce estas cadenas a IDs canónicos reutilizando la tabla de aliases ya definida en §2.2.2 del doc base.
 
@@ -681,11 +681,11 @@ class AliasResolver @Inject constructor(
 
 Si el JSON producido por el modelo no valida (por ejemplo, invent una intent fuera del enum, trunca la salida, o alucina campos), el dispatcher aplica un camino de degradación:
 
-1. Intento A — reparación por patrón: aplicar `JsonRepairer` (algoritmo conservador, sin LLM) que cierra arrays/objetos pendientes y valida de nuevo.
-2. Intento B — pasar la pregunta al motor determinista directamente (§5 del doc UX) como si hubiera sido tecleada en la barra de búsqueda.
-3. Intento C — mensaje explícito al usuario: "No entendí la pregunta, pero puedes buscar manualmente en …" con CTA a la búsqueda determinista.
+1. Intento A (reparación por patrón): aplicar `JsonRepairer` (algoritmo conservador, sin LLM) que cierra arrays/objetos pendientes y valida de nuevo.
+2. Intento B: pasar la pregunta al motor determinista directamente (§5 del doc UX) como si hubiera sido tecleada en la barra de búsqueda.
+3. Intento C: mensaje explícito al usuario ("No entendí la pregunta, pero puedes buscar manualmente en …") con CTA a la búsqueda determinista.
 
-En ningún caso se reintenta contra el LLM automáticamente — respeta la cuota de AICore y evita bucles que drenen batería.
+En ningún caso se reintenta contra el LLM automáticamente: respeta la cuota de AICore y evita bucles que drenen batería.
 
 ---
 
@@ -695,10 +695,10 @@ En ningún caso se reintenta contra el LLM automáticamente — respeta la cuota
 
 AICore se adhiere a los principios de **Private Compute Core** de Android:
 
-1. **Restricted Package Binding** — AICore solo es accesible por apps firmadas; las peticiones se ejecutan en un proceso aislado del sistema.
-2. **Aislamiento por petición** — AICore no persiste ni los prompts ni las salidas. Cada inferencia es un evento sin historial compartido entre apps.
-3. **Sin red** — el servicio no posee permiso `INTERNET` dentro de su sandbox de inferencia; los pesos del modelo se distribuyen vía Google Play System Updates (Project Mainline), no por conexión in-app.
-4. **Ejecución en edge TPU** — el dispatch sucede en la unidad de procesamiento tensorial del Tensor G4 (Pixel 9 Pro Fold). La CPU/GPU solo intervienen en el pre/post-procesamiento léxico.
+1. **Restricted Package Binding**: AICore solo es accesible por apps firmadas; las peticiones se ejecutan en un proceso aislado del sistema.
+2. **Aislamiento por petición**: AICore no persiste ni los prompts ni las salidas. Cada inferencia es un evento sin historial compartido entre apps.
+3. **Sin red**: el servicio no posee permiso `INTERNET` dentro de su sandbox de inferencia; los pesos del modelo se distribuyen vía Google Play System Updates (Project Mainline), no por conexión in-app.
+4. **Ejecución en edge TPU**: el dispatch sucede en la unidad de procesamiento tensorial del Tensor G4 (Pixel 9 Pro Fold). La CPU/GPU solo intervienen en el pre/post-procesamiento léxico.
 
 La app refuerza estas garantías con tres reglas propias:
 
@@ -735,17 +735,17 @@ La app expone **Settings → Privacidad → Asistente IA** con:
 - Versión del modelo y fecha de último uso.
 - Número de inferencias del día (acotadas por la cuota).
 - Botón "Ver últimos 10 prompts" que abre un visor sobre `aicore_audit_log` con cada prompt enviado al modelo junto con el JSON recibido.
-- Botón "Deshabilitar asistente" — liberación inmediata del `GenerativeModel` y oculta el módulo de chat de toda la UI.
-- Botón "Borrar historial del asistente" — elimina `aicore_audit_log` sin afectar el ledger de gastos.
+- Botón "Deshabilitar asistente": liberación inmediata del `GenerativeModel` y oculta el módulo de chat de toda la UI.
+- Botón "Borrar historial del asistente": elimina `aicore_audit_log` sin afectar el ledger de gastos.
 
 ### E.5.4 Sanitización contra prompt injection
 
 Aunque los prompts nunca se mueven a servidores externos, un atacante con acceso local (por ejemplo, pegando un concepto de gasto cuidadosamente elaborado en un campo de texto libre) podría intentar influir en respuestas futuras. Mitigaciones:
 
-1. **Delimitadores robustos** — el bloque del usuario va entre `## PREGUNTA_DEL_USUARIO` y `## END`. El *system prompt* instruye explícitamente ignorar cualquier instrucción dentro del bloque.
-2. **Stripping de tokens peligrosos** — `PromptSanitizer` elimina líneas que empiecen con `##`, `###`, `<|`, `SYSTEM:`, `ASSISTANT:`, y colapsa runs de whitespace.
-3. **Ventana reducida del contexto RAG** — los `concept` textuales de los gastos se truncan a 64 caracteres antes de serializar.
-4. **Schema-enforced output** — aunque el modelo caiga en un exploit, solo puede emitir un objeto JSON del schema; no hay camino para que filtre datos hacia afuera porque no hay red.
+1. **Delimitadores robustos**: el bloque del usuario va entre `## PREGUNTA_DEL_USUARIO` y `## END`. El *system prompt* instruye explícitamente ignorar cualquier instrucción dentro del bloque.
+2. **Stripping de tokens peligrosos**: `PromptSanitizer` elimina líneas que empiecen con `##`, `###`, `<|`, `SYSTEM:`, `ASSISTANT:`, y colapsa runs de whitespace.
+3. **Ventana reducida del contexto RAG**: los `concept` textuales de los gastos se truncan a 64 caracteres antes de serializar.
+4. **Schema-enforced output**: aunque el modelo caiga en un exploit, solo puede emitir un objeto JSON del schema; no hay camino para que filtre datos hacia afuera porque no hay red.
 
 ---
 
@@ -757,10 +757,10 @@ El componente `AssistantShell` decide dinámicamente su postura según el `Windo
 
 | Postura física del dispositivo | `WindowWidthSizeClass` | Layout |
 |---|---|---|
-| Plegado (outer display) | `COMPACT` | `BottomSheetChat` — hoja modal 85% altura, cierra con swipe-down |
-| Desplegado (inner display), apaisado | `EXPANDED` | `DualPaneChat` — chat 40% izq, dashboard 60% der |
-| Desplegado, retrato | `EXPANDED` | `TopChat` — chat 55% superior, contenido 45% inferior |
-| Tabletop (bisagra ~90°) | `MEDIUM` + half-folded | `FoldedBookChat` — chat arriba de la bisagra, visual abajo |
+| Plegado (outer display) | `COMPACT` | `BottomSheetChat`: hoja modal 85% altura, cierra con swipe-down |
+| Desplegado (inner display), apaisado | `EXPANDED` | `DualPaneChat`: chat 40% izq, dashboard 60% der |
+| Desplegado, retrato | `EXPANDED` | `TopChat`: chat 55% superior, contenido 45% inferior |
+| Tabletop (bisagra ~90°) | `MEDIUM` + half-folded | `FoldedBookChat`: chat arriba de la bisagra, visual abajo |
 
 ```kotlin
 @Composable
@@ -823,7 +823,7 @@ fun DualPaneChat(viewModel: BudgetAssistantViewModel) {
     val lastResult by viewModel.lastResult.collectAsStateWithLifecycle()
 
     Row(Modifier.fillMaxSize()) {
-        // Pane izquierdo — chat
+        // Pane izquierdo: chat
         Box(
             Modifier
                 .weight(0.40f)
@@ -838,7 +838,7 @@ fun DualPaneChat(viewModel: BudgetAssistantViewModel) {
             onResize = { fraction -> viewModel.setPaneFraction(fraction) }
         )
 
-        // Pane derecho — dashboard dinámico
+        // Pane derecho: dashboard dinámico
         Box(
             Modifier
                 .weight(0.60f)
@@ -883,7 +883,7 @@ Al tocar una sugerencia, el chip se sustituye por el texto en el input y dispara
 
 ### E.6.4 Streaming UX
 
-`AiCoreService.generateContentStream` se usa en el pane izquierdo para que el usuario perciba progreso. Sin embargo, el pane derecho **no** se actualiza hasta que el JSON valida completo — una actualización parcial basada en tokens intermedios del modelo sería engañosa porque el intent podría cambiar al completarse la respuesta.
+`AiCoreService.generateContentStream` se usa en el pane izquierdo para que el usuario perciba progreso. Sin embargo, el pane derecho **no** se actualiza hasta que el JSON valida completo: una actualización parcial basada en tokens intermedios del modelo sería engañosa porque el intent podría cambiar al completarse la respuesta.
 
 ```
 t=0.0s    ▌
@@ -898,7 +898,7 @@ t=1.1s    <JSON completo> → dispatcher ejecuta → pane derecho actualiza
 
 - **Drag & drop entre paneles**: arrastrar un gasto del pane derecho hacia la caja de entrada lo inyecta como referencia ("Explícame este gasto: …").
 - **Expand to full screen**: doble tap en la barra del pane izquierdo colapsa el derecho temporalmente (útil para lectura larga).
-- **Tabletop posture**: el chat queda sobre la bisagra, el visual bajo — útil para mantener el teléfono sobre la mesa durante una conversación sostenida con el asistente.
+- **Tabletop posture**: el chat queda sobre la bisagra, el visual bajo, útil para mantener el teléfono sobre la mesa durante una conversación sostenida con el asistente.
 - **Haptic feedback**: `HapticFeedbackType.LongPress` al completar un dispatch exitoso; `HapticFeedbackType.Reject` si el intent fue `UNKNOWN`.
 
 ---
@@ -909,12 +909,12 @@ t=1.1s    <JSON completo> → dispatcher ejecuta → pane derecho actualiza
 
 | Evento | Target P50 | Target P95 | Acción si se excede |
 |---|---|---|---|
-| `ensureReady()` warm | 120 ms | 400 ms | — |
+| `ensureReady()` warm | 120 ms | 400 ms | ninguna |
 | `ensureReady()` cold con download | 10 s | 90 s | Banner de progreso explícito |
-| Construcción de contexto RAG | 40 ms | 120 ms | — |
+| Construcción de contexto RAG | 40 ms | 120 ms | ninguna |
 | Inferencia completa (JSON cerrado) | 1.2 s | 2.5 s | Mostrar skeleton con shimmer |
-| Dispatch + render del pane derecho | 80 ms | 200 ms | — |
-| Round-trip total (enter → render) | 1.4 s | 3.0 s | — |
+| Dispatch + render del pane derecho | 80 ms | 200 ms | ninguna |
+| Round-trip total (enter → render) | 1.4 s | 3.0 s | ninguna |
 
 ### E.7.2 Tabla de degradación
 
@@ -993,32 +993,32 @@ Cada caso cuenta como **pass** si:
 
 ---
 
-## Apéndice E.A — Catálogo completo de intents
+## Apéndice E.A: Catálogo completo de intents
 
 | # | Intent | Args obligatorios | Args opcionales | Función motor | Plantilla de render |
 |---|---|---|---|---|---|
-| 1 | `GET_CATEGORY_REMAINING` | `category_code` | — | `analytics.remainingForCategory` | `CategoryDetailPanel` |
+| 1 | `GET_CATEGORY_REMAINING` | `category_code` | ninguno | `analytics.remainingForCategory` | `CategoryDetailPanel` |
 | 2 | `GET_CATEGORY_SPENT_TO_DATE` | `category_code` | `from_date` | `analytics.spentSince` | `CategoryDetailPanel` |
-| 3 | `GET_TOP_SPENDER` | — | `from_date`, `to_date` | `analytics.topBeneficiary` | `MemberRankingPanel` |
+| 3 | `GET_TOP_SPENDER` | ninguno | `from_date`, `to_date` | `analytics.topBeneficiary` | `MemberRankingPanel` |
 | 4 | `GET_SPEND_BY_MEMBER` | `member_alias` | `from_date`, `to_date` | `analytics.spendByMember` | `MemberDetailPanel` |
-| 5 | `GET_WALLET_BALANCE` | `wallet_name` | — | `wallets.balance` | `WalletDetailPanel` |
-| 6 | `GET_WALLET_UTILIZATION` | `wallet_name` | — | `wallets.utilization` | `WalletDetailPanel` |
-| 7 | `GET_INSTALLMENT_STATUS` | `plan_name` | — | `installments.status` | `InstallmentDetailPanel` |
-| 8 | `LIST_UPCOMING_INSTALLMENTS` | — | — | `installments.upcoming` | `InstallmentListPanel` |
-| 9 | `PROJECT_SAVINGS_IF` | `hypothetical_cut_category` | — | `forecast.savingsIfCategoryFrozen` | `ForecastPanel` |
-| 10 | `FORECAST_NEXT_QUINCENA` | — | `baseline_quincenas` | `forecast.nextQuincena` | `ForecastPanel` |
-| 11 | `COMPARE_QUINCENAS` | — | `baseline_quincenas` | `variance.compareVsBaseline` | `VarianceComparePanel` |
-| 12 | `EXPLAIN_VARIANCE` | `category_code` | — | `variance.explainCategory` | `VarianceExplainPanel` |
-| 13 | `LIST_RECURRENCE_TEMPLATES` | — | — | `recurrence.listActive` | `TemplateListPanel` |
-| 14 | `LIST_RECENT_EXPENSES` | — | `from_date`, `to_date` | `expenses.recent` | `ExpenseListPanel` |
-| 15 | `SUMMARIZE_QUINCENA` | — | — | `analytics.snapshotSummary` | `QuincenaSummaryPanel` |
-| 16 | `GET_INTEREST_PAID` | — | `from_date`, `to_date` | `analytics.interestPaid` | `InterestPanel` |
-| 17 | `GET_LOANS_RECEIVABLE` | — | — | `loans.receivable` | `LoansPanel` |
-| 18 | `UNKNOWN` | — | — | — | `UnknownFallback` |
+| 5 | `GET_WALLET_BALANCE` | `wallet_name` | ninguno | `wallets.balance` | `WalletDetailPanel` |
+| 6 | `GET_WALLET_UTILIZATION` | `wallet_name` | ninguno | `wallets.utilization` | `WalletDetailPanel` |
+| 7 | `GET_INSTALLMENT_STATUS` | `plan_name` | ninguno | `installments.status` | `InstallmentDetailPanel` |
+| 8 | `LIST_UPCOMING_INSTALLMENTS` | ninguno | ninguno | `installments.upcoming` | `InstallmentListPanel` |
+| 9 | `PROJECT_SAVINGS_IF` | `hypothetical_cut_category` | ninguno | `forecast.savingsIfCategoryFrozen` | `ForecastPanel` |
+| 10 | `FORECAST_NEXT_QUINCENA` | ninguno | `baseline_quincenas` | `forecast.nextQuincena` | `ForecastPanel` |
+| 11 | `COMPARE_QUINCENAS` | ninguno | `baseline_quincenas` | `variance.compareVsBaseline` | `VarianceComparePanel` |
+| 12 | `EXPLAIN_VARIANCE` | `category_code` | ninguno | `variance.explainCategory` | `VarianceExplainPanel` |
+| 13 | `LIST_RECURRENCE_TEMPLATES` | ninguno | ninguno | `recurrence.listActive` | `TemplateListPanel` |
+| 14 | `LIST_RECENT_EXPENSES` | ninguno | `from_date`, `to_date` | `expenses.recent` | `ExpenseListPanel` |
+| 15 | `SUMMARIZE_QUINCENA` | ninguno | ninguno | `analytics.snapshotSummary` | `QuincenaSummaryPanel` |
+| 16 | `GET_INTEREST_PAID` | ninguno | `from_date`, `to_date` | `analytics.interestPaid` | `InterestPanel` |
+| 17 | `GET_LOANS_RECEIVABLE` | ninguno | ninguno | `loans.receivable` | `LoansPanel` |
+| 18 | `UNKNOWN` | ninguno | ninguno | ninguno | `UnknownFallback` |
 
 ---
 
-## Apéndice E.B — Ejemplo extremo-a-extremo
+## Apéndice E.B: Ejemplo extremo-a-extremo
 
 **Pregunta del usuario** (tecleada en el pane izquierdo del Fold desplegado):
 
@@ -1068,7 +1068,7 @@ forecast.savingsIfCategoryFrozen(CategoryId("ENTERTAINMENT"))
 **9. Render en pane derecho (`ForecastPanel`):**
 
 ```
-┌ Escenario — congelar ENTERTAINMENT ────────┐
+┌ Escenario: congelar ENTERTAINMENT ─────────┐
 │                                             │
 │   Ahorro actual proyectado     $12,660     │
 │   Ahorro si congelas           $12,676     │

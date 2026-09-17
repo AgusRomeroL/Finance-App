@@ -7,6 +7,7 @@ plugins {
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.serialization") version "2.2.20"
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 // Firma de release (Fase 8). La llave nunca entra al repo: sus rutas y alias
@@ -212,6 +213,12 @@ dependencies {
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    // Observabilidad (Fase 7, decision 7 del plan, resuelta el 2026-09-17 por
+    // Crashlytics): fallos no controlados y ANR con trazas a la consola de
+    // Firebase. Se inicializa solo por su ContentProvider, sin codigo. La subida
+    // de simbolos de release (mappingFileUploadEnabled) queda para la Fase 8,
+    // cuando exista minificacion.
+    implementation("com.google.firebase:firebase-crashlytics")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
     // Fase B (multi-tenant): Google Sign-In vía Credential Manager. Reemplaza al

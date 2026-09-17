@@ -1,4 +1,4 @@
-# Remediación de Seguridad — Finance-App
+# Remediación de Seguridad: Finance-App
 
 > Fecha de detección: 2026-06-27
 > Proyecto Firebase afectado: `finance-app-abdf9`
@@ -10,18 +10,18 @@ Este documento describe las acciones de remediación.
 
 ## ESTADO ACTUAL (actualizado 2026-06-27)
 
-- ✅ **Untrack + `.gitignore` reforzado** — commiteado (`chore(security): untrack secrets and build artifacts`).
-- ✅ **Historial purgado** — `service-account.json`, `budget_database.db` (raíz), `etl_output.log` y los `java_pid*.hprof` se eliminaron de **todos** los commits con `git filter-repo`. Verificado: no aparecen en ningún commit.
-- ✅ **Push limpio a GitHub** — el historial reescrito (limpio) se subió con `git push --force-with-lease`. **El secreto nunca llegó a estar presente en el árbol remoto de GitHub** (origin estaba 11 commits atrás del commit que lo añadió; se purgó antes del primer push del trabajo nuevo). Verificado sobre `origin/main`.
+- ✅ **Untrack + `.gitignore` reforzado**: commiteado (`chore(security): untrack secrets and build artifacts`).
+- ✅ **Historial purgado**: `service-account.json`, `budget_database.db` (raíz), `etl_output.log` y los `java_pid*.hprof` se eliminaron de **todos** los commits con `git filter-repo`. Verificado: no aparecen en ningún commit.
+- ✅ **Push limpio a GitHub**: el historial reescrito (limpio) se subió con `git push --force-with-lease`. **El secreto nunca llegó a estar presente en el árbol remoto de GitHub** (origin estaba 11 commits atrás del commit que lo añadió; se purgó antes del primer push del trabajo nuevo). Verificado sobre `origin/main`.
 - ✅ **Backup** del historial previo en `%LOCALAPPDATA%\Temp\finance-backup-d738dc5.bundle` (restaurable con `git clone`).
-- ⬜ **Rotación de la private key** — **decisión del propietario: NO rotar** (repo privado y la clave nunca se publicó en GitHub). La recomendación de la sección 1 se conserva por si cambia el contexto (p.ej. si el repo se hace público o se comparte).
-- ⬜ **Restringir la API key** de `google-services.json` (sección 3) — pendiente, recomendado.
+- ⬜ **Rotación de la private key**: **decisión del propietario, NO rotar** (repo privado y la clave nunca se publicó en GitHub). La recomendación de la sección 1 se conserva por si cambia el contexto (p.ej. si el repo se hace público o se comparte).
+- ⬜ **Restringir la API key** de `google-services.json` (sección 3): pendiente, recomendado.
 
 > Las secciones 1, 2 y 4 quedan como **referencia histórica** del procedimiento ya ejecutado.
 
 ---
 
-## 1. CRÍTICO Y URGENTE — Rotar/revocar la private key comprometida
+## 1. CRÍTICO Y URGENTE: Rotar/revocar la private key comprometida
 
 El archivo `service-account.json` (raíz del repo) fue **commiteado al historial de git** y contiene la **private key completa** de una cuenta de servicio de Firebase Admin SDK del proyecto `finance-app-abdf9`. Como existe un remoto en GitHub, **debes asumir que la clave ya está expuesta públicamente** (incluso si el repo es privado: forks, clones, caches y logs de CI pueden retenerla).
 
@@ -33,7 +33,7 @@ Quitarla del tracking **NO** invalida la clave. La clave sigue siendo válida ha
 2. Ve a **IAM & Admin > Service Accounts**.
 3. Busca la cuenta `firebase-adminsdk-...@finance-app-abdf9.iam.gserviceaccount.com` (el `client_email` que aparece dentro de `service-account.json`).
 4. Abre la cuenta y ve a la pestaña **Keys**.
-5. Identifica la key cuyo `private_key_id` coincide con el del JSON comprometido. **Bórrala (Delete)** — esto la revoca inmediatamente.
+5. Identifica la key cuyo `private_key_id` coincide con el del JSON comprometido. **Bórrala (Delete)**: esto la revoca inmediatamente.
 6. Pulsa **Add Key > Create new key > JSON** para generar una clave nueva.
 7. Guarda el nuevo JSON **fuera del repo** (o en la raíz, ya cubierto por `.gitignore`) y actualiza tu configuración local/servidor.
 8. Revisa los **logs de auditoría** del proyecto (Logging > Logs Explorer) por uso sospechoso de la clave vieja entre la fecha del primer commit y hoy.
@@ -48,7 +48,7 @@ Quitar el archivo del tracking (ya hecho, ver sección 4) **no lo borra del hist
 
 > **ADVERTENCIA:** Reescribir el historial cambia todos los SHA de los commits afectados. Como **hay un remoto (`origin` en GitHub)**, tras la reescritura necesitarás un **`git push --force`** y todos los colaboradores deberán re-clonar o resetear sus copias. Coordina antes de hacerlo. Haz un backup del repo (`cp -r` o un clon espejo) antes de empezar.
 
-### Opción A — `git filter-repo` (recomendada)
+### Opción A: `git filter-repo` (recomendada)
 
 Instalación: `pip install git-filter-repo` (o `brew install git-filter-repo`).
 
@@ -70,7 +70,7 @@ git push origin --force --all
 git push origin --force --tags
 ```
 
-### Opción B — BFG Repo-Cleaner (alternativa)
+### Opción B: BFG Repo-Cleaner (alternativa)
 
 ```bash
 # Requiere Java. Descarga bfg.jar de https://rtyley.github.io/bfg-repo-cleaner/
@@ -131,7 +131,7 @@ git commit -m "chore(security): dejar de trackear secretos y artefactos; reforza
 
 ## Checklist de cierre
 
-- [~] Revocar la private key vieja en GCP IAM — **descartado por decisión del propietario** (repo privado, clave nunca publicada). Reactivar si el contexto cambia.
+- [~] Revocar la private key vieja en GCP IAM: **descartado por decisión del propietario** (repo privado, clave nunca publicada). Reactivar si el contexto cambia.
 - [x] Commitear los cambios de untrack (sección 4).
 - [x] Backup del repo y purga del historial con `filter-repo` + `push --force-with-lease` (sección 2).
 - [ ] Restringir la API key de `google-services.json` por SHA-1 + `mx.budget` (sección 3).

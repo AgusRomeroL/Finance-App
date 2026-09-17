@@ -19,7 +19,7 @@ APK="app/build/outputs/apk/debug/app-debug.apk"
 PKG="mx.budget"
 
 [ -x "$ADB" ] || { echo "✗ No encuentro adb en $ADB"; exit 1; }
-[ -f "$APK" ] || { echo "✗ No existe $APK — corre primero: ./gradlew.bat :app:assembleDebug"; exit 1; }
+[ -f "$APK" ] || { echo "✗ No existe $APK; corre primero: ./gradlew.bat :app:assembleDebug"; exit 1; }
 
 # El primer device cuyo serial NO empiece con "emulator-" = el teléfono físico.
 SERIAL="$("$ADB" devices | awk 'NR>1 && $2=="device" && $1 !~ /^emulator-/ {print $1; exit}')"
@@ -44,9 +44,9 @@ echo "→ Lanzando $PKG…"
 cat <<'NOTE'
 
 ──────────────────────────────────────────────────────────────────────────────
- Capa 3 (Gemini Nano) — qué esperar en el Pixel 9:
+ Capa 3 (Gemini Nano): qué esperar en el Pixel 9:
    • En el PRIMER uso, AICore puede estar DESCARGANDO el modelo (necesita Wi-Fi).
-     Mientras tanto verás "fallback SQL" — es lo correcto. Reabre la app un par
+     Mientras tanto verás "fallback SQL"; es lo correcto. Reabre la app un par
      de veces en unos minutos.
    • Para disparar una sugerencia proactiva: necesitas que el día/hora actual
      coincida con un patrón histórico (p. ej. el hogar suele registrar algo los

@@ -36,7 +36,7 @@
 
 ### 1.2 Principios M3 Expressive aplicados
 
-- **Emphasized motion [OBLIGATORIO — existentes y futuras]**: animaciones *spring-based* (resortes espaciales) de Material Expressive son el default para **todo** cambio de estado e interacción: aparición/descarte, selección, expansión/compactación, transiciones de lista, navegación, sheets. Nada de saltos instantáneos ni `tween` lineales (reservar `tween` solo para fades sutiles). Specs de referencia: `dampingRatio ≈ 0.8`, `stiffness ≈ 380` (`Spring.StiffnessMediumLow`/`Medium`). **Este principio aplica retroactivamente**: cualquier UI ya construida que NO tenga animación debe ganarla conforme se toque, no solo las features nuevas. Implementación de referencia ya en código: el carrusel de sugerencias (`SmartSuggestionsCarousel`, `DashboardScreen.kt`) compacta las tarjetas a "cuñas" con `updateTransition` + `spring`. Preferir `animate*AsState` / `updateTransition` / `AnimatedContent` / `AnimatedVisibility`. Todas las transiciones de panel deben correr a ≥ 120 Hz en el Fold (pantalla interna LTPO 120 Hz). Nota de toolchain: hoy el tema usa `MaterialTheme` estable (M3 1.3.1), no `MaterialExpressiveTheme` (M3 1.4/1.5) — lo "expressive" se logra con los specs de animación.
+- **Emphasized motion [OBLIGATORIO: existentes y futuras]**: animaciones *spring-based* (resortes espaciales) de Material Expressive son el default para **todo** cambio de estado e interacción: aparición/descarte, selección, expansión/compactación, transiciones de lista, navegación, sheets. Nada de saltos instantáneos ni `tween` lineales (reservar `tween` solo para fades sutiles). Specs de referencia: `dampingRatio ≈ 0.8`, `stiffness ≈ 380` (`Spring.StiffnessMediumLow`/`Medium`). **Este principio aplica retroactivamente**: cualquier UI ya construida que NO tenga animación debe ganarla conforme se toque, no solo las features nuevas. Implementación de referencia ya en código: el carrusel de sugerencias (`SmartSuggestionsCarousel`, `DashboardScreen.kt`) compacta las tarjetas a "cuñas" con `updateTransition` + `spring`. Preferir `animate*AsState` / `updateTransition` / `AnimatedContent` / `AnimatedVisibility`. Todas las transiciones de panel deben correr a ≥ 120 Hz en el Fold (pantalla interna LTPO 120 Hz). Nota de toolchain: hoy el tema usa `MaterialTheme` estable (M3 1.3.1), no `MaterialExpressiveTheme` (M3 1.4/1.5): lo "expressive" se logra con los specs de animación.
 - **Shape expressivity**: corners de 28 dp para FAB, 16 dp para cards, morphing de shape entre estados (ver `MaterialShapes.Cookie12`, `MaterialShapes.Clover4Leaf` de M3E).
 - **Dynamic color v2**: extracción de paleta desde *home screen wallpaper* del usuario y aplicación de tonal palette con seed `#006D3D` (verde-contable) como fallback.
 - **Typography scale expresiva**: `displayLargeEmphasized` (57 sp, peso 700) para KPIs principales, `bodyMediumEmphasized` (14 sp, peso 500) para etiquetas de categoría.
@@ -64,7 +64,7 @@
                                            └──────────────┘
 ```
 
-El `Core Domain` se compila como módulo Kotlin Multiplatform (targets: `androidTarget`, `wasmJs`) y se consume desde los tres frontends. La **lógica determinista de atribución y recurrencia vive en este módulo compartido** — esto es crítico: garantiza que la misma entrada produce el mismo output en todas las superficies sin requerir sincronización de modelos entrenados.
+El `Core Domain` se compila como módulo Kotlin Multiplatform (targets: `androidTarget`, `wasmJs`) y se consume desde los tres frontends. La **lógica determinista de atribución y recurrencia vive en este módulo compartido**; esto es crítico: garantiza que la misma entrada produce el mismo output en todas las superficies sin requerir sincronización de modelos entrenados.
 
 ### 1.4 Contrato de latencia percibida
 
@@ -91,8 +91,8 @@ El `Core Domain` se compila como módulo Kotlin Multiplatform (targets: `android
 | Celdas `E4/E5` (sueldos) | Card `IncomeCard` con `IncomeSource[]` editables inline | Fold, Web |
 | Celda `E10` (presupuesto total) | Chip `BudgetChip` en header, color `tertiary` | Todas |
 | Celda `K62` (gasto real) | Chip `ActualChip`, color dinámico según varianza | Todas |
-| Celda `K66` (diferencia) | `VarianceIndicator` — badge con ▲/▼ y valor absoluto | Todas |
-| Filas 12-60 (tablas categóricas) | `CategorySectionList` — cada categoría es un `ExpandableCard` | Fold (accordion), Fold interno (grid 2×5) |
+| Celda `K66` (diferencia) | `VarianceIndicator`: badge con ▲/▼ y valor absoluto | Todas |
+| Filas 12-60 (tablas categóricas) | `CategorySectionList`: cada categoría es un `ExpandableCard` | Fold (accordion), Fold interno (grid 2×5) |
 | Columnas N-U (conciliación) | Pantalla `WalletScreen` dedicada | Fold, Web |
 | Filas 90-127 (histórico) | Pantalla `HistoryScreen` con `LineChart` | Todas |
 
@@ -130,7 +130,7 @@ Reglas:
 - `CLOSING_REVIEW`: pantalla de validación que muestra: (a) gastos `PLANNED` no ejecutados, (b) varianza global, (c) snapshot de saldos por wallet. Usuario decide si los planned se descartan, se reprograman o se postean manualmente.
 - `CLOSED`: entidad inmutable. Todo `Expense` con `quincena_id = X` queda bloqueado contra updates salvo por `reconciled_at`.
 
-### 2.3 Ciclo quincenal — timeline de eventos del sistema
+### 2.3 Ciclo quincenal: timeline de eventos del sistema
 
 ```
 Día −3 (anterior a start_date)
@@ -307,7 +307,7 @@ Columnas visibles son responsivas: en Fold plegado muestra `concepto | monto`, e
 
 Meta medible: **desde que el gasto ocurre hasta que queda registrado ≤ 5 segundos** en el 80% de los casos. El flujo ideal requiere ≤ 3 acciones físicas.
 
-### 3.2 Superficies de captura — jerarquía por latencia
+### 3.2 Superficies de captura: jerarquía por latencia
 
 | Ranking | Superficie | Trigger | Latencia típica |
 |---|---|---|---|
@@ -321,11 +321,11 @@ Meta medible: **desde que el gasto ocurre hasta que queda registrado ≤ 5 segun
 
 Cada superficie escribe en la misma `ExpenseDraftRepository` y la confirmación final materializa un `Expense` transaccional.
 
-### 3.3 Quick Tap — especificación técnica
+### 3.3 Quick Tap: especificación técnica
 
 **Quick Tap** es una feature nativa de Pixel (Android 12+) que detecta dos golpes consecutivos en el sensor trasero. Expone acciones limitadas a nivel de OS (screenshot, linterna, play/pause, Assistant, app específica). **No ofrece API pública para invocar un overlay in-app directamente**, pero se puede construir la experiencia combinando tres componentes:
 
-#### Componente A — Shortcut disparable por Quick Tap
+#### Componente A: Shortcut disparable por Quick Tap
 
 ```xml
 <!-- AndroidManifest.xml -->
@@ -367,7 +367,7 @@ Cada superficie escribe en la misma `ExpenseDraftRepository` y la confirmación 
 
 El usuario configura una sola vez: **Settings → System → Gestures → Quick Tap → "Open app" → Budget**. A partir de ahí, el doble golpe lanza `QuickCaptureActivity`.
 
-#### Componente B — Overlay transparente tipo "floating panel"
+#### Componente B: Overlay transparente tipo "floating panel"
 
 `QuickCaptureActivity` no es una pantalla normal. Es una activity con `Theme.Transparent` que, al arrancar, solicita al `OverlayService` (foreground service) pintar una **burbuja semitransparente** encima del contenido actual usando `WindowManager.addView()`:
 
@@ -400,7 +400,7 @@ class OverlayService : Service() {
 
 El `QuickCapturePanel` es un composable que se muestra con animación `slideInVertically(spring())` + `fadeIn()`, imita visualmente una **notificación activa expandida** siguiendo los patrones de Notifications M3 Expressive (fondo `surfaceContainerHighest`, elevation 2, corner 28 dp).
 
-#### Componente C — Formulario mínimo viable de 4 campos
+#### Componente C: Formulario mínimo viable de 4 campos
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -426,18 +426,18 @@ Detalles:
 - **Enter** confirma y el overlay se cierra con `slideOutVertically(spring())`. El gasto se escribe en Room **en el mismo dispatcher** con `withContext(Dispatchers.IO)` usando una transacción. Tiempo total medido: 1.2–1.6 s.
 - Si el usuario no toca nada en 6 segundos, el overlay se desvanece automáticamente (el gesto pudo ser accidental).
 
-#### Componente D — Fallback para teléfonos sin Quick Tap
+#### Componente D: Fallback para teléfonos sin Quick Tap
 
 En dispositivos que no son Pixel (o con Quick Tap desactivado), la misma `QuickCaptureActivity` se invoca desde:
-- Tile de Quick Settings personalizado (`TileService` — requiere Android 7+, es ubicuo).
+- Tile de Quick Settings personalizado (`TileService`: requiere Android 7+, es ubicuo).
 - Widget de pantalla de inicio de 2×1 "Capturar gasto".
 - Ongoing notification permanente (si el usuario lo elige) con RemoteInput.
 
 ### 3.4 Permisos requeridos (tabla completa en Apéndice C)
 
-- `SYSTEM_ALERT_WINDOW` — para el overlay. Flujo onboarding: al primer lanzamiento se abre un `Activity` explicativo (por qué lo pedimos, imagen del overlay) y luego redirige a `Settings.ACTION_MANAGE_OVERLAY_PERMISSION`.
-- `POST_NOTIFICATIONS` — para la notificación del foreground service.
-- `FOREGROUND_SERVICE` y `FOREGROUND_SERVICE_SPECIAL_USE` — porque la captura rápida no encaja en tipos de *special use* estándar (se declara `specialUse` con justificación "Persistent expense capture overlay").
+- `SYSTEM_ALERT_WINDOW`: para el overlay. Flujo onboarding: al primer lanzamiento se abre un `Activity` explicativo (por qué lo pedimos, imagen del overlay) y luego redirige a `Settings.ACTION_MANAGE_OVERLAY_PERMISSION`.
+- `POST_NOTIFICATIONS`: para la notificación del foreground service.
+- `FOREGROUND_SERVICE` y `FOREGROUND_SERVICE_SPECIAL_USE`: porque la captura rápida no encaja en tipos de *special use* estándar (se declara `specialUse` con justificación "Persistent expense capture overlay").
 
 ### 3.5 Captura por intent/deep-link (compatibilidad con Tasker, Shortcuts, Assistant)
 
@@ -467,12 +467,12 @@ Metas hard: `P95(coldStart) < 600 ms` en Fold interno, `P99(persistDuration) < 1
 
 El Pixel Watch 3 soporta cuatro superficies de integración; la app las usa todas:
 
-1. **App completa** (Compose for Wear OS) — para registro detallado y revisión.
-2. **Tiles** (Protolayout) — swipe desde watch face para ver un panel curado.
-3. **Complications** — campos dentro de la esfera del reloj.
-4. **Ongoing Activity** — notificación persistente cuando la quincena está activa.
+1. **App completa** (Compose for Wear OS): para registro detallado y revisión.
+2. **Tiles** (Protolayout): swipe desde watch face para ver un panel curado.
+3. **Complications**: campos dentro de la esfera del reloj.
+4. **Ongoing Activity**: notificación persistente cuando la quincena está activa.
 
-### 4.2 Tiles nativos — catálogo
+### 4.2 Tiles nativos: catálogo
 
 Cada Tile se implementa como un `TileService` separado. El usuario elige cuáles activar desde la watch companion app.
 
@@ -664,7 +664,7 @@ ComplicationDataSourceUpdateRequester
     .requestUpdateAll()
 ```
 
-### 4.4 Ongoing Activity — presencia persistente
+### 4.4 Ongoing Activity: presencia persistente
 
 Mientras la quincena está `ACTIVE`, la app publica una `OngoingActivity` (Wear-specific) que aparece en watch face como *chip* y en CoF (Carousel of Faces). Ofrece:
 - Label dinámico (% ejecución).
@@ -685,7 +685,7 @@ val ongoing = OngoingActivity.Builder(context, NOTIF_ID, notificationBuilder)
 ongoing.apply(context)
 ```
 
-### 4.5 App completa en Wear — navegación
+### 4.5 App completa en Wear: navegación
 
 ```
 Navigation graph (Wear):
@@ -953,7 +953,7 @@ Las reglas viven en un asset de la app y pueden actualizarse remotamente con un 
 
 ### 5.5 Memorización con aprendizaje incremental determinista
 
-Cada vez que el usuario confirma un `Expense` — incluso si aceptó la sugerencia tal cual o la editó — el sistema actualiza `attribution_memory`:
+Cada vez que el usuario confirma un `Expense` (incluso si aceptó la sugerencia tal cual o la editó), el sistema actualiza `attribution_memory`:
 
 ```kotlin
 fun onExpenseConfirmed(expense: Expense, attributions: List<ExpenseAttribution>) {
@@ -1100,7 +1100,7 @@ En el inner display, la lista de módulos ocupa 360 dp (~22%) a la izquierda y e
 
 ### 6.3 Catálogo de módulos analíticos
 
-#### 6.3.1 Módulo A — **Flujo de capital** (Sankey diagram)
+#### 6.3.1 Módulo A: **Flujo de capital** (Sankey diagram)
 
 Visualiza origen → destino del dinero en la quincena o en un rango.
 
@@ -1143,11 +1143,11 @@ expense_agg AS (
 SELECT * FROM income_agg UNION ALL SELECT * FROM expense_agg;
 ```
 
-#### 6.3.2 Módulo B — **Gasto proporcional por miembro del hogar**
+#### 6.3.2 Módulo B: **Gasto proporcional por miembro del hogar**
 
 Responde "¿cuánto consume cada miembro?" con doble vista:
 
-**Vista 1 — Stacked bar horizontal por quincena**:
+**Vista 1 (Stacked bar horizontal por quincena)**:
 
 ```
 Q1 Ene │ ████████████░░░░░░░░░ $24,300  (Pau 28%, David 34%, Agus 18%, Santi 12%, Adultos 8%)
@@ -1156,7 +1156,7 @@ Q1 Feb │ ██████████░░░░░░░░░░░ $21,8
 ...
 ```
 
-**Vista 2 — Treemap por miembro y categoría**:
+**Vista 2 (Treemap por miembro y categoría)**:
 
 ```
 ┌─────────────────────────────────────┬─────────────┐
@@ -1174,7 +1174,7 @@ Q1 Feb │ ██████████░░░░░░░░░░░ $21,8
 └─────────────┴───────────────────────┴─────────────┘
 ```
 
-Query (fundamental — ya incluida en §5.2.2 del doc base):
+Query (fundamental, ya incluida en §5.2.2 del doc base):
 
 ```sql
 SELECT m.display_name AS miembro,
@@ -1203,11 +1203,11 @@ Benjamin      | $9,230         |  7.4%
 Compartido    | $36,600        | 29.4%
 ```
 
-#### 6.3.3 Módulo C — **Detección de pagos por intereses**
+#### 6.3.3 Módulo C: **Detección de pagos por intereses**
 
 Desglose mensual de intereses pagados. Componentes:
 
-**Panel C.1 — Intereses acumulados por wallet** (columna izquierda del dual-pane):
+**Panel C.1: Intereses acumulados por wallet** (columna izquierda del dual-pane):
 
 ```
 Intereses pagados últimos 12 meses
@@ -1222,12 +1222,12 @@ Total             $20,860
                   ═════════
 ```
 
-**Panel C.2 — Detalle del plan seleccionado** (columna derecha):
+**Panel C.2: Detalle del plan seleccionado** (columna derecha):
 
 Línea de tiempo con cada cuota, distinguiendo capital (verde) de interés (rojo):
 
 ```
-Préstamo Omar — 10 cuotas
+Préstamo Omar: 10 cuotas
 Tasa implícita: 22.4% anual
 
 Cuota 1  feb  ██ $5,500  → $4,475 capital · $1,025 interés
@@ -1256,11 +1256,11 @@ ORDER BY intereses DESC;
 
 **Alerta inline**: si los intereses representan > 10% del gasto mensual, se muestra un banner persistente con recomendación de prioridad ("Liquidar Préstamo Omar ahorraría $X de aquí a noviembre").
 
-#### 6.3.4 Módulo D — **Análisis de varianza histórica entre quincenas**
+#### 6.3.4 Módulo D: **Análisis de varianza histórica entre quincenas**
 
 Comparador estadístico de la quincena actual vs baseline histórica.
 
-**Panel superior — Overview numérico**:
+**Panel superior (Overview numérico)**:
 
 ```
                        Actual   Mediana 6Q   σ        Z-score    Status
@@ -1280,13 +1280,13 @@ Los umbrales visuales (`▲ ▼ ═`) se disparan con |z-score|:
 - `0.5 ≤ |z| < 1.5` → `▲/▼` (atención)
 - `|z| ≥ 1.5` → `▲▲/▼▼` (anomalía)
 
-**Panel inferior — Visualizaciones**:
+**Panel inferior (Visualizaciones)**:
 
-1. **Line chart con banda σ** (6 líneas, una por categoría top) — muestra trayectoria histórica con banda ±1σ sombreada. El punto actual resalta con glow si es outlier.
-2. **Waterfall chart de la varianza total** — descompone la diferencia `actual_total − baseline_total` en contribuciones por categoría.
-3. **Heatmap de varianza** (12 meses × 6 categorías top) — tonalidad rojo si sobregasto, verde si subgasto.
+1. **Line chart con banda σ** (6 líneas, una por categoría top): muestra trayectoria histórica con banda ±1σ sombreada. El punto actual resalta con glow si es outlier.
+2. **Waterfall chart de la varianza total**: descompone la diferencia `actual_total − baseline_total` en contribuciones por categoría.
+3. **Heatmap de varianza** (12 meses × 6 categorías top): tonalidad rojo si sobregasto, verde si subgasto.
 
-**Detector de outliers — método robusto (sin LLM)**:
+**Detector de outliers, método robusto (sin LLM)**:
 
 ```kotlin
 fun detectOutliers(history: List<QuincenaSnapshot>, current: QuincenaSnapshot): List<Outlier> {
@@ -1334,7 +1334,7 @@ fun forecastNextQuincena(history: List<QuincenaSnapshot>): QuincenaForecast {
 }
 ```
 
-#### 6.3.5 Módulo E — **Concentración de deuda y utilización de crédito**
+#### 6.3.5 Módulo E: **Concentración de deuda y utilización de crédito**
 
 Panel dual:
 - Izquierda: `DonutChart` de deuda total por wallet de crédito (absoluto).
@@ -1349,7 +1349,7 @@ val amortizationMonths = currentBalance / monthlyAveragePayment
 // Si monthlyAveragePayment ≤ mensual_intereses_esperados → INFINITY (red alert)
 ```
 
-#### 6.3.6 Módulo F — **Timeline quincenal del household**
+#### 6.3.6 Módulo F: **Timeline quincenal del household**
 
 Vista cronológica completa del household: cada quincena es un card con thumbnail de KPIs, permitiendo saltar a la vista detalle.
 

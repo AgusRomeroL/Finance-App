@@ -66,7 +66,7 @@ Valores Material 3 (rejilla responsiva) por breakpoint:
 | Media | 600-839 dp | 8 (algunas fuentes citan 12) | 24-32 dp | 24 dp |
 | Expandida | ≥840 dp | 12 | 24 dp+ (escala con ancho) | 24 dp |
 
-El sistema de espaciado opera en incrementos de **4 dp**; 16 dp es el padding base y **24 dp** el espaciado recomendado entre componentes/paneles. (Fuente: m3.material.io *grids & spacing* y codelab *adaptive material guidance*; los valores exactos no fueron extraíbles de m3.material.io por render JS, confirmados vía búsqueda y documentación de Android — [parcialmente verificado].)
+El sistema de espaciado opera en incrementos de **4 dp**; 16 dp es el padding base y **24 dp** el espaciado recomendado entre componentes/paneles. (Fuente: m3.material.io *grids & spacing* y codelab *adaptive material guidance*; los valores exactos no fueron extraíbles de m3.material.io por render JS, confirmados vía búsqueda y documentación de Android, [parcialmente verificado].)
 
 **Para el lienzo casi cuadrado del Fold (~884x1104 dp [Inferencia] a densidad ~2.0):**
 - Usa **12 columnas, margen 24 dp, gutter 24 dp** como rejilla del Bento.
@@ -97,7 +97,7 @@ El sistema de espaciado opera en incrementos de **4 dp**; 16 dp es el padding ba
 Cambios respecto a M3 base (Google I/O 2025; 46 estudios, >18,000 participantes):
 - **Movimiento**: sistema de física de resortes; `MotionScheme` configurable dentro de `MaterialExpressiveTheme`/`MaterialTheme` (graduado a estable en 1.5.0-alpha15).
 - **Formas**: 35 formas nuevas + *shape morphing* en la librería y en Compose; `ButtonGroup` morfea al tocar.
-- **Color**: roles más diferenciados (primario/secundario/terciario), separación clara — alineado con la jerarquía de capas tonales del Ledger.
+- **Color**: roles más diferenciados (primario/secundario/terciario), separación clara, alineado con la jerarquía de capas tonales del Ledger.
 - **Tipografía y énfasis**: estilos con mayor peso/tamaño para titulares y acciones; Roboto Flex variable encaja directamente.
 - **Componentes nuevos**: `FloatingToolbar` (h/v, con `FloatingToolbarScrollBehavior`), `ButtonGroup` (conectado), `SplitButton`, FAB Menu, `LoadingIndicator`/`WavyProgressIndicator`, `WideNavigationRail`.
 
@@ -114,9 +114,9 @@ Cambios respecto a M3 base (Google I/O 2025; 46 estudios, >18,000 participantes)
 
 **Tipos M3:** *standard/persistente* (`BottomSheetScaffold`, coexiste con la UI, útil para contenido secundario siempre visible) y *modal* (`ModalBottomSheet`, bloquea con scrim, alternativa a menús/diálogos con más espacio). Estados (`SheetValue`): Hidden, PartiallyExpanded, Expanded; `skipPartiallyExpanded` para abrir directo a expandido; `rememberModalBottomSheetState()`; drag handle por defecto.
 
-**Teclado / IME (corrección 2024-2025):** se arregló que `ModalBottomSheet` aplicara `imePadding` incondicionalmente — ahora se controla vía `contentWindowInsets`/`WindowInsets`; la prioridad del callback de back se ajustó para que el IME se cierre primero. Para la captura, gestiona el inset del teclado para que el campo activo (monto) quede visible y el sheet no salte.
+**Teclado / IME (corrección 2024-2025):** se arregló que `ModalBottomSheet` aplicara `imePadding` incondicionalmente; ahora se controla vía `contentWindowInsets`/`WindowInsets`; la prioridad del callback de back se ajustó para que el IME se cierre primero. Para la captura, gestiona el inset del teclado para que el campo activo (monto) quede visible y el sheet no salte.
 
-**Captura rápida — recomendaciones:**
+**Captura rápida (recomendaciones):**
 - `ModalBottomSheet` con `skipPartiallyExpanded = true` para ir directo al formulario completo; drag handle visible.
 - Minimiza pasos: monto con teclado numérico in-sheet enfocado al abrir; concepto, fuente de pago, categoría (acordeón inline + búsqueda en el mismo sheet, **decisión tomada**) y atribución por miembro como chips/`ButtonGroup`.
 - Maneja `imePadding`/`contentWindowInsets` para que el campo enfocado nunca quede tras el teclado.
@@ -203,7 +203,7 @@ Blog Android Developers:
 - Prepare for resizability/orientation changes in Android 17 (2026-02): https://android-developers.googleblog.com/2026/02/prepare-your-app-for-resizability-and.html
 - Scaling Across Screens with Compose @ I/O '24: https://android-developers.googleblog.com/2024/05/scaling-across-screens-with-compose-google-io-24.html
 
-Material Design 3 (m3.material.io — render JS, citado por referencia):
+Material Design 3 (m3.material.io, render JS, citado por referencia):
 - Canonical layouts: https://m3.material.io/foundations/adaptive-design/canonical-layouts
 - Bottom sheets guidelines: https://m3.material.io/components/bottom-sheets/guidelines
 - Navigation rail guidelines: https://m3.material.io/components/navigation-rail/guidelines
@@ -227,7 +227,7 @@ Dispositivo:
 - Pixel 9 Pro Fold specs (Google Store): https://store.google.com/product/pixel_9_pro_fold_specs
 
 Análisis de industria (secundarias):
-- Dylan Roussel — M3 Compose Adaptive: https://evowizz.dev/blog/first-look-m3-compose-adaptive
-- Ian G. Clifton — New APIs for adaptive layouts: https://medium.com/androiddevelopers/new-apis-for-adaptive-layouts-in-jetpack-compose-f27cace48bcd
-- ProAndroidDev — Material 3 Expressive: https://proandroiddev.com/material-3-expressive-design-a-new-era-9ea77959a262
-- Composables — ModalWideNavigationRail / WideNavigationRail: https://composables.com/material3/modalwidenavigationrail
+- Dylan Roussel, M3 Compose Adaptive: https://evowizz.dev/blog/first-look-m3-compose-adaptive
+- Ian G. Clifton, New APIs for adaptive layouts: https://medium.com/androiddevelopers/new-apis-for-adaptive-layouts-in-jetpack-compose-f27cace48bcd
+- ProAndroidDev, Material 3 Expressive: https://proandroiddev.com/material-3-expressive-design-a-new-era-9ea77959a262
+- Composables, ModalWideNavigationRail / WideNavigationRail: https://composables.com/material3/modalwidenavigationrail

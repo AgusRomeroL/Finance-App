@@ -7,9 +7,9 @@
 #  1. DIFF: falla si el rango de commits que se esta integrando INTRODUCE una
 #     linea con U+2014 en cualquier archivo. Es lo unico que impide que vuelvan
 #     mientras la documentacion historica sigue teniendo las suyas.
-#  2. ARBOL: falla si alguna ruta de las que ya estan limpias (el codigo de la
-#     app, del reloj, la web, las reglas y los scripts de CI) contiene una sola
-#     raya larga en el estado actual, sin importar de donde vino.
+#  2. ARBOL: falla si cualquier archivo versionado contiene una sola raya larga
+#     en el estado actual, sin importar de donde vino. Desde el 2026-09-17 el
+#     repositorio entero esta en cero, documentacion y skills incluidas.
 #
 # Uso:
 #   bash scripts/ci/check_em_dash.sh <base-sha> <head-sha>    # diff + arbol
@@ -21,18 +21,6 @@ cd "$ROOT"
 
 EM=$(printf '\342\200\224')
 status=0
-
-# Rutas que deben seguir limpias. Ampliar conforme avance la limpieza de la
-# documentacion (Fase 7 dejo el barrido de docs para despues).
-CLEAN_PATHS=(
-  "app/src" "app/build.gradle.kts" "app/schemas"
-  "wear/src" "wear/build.gradle.kts"
-  "wearcore"
-  "web/src" "web/package.json" "web/vite.config.ts" "web/vitest.config.ts"
-  "scripts/rules" "scripts/ci" "scripts/check_seed_integrity.sh"
-  ".github"
-  "firestore.rules" "build.gradle.kts" "settings.gradle.kts" "gradle.properties"
-)
 
 if [ "$#" -ge 2 ]; then
   base="$1"; head="$2"
@@ -52,17 +40,16 @@ if [ "$#" -ge 2 ]; then
   fi
 fi
 
-existing=()
-for p in "${CLEAN_PATHS[@]}"; do
-  [ -e "$p" ] && existing+=("$p")
-done
-hits=$(git grep -n -I -F "$EM" -- "${existing[@]}" || true)
+# Todo el arbol versionado, sin excepciones: el 2026-09-17 se limpiaron tambien
+# la documentacion, las specs y las skills vendorizadas (decision de Agustin).
+hits=$(git grep -n -I -F "$EM" -- . ':(exclude)*.db' || true)
 if [ -n "$hits" ]; then
-  echo "FALLA: hay rayas largas (U+2014) en rutas que deben estar limpias:" >&2
-  printf '%s\n' "$hits" | head -60 >&2
+  echo "FALLA: hay rayas largas (U+2014) en el arbol versionado:" >&2
+  printf '%s
+' "$hits" | head -60 >&2
   status=1
 else
-  echo "OK: cero U+2014 en ${#existing[@]} rutas limpias."
+  echo "OK: cero U+2014 en todo el arbol versionado."
 fi
 
 exit $status
