@@ -48,7 +48,7 @@ Lo que sí falta, y no se detecta con un volcado:
 - **Sin región viva en el guardado.** Al guardar un gasto, el estado cambia sin que nada aparezca escrito. Ahora el botón es una región viva educada que anuncia "Guardando el movimiento". Estado: **resuelto**.
 - **Encabezados sin `heading()`.** Las cabeceras de sección (`AJUSTES`, `EXPORTAR Y RESPALDAR`, `RECORDATORIOS`) no estaban marcadas, así que la navegación por encabezados de TalkBack no saltaba entre ellas. Con el rediseño de Perfil, la cabecera de cada grupo es un encabezado, dice si está abierta o cerrada (`stateDescription`) y anuncia qué pasa al activarla; los rótulos de tarjeta también van marcados. Estado: **resuelto**.
 
-Pendiente de hardware: la pasada con TalkBack y Accessibility Scanner en el Pixel 7, que es lo único que mide contraste real y orden de foco.
+La pasada en hardware con TalkBack y Accessibility Scanner se hizo el 2026-09-17 en el Pixel 7 y desmintió una línea de esta sección: sí había clicables sin etiqueta, dos, y los dos eran botones extendidos de Material (sección 10).
 
 ## 4. Recorrido: capturar un gasto
 
@@ -103,17 +103,17 @@ Medido en FinanceFold, abriendo el panel con el enlace `mx.budget://capture`:
 | Proceso vivo | 4 a 19 ms |
 | Proceso muerto | 2.2 a 2.4 s |
 
-**Hallazgo 7bis.1 (abierto, severidad media).** Con el proceso vivo, el gesto cumple de sobra la meta de la especificación (P95 por debajo de 600 ms). Con el proceso muerto no se acerca: de esos 2.3 s, el punto de entrada solo usa 8 ms; el resto es el arranque de la aplicación, que resuelve el hogar, la identidad de sesión, el color dinámico y la bandera del tutorial con lecturas bloqueantes antes de dejar dibujar nada. Aligerar ese arranque es lo único que puede cerrar la brecha, y toca a toda la app, no a Quick Tap.
+**Hallazgo 7bis.1 (medido en hardware el 2026-09-17; el diagnóstico original era incompleto).** Con el proceso vivo, el gesto cumple de sobra la meta de la especificación (P95 por debajo de 600 ms). Con el proceso muerto, la cifra de 2.3 s es del emulador x86 con GPU por software: **en el Pixel 7 real el mismo camino tarda 0.54 s** del arranque del proceso al panel. El detalle está en la sección 11. Las lecturas bloqueantes del arranque, que este hallazgo señalaba como culpables, son 0.19 s en el Pixel 7 (1.1 s en el emulador); lo que domina es lo que ocurre antes de `onCreate` (carga del dex de un APK de depuración de 211 MB e inicializadores de bibliotecas) y el primer cuadro de la interfaz. La única parte que se pudo aligerar sin tocar a toda la app ya está aplicada: las dos lecturas frías (preferencias y apertura de la base) corren a la par y `onCreate` bajó de 190 a 125 ms en el Pixel 7 y de 1.1 s a 0.6 s en el emulador. El resto se plantea a Agustín en la sección 11 porque cambia el cableado de toda la app.
 
 **Resuelto durante la implementación.** El panel esperaba a que terminara la consulta del historial antes de existir, lo que metía segundos entre el gesto y el primer frame; ahora aparece vacío y se rellena. Y no se podía guardar cuando la cuenta no tenía dueño y la sesión era anónima, porque el gasto se quedaba sin pagador: el panel elige el primer adulto que paga, y si aún falta algo lo dice en vez de no responder.
 
 ## 8. Recorridos pendientes de auditar
 
-Estos tres necesitan datos o dispositivos que esta sesión no tiene:
+Estado al 2026-09-17, en hardware (Pixel 7):
 
-- **Confirmar un pago planeado desde la notificación.** Exige que el trabajo periódico dispare, o forzarlo con WorkManager.
-- **Importar el estado del mes.** Necesita la clave de NVIDIA y un PDF real de estado de cuenta.
-- **Proponer desde la web.** Necesita una sesión de colaborador con rol en la nube; el emulador está en sesión anónima sin rol y todo su push falla con permiso denegado.
+- **Confirmar un pago planeado desde la notificación.** **Auditado y funciona.** El recordatorio llegó con la cadencia natural del trabajo periódico (cada 15 minutos), con sus tres acciones; "Confirmar" desde el panel de notificaciones dejó el gasto en `POSTED` y retiró la notificación (captura `capturas/2026-09-17_pixel7_notificacion_confirmar.png`). Tres cosas que costaron encontrar y conviene saber: (1) forzar el trabajo con `cmd jobscheduler run -f` **no sirve** para un trabajo periódico de WorkManager, porque el propio WorkManager se niega a ejecutarlo antes de que venza su periodo y lo vuelve a programar en silencio; hay que esperar el ciclo; (2) el aparato tenía el permiso de notificaciones denegado y el trabajo marcó como "avisados" los pagos que no llegó a mostrar, así que después de conceder el permiso no volvieron a salir: para probar hubo que crear un pago planeado nuevo; (3) tocar el **cuerpo** del grupo de notificaciones abre la app y descarta las nueve de golpe, con sus acciones; hay que abrir el grupo con su chevrón. Ese último punto es comportamiento del sistema con el agrupado automático, no de la app, pero explica por qué un recordatorio puede "desaparecer" sin haberlo confirmado.
+- **Importar el estado del mes.** **Bloqueado por diseño de esta sesión.** El Pixel 7 no tiene la clave de NVIDIA en Perfil y la app no la lee de ningún archivo: la clave la tiene que pegar Agustín en Perfil, en el Pixel 7, y después el recorrido se puede auditar con cualquiera de los PDF reales de `Estados de Cuenta/BBVA/`. No se hizo porque pegar una clave en la interfaz de un aparato es una acción que esta sesión no ejecuta.
+- **Proponer desde la web.** **Bloqueado en el inicio de sesión.** La web solo entra con Google, y el selector de cuentas se abre en una ventana emergente que la automatización de esta sesión no alcanza. Lo que hace falta es que Agustín elija en esa ventana la cuenta `backuponly.arl.1@gmail.com`, que ya tiene rol `MEMBER` en el grupo de pruebas `hh_1ae9cf5c` ("Test"), y a partir de ahí la propuesta se puede seguir hasta `pending_capture` en el Pixel 7. No hace falta tocar el hogar de producción.
 
 ## 9. Lo que se lleva la sub-fase 6b
 
@@ -132,6 +132,119 @@ Hechos con la opción de diseño elegida (2026-09-16):
 4. Cierre de quincena: cabecera fija y barra inferior con el resumen (hallazgo 6.1).
 5. Quick Tap, que no arregla una fricción sino que añade la entrada más rápida.
 
-Queda abierto el hallazgo 7bis.1 (arranque en frío de 2.3 s cuando el proceso está muerto), que
-toca al arranque de toda la app y no a Quick Tap, y la pasada con TalkBack y Accessibility Scanner
-en hardware, que es lo único que mide contraste real y orden de foco.
+El hallazgo 7bis.1 quedó medido en hardware y acotado (sección 11), y la pasada con TalkBack y
+Accessibility Scanner en hardware está hecha (sección 10).
+
+## 10. Pasada de accesibilidad en hardware (Pixel 7, 2026-09-17)
+
+Aparato: Pixel 7 (`34191FDH20075M`), Android 17, color dinámico y modo oscuro, tipografía 1.0 y
+después 1.3 con negrita (la de Norma). Herramientas: Accessibility Scanner instalado desde Play
+Store y activado como servicio; TalkBack 17. Cada pantalla se escaneó con una instantánea del
+Scanner y se leyó su lista de sugerencias por volcado de accesibilidad. Los volcados y capturas
+de la sesión no se versionan; lo que importa es la tabla.
+
+### 10.1 Resultado por pantalla
+
+Sugerencias del Scanner antes y después de las correcciones de esta pasada, a tipografía 1.0:
+
+| Pantalla | Antes | Después | Lo que queda y por qué |
+|---|---|---|---|
+| Inicio | 8 (con el carrusel de sugerencias a la vista) | 2 | Los dos iconos del pill de navegación (36 dp de ancho, ver 10.3). |
+| Calendario | 35 | 6 | Cuatro "misma descripción" entre las dos tarjetas de pago que tienen idéntico subtítulo, fecha e importe (son datos iguales, no un defecto) y los dos iconos del pill. |
+| Cuentas | 5 | 4 | "Deuda de tarjetas" aparece dos veces (KPI y encabezado de sección, ambos correctos), la tarjeta que asoma recortada bajo la barra inferior y los dos iconos del pill. |
+| Analíticas | 3 | 3 | Solo los tres iconos del pill. |
+| Perfil | 0 | 0 | |
+| Hoja de captura | 4 | 0 | |
+| Hoja del asistente | 3 | 1 | El texto de la pantalla de fondo bajo el velo de la hoja, que el Scanner lee por OCR y no está en el árbol porque es una hoja modal: correcto. |
+
+Con tipografía 1.3 y negrita: Perfil 0, hoja de captura 4 (las cuatro teclas de la última fila del
+teclado, recortadas por la barra inferior y por eso "sin etiqueta"; la hoja se desplaza y el
+teclado entero se ve al tocar el importe), Calendario 10 (los cuatro de datos iguales, los dos
+del pill y cuatro recortes de la tarjeta que queda bajo la barra), Cuentas 4 (los mismos tres
+más el botón extendido, corregido después de ese escaneo). **Inicio no se pudo escanear a 1.3:**
+el Scanner falla con "no se pudo completar" dos veces seguidas; la sospecha es que el árbol no
+llega a quedarse quieto por las animaciones de entrada del panel. Es una limitación de la medida,
+no un hallazgo.
+
+### 10.2 Lo que se corrigió (todo en esta pasada)
+
+| Hallazgo | Dónde | Corrección |
+|---|---|---|
+| **Los dos botones extendidos ("Nueva cuenta", "Preguntar") no exponen su texto**: para TalkBack eran botones sin nombre. Es un comportamiento del `ExtendedFloatingActionButton` de Material 3 1.4.0, no de la app; el volcado de accesibilidad lo confirma (el nodo botón existe, sin texto ni descripción). Esto desmiente la afirmación de la sección 3 de que no había clicables sin etiqueta: el volcado de la 6a no llegó a esos nodos. | `ui/wallets/WalletsScreen.kt`, `ui/analytics/AnalyticsScreen.kt` | `contentDescription` explícita en los dos. |
+| El asa de las hojas modales era un objetivo táctil de 32 dp (la de fábrica) o 40 dp (la propia de la captura) de ancho. | `ui/common/SheetDragHandle.kt` (nuevo), usado por la captura y el asistente | Asa de 48 por 48 dp con la barra visible de 40 por 4 dentro, y nombre en `strings.xml` (`cd_sheet_drag_handle`). |
+| Las 42 celdas del calendario compartían descripción (solo el punto de "hay pagos" la tenía) y las dos "M" de la cabecera eran indistinguibles. | `ui/calendar/MonthCalendar.kt` | Cada día se anuncia como "17 de septiembre, hoy, con pagos planeados"; la cabecera dice "lunes, martes, miércoles..." mientras muestra la letra. |
+| Los números de los días fuera del mes no llegaban al contraste mínimo (alfa 0.35 sobre el fondo oscuro). | `ui/calendar/MonthCalendar.kt` | Alfa 0.8 (a 0.6 el Scanner seguía marcándolos). |
+| Los botones Confirmar, Editar y Posponer de cada tarjeta del calendario sonaban idénticos de una tarjeta a otra. | `ui/calendar/CalendarScreen.kt` | Cada uno dice a qué pago pertenece ("Confirmar Teléfono David") y tiene rol de botón. |
+| El campo de pregunta del asistente no tenía nombre: su texto de ayuda se pinta aparte. | `ui/analytics/AiChatPanel.kt` | `contentDescription` en el campo. |
+| En el carrusel de sugerencias, el motivo iba al 78 % de opacidad (3.5:1) y "Ahora no" quedaba en 3.8:1 porque el fondo del botón se aclaraba con el color del texto. | `ui/dashboard/DashboardScreen.kt` | Motivo a opacidad completa; el botón secundario oscurece el fondo en vez de aclararlo. Medido con los píxeles de la captura antes de cambiar. |
+| Registrar y Ahora no sonaban igual en todas las tarjetas del carrusel; el icono de destello repetía "Sugerencia" que ya está escrito al lado. | `ui/dashboard/DashboardScreen.kt` | Los botones dicen el concepto ("Registrar Hipoteca"); el icono es decorativo. |
+| El segmentado Neto/Bruto medía 32 dp de alto. | `ui/dashboard/DashboardScreen.kt` | 48 dp por segmento, con rol de botón. |
+| La cifra héroe se anunciaba en dos nodos: "signo de pesos" y luego el número. | `ui/dashboard/DashboardScreen.kt` | Un solo nodo que dice "$52,727". |
+| Los items del pill de navegación medían 42 dp de alto. | `ui/navigation/FloatingNavBar.kt` | 48 dp de alto sin cambiar la altura de la barra. |
+| A tipografía 1.3 con negrita en ancho compacto (el Fold plegado, un teléfono), la etiqueta "NUEVO MOVIMIENTO" de la hoja de captura se partía en "MOVIMIENT / O". | `ui/capture/CaptureBottomSheet.kt` | La etiqueta nunca parte una palabra y en ancho compacto dice "NUEVO". |
+
+### 10.3 Lo que se acepta, con el motivo
+
+- **Los tres iconos no seleccionados del pill de navegación miden 36 dp de ancho** (48 de alto). En un teléfono de 411 dp no caben cuatro items de 48 dp, la etiqueta del seleccionado, el micrófono y el "+": ensancharlos obliga a recortar la etiqueta ("Analí..."), que es peor para todo el mundo. En el Fold desplegado la barra es un riel y no aplica. La alternativa real es mover el micrófono dentro de la hoja de captura para liberar 62 dp; es una decisión de diseño para Agustín, no una corrección.
+- **"Misma descripción" entre tarjetas con datos idénticos** (dos pagos de "Teléfono celular" del mismo día y el mismo importe) y entre el KPI y el encabezado "Deuda de tarjetas": el Scanner no distingue datos iguales de etiquetas repetidas.
+- **Elementos recortados por la barra inferior o por el borde de la pantalla**: el Scanner los mide con el alto visible, igual que los volcados de la 6a (sección 2).
+
+### 10.4 TalkBack
+
+TalkBack quedó activo en el aparato, pero **ni los gestos ni los atajos de teclado inyectados por
+`adb` mueven su foco** (la traversal se probó con deslizamientos y con Alt+flecha; el foco no
+salió del buscador), así que el orden de lectura se verificó con el orden del árbol de
+accesibilidad, que es el que TalkBack recorre. En Inicio el orden es el visual: buscador, Perfil,
+periodo, título, flechas de quincena, anillo, cifra, desglose, ritmo, miembros, transacciones y
+barra. El único defecto de orden encontrado fue la cifra héroe partida en dos nodos, ya corregido.
+Lo que sigue sin verificar es el habla en sí (qué dice exactamente TalkBack por cada nodo), que
+exige oírlo.
+
+### 10.5 Contraste en color dinámico oscuro
+
+Con la paleta dinámica del Pixel 7 en modo oscuro, el Scanner solo marcó tres contrastes: los días
+fuera del mes en el calendario y los dos textos del carrusel de sugerencias; los tres están
+corregidos. Los tonos financieros de `FinanceColors` (ingreso, gasto, alerta) pasaron sin
+observaciones.
+
+### 10.6 Otras dos cosas vistas en el camino, sin corregir
+
+- En ancho compacto, el botón flotante del Calendario ("Nuevo pago planeado") y el de Cuentas
+  ("Nueva cuenta") se superponen a la última tarjeta o fila de la lista, y la barra de navegación
+  tapa el final de las listas (captura de Cuentas en la sesión). En el Fold desplegado no ocurre
+  porque el contenido es más ancho y más corto. Es de diseño de la 6, no de accesibilidad:
+  la lista necesita un relleno inferior del alto de la barra más el botón.
+- `CLAUDE.md` sigue diciendo que Perfil es una de "las cinco pestañas top-level"; desde la 6b
+  Perfil se abre desde el avatar de la barra superior y la barra tiene cuatro pestañas. Se corrige
+  en ese archivo en este mismo cierre.
+
+## 11. Arranque en frío de Quick Tap, medido en hardware (hallazgo 7bis.1)
+
+Medida: `am start` del enlace `mx.budget://capture` con el proceso muerto (`am force-stop` antes
+de cada corrida), cinco corridas por aparato, leyendo la traza `QuickCapture.coldStart` (que ahora
+usa el mismo reloj en los dos lados: restaba `elapsedRealtime` de `getStartUptimeMillis` y en un
+teléfono real daba las horas que llevaba dormido) y una traza nueva de `BudgetApplication.onCreate`
+que dice cuánto costó cada tramo.
+
+| Aparato | Del arranque del proceso al panel | `onCreate` | Antes de `onCreate` |
+|---|---|---|---|
+| Pixel 7, antes | 0.54 s (0.53 a 0.54) | 0.19 s (prefs 55 ms, consultas 35, Firebase 55, workers 20) | ~0.32 s |
+| Pixel 7, después | 0.55 a 0.61 s | 0.12 s (prefs y base a la par: 40 ms; consultas 32; Firebase 25) | ~0.41 s |
+| FinanceFold, antes | 2.35 s (1.9 a 2.5) | 1.1 s (prefs 460 a 520 ms, consultas 260, Firebase 170) | ~1.2 s |
+| FinanceFold, después | 2.0 s (2.0 a 2.3) | 0.6 s (prefs y base a la par: 130 ms; consultas 200; Firebase 125) | ~1.3 s |
+
+Lo que dice la tabla: en el teléfono real el arranque en frío ya cumple la meta de la especificación
+(P95 por debajo de 600 ms) por un margen estrecho; los 2.3 s eran del emulador. El cambio aplicado
+(las dos lecturas frías en paralelo) recorta `onCreate` en los dos aparatos pero no mueve la cifra
+total en el Pixel 7, porque ahí `onCreate` es la parte chica: el grueso es lo que pasa antes
+(arranque del proceso, carga de clases de un APK de depuración de 211 MB sin R8, inicializadores
+de Firebase, WorkManager y `ProcessLifecycle`) y el primer cuadro de Compose.
+
+**Propuesta para Agustín, en orden de rendimiento por esfuerzo.** (1) La compilación de release con
+R8 y un perfil de referencia (`androidx.profileinstaller`, Fase 8) ataca justo el tramo grande, el
+anterior a `onCreate`, sin tocar una línea de lógica: es lo primero que hay que medir antes de
+reestructurar nada. (2) Si después de eso hace falta más, mover fuera del hilo principal la
+construcción de Firebase, el sync y los workers (hoy 80 a 100 ms en el Pixel 7, 250 en el emulador)
+con inicialización perezosa; cambia el cableado de `BudgetApplication` y obliga a que todo lo que
+lee `app.syncManager` y compañía tolere la espera, así que no se aplicó. (3) Nada más dentro de
+Quick Tap: el punto de entrada cuesta 3 a 20 ms.

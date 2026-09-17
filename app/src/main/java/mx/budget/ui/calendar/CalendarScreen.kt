@@ -344,22 +344,30 @@ private fun PlannedCard(
 
         // FlowRow: con fontScale alto + bold los botones reflowan en vez de recortarse.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ActionChip("Confirmar", filled = true, onClick = onConfirm)
-            ActionChip("Editar", filled = false, onClick = onEdit)
-            ActionChip("Posponer", filled = false, onClick = onPostpone)
+            // El lector de pantalla oye "Confirmar" en cada tarjeta de la lista: con
+            // el concepto sabe cual esta confirmando.
+            ActionChip("Confirmar", filled = true, onClick = onConfirm, description = "Confirmar ${item.concept}")
+            ActionChip("Editar", filled = false, onClick = onEdit, description = "Editar ${item.concept}")
+            ActionChip("Posponer", filled = false, onClick = onPostpone, description = "Posponer ${item.concept}")
         }
     }
 }
 
 @Composable
-private fun ActionChip(label: String, filled: Boolean, onClick: () -> Unit) {
+private fun ActionChip(
+    label: String,
+    filled: Boolean,
+    onClick: () -> Unit,
+    description: String = label,
+) {
     val bg = if (filled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest
     val fg = if (filled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(bg)
-            .clickable(onClick = onClick)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .semantics { contentDescription = description }
             .padding(horizontal = 18.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {

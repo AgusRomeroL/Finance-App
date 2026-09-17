@@ -206,7 +206,11 @@ class QuickCaptureActivity : ComponentActivity() {
         val enLaActividad = SystemClock.elapsedRealtime() - inicioMs
         if (primeraVezEnEsteProceso) {
             primeraVezEnEsteProceso = false
-            val desdeElProceso = SystemClock.elapsedRealtime() - Process.getStartUptimeMillis()
+            // Mismo reloj a los dos lados: getStartUptimeMillis va en uptimeMillis,
+            // que no cuenta el sueño profundo. Restarlo de elapsedRealtime daba en
+            // el emulador la cifra correcta y en un teléfono real las horas que
+            // llevaba dormido (13 millones de ms en el Pixel 7).
+            val desdeElProceso = SystemClock.uptimeMillis() - Process.getStartUptimeMillis()
             Log.i(
                 TAG,
                 "QuickCapture.coldStart camino=$camino actividadMs=$enLaActividad procesoMs=$desdeElProceso",

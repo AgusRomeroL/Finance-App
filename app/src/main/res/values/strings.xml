@@ -22,6 +22,7 @@
     <!-- Descripciones para lectores de pantalla. -->
     <string name="cd_back">Volver</string>
     <string name="cd_close_sheet">Cerrar hoja</string>
+    <string name="cd_sheet_drag_handle">Controlador de arrastre de la hoja</string>
     <string name="cd_open_profile">Perfil</string>
     <string name="cd_capture_expense">Capturar gasto</string>
     <string name="cd_previous_quincena">Quincena anterior</string>

@@ -318,6 +318,13 @@ class AiAssistantViewModel(
     }
 
     private fun finish(result: DispatchResult, latencyMs: Long) {
+        // Una línea por respuesta con el tipo y el tiempo: es la única forma de
+        // medir la latencia real en un aparato sin instrumentar la interfaz.
+        val llmUsed = (result as? DispatchResult.OpenAnalysis)?.let { !it.deterministic }
+        android.util.Log.i(
+            "AiAssistant",
+            "respuesta tipo=${result::class.simpleName} llm=${llmUsed ?: "n/a"} ms=$latencyMs",
+        )
         _chatHistory.update {
             it + ChatMessage(role = ChatMessage.Role.ASSISTANT, text = "", result = result)
         }

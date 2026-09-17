@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -109,6 +111,9 @@ fun AiChatSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         sheetMaxWidth = 640.dp,
+        // El asa de fabrica mide 32 dp de ancho y es un objetivo tactil (expande y
+        // contrae la hoja): se dibuja igual pero dentro de 48 dp.
+        dragHandle = { mx.budget.ui.common.SheetDragHandle() },
     ) {
         Column(
             Modifier
@@ -368,7 +373,11 @@ private fun ChatInputPill(
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { onSend() }),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // El texto de ayuda se pinta aparte y no forma parte del campo:
+                    // sin esto el lector anunciaba un campo de texto sin nombre.
+                    .semantics { contentDescription = "Pregunta sobre tus finanzas" },
             )
         }
         Spacer(Modifier.width(8.dp))

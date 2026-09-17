@@ -44,6 +44,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -411,6 +413,12 @@ fun AnalyticsScreen(
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    // El boton extendido de Material 3 (1.4.0) no expone su texto al
+                    // arbol de accesibilidad: para el lector era un boton sin nombre
+                    // (Pixel 7, 2026-09-17). El nombre se pone a mano.
+                    .semantics {
+                        contentDescription = "Preguntar"
+                    }
                     .navigationBarsPadding()
                     // Se eleva por encima del pill de navegación flotante del shell.
                     .padding(end = 24.dp, bottom = 84.dp)

@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Caratula minima de prueba (Watch Face Format v1) que declara los dos huecos de
+     complication de Presupuesto Familiar con sus proveedores por defecto, para ver
+     las complications renderizadas sobre una esfera en el emulador FinanceWatch.
+     No forma parte del producto. -->
+<WatchFace width="450" height="450" clipShape="CIRCLE">
+    <Metadata key="CLOCK_TYPE" value="DIGITAL" />
+    <Metadata key="PREVIEW_TIME" value="10:08:32" />
+    <Scene backgroundColor="#ff000000">
+        <DigitalClock x="0" y="40" width="450" height="110">
+            <TimeText format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER">
+                <Font family="SYNC_TO_DEVICE" size="96" weight="NORMAL" color="#ffffffff" />
+            </TimeText>
+        </DigitalClock>
+
+        <!-- Hueco 1: Disponible (RANGED_VALUE con SHORT_TEXT). -->
+        <ComplicationSlot slotId="0" x="40" y="180" width="370" height="110"
+            supportedTypes="RANGED_VALUE SHORT_TEXT" displayName="Disponible" isCustomizable="true">
+            <DefaultProviderPolicy
+                primaryProvider="mx.budget/mx.budget.wear.presentation.complication.DisponibleComplicationService"
+                primaryProviderType="RANGED_VALUE"
+                defaultSystemProvider="DATE"
+                defaultSystemProviderType="SHORT_TEXT" />
+            <BoundingBox x="0" y="0" width="370" height="110" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="5" width="100" height="100">
+                    <Arc centerX="50" centerY="50" width="86" height="86" startAngle="-135" endAngle="135">
+                        <Stroke color="#ff333333" thickness="10" cap="ROUND" />
+                    </Arc>
+                    <Arc centerX="50" centerY="50" width="86" height="86" startAngle="-135" endAngle="-135">
+                        <Transform target="endAngle"
+                            value="-135 + 270 * ([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN])" />
+                        <Stroke color="#ff4caf50" thickness="10" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartText x="110" y="10" width="260" height="50">
+                    <Text align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="40" weight="BOLD" color="#ffffffff">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="110" y="62" width="260" height="40">
+                    <Text align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="26" weight="NORMAL" color="#ffaaaaaa">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="10" width="370" height="50">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="40" weight="BOLD" color="#ffffffff">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="0" y="62" width="370" height="40">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="26" weight="NORMAL" color="#ffaaaaaa">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+
+        <!-- Hueco 2: Proximo pago (SHORT_TEXT). -->
+        <ComplicationSlot slotId="1" x="40" y="300" width="370" height="110"
+            supportedTypes="SHORT_TEXT" displayName="Proximo pago" isCustomizable="true">
+            <DefaultProviderPolicy
+                primaryProvider="mx.budget/mx.budget.wear.presentation.complication.UpcomingPaymentComplicationService"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="DATE"
+                defaultSystemProviderType="SHORT_TEXT" />
+            <BoundingBox x="0" y="0" width="370" height="110" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="10" width="370" height="50">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="40" weight="BOLD" color="#ffffffff">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="0" y="62" width="370" height="40">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="26" weight="NORMAL" color="#ffaaaaaa">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+    </Scene>
+</WatchFace>

@@ -29,6 +29,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -40,6 +44,9 @@ import java.util.Locale
 
 private val monthLabelFmt = DateTimeFormatter.ofPattern("LLLL yyyy", Locale("es", "MX"))
 private val weekdays = listOf("L", "M", "M", "J", "V", "S", "D") // lunes-primero
+
+/** Lo que lee el lector de pantalla por cada letra: "M" y "M" no distinguen nada. */
+private val weekdayNames = listOf("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
 
 /**
  * Vista de mes estilo Google Calendar (Apéndice G.2, Fase 4 inc. 2).
@@ -90,13 +97,16 @@ fun MonthCalendar(
 
         // Cabecera de días de la semana.
         Row(Modifier.fillMaxWidth()) {
-            weekdays.forEach { d ->
+            weekdays.forEachIndexed { i, d ->
+                val name = weekdayNames[i]
                 Text(
                     d,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics { contentDescription = name },
                 )
             }
         }
@@ -151,8 +161,20 @@ private fun DayCell(
 ) {
     val numberColor = when {
         isSelected -> MaterialTheme.colorScheme.onPrimary
-        !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+        // 0.8 y no 0.35: a 0.35 (y todavia a 0.6) el numero no llegaba al contraste
+        // minimo sobre el fondo oscuro (Accessibility Scanner en el Pixel 7,
+        // 2026-09-17); a 0.8 sigue leyendose como secundario frente al mes en curso.
+        !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
         else -> MaterialTheme.colorScheme.onSurface
+    }
+    // Una descripcion por dia: sin ella, las 42 celdas le sonaban igual al lector
+    // de pantalla (solo el punto de "hay pagos" tenia descripcion, y era la misma).
+    val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, Locale("es", "MX"))
+    val description = buildString {
+        append(date.dayOfMonth).append(" de ").append(monthName)
+        if (isToday) append(", hoy")
+        if (hasPayment) append(", con pagos planeados")
+        if (isSelected) append(", seleccionado")
     }
     Box(
         modifier = modifier
@@ -166,7 +188,11 @@ private fun DayCell(
                     else -> Modifier
                 }
             )
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = description
+                role = Role.Button
+            },
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {

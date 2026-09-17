@@ -105,6 +105,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -255,15 +256,9 @@ fun CaptureBottomSheet(
         sheetMaxWidth = 640.dp, // acota y centra en el Fold interno (brief D2)
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(vertical = 12.dp)
-                    .size(width = 40.dp, height = 4.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.outlineVariant)
-            )
-        }
+        // El asa es un objetivo tactil (expande y contrae la hoja): 48 dp de ancho y
+        // alto aunque la barra visible siga midiendo 40 por 4.
+        dragHandle = { mx.budget.ui.common.SheetDragHandle() }
     ) {
       // "Materialize" (Kowalski/Apple): el contenido no aparece de golpe, crece
       // de 0.92→1 con fade desde el borde inferior mientras el sheet sube, para que
@@ -630,7 +625,17 @@ private fun CaptureHeader(
             }
             Spacer(Modifier.width(14.dp))
             Column {
-                CapLabel(if (isReview) "Revisión" else "Nuevo movimiento")
+                // En ancho compacto (el Fold plegado, un telefono) con la tipografia
+                // de Norma, "NUEVO MOVIMIENTO" se partia en "MOVIMIENT / O" (Pixel 7,
+                // 2026-09-17): la etiqueta corta cabe y dice lo mismo.
+                val compacto = LocalConfiguration.current.screenWidthDp < 600
+                CapLabel(
+                    when {
+                        isReview -> "Revisión"
+                        compacto -> "Nuevo"
+                        else -> "Nuevo movimiento"
+                    }
+                )
                 Text(
                     when {
                         isReview -> "Completar captura"
@@ -2198,7 +2203,11 @@ private fun CapLabel(text: String) {
         text.uppercase(),
         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        letterSpacing = 1.6.sp
+        letterSpacing = 1.6.sp,
+        // Una etiqueta de contexto nunca parte una palabra: si no cabe, se recorta.
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 

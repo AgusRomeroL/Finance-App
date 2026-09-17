@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mx.budget.ui.common.AppLocale
@@ -362,6 +363,18 @@ class BudgetApplication : Application() {
         // MainActivity cuando el proceso principal ya murio.
         if (esProcesoDeReinicio()) return
 
+        // Cronómetro del arranque (hallazgo 7bis.1): una línea al final con lo
+        // que costó cada tramo. Sin esto, saber qué parte de los 2 segundos del
+        // arranque en frío se va en cada cosa exige adivinar.
+        val arranqueMs = android.os.SystemClock.uptimeMillis()
+        var tramoMs = arranqueMs
+        val tramos = StringBuilder()
+        fun marca(nombre: String) {
+            val ahora = android.os.SystemClock.uptimeMillis()
+            tramos.append(' ').append(nombre).append('=').append(ahora - tramoMs)
+            tramoMs = ahora
+        }
+
         applyAppLocale()
 
         database = Room.databaseBuilder(
@@ -397,8 +410,6 @@ class BudgetApplication : Application() {
         // Preferencias persistidas + lectura inicial síncrona (una sola vez, antes
         // de cualquier Activity) para que el tema arranque sin parpadeo.
         settingsRepository = SettingsRepository(this)
-        initialDynamicColor = runBlocking { settingsRepository.dynamicColor.first() }
-        initialHasSeenTutorial = runBlocking { settingsRepository.hasSeenTutorial.first() }
 
         // Resolución del household activo (Fase B, multi-tenant):
         // 1) si el usuario eligió un hogar activo (DataStore), se usa ese;
@@ -406,16 +417,32 @@ class BudgetApplication : Application() {
         //    y en última instancia el literal "default_household".
         // runBlocking es aceptable aquí: consultas instantáneas que corren una
         // sola vez durante onCreate, ANTES de cualquier Activity/ViewModel.
-        householdId = runBlocking {
-            settingsRepository.getActiveHouseholdId()
-                ?: database.householdDao().getSingleId()
-                ?: "default_household"
+        //
+        // Las dos lecturas frías del arranque, el archivo de preferencias y abrir
+        // la base, no dependen una de otra, así que corren a la par: se paga la
+        // más lenta y no la suma (medido en el Fold: 500 ms de preferencias más
+        // 260 ms de base en serie). La consulta a la base se hace siempre,
+        // aunque haya hogar activo, porque su trabajo real es dejar la base
+        // abierta para las consultas que vienen justo después.
+        val (prefsIniciales, hogarSembrado) = runBlocking {
+            val prefs = async(Dispatchers.IO) {
+                val color = settingsRepository.dynamicColor.first()
+                val tutorial = settingsRepository.hasSeenTutorial.first()
+                Triple(color, tutorial, settingsRepository.getActiveHouseholdId())
+            }
+            val baseAbierta = async(Dispatchers.IO) { database.householdDao().getSingleId() }
+            prefs.await() to baseAbierta.await()
         }
+        initialDynamicColor = prefsIniciales.first
+        initialHasSeenTutorial = prefsIniciales.second
+        householdId = prefsIniciales.third ?: hogarSembrado ?: "default_household"
+        marca("prefs+base")
 
         // Identidad de sesión (roles v2): arranca con el caché offline; la
         // resolución online contra roles/{uid} corre al final de onCreate (ya
         // con Firestore/Auth construidos) y refresca propiedad + caché.
         linkedMemberId = runBlocking { settingsRepository.getSessionLinkedMemberId() }
+        marca("hogar")
 
         // DAOs de la fuente de verdad local.
         val expenseDao = database.expenseDao()
@@ -539,6 +566,7 @@ class BudgetApplication : Application() {
             val hasExpenses = expenseDao.hasAny(householdId)
             !hasHousehold && activeMembers.isEmpty() && !hasExpenses
         }
+        marca("consultas")
 
         // Captura desde notificaciones bancarias (Feature D, §F.6). El parser lee la
         // allowlist/plantillas del asset; si falla, queda null y la feature se desactiva.
@@ -581,6 +609,7 @@ class BudgetApplication : Application() {
             llm = onDeviceLlm,
             systemPrompt = nlCapturePrompt,
         )
+        marca("ia")
 
         // Proveedor de ubicación on-device (Apéndice G.4). Construido antes que la
         // captura bancaria porque ésta lo usa para el fix al confirmar/ingresar.
@@ -626,6 +655,7 @@ class BudgetApplication : Application() {
         val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
         this.firestore = firestore
         authManager = mx.budget.data.remote.AuthManager(this)
+        marca("firebase")
         remoteExpenseRepository = mx.budget.data.remote.ExpenseRepositoryFirestore(firestore, householdId)
         val remoteWalletRepository = mx.budget.data.remote.WalletRepositoryFirestore(firestore)
         val remoteTransferRepository = mx.budget.data.remote.TransferRepositoryFirestore(firestore)
@@ -686,6 +716,7 @@ class BudgetApplication : Application() {
             quincenaDao = database.quincenaDao(),
             remoteQuincenaRepository = remoteQuincenaRepository
         )
+        marca("sync")
 
         databaseBackupManager = mx.budget.data.backup.DatabaseBackupManager(
             context = this,
@@ -842,6 +873,12 @@ class BudgetApplication : Application() {
         // Identidad de sesión (roles v2): resuelve linkedMemberId online en cuanto
         // haya usuario autenticado (el sign-in anónimo corre en paralelo arriba).
         appScope.launch { refreshSessionIdentity(householdId) }
+        marca("workers")
+        android.util.Log.i(
+            "BudgetApplication",
+            "onCreate ms=${android.os.SystemClock.uptimeMillis() - arranqueMs} tramos:$tramos " +
+                "desdeElProceso=${android.os.SystemClock.uptimeMillis() - android.os.Process.getStartUptimeMillis()}",
+        )
     }
 
     /**

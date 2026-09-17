@@ -88,7 +88,9 @@ fun FloatingNavBar(
             tonalElevation = 2.dp,
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+                // 5 dp y no 8: los items crecieron a 48 dp de alto (objetivo tactil
+                // minimo) y la barra conserva su altura total de 58 dp.
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -171,7 +173,11 @@ private fun NavPillItem(
             )
             // Menos padding horizontal en los no-seleccionados: libera ancho para que
             // la etiqueta del seleccionado ("Cuentas"/"Analíticas") entre a fontScale 1.3.
-            .padding(horizontal = if (selected) 12.dp else 7.dp, vertical = 10.dp),
+            // El alto si llega a 48 dp (13 + 22 + 13): es el minimo tactil y no cuesta
+            // ancho. El ancho de los no seleccionados se queda en 36 dp a proposito: en
+            // un telefono de 411 dp no caben cuatro items de 48 dp mas la etiqueta del
+            // seleccionado, el microfono y el "+" (auditoria en el Pixel 7, 2026-09-17).
+            .padding(horizontal = if (selected) 12.dp else 7.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(

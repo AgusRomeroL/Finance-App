@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -1451,19 +1452,26 @@ private fun ReserveSegment(label: String, selected: Boolean, onClick: () -> Unit
         animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
         label = "reserveFg"
     )
-    Text(
-        label,
-        style = MaterialTheme.typography.labelLarge.copy(
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-        ),
-        color = fg,
-        maxLines = 1, softWrap = false,
+    // 48 dp de alto: cada segmento es un objetivo tactil por si mismo y a 32 dp
+    // Accessibility Scanner lo marcaba (Pixel 7, 2026-09-17).
+    Box(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-    )
+            .clickable(role = Role.Button, onClick = onClick)
+            .defaultMinSize(minHeight = 48.dp)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+            ),
+            color = fg,
+            maxLines = 1, softWrap = false,
+        )
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1634,7 +1642,10 @@ private fun SuggestionActionRow(
     onSecondary: () -> Unit,
     secondaryContentColor: Color,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    // A que se refiere el boton: en el carrusel hay varias tarjetas con los
+    // mismos dos botones y el lector de pantalla no distinguia una de otra.
+    subject: String? = null,
 ) {
     // Atenúa el primario cuando está deshabilitado (p. ej. captura enriqueciéndose);
     // la redundancia no-cromática la da el clickable(enabled=false) + el copy "Creando…".
@@ -1649,7 +1660,8 @@ private fun SuggestionActionRow(
                 .weight(1f)
                 .clip(RoundedCornerShape(14.dp))
                 .background(primaryBg)
-                .clickable(enabled = enabled, onClick = onPrimary)
+                .clickable(enabled = enabled, role = Role.Button, onClick = onPrimary)
+                .semantics { if (subject != null) contentDescription = "$primaryLabel $subject" }
                 .padding(vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -1665,8 +1677,11 @@ private fun SuggestionActionRow(
             modifier = Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(14.dp))
-                .background(secondaryContentColor.copy(alpha = if (enabled) 0.12f else 0.06f))
-                .clickable(enabled = enabled, onClick = onSecondary)
+                // Oscurece en vez de aclarar: aclarar el fondo con el color del texto
+                // dejaba "Ahora no" en 3.8:1 sobre la tarjeta (Scanner, Pixel 7).
+                .background(Color.Black.copy(alpha = if (enabled) 0.18f else 0.08f))
+                .clickable(enabled = enabled, role = Role.Button, onClick = onSecondary)
+                .semantics { if (subject != null) contentDescription = "$secondaryLabel $subject" }
                 .padding(vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -1804,7 +1819,9 @@ private fun ProactiveSuggestionChip(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.Filled.AutoAwesome, "Sugerencia",
+                    // Decorativo: la etiqueta "Sugerencia" va escrita justo al lado y
+                    // repetirla en cada tarjeta le daba al lector varios elementos iguales.
+                    Icons.Filled.AutoAwesome, null,
                     tint = MaterialTheme.colorScheme.onSecondary, modifier = Modifier.size(18.dp)
                 )
             }
@@ -1822,7 +1839,8 @@ private fun ProactiveSuggestionChip(
                 Text(
                     suggestion.reason,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f),
+                    // Sin atenuar: al 78 % quedaba en 3.5:1 sobre la tarjeta.
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                     minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis
                 )
             }
@@ -1833,7 +1851,8 @@ private fun ProactiveSuggestionChip(
             onPrimary = onRegister,
             secondaryLabel = "Ahora no",
             onSecondary = onDismiss,
-            secondaryContentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            secondaryContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            subject = suggestion.concept,
         )
     }
 }
@@ -2503,7 +2522,15 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
             Column(modifier = Modifier.weight(1f)) {
                 Eyebrow("Disponible")
                 Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.Top) {
+                // Un solo nodo para el lector de pantalla: sin esto anunciaba "signo de
+                // pesos" y despues la cifra como dos elementos (TalkBack, Pixel 7).
+                val cifraDisponible = mxnInt.format(animatedShown.toDouble().roundToLong())
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    modifier = Modifier.semantics(mergeDescendants = true) {
+                        contentDescription = "$" + cifraDisponible
+                    },
+                ) {
                     Text(
                         "$",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
@@ -2516,7 +2543,7 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
                     AutoSizeAmountText(
                         // Redondeo, no truncado: es la misma cifra que cierra la
                         // resta del desglose y las dos tienen que coincidir.
-                        text = mxnInt.format(animatedShown.toDouble().roundToLong()),
+                        text = cifraDisponible,
                         baseStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
                         maxFontSp = 24f,
                         minFontSp = 13f,
