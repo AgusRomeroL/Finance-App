@@ -30,6 +30,9 @@ android {
         // construccion: el reloj no puede quedar por delante del telefono.
         versionCode = providers.gradleProperty("budget.versionCode").get().toInt()
         versionName = providers.gradleProperty("budget.versionName").get()
+        // Pruebas instrumentadas del modulo del reloj (Fase 3). Corren en el
+        // emulador FinanceWatch con :wear:connectedDebugAndroidTest.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -115,4 +118,11 @@ dependencies {
 
     // SuspendingTileService: onTileRequest en corrutina (para await del Data Layer).
     implementation("com.google.android.horologist:horologist-tiles:0.6.17")
+
+    // Pruebas instrumentadas: hacen falta en el dispositivo porque lo que se
+    // comprueba (el dato que una caratula recibe) sale de SharedPreferences y
+    // de las clases de complication, que son de Android, no de la JVM.
+    androidTestImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }

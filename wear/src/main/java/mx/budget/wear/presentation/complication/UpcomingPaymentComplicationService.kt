@@ -5,6 +5,7 @@ import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
+import mx.budget.wear.data.DueLabels
 import mx.budget.wear.data.SyncStatus
 import mx.budget.wear.data.WearCache
 
@@ -20,7 +21,9 @@ import mx.budget.wear.data.WearCache
  * quien la escuche con TalkBack, y no se roba el título con un aviso que aquí
  * no corresponde.
  */
-class UpcomingPaymentComplicationService : SuspendingComplicationDataSourceService() {
+// `open` solo para que la prueba instrumentada pueda darle un contexto
+// sin arrancar el servicio; no hay ninguna subclase en produccion.
+open class UpcomingPaymentComplicationService : SuspendingComplicationDataSourceService() {
 
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         if (request.complicationType != ComplicationType.SHORT_TEXT) return null
@@ -36,9 +39,9 @@ class UpcomingPaymentComplicationService : SuspendingComplicationDataSourceServi
             next == null -> short("Sin", "Pagos", "Sin pagos próximos$suffix")
             else -> short(
                 text = WearCache.moneyCompact(next.amount),
-                title = relativeDue(next.dueDate, System.currentTimeMillis()),
+                title = DueLabels.short(next.dueDate),
                 description = "Próximo pago: ${next.concept}, " +
-                    "${WearCache.money(next.amount)}, ${relativeDueLong(next.dueDate, System.currentTimeMillis())}$suffix",
+                    "${WearCache.money(next.amount)}, ${DueLabels.spoken(next.dueDate)}$suffix",
             )
         }
     }
@@ -63,34 +66,4 @@ class UpcomingPaymentComplicationService : SuspendingComplicationDataSourceServi
         .apply { if (tap) setTapAction(hubTapAction(REQ_PROXIMO_PAGO)) }
         .build()
 
-    /**
-     * Etiqueta corta para el título, que da unos siete caracteres. Es un calco
-     * deliberado de la del tile de próximos pagos: extraerla a la capa de cache
-     * para compartirla metería formato de interfaz donde no toca, y son cinco
-     * líneas. Si alguna cambia, cambian las dos.
-     */
-    private fun relativeDue(due: Long, now: Long): String {
-        val days = ((due - now) / DAY_MS).toInt()
-        return when {
-            days <= 0 -> "hoy"
-            days == 1 -> "mañana"
-            days < 7 -> "en ${days}d"
-            else -> "en ${days / 7}sem"
-        }
-    }
-
-    /** Versión hablada, para el `contentDescription` que lee TalkBack. */
-    private fun relativeDueLong(due: Long, now: Long): String {
-        val days = ((due - now) / DAY_MS).toInt()
-        return when {
-            days <= 0 -> "hoy"
-            days == 1 -> "mañana"
-            days < 7 -> "en $days días"
-            else -> "en ${days / 7} semanas"
-        }
-    }
-
-    private companion object {
-        const val DAY_MS = 24L * 60 * 60 * 1000
-    }
 }

@@ -13,6 +13,7 @@ import androidx.wear.protolayout.material.layouts.PrimaryLayout
 import androidx.wear.tiles.RequestBuilders
 import androidx.wear.tiles.TileBuilders
 import com.google.android.horologist.tiles.SuspendingTileService
+import mx.budget.wear.data.DueLabels
 import mx.budget.wear.data.WearCache
 
 /**
@@ -84,7 +85,7 @@ class UpcomingPaymentsTileService : SuspendingTileService() {
             .setMaxLines(1)
             .build()
 
-        val sub = Text.Builder(this, "${WearCache.money(u.amount)} · ${relativeDue(u.dueDate, now)}")
+        val sub = Text.Builder(this, "${WearCache.money(u.amount)} · ${DueLabels.short(u.dueDate, now)}")
             .setTypography(Typography.TYPOGRAPHY_CAPTION2)
             .setColor(argb(COLOR_MUTED))
             .setMaxLines(1)
@@ -101,22 +102,11 @@ class UpcomingPaymentsTileService : SuspendingTileService() {
     private fun spacer(h: Float): LayoutElement =
         LayoutElementBuilders.Spacer.Builder().setHeight(dp(h)).build()
 
-    private fun relativeDue(due: Long, now: Long): String {
-        if (due <= 0L) return ""
-        val days = ((due - now) / DAY_MS).toInt()
-        return when {
-            days <= 0 -> "hoy"
-            days == 1 -> "mañana"
-            days < 7 -> "en ${days}d"
-            else -> "en ${days / 7}sem"
-        }
-    }
 
     companion object {
         private const val RES_VERSION = "1"
         private const val FRESHNESS_MS = 15L * 60 * 1000 // 15 min (etiquetas relativas)
         private const val MAX_ROWS = 3
-        private const val DAY_MS = 24L * 60 * 60 * 1000
         private const val COLOR_ON_SURFACE = 0xFFFFFFFF.toInt()
         private const val COLOR_MUTED = 0xFFAAAAAA.toInt()
     }

@@ -22,7 +22,9 @@ import mx.budget.wear.data.WearCache
  * Lee del [WearCache], que puebla el push del teléfono: el reloj no consulta
  * Room ni red, tampoco desde una carátula.
  */
-class DisponibleComplicationService : SuspendingComplicationDataSourceService() {
+// `open` solo para que la prueba instrumentada pueda darle un contexto
+// sin arrancar el servicio; no hay ninguna subclase en produccion.
+open class DisponibleComplicationService : SuspendingComplicationDataSourceService() {
 
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         val balance = WearCache.balance(this)
