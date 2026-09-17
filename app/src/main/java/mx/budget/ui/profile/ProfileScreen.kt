@@ -71,6 +71,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,6 +112,8 @@ fun ProfileScreen(
     onDynamicColorChange: (Boolean) -> Unit,
     onBack: () -> Unit,
     pendingReviewCount: Int = 0,
+    /** Quincenas vencidas que siguen esperando que alguien las cierre. */
+    quincenasPorCerrar: Int = 0,
     onOpenReview: () -> Unit = {},
     onRenormalize: () -> Unit = {},
     bankCaptureEnabled: Boolean = false,
@@ -250,6 +253,11 @@ fun ProfileScreen(
                 icono = Icons.Filled.EventAvailable,
                 abierto = grupoAbierto == GRUPO_MES,
                 onToggle = { alternar(GRUPO_MES) },
+                aviso = when {
+                    quincenasPorCerrar <= 0 -> null
+                    quincenasPorCerrar == 1 -> "1 por cerrar"
+                    else -> "$quincenasPorCerrar por cerrar"
+                },
             ) {
                 if (onOpenQuincenas != null) QuincenasCard(onOpenQuincenas)
                 if (onImportStatement != null) {
@@ -298,6 +306,7 @@ fun ProfileScreen(
             icono = Icons.Filled.Palette,
             abierto = grupoAbierto == GRUPO_APARIENCIA,
             onToggle = { alternar(GRUPO_APARIENCIA) },
+            aviso = if (pendingReviewCount > 0) "$pendingReviewCount por revisar" else null,
         ) {
             AparienciaCard(dynamicColor = dynamicColor, onDynamicColorChange = onDynamicColorChange)
             InteligenciaCard(
@@ -364,6 +373,16 @@ private fun ProfileGroup(
     icono: androidx.compose.ui.graphics.vector.ImageVector,
     abierto: Boolean,
     onToggle: () -> Unit,
+    /**
+     * Lo que reclama atencion dentro del grupo, visible con el grupo CERRADO.
+     *
+     * Sin esto el acordeon esconde justo lo que hace falta saber para decidir si
+     * vale la pena abrirlo: cuantas quincenas esperan cierre, cuantas
+     * atribuciones faltan por revisar. Un grupo plegado sin aviso obliga a
+     * abrirlos los cuatro para enterarse, que es peor que la lista larga que el
+     * acordeon vino a sustituir.
+     */
+    aviso: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val reducedMotion = LocalReducedMotion.current
@@ -389,7 +408,10 @@ private fun ProfileGroup(
                 )
                 .semantics {
                     heading()
-                    stateDescription = if (abierto) "Abierto" else "Cerrado"
+                    stateDescription = buildString {
+                        append(if (abierto) "Abierto" else "Cerrado")
+                        if (aviso != null) append(", $aviso")
+                    }
                 }
                 .padding(horizontal = 18.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -419,6 +441,21 @@ private fun ProfileGroup(
                     resumen,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (aviso != null) {
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    aviso,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    // La insignia la lee la cabecera en su stateDescription, asi
+                    // que aqui se calla para no decirla dos veces.
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(MaterialTheme.colorScheme.tertiaryContainer)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .clearAndSetSemantics { },
                 )
             }
             Spacer(Modifier.width(12.dp))

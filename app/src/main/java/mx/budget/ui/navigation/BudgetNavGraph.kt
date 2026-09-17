@@ -423,6 +423,9 @@ fun BudgetNavGraph(
             popEnterTransition = slideEnter, popExitTransition = slideExit,
         ) {
             val pendingReviewCount by dashboardViewModel.pendingReviewCount.collectAsState()
+            // Lo que reclama atencion dentro de un grupo plegado de Perfil tiene
+            // que verse sin abrirlo (Fase 6b, brief 2).
+            val quincenasPorCerrar by dashboardViewModel.pendingClose.collectAsState()
             // Estado de identidad (Fase 2): sale del mismo ViewModel de grupos que ya
             // conoce la sesion y el rol propio, para no duplicar el acceso a Firestore.
             val householdState = householdViewModel?.uiState?.collectAsState()?.value
@@ -431,6 +434,7 @@ fun BudgetNavGraph(
                 onDynamicColorChange = onDynamicColorChange,
                 onBack = { onNavigate(BudgetDestinations.DASHBOARD) },
                 pendingReviewCount = pendingReviewCount,
+                quincenasPorCerrar = quincenasPorCerrar.size,
                 onOpenReview = { onNavigate(BudgetDestinations.ATTRIBUTION_REVIEW) },
                 onRenormalize = onRenormalize,
                 bankCaptureEnabled = bankCaptureEnabled,

@@ -20,6 +20,26 @@ de la nube. Las elecciones de los briefs 1 a 4 las tomó Agustín el 2026-09-16 
 que se implementaron ese mismo día, verificadas en FinanceFold con la configuración fiel
 del Fold (capturas en `capturas/2026-09-16-*.png`).
 
+## Lo que se completó después de implementar (2026-09-16)
+
+Al revisar las opciones descartadas quedaron a la vista dos huecos que la opción
+elegida no cubría. Ninguno obliga a cambiar de opción: los dos se cierran
+añadiendo, no rehaciendo.
+
+| Hueco | De dónde salió | Qué se hizo |
+|---|---|---|
+| El acordeón de Perfil esconde el estado hasta que lo abres, que era el contra escrito de la opción C | Nota de la opción C del lienzo de Perfil | La cabecera plegada lleva una insignia con lo que reclama atención dentro: quincenas por cerrar y atribuciones por revisar. La lee TalkBack junto al estado abierto o cerrado, sin decirla dos veces |
+| Confirmar el cierre no decía qué iba a pasar con los pagos planeados, que es lo que la opción B enseñaba en su segundo paso | Nota de la opción B del lienzo de cierre | La barra inferior y el diálogo dicen la misma frase, con cuántos pagos y cuánto dinero se lleva cada decisión. Si hay descartes o pagos dados por hechos, el diálogo avisa de que reabrir no los deshace |
+
+De paso salieron los plurales escritos con paréntesis de la interfaz, del tipo
+"17 pago(s) planeado(s)", en el cierre de quincena y en el importador de estados
+de cuenta. Ahora se escriben en singular o en plural según el número.
+
+Verificado en FinanceFold con la configuración fiel del Fold, adelantando el
+reloj al 1 de octubre para que la quincena en curso venciera con sus 17 pagos
+planeados sin ejecutar. Capturas en `capturas/2026-09-16-perfil-aviso-grupo-cerrado.png`,
+`capturas/2026-09-16-cierre-barra-destino.png` y `capturas/2026-09-16-cierre-dialogo-destino.png`.
+
 ## Decisiones ya tomadas sin lienzo
 
 Estas salen de la auditoría y no necesitan exploración visual: son correcciones,

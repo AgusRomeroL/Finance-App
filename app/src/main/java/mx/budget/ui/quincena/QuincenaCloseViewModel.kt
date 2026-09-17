@@ -66,6 +66,20 @@ data class QuincenaCloseState(
     /** Falta decidir que hacer con algun planeado. */
     val pendingDecisions: Int get() = planned.count { it.expenseId !in decisions }
 
+    /**
+     * Cuantos planeados y cuanto dinero se lleva cada decision.
+     *
+     * Cerrar es dificil de deshacer y con decenas de filas nadie recuerda que
+     * eligio arriba: la barra inferior y el dialogo de confirmacion dicen esto
+     * para que confirmar no sea un acto de fe. Reabrir devuelve la quincena a
+     * revision, pero no resucita lo descartado ni des-ejecuta lo que se dio por
+     * pagado, asi que el numero tiene que verse ANTES.
+     */
+    fun totalPor(decision: PlannedDecision): Pair<Int, Double> {
+        val filas = planned.filter { decisions[it.expenseId] == decision }
+        return filas.size to filas.sumOf { it.amountMxn }
+    }
+
     val canClose: Boolean
         get() = quincena != null && canManage && !working && !isClosed &&
             QuincenaLifecycle.canClose(quincena, today) && pendingDecisions == 0
@@ -79,7 +93,8 @@ data class QuincenaCloseState(
             !QuincenaLifecycle.canClose(quincena, today) ->
                 "Esta quincena se podrá cerrar cuando termine, a partir del día siguiente a su último día."
             pendingDecisions > 0 ->
-                "Decide qué hacer con $pendingDecisions pago(s) planeado(s) antes de cerrar."
+                if (pendingDecisions == 1) "Decide qué hacer con el pago planeado que falta antes de cerrar."
+                else "Decide qué hacer con los $pendingDecisions pagos planeados que faltan antes de cerrar."
             else -> null
         }
 }

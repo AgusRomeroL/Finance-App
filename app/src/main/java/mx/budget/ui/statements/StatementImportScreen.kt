@@ -414,10 +414,10 @@ private fun RewriteReviewContent(viewModel: StatementImportViewModel) {
             Spacer(Modifier.height(8.dp))
             Text(
                 buildString {
-                    append("${selectedPurchases.size} compra(s) por ${mxn(purchasesTotal)} ")
+                    append("${selectedPurchases.size} ${if (selectedPurchases.size == 1) "compra" else "compras"} por ${mxn(purchasesTotal)} ")
                     append("se registrarán como gastos de $walletName")
                     if (selectedAggregates.isNotEmpty()) {
-                        append(" y ${selectedAggregates.size} pago(s) por ${mxn(aggregatesTotal)} ")
+                        append(" y ${selectedAggregates.size} ${if (selectedAggregates.size == 1) "pago" else "pagos"} por ${mxn(aggregatesTotal)} ")
                         append("se convertirán en transferencia a la tarjeta")
                     }
                     append(".")
@@ -759,21 +759,21 @@ private fun AppliedContent(applied: ImportPhase.Applied, onDone: () -> Unit, onA
             buildString {
                 append("Se actualizaron los datos de la cuenta.")
                 // Ruta de conciliación (pre-match).
-                if (applied.linked > 0) append("\n· ${applied.linked} movimiento(s) vinculados a gastos existentes (sin duplicar).")
-                if (applied.queuedNew > 0) append("\n· ${applied.queuedNew} movimiento(s) nuevos en la bandeja de captura para confirmar.")
-                if (applied.ignored > 0) append("\n· ${applied.ignored} ignorado(s).")
+                if (applied.linked > 0) append("\n· ${applied.linked} ${if (applied.linked == 1) "movimiento vinculado" else "movimientos vinculados"} a gastos que ya existían, sin duplicar.")
+                if (applied.queuedNew > 0) append("\n· ${applied.queuedNew} ${if (applied.queuedNew == 1) "movimiento nuevo" else "movimientos nuevos"} en la bandeja de captura, para confirmar.")
+                if (applied.ignored > 0) append("\n· ${applied.ignored} ${if (applied.ignored == 1) "ignorado" else "ignorados"}.")
                 if (applied.duplicates > 0) append("\n· ${applied.duplicates} ya estaban conciliados de un import anterior (omitidos).")
                 // Ruta de reescritura.
                 if (applied.insertedCount > 0) {
                     append(
-                        "\n· Se insertaron ${applied.insertedCount} compra(s) por " +
+                        "\n· Se ${if (applied.insertedCount == 1) "insertó 1 compra" else "insertaron ${applied.insertedCount} compras"} por " +
                             "${mxn(applied.insertedTotalMxn)} (pendientes de revisar atribución)."
                     )
                 }
                 if (applied.convertedCount > 0) {
-                    append("\n· ${applied.convertedCount} pago(s) de tarjeta se convirtieron en transferencia.")
+                    append("\n· ${applied.convertedCount} ${if (applied.convertedCount == 1) "pago de tarjeta se convirtió" else "pagos de tarjeta se convirtieron"} en transferencia.")
                 }
-                if (applied.msiCount > 0) append("\n· ${applied.msiCount} plan(es) a meses creados/actualizados.")
+                if (applied.msiCount > 0) append("\n· ${applied.msiCount} ${if (applied.msiCount == 1) "plan a meses creado o actualizado" else "planes a meses creados o actualizados"}.")
                 if (applied.insertedCount == 0 && applied.convertedCount == 0) {
                     append("\nTus gastos no se modificaron.")
                 }

@@ -262,10 +262,34 @@ fun QuincenaCloseScreen(
             onDismissRequest = { confirmClose = false },
             title = { Text("¿Cerrar ${state.quincena?.label.orEmpty()}?") },
             text = {
-                Text(
-                    "Sus movimientos quedan en solo lectura y sus totales se congelan. " +
-                        "Puedes reabrirla después si necesitas corregir algo."
-                )
+                Column {
+                    Text(
+                        "Sus movimientos quedan en solo lectura y sus totales se congelan. " +
+                            "Puedes reabrirla después si necesitas corregir algo."
+                    )
+                    destinoDeLosPlaneados(state, money)?.let { destino ->
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "Con los pagos planeados: $destino",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        // Reabrir devuelve la quincena a revision, pero no
+                        // resucita lo descartado ni deshace lo que se dio por
+                        // pagado. Decirlo aqui, que es donde todavia se puede
+                        // cancelar.
+                        val (paga, _) = state.totalPor(PlannedDecision.POST)
+                        val (tira, _) = state.totalPor(PlannedDecision.DISCARD)
+                        if (paga > 0 || tira > 0) {
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                "Reabrir la quincena no deshace eso.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -417,6 +441,28 @@ private fun OpcionPlaneado(
  * una acción difícil de deshacer; lo que cambia es que ya no hay que recorrer la
  * lista entera para llegar a él.
  */
+/**
+ * Lo que va a pasar con los planeados, en una frase.
+ *
+ * `null` cuando no hay ninguno o no se ha decidido nada: entonces no hay nada
+ * que prometer. Se usa en la barra inferior y en el dialogo de confirmacion, y
+ * son la misma frase a proposito, para que confirmar no ensene un numero que la
+ * pantalla no traia.
+ */
+private fun destinoDeLosPlaneados(state: QuincenaCloseState, money: NumberFormat): String? {
+    if (state.planned.isEmpty()) return null
+    val partes = buildList {
+        val (mueve, montoMueve) = state.totalPor(PlannedDecision.MOVE)
+        if (mueve > 0) add("$mueve pasan a la quincena en curso (${money.format(montoMueve)})")
+        val (paga, montoPaga) = state.totalPor(PlannedDecision.POST)
+        if (paga > 0) add("$paga se dan por pagados (${money.format(montoPaga)})")
+        val (tira, montoTira) = state.totalPor(PlannedDecision.DISCARD)
+        if (tira > 0) add("$tira se descartan (${money.format(montoTira)})")
+    }
+    if (partes.isEmpty()) return null
+    return partes.joinToString(", ") + "."
+}
+
 @Composable
 private fun BarraDeCierre(
     state: QuincenaCloseState,
@@ -444,8 +490,19 @@ private fun BarraDeCierre(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
             }
+            if (!state.isClosed) {
+                destinoDeLosPlaneados(state, money)?.let { destino ->
+                    Text(
+                        destino,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
+            }
+            Spacer(Modifier.height(6.dp))
             AccionesDeCierre(
                 state = state,
                 onCloseRequest = onCloseRequest,
