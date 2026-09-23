@@ -58,6 +58,14 @@ class NvidiaNimClient(
             )
         }
 
+        // Cuantos caracteres se le mandan al modelo y como empiezan: si la extraccion
+        // local devuelve poco o nada, la respuesta sale vacia y sin esta linea parece
+        // culpa del modelo.
+        android.util.Log.i(
+            "NvidiaNim",
+            "texto enviado (${kind}): ${statementText.length} caracteres; inicio: " +
+                statementText.take(200).lines().joinToString(" "),
+        )
         val bodyJson = buildRequestBody(statementText, context, kind)
         val request = Request.Builder()
             .url(ENDPOINT)
@@ -227,8 +235,20 @@ class NvidiaNimClient(
         val repaired = JsonRepairer.repair(content)
         return runCatching {
             val parsed = json.decodeFromString(ParsedStatement.serializer(), repaired)
+            android.util.Log.i(
+                "NvidiaNim",
+                "respuesta leida: emisor=${parsed.emisor} corte=${parsed.fechaCorte} " +
+                    "saldo=${parsed.saldoTotal} movimientos=${parsed.movimientos.size} " +
+                    "(${content.length} caracteres del modelo); inicio: ${repaired.take(300)}",
+            )
             Result.Success(parsed, repaired)
         }.getOrElse {
+            // Sin esto no hay forma de saber QUE devolvio el modelo cuando no se pudo
+            // leer: el texto crudo no se guarda en ningun lado si la importacion falla.
+            android.util.Log.w(
+                "NvidiaNim",
+                "respuesta no interpretable (${it.message?.take(120)}): ${content.take(600)}",
+            )
             Result.Failure("El modelo devolvió un formato que no se pudo interpretar.")
         }
     }
