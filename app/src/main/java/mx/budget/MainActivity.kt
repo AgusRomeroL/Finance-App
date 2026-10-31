@@ -298,6 +298,74 @@ class MainActivity : ComponentActivity() {
         ))[CaptureViewModel::class.java]
     }
 
+    /**
+     * Destino pedido por una notificación (Fase 7b): el aviso de presupuesto abre
+     * Analíticas con su categoría al frente. Lo consume el grafo de navegación.
+     */
+    private val pendingNavigation = kotlinx.coroutines.flow.MutableStateFlow<mx.budget.ui.navigation.PendingNavigation?>(null)
+
+    /** Si las notificaciones están permitidas; se relee al volver a la app. */
+    private val notificationsAllowed = kotlinx.coroutines.flow.MutableStateFlow(true)
+
+    /** Pide POST_NOTIFICATIONS (Android 13+) desde la tarjeta de avisos de Perfil. */
+    private val notificationPermLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        notificationsAllowed.value = granted &&
+            androidx.core.app.NotificationManagerCompat.from(this).areNotificationsEnabled()
+        if (granted) {
+            mx.budget.data.budget.CategoryBudgetAlertWorker.requestCheck(this)
+        }
+    }
+
+    private fun readNavigationIntent(intent: android.content.Intent?) {
+        val target = intent?.getStringExtra(mx.budget.data.budget.BudgetAlertNotifier.EXTRA_NAV_TARGET) ?: return
+        pendingNavigation.value = mx.budget.ui.navigation.PendingNavigation(
+            route = target,
+            categoryId = intent.getStringExtra(mx.budget.data.budget.BudgetAlertNotifier.EXTRA_CATEGORY_ID),
+        )
+        // Consumido: una recreación de la actividad no debe repetir la navegación.
+        intent.removeExtra(mx.budget.data.budget.BudgetAlertNotifier.EXTRA_NAV_TARGET)
+    }
+
+    /**
+     * En Android 13+ pide el permiso; si ya se negó dos veces el sistema no vuelve a
+     * preguntar, así que abre los ajustes de notificaciones de la app.
+     */
+    private fun requestNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) ||
+                !notificationPermissionAsked())
+        ) {
+            markNotificationPermissionAsked()
+            notificationPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            startActivity(
+                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+            )
+        }
+    }
+
+    private fun notificationPermissionAsked(): Boolean =
+        getSharedPreferences("permissions", MODE_PRIVATE).getBoolean("post_notifications_asked", false)
+
+    private fun markNotificationPermissionAsked() {
+        getSharedPreferences("permissions", MODE_PRIVATE).edit().putBoolean("post_notifications_asked", true).apply()
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readNavigationIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        notificationsAllowed.value = androidx.core.app.NotificationManagerCompat.from(this).areNotificationsEnabled()
+    }
+
     /** Pide READ+WRITE_CALENDAR para el espejo (Fase 6); al conceder, activa y reconcilia. */
     private val calendarPermLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -358,6 +426,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
         )
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) readNavigationIntent(intent)
         val windowWidthDp = resources.displayMetrics.let {
             (it.widthPixels / it.density).toInt()
         }
@@ -381,6 +450,8 @@ class MainActivity : ComponentActivity() {
             val bankCaptureEnabled by settings.bankCaptureEnabled.collectAsState(initial = false)
             val reminderLeadDays by settings.reminderLeadDays.collectAsState(initial = 2)
             val calendarMirrorEnabled by settings.calendarMirrorEnabled.collectAsState(initial = false)
+            val budgetAlertsEnabled by settings.budgetAlertsEnabled.collectAsState(initial = true)
+            val notificationsOk by notificationsAllowed.collectAsState()
             val locationLevel by settings.locationCaptureLevel.collectAsState(
                 initial = SettingsRepository.LOCATION_LEVEL_NONE
             )
@@ -434,6 +505,15 @@ class MainActivity : ComponentActivity() {
                     },
                     reminderLeadDays = reminderLeadDays,
                     onReminderLeadChange = { days -> scope.launch { settings.setReminderLeadDays(days) } },
+                    budgetAlertsEnabled = budgetAlertsEnabled,
+                    notificationsAllowed = notificationsOk,
+                    onBudgetAlertsToggle = { enabled ->
+                        scope.launch { settings.setBudgetAlertsEnabled(enabled) }
+                        if (enabled && !notificationsOk) requestNotificationPermission()
+                    },
+                    onRequestNotifications = { requestNotificationPermission() },
+                    pendingNavigation = pendingNavigation,
+                    onNavigationConsumed = { pendingNavigation.value = null },
                     calendarMirrorEnabled = calendarMirrorEnabled,
                     onCalendarMirrorToggle = { enabled ->
                         if (enabled) {

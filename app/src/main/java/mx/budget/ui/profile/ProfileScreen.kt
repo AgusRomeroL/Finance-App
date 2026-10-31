@@ -123,6 +123,10 @@ fun ProfileScreen(
     onReminderLeadChange: (Int) -> Unit = {},
     calendarMirrorEnabled: Boolean = false,
     onCalendarMirrorToggle: (Boolean) -> Unit = {},
+    budgetAlertsEnabled: Boolean = true,
+    notificationsAllowed: Boolean = true,
+    onBudgetAlertsToggle: (Boolean) -> Unit = {},
+    onRequestNotifications: () -> Unit = {},
     locationLevel: String = "NONE",
     onLocationLevelChange: (String) -> Unit = {},
     onOpenQuincenas: (() -> Unit)? = null,
@@ -332,6 +336,12 @@ fun ProfileScreen(
                 onGrantNotificationAccess = onGrantNotificationAccess,
             )
             RecordatoriosCard(reminderLeadDays = reminderLeadDays, onPickLead = { showLeadDialog = true })
+            AvisosPresupuestoCard(
+                enabled = budgetAlertsEnabled,
+                notificationsAllowed = notificationsAllowed,
+                onToggle = onBudgetAlertsToggle,
+                onRequestNotifications = onRequestNotifications,
+            )
             CalendarioCard(
                 calendarMirrorEnabled = calendarMirrorEnabled,
                 onCalendarMirrorToggle = onCalendarMirrorToggle,
@@ -824,6 +834,71 @@ private fun RecordatoriosCard(reminderLeadDays: Int, onPickLead: () -> Unit) {
             trailingBadge = null,
             onClick = onPickLead
         )
+    }
+}
+
+/**
+ * Avisos de presupuesto por categoría (Fase 7b): al 80 %, al 100 % y antes, cuando
+ * al ritmo actual una categoría se pasaría de su tope. Si el sistema tiene las
+ * notificaciones apagadas, lo dice y ofrece permitirlas: un aviso que nunca llega
+ * es peor que no tenerlo.
+ */
+@Composable
+private fun AvisosPresupuestoCard(
+    enabled: Boolean,
+    notificationsAllowed: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onRequestNotifications: () -> Unit,
+) {
+    AjustesCard {
+        SectionLabel("PRESUPUESTO")
+        Spacer(Modifier.height(14.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .clickable(role = Role.Switch) { onToggle(!enabled) }
+                .padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.Notifications, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Avisos de presupuesto",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "Te avisa cuando una categoría llega al 80 % de su tope, cuando lo pasa y, antes, si al ritmo actual lo va a pasar.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                )
+            )
+        }
+        if (enabled && !notificationsAllowed) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Las notificaciones de la app están apagadas, así que estos avisos no llegarían.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            TextButton(onClick = onRequestNotifications) { Text("Permitir notificaciones") }
+        }
     }
 }
 

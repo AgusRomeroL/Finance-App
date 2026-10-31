@@ -40,6 +40,17 @@
     <string name="state_rhythm_week">Por semana</string>
     <string name="state_rhythm_quincena">En la quincena</string>
 
+    <!-- Avisos de presupuesto por categoría (Fase 7b): los escribe un worker. -->
+    <string name="budget_alert_channel_name">Avisos de presupuesto</string>
+    <string name="budget_alert_channel_description">Cuando una categoría se acerca a su tope, lo pasa o va a pasarlo al ritmo actual.</string>
+    <string name="budget_alert_80_title">%1$s va al %2$d %% de su tope</string>
+    <string name="budget_alert_80_text">Llevas %1$s de %2$s esta quincena; quedan %3$s.</string>
+    <string name="budget_alert_over_title">Te pasaste del tope de %1$s</string>
+    <string name="budget_alert_reached_title">Llegaste al tope de %1$s</string>
+    <string name="budget_alert_over_text">Llevas %1$s de %2$s esta quincena.</string>
+    <string name="budget_alert_forecast_title">A este ritmo te pasarás en %1$s</string>
+    <string name="budget_alert_forecast_text">Llevas %1$s de %2$s y al cierre irías en %3$s.</string>
+
     <!-- Errores compartidos. -->
     <string name="error_quincena_closed">La quincena %1$s está cerrada. Reábrela desde Inicio para modificar sus movimientos.</string>
     <string name="error_no_active_quincena">No hay quincena activa para el hogar.</string>

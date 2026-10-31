@@ -63,6 +63,11 @@ import mx.budget.data.settings.SettingsRepository
 import mx.budget.data.sync.RemotePullSync
 import mx.budget.data.sync.SyncManager
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.tasks.await
 
@@ -850,6 +855,12 @@ class BudgetApplication : Application() {
         ReminderNotifier.ensureChannel(this)
         scheduleReminders()
 
+        // Avisos de presupuesto por categoría (Fase 7b): periódico de 15 min y una
+        // revisión al momento cada vez que cambia lo gastado en la quincena activa.
+        mx.budget.data.budget.BudgetAlertNotifier.ensureChannel(this)
+        mx.budget.data.budget.CategoryBudgetAlertWorker.schedule(this)
+        watchSpendingForBudgetAlerts()
+
         // Recordatorio mensual de estados de cuenta por importar (Tarea 4).
         mx.budget.data.statements.StatementReminderNotifier.ensureChannel(this)
         scheduleStatementReminders()
@@ -1176,6 +1187,30 @@ class BudgetApplication : Application() {
      * `SCHEDULE_EXACT_ALARM`). `KEEP`: respeta una agenda existente entre arranques
      * para no reiniciar el contador del periodo en cada apertura de la app.
      */
+    /**
+     * Pide una revisión de los topes cada vez que cambia lo gastado (POSTED) en la
+     * quincena activa, venga de la captura, de Quick Tap, de una notificación del
+     * banco o del pull. Se ignora el primer valor (el de arranque) y se esperan
+     * dos segundos de calma para fundir una ráfaga de escrituras en una revisión.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
+    private fun watchSpendingForBudgetAlerts() {
+        val hid = householdId
+        appScope.launch {
+            database.quincenaDao().observeActive(hid)
+                .map { it?.id }
+                .distinctUntilChanged()
+                .flatMapLatest { qid ->
+                    if (qid == null) kotlinx.coroutines.flow.emptyFlow()
+                    else database.expenseDao().observePostedTotal(qid).drop(1)
+                }
+                .debounce(2_000)
+                .collect {
+                    mx.budget.data.budget.CategoryBudgetAlertWorker.requestCheck(this@BudgetApplication)
+                }
+        }
+    }
+
     private fun scheduleReminders() {
         val request = PeriodicWorkRequestBuilder<ReminderWorker>(15, TimeUnit.MINUTES).build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(

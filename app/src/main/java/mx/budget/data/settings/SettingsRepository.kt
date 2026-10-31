@@ -43,6 +43,8 @@ class SettingsRepository(private val context: Context) {
     private val statementCycleNotifiedKey = stringSetPreferencesKey("statement_cycle_notified")
     private val paymentDueNotifiedKey = stringSetPreferencesKey("payment_due_notified")
     private val quincenaCloseNotifiedKey = stringSetPreferencesKey("quincena_close_notified")
+    private val budgetAlertsEnabledKey = booleanPreferencesKey("budget_alerts_enabled")
+    private val budgetAlertsSentKey = stringSetPreferencesKey("budget_alerts_sent")
     private val calendarMirrorEnabledKey = booleanPreferencesKey("calendar_mirror_enabled")
     private val calendarMirrorIdKey = longPreferencesKey("calendar_mirror_id")
     private val calendarEventMapKey = stringPreferencesKey("calendar_event_map_json")
@@ -254,6 +256,22 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setQuincenaCloseNotified(ids: Set<String>) {
         context.dataStore.edit { prefs -> prefs[quincenaCloseNotifiedKey] = ids }
+    }
+
+    /** Avisos de presupuesto por categoría (Fase 7b). Encendidos por defecto. */
+    val budgetAlertsEnabled: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[budgetAlertsEnabledKey] ?: true }
+
+    suspend fun setBudgetAlertsEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[budgetAlertsEnabledKey] = enabled }
+    }
+
+    /** Avisos ya publicados, como `quincenaId|categoryId|NIVEL`; el worker los poda. */
+    suspend fun getBudgetAlertsSent(): Set<String> =
+        context.dataStore.data.first()[budgetAlertsSentKey] ?: emptySet()
+
+    suspend fun setBudgetAlertsSent(keys: Set<String>) {
+        context.dataStore.edit { prefs -> prefs[budgetAlertsSentKey] = keys }
     }
 
     // Dedupe del recordatorio de fecha límite de pago de tarjeta (estados v2 Fase 5).

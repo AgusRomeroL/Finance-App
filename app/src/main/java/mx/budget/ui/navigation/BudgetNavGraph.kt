@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -121,6 +122,14 @@ fun BudgetNavGraph(
     onReminderLeadChange: (Int) -> Unit = {},
     calendarMirrorEnabled: Boolean = false,
     onCalendarMirrorToggle: (Boolean) -> Unit = {},
+    /** Avisos de presupuesto por categoría (Fase 7b). */
+    budgetAlertsEnabled: Boolean = true,
+    notificationsAllowed: Boolean = true,
+    onBudgetAlertsToggle: (Boolean) -> Unit = {},
+    onRequestNotifications: () -> Unit = {},
+    /** Destino pedido por una notificación (Fase 7b). */
+    pendingNavigation: kotlinx.coroutines.flow.StateFlow<PendingNavigation?>? = null,
+    onNavigationConsumed: () -> Unit = {},
     locationLevel: String = "NONE",
     onLocationLevelChange: (String) -> Unit = {},
     householdViewModel: mx.budget.ui.household.HouseholdViewModel? = null,
@@ -180,6 +189,18 @@ fun BudgetNavGraph(
     }
     val isTopLevel = currentRoute in topLevelRoutes
     val isExpanded = windowWidthDp >= 600
+
+    // Fase 7b: un aviso de presupuesto abre Analíticas con su categoría al frente.
+    var analyticsFocusCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    val pendingNav = pendingNavigation?.collectAsState()?.value
+    LaunchedEffect(pendingNav) {
+        val nav = pendingNav ?: return@LaunchedEffect
+        if (nav.route == BudgetDestinations.ANALYTICS) {
+            analyticsFocusCategoryId = nav.categoryId
+            onNavigate(BudgetDestinations.ANALYTICS)
+        }
+        onNavigationConsumed()
+    }
 
     // ── Tutorial guiado (coach-marks o spotlight); ver ui/tutorial/ y TUTORIAL.md ──
     // El controller se recuerda una sola vez; el overlay (abajo) ejecuta la navegación
@@ -413,6 +434,8 @@ fun BudgetNavGraph(
                     } else null,
                     aiViewModel = aiAssistantViewModel,
                     tutorialController = tutorialController,
+                    focusCategoryId = analyticsFocusCategoryId,
+                    onFocusDismissed = { analyticsFocusCategoryId = null },
                 )
             } else {
                 PlaceholderScreen("Analíticas e IA", onNavigate)
@@ -446,6 +469,10 @@ fun BudgetNavGraph(
                 onReminderLeadChange = onReminderLeadChange,
                 calendarMirrorEnabled = calendarMirrorEnabled,
                 onCalendarMirrorToggle = onCalendarMirrorToggle,
+                budgetAlertsEnabled = budgetAlertsEnabled,
+                notificationsAllowed = notificationsAllowed,
+                onBudgetAlertsToggle = onBudgetAlertsToggle,
+                onRequestNotifications = onRequestNotifications,
                 locationLevel = locationLevel,
                 onLocationLevelChange = onLocationLevelChange,
                 onOpenQuincenas = { onNavigate(BudgetDestinations.QUINCENAS) },
@@ -779,3 +806,12 @@ private fun PlaceholderScreen(title: String, onNavigate: (String) -> Unit) {
     }
 }
 
+/**
+ * Destino que pide algo de fuera de la app, hoy solo el aviso de presupuesto
+ * (Fase 7b): [route] es una ruta de [BudgetDestinations] y [categoryId] la
+ * categoría que Analíticas pone al frente.
+ */
+data class PendingNavigation(
+    val route: String,
+    val categoryId: String? = null,
+)

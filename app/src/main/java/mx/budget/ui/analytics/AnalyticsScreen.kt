@@ -59,6 +59,8 @@ import androidx.compose.ui.res.stringResource
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.quincena.QuincenaFigures
 import mx.budget.data.quincena.quincenaFigures
+import mx.budget.data.quincena.quincenaProgress
+import mx.budget.data.budget.CategoryForecast
 import mx.budget.ui.common.MemberPeriod
 import mx.budget.ui.common.MemberPeriodPills
 import mx.budget.data.local.result.QuincenaSnapshot
@@ -93,6 +95,9 @@ fun AnalyticsScreen(
     onOpenLedger: (() -> Unit)? = null,
     aiViewModel: mx.budget.ai.AiAssistantViewModel? = null,
     tutorialController: mx.budget.ui.tutorial.TutorialController? = null,
+    /** Categoría que un aviso de presupuesto pone al frente (Fase 7b). */
+    focusCategoryId: String? = null,
+    onFocusDismissed: () -> Unit = {},
 ) {
     val money = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")) }
     var chatOpen by remember { mutableStateOf(false) }
@@ -124,6 +129,12 @@ fun AnalyticsScreen(
     val postedExpenses = if (demo) D.spendByCategory.sumOf { it.actual } else rawPostedExpenses
     val reservedPlanned = if (demo) 0.0 else rawReservedPlanned
     val extras = if (demo) mx.budget.data.quincena.QuincenaFiguresSource.Extras() else rawExtras
+    // Pronóstico por categoría (Fase 7b): la misma fracción de quincena que Ritmo.
+    val progress = remember(quincena?.id) { quincenaProgress(quincena?.startDate, quincena?.endDate) }
+    val forecastFor: (SpendByCategory) -> Double? = { row ->
+        if (demo) null else CategoryForecast.projected(row.actual, progress.fraction, progress.dayIndex)
+    }
+    val focusRow = focusCategoryId?.let { id -> byCategory.firstOrNull { it.categoryId == id } }
     // Misma convencion que el dashboard (Fase 7b: con topes y arrastre), en un
     // solo sitio, para que resumen y flujo no cuenten otra historia.
     val figures = quincena?.let { q ->
@@ -173,6 +184,25 @@ fun AnalyticsScreen(
                                 contentDescription = "Libro Mayor",
                                 tint = MaterialTheme.colorScheme.primary,
                             )
+                        }
+                    }
+                }
+            }
+
+            // ── Aviso de presupuesto (Fase 7b): la categoría del aviso, al frente ─
+            if (focusRow != null) {
+                item(key = "focus") {
+                    WidgetCard(title = "Aviso de presupuesto") {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CategoryBudgetBar(
+                                name = focusRow.categoryName,
+                                projected = focusRow.projected,
+                                actual = focusRow.actual,
+                                pctExec = focusRow.pctExec,
+                                money = money,
+                                forecast = forecastFor(focusRow),
+                            )
+                            TextButton(onClick = onFocusDismissed) { Text("Listo") }
                         }
                     }
                 }
@@ -317,6 +347,7 @@ fun AnalyticsScreen(
                                     actual = row.actual,
                                     pctExec = row.pctExec,
                                     money = money,
+                                    forecast = forecastFor(row),
                                 )
                             }
                             if (byCategory.size > 6) {
@@ -998,6 +1029,8 @@ private fun CategoryBudgetBar(
     actual: Double,
     pctExec: Int,
     money: NumberFormat,
+    /** Gasto proyectado al cierre (Fase 7b); null sin base o fuera de la quincena activa. */
+    forecast: Double? = null,
 ) {
     val over = projected > 0 && actual > projected
     val fillColor = when {
@@ -1061,6 +1094,15 @@ private fun CategoryBudgetBar(
                 color = if (over) MaterialTheme.financeColors.expense
                 else MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            // Pronóstico (Fase 7b): solo cuando el ritmo actual pasaría el tope y
+            // todavía no se pasó. Texto con la cifra y el signo, no solo el color.
+            if (actual < projected && forecast != null && forecast > projected) {
+                Text(
+                    "A este ritmo: ${money.format(forecast)}, ${CategoryForecast.pct(forecast, projected)} % del tope",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.financeColors.warning,
+                )
+            }
         }
     }
 }
