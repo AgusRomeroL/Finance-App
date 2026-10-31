@@ -93,7 +93,8 @@ data class PlannedBreakdownRow(
  * Tope de una categoría frente a lo que ya consumió en una quincena (Fase 7b):
  * lo gastado (POSTED) y lo planeado prorrateado por cadencia, con el mismo peso
  * que `ExpenseDao.observeProratedPlannedTotal`. Lo pendiente lo calcula
- * `CategoryCaps`, que también alimenta los avisos de presupuesto.
+ * `CategoryCaps`, que también alimenta los avisos de presupuesto. Solo hay filas
+ * de categorías sin plantilla recurrente activa (ver `AnalyticsDao.getCategoryCaps`).
  */
 data class CategoryCapRow(
     val categoryId: String,

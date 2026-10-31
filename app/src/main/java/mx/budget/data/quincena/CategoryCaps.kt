@@ -13,6 +13,12 @@ import mx.budget.data.local.result.CategoryCapRow
  *
  * El tope cubre solo los gastos de su misma categoria, sin sumar las hijas, como
  * las barras de Analiticas.
+ *
+ * Solo llegan aqui los topes de gasto libre: `AnalyticsDao.getCategoryCaps`
+ * descarta las categorias con una plantilla recurrente activa (decision del
+ * 2026-10-31), porque su cargo ya lo aparta "Reservado". En la semilla quedan
+ * Comida, Despensa, Comida gatas y Gasolina; las suscripciones y servicios ya no
+ * apartan su tope dos veces ni avisan al pagarse.
  */
 object CategoryCaps {
 

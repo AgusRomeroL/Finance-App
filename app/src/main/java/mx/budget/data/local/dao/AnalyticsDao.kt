@@ -79,6 +79,12 @@ interface AnalyticsDao {
      * gastó en la quincena y lo que tiene planeado, prorrateado por cadencia con
      * el mismo `CASE` que `ExpenseDao.observeProratedPlannedTotal`. Sin filas de
      * categorías sin tope: no aportan nada al disponible ni a los avisos.
+     *
+     * Tampoco entran las categorías con una plantilla recurrente activa (decisión
+     * del 2026-10-31): su cargo ya lo aparta "Reservado", así que su tope se
+     * apartaba dos veces y, en la quincena en que no se cobra, apartaba dinero que
+     * no se iba a gastar; además pagar la suscripción disparaba "Llegaste al tope".
+     * Los topes que quedan son los de gasto libre, como en Lukas.
      */
     @Query(
         """
@@ -99,6 +105,8 @@ interface AnalyticsDao {
                            AND e.status = 'PLANNED'), 0.0) AS plannedProrated
         FROM category c
         WHERE c.household_id = :householdId AND c.budget_default_mxn > 0
+          AND NOT EXISTS (SELECT 1 FROM recurrence_template rt
+                          WHERE rt.category_id = c.id AND rt.is_active = 1)
         ORDER BY c.sort_order, c.display_name
         """
     )
@@ -123,6 +131,8 @@ interface AnalyticsDao {
                            AND e.status = 'PLANNED'), 0.0) AS plannedProrated
         FROM category c
         WHERE c.household_id = :householdId AND c.budget_default_mxn > 0
+          AND NOT EXISTS (SELECT 1 FROM recurrence_template rt
+                          WHERE rt.category_id = c.id AND rt.is_active = 1)
         ORDER BY c.sort_order, c.display_name
         """
     )
