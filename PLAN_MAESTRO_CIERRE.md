@@ -72,12 +72,15 @@ Severidad: **B** bloquea la entrega; **F** funcionalidad incompleta o defecto co
 | 24 | D | Higiene local: cinco volcados `java_pid*.hprof` (unos 3.8 GB) y `sdk.zip` (75 MB) en la carpeta sincronizada de Drive; están ignorados por git pero se replican en la nube. `DESIGN.md` de referencia habla de Roboto Flex cuando la app usa Google Sans Flex. Resuelto en la Fase 0: movidos a `C:\dev\finance-app-offdrive\` (4.2 GB con `temp_jdk`, `temp_sdk` y `build_log.txt`); `DESIGN.md` marcado como histórico con nota de tokens reales (la reescritura con tokens sigue en 6a). | listado de raíz; `ui_reference/veridian_ledger/DESIGN.md` | 0, 6 |
 | 26 | D | **Cerrado a medias (2026-09-16; corregido el mismo día).** Cero U+2014 es regla invariable y el repositorio llegó a versionar 1395 ocurrencias en 206 archivos. La Fase 6b barrió **el código y los textos visibles**, que hoy están limpios (`app/`, `wear/`, `wearcore/`, `res/`) y protegidos por el hook `pre-commit`. La afirmación de que no quedaba ninguna en todo el repositorio era falsa: `git grep` sobre `HEAD` encuentra **930 líneas en 61 archivos** (documentación de la raíz, specs, `web/` y scripts). Ese barrido sigue siendo de la Fase 7, con la CI que lo verifique. La Fase 7 (2026-09-17) limpió `web/src`, `app/schemas/README.md` y `scripts/check_seed_integrity.sh` y puso la verificación en CI (`scripts/ci/check_em_dash.sh`: el diff no introduce ninguna y 18 rutas de código siguen en cero). El mismo día, por decisión de Agustín, se barrieron también la documentación, las specs, los scripts y las skills vendorizadas bajo `.claude/skills/` (876 líneas en 41 archivos), y el script exige cero en todo el árbol versionado. **Cerrado.** | `git grep` del 2026-09-17 | 6, 7 |
 | 25 | B | Preguntas de clasificación de la semilla sin respuesta de Norma (Pau Raúl, Berna/Bernardo, Marco y Omar, Cochecito $8,000, Changan $5,000, deudor "Por identificar" $1,900) y dudas surgidas de los estados de cuenta (CENEVAL, CirculoDerm, ropa universitarios, WIM, Google CR, cargos de Amazon). Regla nueva (2026-09-05): la base inicial no se genera con ninguna duda abierta. | `seed/REPORTE_SEMILLA_2026-07.md:41-47,232`; memoria `auditoria-metodo-beneficiario` | 10 |
+| 27 | F | **Añadido el 2026-10-31.** La comparación con Lukas y Wallet by BudgetBakers (recorridas en el Pixel 7 el 2026-10-30 con un juego de datos común) dejó 28 brechas con valor y esfuerzo, y destapó dos defectos propios: "Por día" prometía más dinero del disponible porque no restaba lo reservado, y un plan MSI sin categoría nunca proyectaba cuotas. Los dos defectos se corrigieron el mismo día (`121d8b5`). Las brechas de valor alto y esfuerzo bajo van en la Fase 7b, antes del release; el resto, en la Fase 12, después del cutover. | `ui_reference/referencias_2026-10/ANALISIS_LUKAS_WALLET.md` (tabla de brechas y orden propuesto) | 7b, 12 |
 
 ---
 
 ## 3. Mapa de fases y estado
 
 El orden respeta dependencias reales: primero se sanea el terreno, después se cierra la deuda funcional, luego la robustez del sync (de la que dependen reloj y datos), en seguida las capas que se apoyan en ella, y al final calidad, release y puesta en producción con Norma. La Fase 9 (`main` público) se conserva en la numeración pero quedó cancelada el 2026-09-05: el repositorio es privado. Por decisión de Agustín (2026-09-05), todo lo que involucra a Norma queda al final: no recibe preguntas ni tareas hasta que el software esté terminado y publicado. Sus preguntas (§5.3) se envían al arrancar la Fase 10.
+
+La Fase 7b se añadió el 2026-10-31, por decisión de Agustín, a partir del análisis de Lukas y Wallet (hallazgo 27). No es una sub-fase de la 7: ocupa el hueco entre la 7 y la 8 para no renumerar fases que el repositorio y las memorias citan por número, y entra antes del release para que Norma la reciba en su primera instalación. La segunda tanda de ese análisis es la Fase 12, que corre con Norma ya usando la app.
 
 | Fase | Nombre | Depende de | Chats estimados | Estado | Commit de cierre |
 |---|---|---|---|---|---|
@@ -89,12 +92,14 @@ El orden respeta dependencias reales: primero se sanea el terreno, después se c
 | 5 | Ciclo de quincena, exportación y respaldo | 1 | 1 | **hecha** (2026-09-15) | `e5f35e9` (último de contenido; el cierre documental es el commit siguiente, que actualiza esta tabla) |
 | 6 | Mejora de UX con `/design` y accesibilidad | 1, 5 | 2 (6a auditoría y diseño; 6b implementación) | **hecha** (2026-09-16; la pasada de accesibilidad en hardware se hizo el 2026-09-17 en el Pixel 7 con Accessibility Scanner y TalkBack, con once correcciones, y el recorrido de la notificación quedó auditado). Sin publicar el sistema de diseño en la nube (`/design-sync` exige `/design-login`, que solo se concede desde una sesión interactiva). Los siete recorridos de la 6a quedaron auditados el 2026-09-23 (importar el estado del mes con el PDF real de Banamex hasta la revisión, y proponer desde la web hasta la bandeja del teléfono); el detalle está en `ui_reference/design_2026-09/AUDITORIA.md` §8 | `5859d87` (último de contenido; el cierre documental es el commit siguiente, que actualiza esta tabla) |
 | 7 | Calidad: pruebas, CI y observabilidad | 2, 5 | 1 | **hecha** (2026-09-17): 91 pruebas JVM, 10 instrumentadas (migraciones sobre el asset real desde v1, v16, v17 y v18, verificadas en el Pixel 7), 395 casos de reglas, 21 de la web, CI en `ci.yml` e `instrumented.yml`, Crashlytics (decisión 7) y el repositorio entero sin rayas largas, skills vendorizadas incluidas | (el cierre documental es el commit que actualiza esta tabla) |
-| 8 | Release firmado, publicación web y distribución | 3, 4, 6, 7 | 1 | pendiente | |
+| 7b | Paridad con Lukas y Wallet: primer bloque | 5, 6 | 1 | pendiente (los dos defectos que destapó el análisis ya se corrigieron en `121d8b5`) | |
+| 8 | Release firmado, publicación web y distribución | 3, 4, 6, 7, 7b | 1 | pendiente | |
 | 9 | `main` público (opcional) | 8 | 0 | **cancelada** (2026-09-05: repo privado, sin `LICENSE`) | |
 | 10 | Semilla definitiva desde el Excel 2.5 (2), 100 % clasificada | 8 + respuestas de Norma | 1 a 2 | pendiente | |
 | 11 | Puesta en producción con Norma (cutover) | 10 | 1 | pendiente | |
+| 12 | Paridad con Lukas y Wallet: segunda tanda | 11 | 2 (12a widget, bloqueo y privacidad; 12b recurrencias, recordatorio, foto de ticket y proyección) | pendiente | |
 
-Las fases 3 y 4 pueden correr en paralelo (chats distintos) una vez cerrada la 2. La 5 puede correr en paralelo con la 2. Las fases 10 y 11 son las últimas por decisión explícita; el chat de la Fase 10 adelanta primero el trabajo técnico que no requiere a Norma (diff de hojas, extensión del ETL, cuestionario de conceptos nuevos) y solo después le escribe.
+Las fases 3 y 4 pueden correr en paralelo (chats distintos) una vez cerrada la 2. La 5 puede correr en paralelo con la 2. Las fases 10 y 11 son las últimas del cierre por decisión explícita (la 12 ya no es cierre: mejora la app con Norma usándola); el chat de la Fase 10 adelanta primero el trabajo técnico que no requiere a Norma (diff de hojas, extensión del ETL, cuestionario de conceptos nuevos) y solo después le escribe.
 
 ---
 
@@ -392,6 +397,37 @@ fast-forward a main y norma y actualiza la sección 3 del plan.
 
 ---
 
+### Fase 7b. Paridad con Lukas y Wallet: primer bloque
+
+**Contexto.** El 2026-10-30 se recorrieron Lukas y Wallet by BudgetBakers en el Pixel 7 con un juego de datos común (cuentas, sueldo quincenal, recurrentes, gastos, MSI, transferencia y topes por categoría) y se compararon contra el código. El resultado está en `ui_reference/referencias_2026-10/ANALISIS_LUKAS_WALLET.md`: inventario de cada app, la fórmula deducida del "Seguro para Gastar" de Lukas, una tabla de 28 brechas con valor y esfuerzo, y un orden propuesto de once puntos. El punto 1 (dos defectos propios) quedó hecho el mismo día en `121d8b5`. Por decisión de Agustín del 2026-10-31, los puntos 2 a 5 entran antes del release y del 6 en adelante pasan a la Fase 12.
+
+**Objetivo.** Que el presupuesto de la quincena se pueda declarar y vigilar, y que registrar y corregir un gasto cueste menos que en las dos apps de referencia.
+
+**Alcance.**
+1. **Presupuesto de la quincena editable.** Las columnas de ingreso y gasto proyectados ya existen y el rollover las arrastra (`QuincenaEntity`, `QuincenaRollover.kt:140`), pero ninguna pantalla las edita. Editor en `ui/quincena/QuincenasScreen`; la escritura pasa por `QuincenaLifecycle.save`, que sella `updated_at` y encola el kind `QUINCENA`. Una quincena `CLOSED` no se edita.
+2. **Avisos de presupuesto por categoría con pronóstico.** Worker periódico que reutiliza `getCategoriesOverBudget` (existe en `AnalyticsDao.kt:187` y en `AnalyticsRepository`, y nadie la llama): una notificación por categoría y quincena al 80 % y otra al 100 %, con la marca en DataStore, canal propio, acción que abre Analíticas en la categoría y preferencia en Perfil. El pronóstico proyecta el gasto de la categoría con la fracción de quincena transcurrida (la misma de la tarjeta Ritmo) y aparece como leyenda en la barra de la categoría y como aviso anticipado.
+3. **Deshacer y última cuenta recordada.** Snackbar con "Deshacer" al guardar y al borrar, que revierte por el repositorio en una transacción (gasto, atribuciones y outbox); el deshacer de un borrado tiene que convivir con la lápida ya encolada para que el gasto no resucite ni desaparezca en otro dispositivo. La última cuenta usada se guarda por miembro en DataStore y siembra `CaptureBottomSheet` solo en modo New, nunca en Review.
+4. **Desglose de lo reservado y vista por periodo.** Tocar "Reservado" en la resta del héroe abre una hoja con los planeados de la quincena (la consulta prorrateada de `ExpenseDao`, filas con tono `SCHEDULED`). La tarjeta Ritmo alterna con un toque entre por día, por semana y por quincena (no con pulsación larga, que TalkBack no descubre); las cifras salen de `QuincenaFigures`, como `disponiblePorDia`, y el estado del alternador se anuncia con un `stateDescription` en `strings.xml`.
+
+Sin cambio de esquema: la base sigue en v21.
+
+**Fuera de alcance.** Las decisiones 13 y 14 de §7 (reservar lo que falta de los topes por categoría y arrastrar el sobrante). Si Agustín las resuelve a favor antes de arrancar, entran en esta fase porque tocan la misma `QuincenaFigures` y la resta escrita del héroe; si no, se quedan para la Fase 12.
+
+**Criterio de salida.** Los cuatro puntos verificados en FinanceFold con la configuración fiel y en modo oscuro; el aviso de presupuesto visto como notificación real (ojo: `jobscheduler run -f` no salta el periodo mínimo de WorkManager); pruebas JVM del pronóstico y de las cifras por semana y por quincena; el deshacer de un borrado verificado contra un segundo dispositivo (`scripts/admin/sync_peer.py` o el Pixel 7).
+
+**Prompt de arranque.**
+```text
+Lee CLAUDE.md, la Fase 7b de PLAN_MAESTRO_CIERRE.md y ui_reference/referencias_2026-10/ANALISIS_LUKAS_WALLET.md
+(tabla de brechas y orden propuesto). Antes de empezar, confirma con el usuario cómo reconciliar main con
+develop si todavía divergen, porque el cierre de la fase exige fast-forward. Pregúntale por las decisiones
+13 y 14 de la sección 7 antes de tocar QuincenaFigures. Implementa en develop los cuatro puntos del
+alcance, sin cambio de esquema. Verifica cada uno en FinanceFold con la configuración fiel y en modo
+oscuro, el aviso como notificación real y el deshacer contra un segundo dispositivo. Cierra con
+fast-forward a main y norma y actualiza la sección 3 del plan.
+```
+
+---
+
 ### Fase 8. Release firmado, publicación web y distribución
 
 **Objetivo.** Un APK o AAB firmado, con reducción de código, instalable en el Fold y el reloj, más la web desplegada con su configuración definitiva.
@@ -487,7 +523,7 @@ sección 3 del plan.
 4. Sesión de acompañamiento: tutorial, primera captura, confirmación de un PLANNED, importación del estado de cuenta del mes, exportación de un reporte. Registrar dudas para mantenimiento.
 5. Documentar el corte en `seed/` y alinear la rama `norma`.
 
-**Criterio de salida.** Norma opera una quincena completa sin intervención; sync verificado con el Pixel de Agustín; el Excel deja de usarse. Con esto el plan queda cerrado.
+**Criterio de salida.** Norma opera una quincena completa sin intervención; sync verificado con el Pixel de Agustín; el Excel deja de usarse. Con esto el cierre queda hecho; la Fase 12 sigue con Norma ya en la app.
 
 **Prompt de arranque.**
 ```text
@@ -495,6 +531,34 @@ Lee CLAUDE.md, la Fase 11 y la sección 5 de PLAN_MAESTRO_CIERRE.md, y las memor
 y bugs de julio. Confirma con el usuario el día del corte antes de ejecutar purge_and_reseed; nunca lo
 corras sin esa confirmación explícita. Ejecuta los 5 puntos, verifica el sync con el Pixel del
 usuario y documenta el corte en seed/. Actualiza la sección 3 del plan.
+```
+
+---
+
+### Fase 12. Paridad con Lukas y Wallet: segunda tanda
+
+**Contexto.** Los puntos 6 a 11 del orden propuesto en `ui_reference/referencias_2026-10/ANALISIS_LUKAS_WALLET.md`, que por decisión de Agustín del 2026-10-31 van después de la puesta en producción. Norma ya opera la app, así que cada entrega le llega por el canal de distribución de la Fase 8 y cualquier cambio de esquema migra datos reales.
+
+**Objetivo.** Igualar a las dos apps en lo que le sirve a Norma y superarlas en los dos puntos donde Wallet falla: un modo privacidad que también le oculte los montos a TalkBack y una proyección de saldo que sume cada movimiento con su signo.
+
+**Alcance.**
+1. **Widget con cifras** (12a): segunda variante Glance, o tamaños responsivos del widget actual (`widget/BudgetCaptureWidget.kt`, hoy solo botones), con "Disponible" y "Gastado hoy"; refresco con `updateAll` al escribir en el repositorio de gastos; probado en el lanzador del Fold abierto y cerrado; respeta el modo privacidad.
+2. **Bloqueo con huella o PIN y modo privacidad, juntos** (12a), porque los dos tocan el arranque y los montos. `MainActivity` pasa a `FragmentActivity` y pide `BiometricPrompt` al volver de segundo plano (`lifecycle-process` ya está), con respaldo de la credencial del dispositivo, opt-in en Perfil y cubriendo Quick Tap y la captura por voz. El modo privacidad es una preferencia de DataStore leída por un `CompositionLocal`: `AutoSizeAmountText` y los montos del dashboard y de Cuentas pintan guiones y su `contentDescription` dice "monto oculto", en `strings.xml`.
+3. **Recurrencias con fecha de fin, cada N meses y ocurrencias omitidas** (12b), en una sola migración v21 → v22: `interval_months`, `end_date` y `max_occurrences` en `recurrence_template`, más una marca de ocurrencia omitida que el materializador respete (el id determinista haría renacer una ocurrencia borrada). Migración idempotente con `addColumnIfMissing` y el `createSql` copiado del `22.json`, mapper del pull con doble nombre, regla de Firestore si nace una colección (nace cerrada), CRUD de la web y acción "Omitir" en la notificación del recordatorio.
+4. **Recordatorio diario y crédito disponible de la tarjeta** (12b): worker diario a la hora elegida en Perfil cuya acción abre Quick Tap; la cifra límite menos saldo en la tarjeta de la cuenta, junto a la barra de porcentaje que ya existe.
+5. **Captura por foto de ticket y proyección de saldo** (12b). Foto o cámara del sistema, OCR en el dispositivo con el ML Kit que ya usan los estados de cuenta, extracción determinista de total, fecha y comercio (LLM solo si hay AICore), un `pending_capture` con `source` nuevo y revisión en `CaptureBottomSheet` modo Review; nunca se inserta directo. La proyección a 30, 60 y 90 días va como widget de Analíticas: saldo líquido de hoy más ingresos y planeados futuros, con las recurrencias proyectadas en memoria sin materializarlas.
+6. **Lo de valor bajo, si sobra tiempo:** etiquetas, foto adjunta del recibo, reglas de categorización del usuario, filtros de búsqueda con exportación de lo filtrado y estadísticas extra. Lo que toque esquema y entre en esta tanda comparte la migración v22. La conexión bancaria y el periodo configurable quedan descartados.
+
+**Criterio de salida.** La prueba instrumentada de migraciones cubre la v22 (cadena 1→22 sobre el asset real y la ruta desde v21 sobre una base con datos) antes de distribuir; cada punto verificado en FinanceFold con la configuración fiel; el modo privacidad recorrido con TalkBack en el Pixel 7; la entrega instalada en el Fold de Norma por el canal de la Fase 8 sin perder datos.
+
+**Prompt de arranque.**
+```text
+Lee CLAUDE.md, la Fase 12 de PLAN_MAESTRO_CIERRE.md y ui_reference/referencias_2026-10/ANALISIS_LUKAS_WALLET.md.
+Norma ya usa la app: todo cambio de esquema va en una sola migración v21 a v22, idempotente, y la prueba
+instrumentada de la cadena se extiende a la v22 antes de distribuir. Haz la sub-fase que toque (12a o 12b)
+en develop, verifica en FinanceFold con la configuración fiel y el modo privacidad con TalkBack en el
+Pixel 7, y distribuye por el canal de la Fase 8. Cierra con fast-forward a main y norma y actualiza la
+sección 3 del plan.
 ```
 
 ---
@@ -573,6 +637,9 @@ Consume mucho contexto porque genera varios *artboards* a la vez; la herencia au
 12. **Congelación en la web.** Abierta desde 2026-09-15. La app rechaza altas y ediciones sobre una quincena cerrada dentro de la transacción del repositorio, pero la PWA (`web/src/lib/repository.ts`) edita cualquier periodo sin mirar su estado. Poner el mismo guard allí exige tocar la web y volver a desplegar hosting; mientras no se haga, quien use el escritorio puede modificar un periodo cerrado y el cambio llegará al teléfono por el pull, que escribe por DAO directo y no pasa por el guard. Se decide cuando la Fase 8 vuelva a tocar la web.
 
 11. **Alcance de lectura del Colaborador.** Resuelta el 2026-09-07: lee `members`, `categories`, `wallets` y `proposals`, que es justo lo que necesita para proponer y lo que su web consume. Se descartó el documento agregado `summary/{quincenaId}`: obligaba a decidir quién lo escribe y cuándo, con riesgo de quedar rancio si nadie abre la app, añadía una escritura más al push y exigía adaptar la web, a cambio de un panorama que el Colaborador no ha pedido.
+
+13. **Reservar lo que falta de los topes por categoría.** Abierta desde 2026-10-30. Lukas resta de su disponible lo que falta por gastar de cada tope activo; Finance-App solo resta lo planeado (`data/quincena/QuincenaFigures.kt`). Adoptarlo cambia la convención de cifras que comparten dashboard, resumen y asistente, y añade un término a la resta escrita del héroe. Se decide antes de arrancar la Fase 7b; si no, va con la 12.
+14. **Arrastre del sobrante a la quincena siguiente.** Abierta desde 2026-10-30. Lukas pasa el sobrante al periodo siguiente; aquí solo se arrastra el presupuesto declarado (`QuincenaRollover.kt:140`). Como el cierre de quincena ya congela las cifras, el sobrante podría entrar como término "arrastre" en `QuincenaFigures` de la siguiente y escribirse en la resta del héroe. Mismo plazo que la 13.
 
 ---
 

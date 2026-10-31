@@ -212,3 +212,5 @@ Valor para Norma: alto, medio o bajo. Esfuerzo: S (horas), M (un par de días), 
 11. Lo de valor bajo (etiquetas, adjuntos, reglas, búsqueda avanzada, estadísticas extra) cuando sobre tiempo. Conexión bancaria y periodo configurable, no.
 
 Decisiones que tiene que tomar Agustín antes de implementar: si el disponible debe reservar lo que falta de los topes por categoría (cambia la convención de cifras de tres pantallas) y si el sobrante de una quincena se arrastra a la siguiente.
+
+**Adoptado en el plan maestro el 2026-10-31.** El punto 1 quedó hecho en `121d8b5`. Los puntos 2 a 5 son la Fase 7b de `PLAN_MAESTRO_CIERRE.md`, antes del release; del 6 en adelante, la Fase 12, después del cutover. Las dos decisiones pasaron a la sección 7 del plan como la 13 y la 14.
