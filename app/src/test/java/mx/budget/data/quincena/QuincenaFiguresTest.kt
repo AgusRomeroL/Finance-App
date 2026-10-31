@@ -71,6 +71,65 @@ class QuincenaFiguresTest {
     }
 
     @Test
+    fun `los topes por gastar y el arrastre entran a la resta`() {
+        // Entraron 20,000, sobraron 1,500 de la anterior, se gastaron 8,000,
+        // hay 2,000 reservados y faltan 3,000 por gastar de los topes.
+        val f = QuincenaFigures(
+            projectedIncome = 20000.0, receivedIncome = 0.0, spent = 8000.0, reserved = 2000.0,
+            projectedExpenses = 0.0, capsPending = 3000.0, carryOver = 1500.0,
+        )
+        assertEquals(21500.0, f.base, 0.0)
+        assertEquals(13500.0, f.gross, 0.0)
+        assertEquals(5000.0, f.setAside, 0.0)
+        assertEquals(8500.0, f.available, 0.0)
+    }
+
+    @Test
+    fun `un arrastre negativo resta lo que falto`() {
+        val f = QuincenaFigures(10000.0, 0.0, spent = 2000.0, reserved = 0.0, projectedExpenses = 0.0, carryOver = -1578.2)
+        assertEquals(6421.8, f.available, 1e-9)
+        assertEquals(6421.8, f.gross, 1e-9)
+    }
+
+    @Test
+    fun `sin topes ni arrastre la convencion no cambia`() {
+        val f = QuincenaFigures(10000.0, 0.0, spent = 7000.0, reserved = 2500.0, projectedExpenses = 0.0)
+        assertEquals(500.0, f.available, 0.0)
+        assertEquals(3000.0, f.gross, 0.0)
+    }
+
+    @Test
+    fun `quincenaFigures pasa los topes y el arrastre`() {
+        val q = Fixtures.quincena(2026, 10, "SECOND", projectedIncome = 18000.0)
+        val f = quincenaFigures(q, receivedIncome = 0.0, spent = 1000.0, reserved = 500.0, capsPending = 700.0, carryOver = 300.0)
+        assertEquals(16100.0, f.available, 0.0)
+    }
+
+    @Test
+    fun `por semana son siete dias y nunca mas que el disponible`() {
+        // 14 dias restantes mas hoy: 15 dias, 1,000 por dia, 7,000 por semana.
+        assertEquals(7000.0, disponiblePorSemana(15000.0, diasRestantesSinHoy = 14)!!, 1e-9)
+        // Quedan hoy y 6 mas: la semana es justo el disponible.
+        assertEquals(7000.0, disponiblePorSemana(7000.0, diasRestantesSinHoy = 6)!!, 1e-9)
+        // Quedan hoy y manana: la semana no puede prometer mas de lo que hay.
+        assertEquals(1000.0, disponiblePorSemana(1000.0, diasRestantesSinHoy = 1)!!, 1e-9)
+        assertEquals(1000.0, disponiblePorSemana(1000.0, diasRestantesSinHoy = 0)!!, 1e-9)
+        assertNull(disponiblePorSemana(0.0, diasRestantesSinHoy = 5))
+        assertNull(disponiblePorSemana(-10.0, diasRestantesSinHoy = 5))
+    }
+
+    @Test
+    fun `la cifra de Ritmo sigue a la vista elegida`() {
+        assertEquals(1000.0, cifraRitmo(RitmoVista.DIA, 15000.0, 14)!!, 1e-9)
+        assertEquals(7000.0, cifraRitmo(RitmoVista.SEMANA, 15000.0, 14)!!, 1e-9)
+        assertEquals(15000.0, cifraRitmo(RitmoVista.QUINCENA, 15000.0, 14)!!, 1e-9)
+        // La quincena muestra el disponible aunque sea negativo; dia y semana no.
+        assertEquals(-200.0, cifraRitmo(RitmoVista.QUINCENA, -200.0, 3)!!, 0.0)
+        assertNull(cifraRitmo(RitmoVista.DIA, -200.0, 3))
+        assertNull(cifraRitmo(RitmoVista.SEMANA, -200.0, 3))
+    }
+
+    @Test
     fun `quincenaFigures respeta la columna cuando trae presupuesto`() {
         val q = Fixtures.quincena(2026, 9, "FIRST", projectedIncome = 18000.0, projectedExpenses = 9000.0)
         val f = quincenaFigures(q, receivedIncome = 0.0, spent = 0.0, reserved = 0.0, projectedExpensesFallback = 12000.0)

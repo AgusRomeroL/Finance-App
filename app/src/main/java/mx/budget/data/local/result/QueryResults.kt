@@ -71,6 +71,21 @@ data class SpendByCategory(
 )
 
 /**
+ * Tope de una categoría frente a lo que ya consumió en una quincena (Fase 7b):
+ * lo gastado (POSTED) y lo planeado prorrateado por cadencia, con el mismo peso
+ * que `ExpenseDao.observeProratedPlannedTotal`. Lo pendiente lo calcula
+ * `CategoryCaps`, que también alimenta los avisos de presupuesto.
+ */
+data class CategoryCapRow(
+    val categoryId: String,
+    val categoryName: String,
+    val colorHex: String?,
+    val cap: Double,
+    val spent: Double,
+    val plannedProrated: Double,
+)
+
+/**
  * Gasto acumulado por miembro con rol BENEFICIARY.
  * Alimenta el módulo analítico B (gasto proporcional por miembro)
  * y el intent GET_SPEND_BY_MEMBER del asistente IA.

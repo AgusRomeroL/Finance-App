@@ -54,6 +54,9 @@ object Fixtures {
         half: String,
         projectedIncome: Double = 0.0,
         projectedExpenses: Double = 0.0,
+        status: String = "ACTIVE",
+        actualIncome: Double = 0.0,
+        actualExpenses: Double = 0.0,
     ): QuincenaEntity {
         val first = half == "FIRST"
         val start = LocalDate.of(year, month, if (first) 1 else 16)
@@ -70,7 +73,9 @@ object Fixtures {
             label = "Quincena $year-$month $half",
             projectedIncomeMxn = projectedIncome,
             projectedExpensesMxn = projectedExpenses,
-            status = "ACTIVE",
+            actualIncomeMxn = actualIncome,
+            actualExpensesMxn = actualExpenses,
+            status = status,
         )
     }
 
@@ -141,12 +146,13 @@ object Fixtures {
         role = role,
     )
 
-    fun category(code: String, name: String, id: String = code) = CategoryEntity(
+    fun category(code: String, name: String, id: String = code, budget: Double? = null) = CategoryEntity(
         id = id,
         householdId = HID,
         code = code,
         displayName = name,
         kind = "EXPENSE",
+        budgetDefaultMxn = budget,
     )
 
     fun plan(id: String, name: String) = InstallmentPlanEntity(

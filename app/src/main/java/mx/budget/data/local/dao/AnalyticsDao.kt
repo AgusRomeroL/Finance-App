@@ -3,6 +3,7 @@ package mx.budget.data.local.dao
 import androidx.room.Dao
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
+import mx.budget.data.local.result.CategoryCapRow
 import mx.budget.data.local.result.InterestByWallet
 import mx.budget.data.local.result.MemberSpendByCategory
 import mx.budget.data.local.result.SpendByCategory
@@ -70,6 +71,62 @@ interface AnalyticsDao {
         """
     )
     suspend fun getSpendByCategory(householdId: String, quincenaId: String): List<SpendByCategory>
+
+    // ── Topes por categoría frente a lo gastado y lo planeado (Fase 7b) ──────
+
+    /**
+     * Cada categoría del hogar con tope (`budget_default_mxn > 0`) con lo que
+     * gastó en la quincena y lo que tiene planeado, prorrateado por cadencia con
+     * el mismo `CASE` que `ExpenseDao.observeProratedPlannedTotal`. Sin filas de
+     * categorías sin tope: no aportan nada al disponible ni a los avisos.
+     */
+    @Query(
+        """
+        SELECT c.id AS categoryId,
+               c.display_name AS categoryName,
+               c.color_hex AS colorHex,
+               c.budget_default_mxn AS cap,
+               COALESCE((SELECT SUM(e.amount_mxn) FROM expense e
+                         WHERE e.category_id = c.id AND e.quincena_id = :quincenaId
+                           AND e.status = 'POSTED'), 0.0) AS spent,
+               COALESCE((SELECT SUM(e.amount_mxn * CASE rt.cadence
+                                    WHEN 'MONTHLY_SPECIFIC_HALF' THEN 0.5
+                                    WHEN 'BIMONTHLY' THEN 0.25
+                                    ELSE 1.0 END)
+                         FROM expense e
+                         LEFT JOIN recurrence_template rt ON rt.id = e.recurrence_template_id
+                         WHERE e.category_id = c.id AND e.quincena_id = :quincenaId
+                           AND e.status = 'PLANNED'), 0.0) AS plannedProrated
+        FROM category c
+        WHERE c.household_id = :householdId AND c.budget_default_mxn > 0
+        ORDER BY c.sort_order, c.display_name
+        """
+    )
+    fun observeCategoryCaps(householdId: String, quincenaId: String): Flow<List<CategoryCapRow>>
+
+    @Query(
+        """
+        SELECT c.id AS categoryId,
+               c.display_name AS categoryName,
+               c.color_hex AS colorHex,
+               c.budget_default_mxn AS cap,
+               COALESCE((SELECT SUM(e.amount_mxn) FROM expense e
+                         WHERE e.category_id = c.id AND e.quincena_id = :quincenaId
+                           AND e.status = 'POSTED'), 0.0) AS spent,
+               COALESCE((SELECT SUM(e.amount_mxn * CASE rt.cadence
+                                    WHEN 'MONTHLY_SPECIFIC_HALF' THEN 0.5
+                                    WHEN 'BIMONTHLY' THEN 0.25
+                                    ELSE 1.0 END)
+                         FROM expense e
+                         LEFT JOIN recurrence_template rt ON rt.id = e.recurrence_template_id
+                         WHERE e.category_id = c.id AND e.quincena_id = :quincenaId
+                           AND e.status = 'PLANNED'), 0.0) AS plannedProrated
+        FROM category c
+        WHERE c.household_id = :householdId AND c.budget_default_mxn > 0
+        ORDER BY c.sort_order, c.display_name
+        """
+    )
+    suspend fun getCategoryCaps(householdId: String, quincenaId: String): List<CategoryCapRow>
 
     // ── Módulo C: intereses pagados por wallet ───────────────────────────────
 

@@ -121,6 +121,7 @@ import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.quincena.disponiblePorDia
+import mx.budget.data.quincena.quincenaProgress
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.capture.toReviewMode
@@ -196,26 +197,6 @@ private fun quincenaRange(q: QuincenaEntity?): String {
     val mFmt = DateTimeFormatter.ofPattern("MMM", AppLocale)
     val endMonth = end.format(mFmt).replace(".", "")
     return "${start.dayOfMonth}–${end.dayOfMonth} $endMonth"
-}
-
-/** Estado calculado del progreso de la quincena (día actual, fracción, días restantes). */
-private data class QuincenaProgress(
-    val dayIndex: Int,
-    val totalDays: Int,
-    val fraction: Float,
-    val daysRemaining: Int
-)
-
-private fun computeProgress(q: QuincenaEntity?): QuincenaProgress {
-    val start = parseIso(q?.startDate)
-    val end = parseIso(q?.endDate)
-    if (start == null || end == null) return QuincenaProgress(1, 15, 0f, 0)
-    val total = (ChronoUnit.DAYS.between(start, end) + 1).toInt().coerceAtLeast(1)
-    val today = LocalDate.now()
-    val rawDay = (ChronoUnit.DAYS.between(start, today) + 1).toInt()
-    val day = rawDay.coerceIn(1, total)
-    val remaining = (ChronoUnit.DAYS.between(today, end)).toInt().coerceIn(0, total)
-    return QuincenaProgress(day, total, day.toFloat() / total, remaining)
 }
 
 /** Ramp monocromático verde (matiz de marca) derivado del primary dinámico. */
@@ -1880,7 +1861,7 @@ private fun RitmoCard(
 ) {
     val income = maxOf(quincena?.projectedIncomeMxn ?: 0.0, actualIncome)
     val budget = (quincena?.projectedExpensesMxn?.takeIf { it > 0.0 } ?: income)
-    val progress = remember(quincena?.id) { computeProgress(quincena) }
+    val progress = remember(quincena?.id) { quincenaProgress(quincena?.startDate, quincena?.endDate) }
     val expectedByNow = budget * progress.fraction
     val hasPlan = expectedByNow > 0.0
     val deviation = if (hasPlan) (postedTotal - expectedByNow) / expectedByNow else 0.0
@@ -2483,7 +2464,7 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
         animationSpec = BudgetMotion.standard(),
         label = "heroAmountCompact",
     )
-    val progress = remember(q?.id) { computeProgress(q) }
+    val progress = remember(q?.id) { quincenaProgress(q?.startDate, q?.endDate) }
     val timePct = (progress.fraction * 100).toInt()
     val spendFraction = if (income > 0.0) (spent / income).toFloat() else 0f
     val overBudget = spent > income

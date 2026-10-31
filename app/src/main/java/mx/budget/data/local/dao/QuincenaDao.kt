@@ -49,6 +49,22 @@ interface QuincenaDao {
     )
     suspend fun getForDate(householdId: String, isoDate: String): QuincenaEntity?
 
+    /**
+     * Versión reactiva de [getForDate]. La usa el arrastre (Fase 7b) para seguir
+     * a la quincena anterior: cuando se cierra, el arrastre de la siguiente se
+     * actualiza solo. Las quincenas sembradas tienen ids UUID, así que la
+     * anterior se busca por fecha y nunca armando el id.
+     */
+    @Query(
+        """
+        SELECT * FROM quincena
+        WHERE household_id = :householdId
+          AND start_date <= :isoDate AND end_date >= :isoDate
+        LIMIT 1
+        """
+    )
+    fun observeForDate(householdId: String, isoDate: String): Flow<QuincenaEntity?>
+
     @Query(
         """
         SELECT * FROM quincena

@@ -98,6 +98,10 @@ class BudgetApplication : Application() {
     lateinit var quincenaFreezeGuard: mx.budget.data.quincena.QuincenaFreezeGuard
         private set
 
+    /** Topes por gastar y arrastre de la convencion de cifras (Fase 7b). */
+    lateinit var quincenaFiguresSource: mx.budget.data.quincena.QuincenaFiguresSource
+        private set
+
     /**
      * Gemelo de [expenseRepository] SIN la guardia de quincena cerrada.
      *
@@ -459,6 +463,10 @@ class BudgetApplication : Application() {
             db = database,
         )
         quincenaRepository = QuincenaRepositoryImpl(database.quincenaDao(), quincenaLifecycle)
+        quincenaFiguresSource = mx.budget.data.quincena.QuincenaFiguresSource(
+            analyticsDao = database.analyticsDao(),
+            quincenaDao = database.quincenaDao(),
+        )
         // Desde v14 los miembros se escriben localmente (wizard, CRUD de maestros):
         // el repo estampa updated_at y encola MEMBER en el outbox.
         memberRepository = MemberRepositoryImpl(
