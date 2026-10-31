@@ -2,7 +2,7 @@
 
 Fecha de la solicitud: 2026-09-__ (Agustín anota el día en que la envía).
 
-Norma: la app ya tiene cargado todo tu Excel hasta junio de 2026 (919 gastos, tus cuentas, tus tarjetas y tus pagos fijos), y ya recibimos tu Excel nuevo con los meses siguientes. Para crear tu base definitiva con todo bien clasificado desde el primer día hacen falta algunas respuestas y tus estados de cuenta. Nada de esto requiere que teclees en la app; basta con contestar preguntas cortas y mandar archivos. Como acordamos, no hay que descargar nada de Amazon, Mercado Libre ni tiendas: solo estados de cuenta bancarios.
+Norma: la app ya tiene cargado tu Excel hasta el 7 de julio de 2026 (834 gastos, tus cuentas, tus tarjetas y tus pagos fijos), y ya recibimos tu Excel nuevo con los meses siguientes. Para crear tu base definitiva con todo bien clasificado desde el primer día hacen falta algunas respuestas y tus estados de cuenta. Nada de esto requiere que teclees en la app; basta con contestar preguntas cortas y mandar archivos. Como acordamos, no hay que descargar nada de Amazon, Mercado Libre ni tiendas: solo estados de cuenta bancarios.
 
 ## 1. En tu teléfono (cinco minutos)
 
