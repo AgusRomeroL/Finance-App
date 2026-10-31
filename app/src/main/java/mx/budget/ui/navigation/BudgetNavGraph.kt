@@ -22,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
@@ -809,6 +810,9 @@ fun BudgetNavGraph(
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .navigationBarsPadding()
+            // Encima del teclado: en Búsqueda el snackbar quedaba detrás del IME y
+            // el toque en "Deshacer" caía en una tecla.
+            .imePadding()
             .padding(bottom = if (isExpanded || !isTopLevel) 16.dp else 96.dp)
             .widthIn(max = 640.dp),
     )
