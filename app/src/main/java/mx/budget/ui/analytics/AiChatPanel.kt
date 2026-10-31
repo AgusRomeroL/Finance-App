@@ -504,16 +504,32 @@ private fun formatResult(result: DispatchResult, money: NumberFormat): String = 
         }
 
     is DispatchResult.QuincenaSummary -> with(result.summary) {
-        // Misma convencion que el dashboard: ingreso en sus dos formas, gasto
-        // ejecutado, reserva prorrateada y el disponible que resulta de restarlas.
-        val income = maxOf(projectedIncomeMxn, actualIncomeMxn)
-        val available = income - actualExpensesMxn - result.reservedMxn
+        // Misma convencion que el dashboard (QuincenaFigures): ingreso en sus dos
+        // formas, arrastre, gasto ejecutado, reserva prorrateada, topes por gastar
+        // y el disponible que resulta de restarlos.
+        val available = mx.budget.data.quincena.QuincenaFigures(
+            projectedIncome = projectedIncomeMxn,
+            receivedIncome = actualIncomeMxn,
+            spent = actualExpensesMxn,
+            reserved = result.reservedMxn,
+            projectedExpenses = projectedExpensesMxn,
+            capsPending = result.capsPendingMxn,
+            carryOver = result.carryOverMxn,
+        ).available
         buildString {
             append("$label: ingreso ${money.format(actualIncomeMxn)} recibido de ")
-            append("${money.format(projectedIncomeMxn)} proyectado, gasto ")
-            append("${money.format(actualExpensesMxn)}")
+            append("${money.format(projectedIncomeMxn)} proyectado")
+            if (result.carryOverMxn > 0) {
+                append(", más ${money.format(result.carryOverMxn)} que sobraron de la anterior")
+            } else if (result.carryOverMxn < 0) {
+                append(", menos ${money.format(-result.carryOverMxn)} que faltaron en la anterior")
+            }
+            append(", gasto ${money.format(actualExpensesMxn)}")
             if (result.reservedMxn > 0) {
                 append(", reservado ${money.format(result.reservedMxn)}")
+            }
+            if (result.capsPendingMxn > 0) {
+                append(", topes por gastar ${money.format(result.capsPendingMxn)}")
             }
             append(
                 if (available >= 0) "; disponible ${money.format(available)}."

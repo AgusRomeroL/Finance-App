@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
             app.database.categoryDao(),
             app.proactiveReasoner,
             app.walletRepository,
+            app.quincenaFiguresSource,
         ))[DashboardViewModel::class.java]
     }
 
@@ -169,7 +170,8 @@ class MainActivity : ComponentActivity() {
             app.savingsRepository,
             app.installmentRepository,
             app.loanRepository,
-            app.householdId
+            app.householdId,
+            app.quincenaFiguresSource,
         ))[mx.budget.ui.analytics.AnalyticsViewModel::class.java]
     }
 
@@ -709,6 +711,7 @@ class DashboardViewModelFactory(
     private val categoryDao: mx.budget.data.local.dao.CategoryDao,
     private val proactiveReasoner: mx.budget.ai.proactive.ProactiveReasoner,
     private val walletRepository: WalletRepository,
+    private val quincenaFiguresSource: mx.budget.data.quincena.QuincenaFiguresSource? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -725,6 +728,7 @@ class DashboardViewModelFactory(
             categoryDao = categoryDao,
             proactiveReasoner = proactiveReasoner,
             walletRepository = walletRepository,
+            quincenaFiguresSource = quincenaFiguresSource,
         ) as T
     }
 }
@@ -905,6 +909,7 @@ class AnalyticsViewModelFactory(
     private val installmentRepository: mx.budget.data.repository.InstallmentRepository,
     private val loanRepository: mx.budget.data.repository.LoanRepository,
     private val householdId: String,
+    private val quincenaFiguresSource: mx.budget.data.quincena.QuincenaFiguresSource? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -918,6 +923,7 @@ class AnalyticsViewModelFactory(
             installmentRepository = installmentRepository,
             loanRepository = loanRepository,
             householdId = householdId,
+            quincenaFiguresSource = quincenaFiguresSource,
         ) as T
     }
 }
@@ -960,6 +966,7 @@ class AiAssistantViewModelFactory(
             quincenaRepository = app.quincenaRepository,
             memberRepository = app.memberRepository,
             householdId = app.householdId,
+            quincenaFiguresSource = app.quincenaFiguresSource,
         )
         val openAnalysis = mx.budget.ai.rag.OpenAnalysisAnswerer(
             context = app,
@@ -970,6 +977,7 @@ class AiAssistantViewModelFactory(
             incomeRepository = app.incomeRepository,
             installmentRepository = app.installmentRepository,
             settings = app.settingsRepository,
+            quincenaFiguresSource = app.quincenaFiguresSource,
         )
         return mx.budget.ai.AiAssistantViewModel(
             llm = app.onDeviceLlm,

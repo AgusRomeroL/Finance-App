@@ -27,6 +27,7 @@ import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.InstallmentRepository
 import mx.budget.data.repository.LoanRepository
+import mx.budget.data.quincena.QuincenaFiguresSource
 import mx.budget.data.repository.QuincenaRepository
 import mx.budget.data.repository.SavingsRepository
 import mx.budget.ui.common.MemberPeriod
@@ -50,6 +51,7 @@ class AnalyticsViewModel(
     installmentRepository: InstallmentRepository,
     loanRepository: LoanRepository,
     private val householdId: String,
+    private val quincenaFiguresSource: QuincenaFiguresSource? = null,
 ) : ViewModel() {
 
     val activeQuincena: StateFlow<QuincenaEntity?> =
@@ -119,6 +121,17 @@ class AnalyticsViewModel(
         activeQuincena.flatMapLatest { q ->
             if (q == null) flowOf(0.0) else expenseRepository.observeProratedPlannedTotal(q.id)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0.0)
+
+    /**
+     * Topes por gastar y arrastre de la quincena activa (Fase 7b): con ellos el
+     * resumen y el flujo dan el mismo disponible que el dashboard, y las filas de
+     * topes alimentan el pronóstico de cada barra de categoría.
+     */
+    val quincenaExtras: StateFlow<QuincenaFiguresSource.Extras> =
+        activeQuincena.flatMapLatest { q ->
+            if (q == null || quincenaFiguresSource == null) flowOf(QuincenaFiguresSource.Extras())
+            else quincenaFiguresSource.observeExtras(q)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), QuincenaFiguresSource.Extras())
 
     /** Tendencia: últimas quincenas cerradas (ingreso/gasto real). */
     val trend: StateFlow<List<QuincenaSnapshot>> =

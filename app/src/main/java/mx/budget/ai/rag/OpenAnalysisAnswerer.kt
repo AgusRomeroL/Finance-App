@@ -49,6 +49,7 @@ class OpenAnalysisAnswerer(
     private val incomeRepository: IncomeRepository,
     private val installmentRepository: InstallmentRepository,
     private val settings: mx.budget.data.settings.SettingsRepository? = null,
+    private val quincenaFiguresSource: mx.budget.data.quincena.QuincenaFiguresSource? = null,
 ) {
 
     /** Resultado de la segunda pasada. */
@@ -100,12 +101,16 @@ class OpenAnalysisAnswerer(
             // a la pantalla principal porque partia de columnas desnormalizadas que
             // no se mantienen.
             val figures = runCatching {
+                // Fase 7b: con topes por gastar y arrastre, como el dashboard.
+                val extras = quincenaFiguresSource?.let { runCatching { it.extrasFor(quincena) }.getOrNull() }
                 quincenaFigures(
                     quincena = quincena,
                     receivedIncome = incomeRepository.observePostedTotal(quincena.id).first(),
                     spent = expenseRepository.observePostedTotal(quincena.id).first(),
                     reserved = expenseRepository.observeProratedPlannedTotal(quincena.id).first(),
                     projectedExpensesFallback = spendByCategory.sumOf { it.projected },
+                    capsPending = extras?.capsPending ?: 0.0,
+                    carryOver = extras?.carryOver ?: 0.0,
                 )
             }.getOrElse {
                 quincenaFigures(quincena, 0.0, spendByCategory.sumOf { it.actual }, 0.0,
@@ -287,6 +292,17 @@ class OpenAnalysisAnswerer(
                 " Ademas hay ${money.format(figures.reserved)} reservados para los " +
                     "cargos planeados que faltan por pagar."
             )
+        }
+        if (figures.capsPending > 0) {
+            append(
+                " También hay ${money.format(figures.capsPending)} apartados para lo que " +
+                    "falta de los topes por categoría."
+            )
+        }
+        if (figures.carryOver > 0) {
+            append(" De la quincena anterior sobraron ${money.format(figures.carryOver)}.")
+        } else if (figures.carryOver < 0) {
+            append(" La quincena anterior cerró ${money.format(-figures.carryOver)} por debajo.")
         }
         append(
             if (figures.available >= 0) {

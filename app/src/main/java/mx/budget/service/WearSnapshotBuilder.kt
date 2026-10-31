@@ -61,13 +61,18 @@ object WearSnapshotBuilder {
         // cual y su "Disponible" no se movia por mucho que se gastara. La Fase 1
         // unifico dashboard, resumen de Analiticas y asistente; el reloj se quedo
         // fuera y este era el ultimo sitio con la cuenta vieja.
+        // Fase 7b: el reloj tambien aparta los topes por gastar y suma el arrastre
+        // de la quincena anterior, o su Disponible volveria a contradecir al heroe.
         val figures = quincena?.let { q ->
             runCatching {
+                val extras = app.quincenaFiguresSource.extrasFor(q)
                 quincenaFigures(
                     quincena = q,
                     receivedIncome = app.database.incomeSourceDao().observePostedTotal(q.id).first(),
                     spent = app.database.expenseDao().observePostedTotal(q.id).first(),
                     reserved = app.database.expenseDao().observeProratedPlannedTotal(q.id).first(),
+                    capsPending = extras.capsPending,
+                    carryOver = extras.carryOver,
                 )
             }.getOrNull()
         }
@@ -76,7 +81,7 @@ object WearSnapshotBuilder {
         // Denominador del arco: el ingreso de referencia, coherente con el
         // "Disponible" de arriba (si entra mas dinero del proyectado, manda lo
         // recibido, igual que en el dashboard).
-        val budgetTotal = figures?.income ?: 0.0
+        val budgetTotal = figures?.base ?: 0.0
         val label = quincena?.label ?: "Sin Quincena"
 
         val sinceEpochMs = System.currentTimeMillis() - RECENT_WINDOW_MS

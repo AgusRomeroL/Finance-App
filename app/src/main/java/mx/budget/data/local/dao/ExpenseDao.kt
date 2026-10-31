@@ -9,6 +9,7 @@ import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.result.ExpenseWithDetails
+import mx.budget.data.local.result.PlannedBreakdownRow
 import mx.budget.data.local.result.PlannedReminder
 import mx.budget.data.local.result.TopExpense
 
@@ -187,6 +188,33 @@ interface ExpenseDao {
         """
     )
     fun observeProratedPlannedTotal(quincenaId: String): Flow<Double>
+
+    /**
+     * Los cargos planeados de la quincena, uno por fila, con su peso por cadencia
+     * (Fase 7b): la hoja "Lo reservado" del héroe. Mismo `CASE` que
+     * [observeProratedPlannedTotal], así que la suma de lo prorrateado cuadra con
+     * el término "Reservado". Ordenados por fecha: lo que vence primero, arriba.
+     */
+    @Query(
+        """
+        SELECT e.id AS expenseId,
+               e.concept AS concept,
+               COALESCE(c.display_name, '') AS categoryName,
+               e.amount_mxn AS amountMxn,
+               e.occurred_at AS occurredAt,
+               CASE rt.cadence
+                   WHEN 'MONTHLY_SPECIFIC_HALF' THEN 0.5
+                   WHEN 'BIMONTHLY' THEN 0.25
+                   ELSE 1.0
+               END AS weight
+        FROM expense e
+        LEFT JOIN category c ON c.id = e.category_id
+        LEFT JOIN recurrence_template rt ON rt.id = e.recurrence_template_id
+        WHERE e.quincena_id = :quincenaId AND e.status = 'PLANNED'
+        ORDER BY e.occurred_at ASC
+        """
+    )
+    fun observePlannedBreakdown(quincenaId: String): Flow<List<PlannedBreakdownRow>>
 
     /**
      * Gastos `PLANNED` del hogar con detalles (categoría/wallet/quincena),

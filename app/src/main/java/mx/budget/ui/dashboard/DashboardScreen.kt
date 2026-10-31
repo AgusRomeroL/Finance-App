@@ -19,7 +19,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -37,6 +39,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -61,6 +65,7 @@ import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -104,6 +109,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -120,7 +126,10 @@ import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.QuincenaEntity
-import mx.budget.data.quincena.disponiblePorDia
+import mx.budget.data.quincena.CarryOver
+import mx.budget.data.quincena.QuincenaFigures
+import mx.budget.data.quincena.RitmoVista
+import mx.budget.data.quincena.cifraRitmo
 import mx.budget.data.quincena.quincenaProgress
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
@@ -128,6 +137,7 @@ import mx.budget.data.capture.toReviewMode
 import mx.budget.ui.common.AppLocale
 import mx.budget.ui.common.AutoSizeAmountText
 import mx.budget.ui.common.AppTopBar
+import mx.budget.ui.common.LocalReducedMotion
 import mx.budget.ui.common.LocalSessionMemberId
 import mx.budget.ui.common.SearchPill
 import mx.budget.ui.common.pressScale
@@ -185,6 +195,23 @@ private fun Long.toShortDate(): String = shortMonth.format(this)
  */
 private val LocalExpenseRowClick =
     androidx.compose.runtime.staticCompositionLocalOf<(ExpenseWithDetails) -> Unit> { {} }
+
+/**
+ * Abre la hoja "Lo reservado" (Fase 7b) desde los términos Reservado y Topes de
+ * la resta del héroe. Mismo patrón que [LocalExpenseRowClick]: el héroe vive en
+ * dos layouts anidados (compacto y Fold) y así no se enhebra por ambos. `null`
+ * deja los términos sin acción (datos de demostración del tutorial).
+ */
+private val LocalOpenReserved =
+    androidx.compose.runtime.staticCompositionLocalOf<(() -> Unit)?> { null }
+
+/**
+ * Resorte estándar, o salto directo si el sistema tiene las animaciones quitadas.
+ * Reduced motion no quita el cambio de cifra, solo el movimiento.
+ */
+@Composable
+private fun <T> heroMotion(): AnimationSpec<T> =
+    if (LocalReducedMotion.current) snap() else BudgetMotion.standard()
 
 /** Parsea ISO yyyy-MM-dd de forma segura; null si falla. */
 private fun parseIso(s: String?): LocalDate? =
@@ -285,6 +312,8 @@ fun DashboardScreen(
 
     val isExpanded = windowWidthDp >= 600.dp
     var showFilterSheet by remember { mutableStateOf(false) }
+    // Fase 7b: hoja "Lo reservado" (planeados y topes de la quincena mostrada).
+    var showReservedSheet by remember { mutableStateOf(false) }
 
     // Tutorial guiado: abre la hoja de captura (que vive hoisted en BudgetNavGraph)
     // cuando el tour lo pide (ver TUTORIAL.md). La hoja ya no se hospeda aquí. El
@@ -297,6 +326,18 @@ fun DashboardScreen(
     // Hoja de detalle del gasto (§G.4): ubicación + hora. Se abre al tocar una fila.
     if (detailViewModel != null) {
         mx.budget.ui.detail.ExpenseDetailSheet(viewModel = detailViewModel)
+    }
+
+    val reservedState = uiState as? DashboardUiState.Success
+    val reservedQuincenaId = reservedState?.quincena?.id
+    if (showReservedSheet && reservedState != null && reservedQuincenaId != null) {
+        val rows by remember(reservedQuincenaId) { viewModel.observePlannedBreakdown(reservedQuincenaId) }
+            .collectAsState(initial = emptyList())
+        ReservedBreakdownSheet(
+            planned = rows,
+            caps = reservedState.extras.caps,
+            onDismiss = { showReservedSheet = false },
+        )
     }
 
     if (showFilterSheet) {
@@ -363,7 +404,8 @@ fun DashboardScreen(
     )
 
     androidx.compose.runtime.CompositionLocalProvider(
-        LocalExpenseRowClick provides { tx -> detailViewModel?.open(tx) }
+        LocalExpenseRowClick provides { tx -> detailViewModel?.open(tx) },
+        LocalOpenReserved provides if (demo) null else ({ showReservedSheet = true })
     ) {
         if (isExpanded) {
             ExpandedDashboard(
@@ -1841,7 +1883,10 @@ private fun ProactiveSuggestionChip(
 
 /**
  * Tarjeta de **Ritmo**: compara el gasto ejecutado con el ritmo lineal esperado
- * por el tiempo transcurrido de la quincena, y muestra el gasto disponible por día.
+ * por el tiempo transcurrido de la quincena, y reparte el disponible por día, por
+ * semana o en toda la quincena (Fase 7b): un toque en la cifra alterna la vista,
+ * no una pulsación larga, que TalkBack no descubre, y la vista elegida se anuncia
+ * como estado.
  *
  * "% por debajo/encima del gasto previsto" = (gastado − presupuesto×fracción_tiempo)
  * / (presupuesto×fracción_tiempo). El presupuesto es `projectedExpensesMxn` (con
@@ -1854,12 +1899,11 @@ private fun ProactiveSuggestionChip(
 private fun RitmoCard(
     quincena: QuincenaEntity?,
     postedTotal: Double,
-    actualIncome: Double,
+    income: Double,
     available: Double,
     viewingActive: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val income = maxOf(quincena?.projectedIncomeMxn ?: 0.0, actualIncome)
     val budget = (quincena?.projectedExpensesMxn?.takeIf { it > 0.0 } ?: income)
     val progress = remember(quincena?.id) { quincenaProgress(quincena?.startDate, quincena?.endDate) }
     val expectedByNow = budget * progress.fraction
@@ -1869,20 +1913,27 @@ private fun RitmoCard(
     val onTrack = pct < 1
     val below = deviation < 0
     val overIncome = income > 0.0 && postedTotal > income
-    // Animada como la del hero: al cambiar Neto/Bruto la cifra viaja, no salta.
-    val animatedAvailable by animateFloatAsState(
-        targetValue = available.toFloat(),
-        animationSpec = BudgetMotion.standard(),
-        label = "ritmoAvailable",
+    // Repartir solo tiene sentido en la quincena en curso, con dias por delante y
+    // dinero que repartir; el ultimo dia "por dia" y "disponible" son la misma
+    // cifra y se queda la segunda.
+    var vista by rememberSaveable { mutableStateOf(RitmoVista.DIA) }
+    val puedeAlternar = viewingActive && progress.daysRemaining > 0 && available > 0.0
+    val vistaMostrada = if (puedeAlternar) vista else RitmoVista.QUINCENA
+    val cifra = cifraRitmo(vistaMostrada, available, progress.daysRemaining) ?: available
+    // Animada como la del hero: al cambiar de vista o de Neto a Bruto la cifra
+    // viaja, no salta.
+    val animatedCifra by animateFloatAsState(
+        targetValue = cifra.toFloat(),
+        animationSpec = heroMotion(),
+        label = "ritmoCifra",
     )
-    // El último día "por día" y "disponible" son la misma cifra: se queda la segunda.
-    val showPerDay = viewingActive && progress.daysRemaining > 0 &&
-        disponiblePorDia(available, progress.daysRemaining) != null
-    val shownAmount = if (showPerDay) {
-        disponiblePorDia(animatedAvailable.toDouble(), progress.daysRemaining) ?: 0.0
-    } else {
-        animatedAvailable.toDouble()
+    val rotuloVista = when {
+        !puedeAlternar -> "Disponible"
+        vistaMostrada == RitmoVista.DIA -> stringResource(R.string.state_rhythm_day)
+        vistaMostrada == RitmoVista.SEMANA -> stringResource(R.string.state_rhythm_week)
+        else -> stringResource(R.string.state_rhythm_quincena)
     }
+    val accionAlternar = stringResource(R.string.action_rhythm_switch)
 
     // Estado → tono + símbolo + frase (redundancia no-cromática: icono+texto+color).
     // Cada situación tiene su propio mensaje e icono, no siempre el mismo.
@@ -1912,14 +1963,8 @@ private fun RitmoCard(
     }
     val sem = amountSemantic(ui.tone)
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    // El mensaje del ritmo, con el icono a su izquierda.
+    val mensaje: @Composable RowScope.() -> Unit = {
         Box(
             modifier = Modifier.size(34.dp).clip(CircleShape).background(sem.container),
             contentAlignment = Alignment.Center
@@ -1944,16 +1989,69 @@ private fun RitmoCard(
                 maxLines = 4, overflow = TextOverflow.Ellipsis
             )
         }
-        Spacer(Modifier.width(10.dp))
-        Column(horizontalAlignment = Alignment.End) {
+    }
+    // La cifra con su vista; un toque la alterna.
+    val cifraBloque: @Composable (Modifier) -> Unit = { m ->
+        Column(
+            horizontalAlignment = Alignment.End,
+            modifier = m.then(
+                if (puedeAlternar) {
+                    Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(role = Role.Button, onClickLabel = accionAlternar) {
+                            vista = RitmoVista.entries[(vista.ordinal + 1) % RitmoVista.entries.size]
+                        }
+                        .semantics { stateDescription = rotuloVista }
+                        .defaultMinSize(minHeight = 48.dp)
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                } else Modifier
+            ),
+        ) {
             AutoSizeAmountText(
-                text = shownAmount.toMxn(),
+                // Redondeo, no truncado: en la vista de quincena es la cifra del héroe.
+                text = "$" + mxnInt.format(animatedCifra.toDouble().roundToLong()),
                 baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
                 maxFontSp = 22f,
                 minFontSp = 13f,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Eyebrow(if (showPerDay) "Por día" else "Disponible", maxLines = 2)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Eyebrow(rotuloVista, maxLines = 2)
+                if (puedeAlternar) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        Icons.Filled.SwapHoriz,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    // En el panel angosto del Fold (unos 250 dp a fuente 1.3 con negrita) la cifra
+    // y su vista le quitaban el ancho al mensaje y cortaban "Ritmo" a la mitad:
+    // por debajo de 360 dp la cifra baja a su propia linea.
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(12.dp),
+    ) {
+        if (maxWidth < 360.dp) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically, content = mensaje)
+                Spacer(Modifier.height(6.dp))
+                cifraBloque(Modifier.align(Alignment.End))
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                mensaje()
+                Spacer(Modifier.width(10.dp))
+                cifraBloque(Modifier)
+            }
         }
     }
 }
@@ -2447,27 +2545,35 @@ private fun HeroRingSection(state: DashboardUiState.Success) {
 @Composable
 private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
     val q = state.quincena
-    val income = maxOf(q?.projectedIncomeMxn ?: 0.0, state.actualIncome)
-    val spent = state.postedTotal
+    // Fase 7b: el héroe lee la convención compartida en vez de restar a mano,
+    // así que dice lo mismo que el resumen, el asistente y el reloj.
+    val f = state.figures
+    val carry = state.extras.carry
     val planned = state.plannedTotal
     // Reserva prorrateada por cadencia: una obligacion mensual solo pesa la mitad
     // en esta quincena. Sin esto, "Disponible" salia en negativo el dia 1 del mes.
-    // La tarjeta "Reservado" sigue mostrando el compromiso entero.
-    val reserved = state.proratedPlannedTotal
-    val hasPlanned = planned > 0.0
-    val gross = income - spent
-    val net = gross - reserved          // budget-aware: reserva lo PLANNED (G.2.4)
+    val reserved = f.reserved
+    val caps = f.capsPending
+    // Neto aparta lo planeado y lo que falta de los topes; Bruto solo resta lo
+    // pagado. El selector aparece en cuanto hay algo que apartar.
+    val hasReserve = planned > 0.0 || caps > 0.0
     var showNet by rememberSaveable { mutableStateOf(true) }
-    val shown = if (hasPlanned && showNet) net else gross
+    val restaApartado = hasReserve && showNet
+    // La cifra grande, Ritmo y la resta escrita salen de los mismos términos
+    // redondeados: una resta que no cuadra por un peso destruye la confianza.
+    val resta = RestaDisponible.of(f, restaApartado)
+    val shown = resta.disponible.toDouble()
     val animatedShown by animateFloatAsState(
         targetValue = shown.toFloat(),
-        animationSpec = BudgetMotion.standard(),
+        animationSpec = heroMotion(),
         label = "heroAmountCompact",
     )
     val progress = remember(q?.id) { quincenaProgress(q?.startDate, q?.endDate) }
     val timePct = (progress.fraction * 100).toInt()
-    val spendFraction = if (income > 0.0) (spent / income).toFloat() else 0f
-    val overBudget = spent > income
+    val base = f.base
+    val spent = f.spent
+    val spendFraction = if (base > 0.0) (spent / base).toFloat() else 0f
+    val overBudget = spent > base
     val expenseC = amountSemantic(FinancialTone.EXPENSE)
     val warningC = amountSemantic(FinancialTone.WARNING)
     // Salud del gasto por umbral: neutral bajo control → ámbar al acercarse al ingreso
@@ -2479,7 +2585,7 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
             spendFraction >= 0.85f -> warningC.color
             else -> MaterialTheme.colorScheme.primary
         },
-        animationSpec = BudgetMotion.standard(),
+        animationSpec = heroMotion(),
         label = "ringColor",
     )
 
@@ -2488,17 +2594,17 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-            // Anillo: fracción del ingreso ya gastada; color por umbral (neutral/ámbar/rojo).
-            // Fase 6b (brief 3): un segundo tramo, contiguo, pinta lo que queda
-            // reservado en pagos planeados, así que la cifra grande deja de
-            // aparecer sin explicación.
+            // Anillo: fracción de lo disponible para la quincena (ingreso más
+            // arrastre) ya gastada; el segundo tramo, contiguo, pinta lo apartado
+            // en planeados y topes, así que la cifra grande nunca aparece sin
+            // explicación.
             BudgetRing(
                 fraction = spendFraction,
                 ringSize = 126.dp,
                 strokeWidth = 13.dp,
                 progressColor = ringColor,
-                secondaryFraction = if (hasPlanned && showNet && income > 0.0)
-                    (reserved / income).toFloat() else 0f,
+                secondaryFraction = if (restaApartado && base > 0.0)
+                    (f.setAside / base).toFloat() else 0f,
                 secondaryColor = warningC.color.copy(alpha = 0.55f),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2549,8 +2655,11 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    if (hasPlanned && showNet) "Lo que entró, menos lo gastado y lo reservado"
-                    else "Lo que entró, menos lo gastado",
+                    buildString {
+                        append("Lo que entró")
+                        if (resta.arrastre != 0L) append(" con el arrastre")
+                        append(if (restaApartado) ", menos lo gastado y lo apartado" else ", menos lo gastado")
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -2560,13 +2669,16 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
         // mismo orden en que se lee el anillo.
         Spacer(Modifier.height(14.dp))
         DisponibleDesglose(
-            income = income,
-            spent = spent,
-            reserved = reserved,
+            resta = resta,
             planned = planned,
-            restaReservado = hasPlanned && showNet,
+            reserved = reserved,
+            carry = carry,
+            restaApartado = restaApartado,
+            hasPlanned = planned > 0.0,
+            hasCaps = caps > 0.0,
+            onOpenReserved = LocalOpenReserved.current,
         )
-        if (hasPlanned) {
+        if (hasReserve) {
             Spacer(Modifier.height(14.dp))
             ReserveToggle(showNet = showNet, onChange = { showNet = it })
         }
@@ -2574,7 +2686,7 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
         // Motion expresivo: la barra de avance crece con resorte.
         val animatedProgressFraction by animateFloatAsState(
             targetValue = progress.fraction,
-            animationSpec = BudgetMotion.standard(),
+            animationSpec = heroMotion(),
             label = "collapsedQuincenaFraction"
         )
         Box(
@@ -2616,11 +2728,36 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
         Spacer(Modifier.height(14.dp))
         RitmoCard(
             quincena = state.quincena,
-            postedTotal = state.postedTotal,
-            actualIncome = state.actualIncome,
+            postedTotal = spent,
+            income = base,
             available = shown,
             viewingActive = state.viewingActive
         )
+}
+
+/**
+ * Los términos de la resta del héroe, redondeados a pesos ANTES de restarse: el
+ * disponible sale de esa resta, así que la línea escrita siempre cuadra con la
+ * cifra grande. Lo apartado (reservado y topes) solo entra en la vista Neto.
+ */
+private data class RestaDisponible(
+    val entro: Long,
+    val arrastre: Long,
+    val gastado: Long,
+    val reservado: Long,
+    val topes: Long,
+) {
+    val disponible: Long get() = entro + arrastre - gastado - reservado - topes
+
+    companion object {
+        fun of(f: QuincenaFigures, restaApartado: Boolean) = RestaDisponible(
+            entro = f.income.roundToLong(),
+            arrastre = f.carryOver.roundToLong(),
+            gastado = f.spent.roundToLong(),
+            reservado = if (restaApartado) f.reserved.roundToLong() else 0L,
+            topes = if (restaApartado) f.capsPending.roundToLong() else 0L,
+        )
+    }
 }
 
 /**
@@ -2633,51 +2770,67 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
  *
  * El KPI ya descontaba lo reservado, pero eso solo se entendía bajando a la
  * tarjeta "Reservado", y una cifra grande sin su explicación invita a gastar de
- * más. Aquí los cuatro términos van en el mismo orden que el anillo y con sus
+ * más. Aquí los términos van en el mismo orden que el anillo y con sus
  * operadores, así que la relación se lee de un vistazo.
  *
- * El término reservado muestra lo **prorrateado por cadencia**, que es lo que de
- * verdad se resta; si el compromiso completo es mayor, lo dice en una nota en
- * vez de romper la aritmética.
+ * Fase 7b: entran el arrastre de la quincena anterior (con su signo) y los topes
+ * por gastar. "Reservado" y "Topes por gastar" se tocan y abren la hoja con lo
+ * que cada uno aparta. El término reservado muestra lo **prorrateado por
+ * cadencia**, que es lo que de verdad se resta; si el compromiso completo es
+ * mayor, lo dice en una nota en vez de romper la aritmética.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DisponibleDesglose(
-    income: Double,
-    spent: Double,
-    reserved: Double,
+    resta: RestaDisponible,
     planned: Double,
-    restaReservado: Boolean,
+    reserved: Double,
+    carry: CarryOver?,
+    restaApartado: Boolean,
+    hasPlanned: Boolean,
+    hasCaps: Boolean,
+    onOpenReserved: (() -> Unit)?,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Los términos se redondean a pesos ANTES de restarse y el disponible sale
-        // de esa resta: si cada uno se redondeara por su cuenta, la línea podría
-        // no cuadrar por un peso, y una resta escrita que no cuadra destruye la
-        // confianza en la cifra que explica.
-        val entro = income.roundToLong()
-        val gastado = spent.roundToLong()
-        val reservadoRedondeado = if (restaReservado) reserved.roundToLong() else 0L
-        val disponible = entro - gastado - reservadoRedondeado
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            DesgloseTermino(FinancialTone.INCOME, "Entró", entro)
-            DesgloseOperador("−")
-            DesgloseTermino(FinancialTone.EXPENSE, "Gastado", gastado)
-            if (restaReservado) {
+            DesgloseTermino(FinancialTone.INCOME, "Entró", resta.entro)
+            if (resta.arrastre > 0L) {
+                DesgloseOperador("+")
+                DesgloseTermino(FinancialTone.INCOME, "Sobró la anterior", resta.arrastre)
+            } else if (resta.arrastre < 0L) {
                 DesgloseOperador("−")
-                DesgloseTermino(FinancialTone.WARNING, "Reservado", reservadoRedondeado)
+                DesgloseTermino(FinancialTone.EXPENSE, "Faltó la anterior", -resta.arrastre)
+            }
+            DesgloseOperador("−")
+            DesgloseTermino(FinancialTone.EXPENSE, "Gastado", resta.gastado)
+            if (restaApartado && hasPlanned) {
+                DesgloseOperador("−")
+                DesgloseTermino(FinancialTone.WARNING, "Reservado", resta.reservado, onClick = onOpenReserved)
+            }
+            if (restaApartado && hasCaps) {
+                DesgloseOperador("−")
+                DesgloseTermino(FinancialTone.WARNING, "Topes por gastar", resta.topes, onClick = onOpenReserved)
             }
             DesgloseOperador("=")
-            DesgloseTermino(FinancialTone.NEUTRAL, "Disponible", disponible, destacado = true)
+            DesgloseTermino(FinancialTone.NEUTRAL, "Disponible", resta.disponible, destacado = true)
         }
-        if (restaReservado && planned > reserved + 0.5) {
+        if (restaApartado && planned > reserved + 0.5) {
             Spacer(Modifier.height(8.dp))
             Text(
                 "De ${planned.roundToLong().toMxnRedondeado()} planeados, esta quincena " +
-                    "carga ${reservadoRedondeado.toMxnRedondeado()}; el resto pesa en la siguiente.",
+                    "carga ${resta.reservado.toMxnRedondeado()}; el resto pesa en la siguiente.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (carry != null && carry.pendingClose) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Lo que sobre o falte de ${carry.fromLabel} se sumará aquí cuando la cierres.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -2692,12 +2845,25 @@ private fun DesgloseTermino(
     label: String,
     amount: Long,
     destacado: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
     val s = amountSemantic(tone)
+    val interaction = rememberPressInteractionSource()
     Column(
         modifier = Modifier
+            .then(if (onClick != null) Modifier.pressScale(interactionSource = interaction) else Modifier)
             .clip(RoundedCornerShape(14.dp))
             .background(if (destacado) MaterialTheme.colorScheme.surfaceContainerHighest else s.container)
+            .then(
+                if (onClick != null) Modifier.clickable(
+                    interactionSource = interaction,
+                    indication = androidx.compose.foundation.LocalIndication.current,
+                    role = Role.Button,
+                    onClickLabel = "Ver lo que aparta",
+                    onClick = onClick,
+                ) else Modifier
+            )
+            .defaultMinSize(minHeight = if (onClick != null) 48.dp else 0.dp)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2719,6 +2885,15 @@ private fun DesgloseTermino(
                 minFontSp = 8f,
                 color = if (destacado) MaterialTheme.colorScheme.onSurfaceVariant else s.onContainer,
             )
+            if (onClick != null) {
+                // Señal de que el término se abre, además del rol de botón.
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = s.onContainer,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
         }
         Spacer(Modifier.height(2.dp))
         AutoSizeAmountText(

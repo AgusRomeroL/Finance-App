@@ -71,6 +71,25 @@ data class SpendByCategory(
 )
 
 /**
+ * Un cargo planeado de la quincena con su peso por cadencia (Fase 7b): las filas
+ * de la hoja "Lo reservado", con el mismo `CASE` que
+ * `ExpenseDao.observeProratedPlannedTotal`, así que la suma de [prorated] es
+ * exactamente el término "Reservado" del héroe.
+ */
+data class PlannedBreakdownRow(
+    val expenseId: String,
+    val concept: String,
+    val categoryName: String,
+    val amountMxn: Double,
+    val occurredAt: Long,
+    /** Peso por cadencia: 1.0, 0.5 (mensual) o 0.25 (bimestral). */
+    val weight: Double,
+) {
+    /** Lo que de este cargo carga la quincena. */
+    val prorated: Double get() = amountMxn * weight
+}
+
+/**
  * Tope de una categoría frente a lo que ya consumió en una quincena (Fase 7b):
  * lo gastado (POSTED) y lo planeado prorrateado por cadencia, con el mismo peso
  * que `ExpenseDao.observeProratedPlannedTotal`. Lo pendiente lo calcula

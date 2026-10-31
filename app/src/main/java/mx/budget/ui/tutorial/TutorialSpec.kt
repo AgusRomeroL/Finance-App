@@ -42,8 +42,9 @@ object TutorialSpec {
             key = TutorialKey.DASH_HERO_KPI,
             route = BudgetDestinations.DASHBOARD,
             title = "Disponible para gastar",
-            body = "Este es el corazón de tu quincena: lo que te queda tras ingresos y gastos. " +
-                "Toca la barra de ritmo para ver si vas adelantado o atrasado en el gasto.",
+            body = "Este es el corazón de tu quincena: lo que entró, menos lo gastado y lo que " +
+                "ya tiene destino. Toca Reservado para ver qué está apartado, y la cifra de Ritmo " +
+                "para verla por día, por semana o en toda la quincena.",
         ),
         TutorialStep(
             key = TutorialKey.DASH_MEMBER_BARS,

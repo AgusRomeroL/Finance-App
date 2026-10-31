@@ -42,6 +42,7 @@ class IntentDispatcher(
     private val quincenaRepository: QuincenaRepository,
     private val memberRepository: MemberRepository,
     private val householdId: String,
+    private val quincenaFiguresSource: mx.budget.data.quincena.QuincenaFiguresSource? = null,
 ) {
 
     private val jsonConfig = Json {
@@ -285,6 +286,8 @@ class IntentDispatcher(
                 val actualExpenses = expenseRepository.observePostedTotal(quincena.id).first()
                 val actualIncome = incomeRepository.observePostedTotal(quincena.id).first()
                 val reserved = expenseRepository.observeProratedPlannedTotal(quincena.id).first()
+                // Fase 7b: topes por gastar y arrastre, como el dashboard.
+                val extras = quincenaFiguresSource?.let { runCatching { it.extrasFor(quincena) }.getOrNull() }
                 DispatchResult.QuincenaSummary(
                     QuincenaSnapshot(
                         quincenaId = quincena.id,
@@ -298,6 +301,8 @@ class IntentDispatcher(
                         savingsMxn = actualIncome - actualExpenses,
                     ),
                     reservedMxn = reserved,
+                    capsPendingMxn = extras?.capsPending ?: 0.0,
+                    carryOverMxn = extras?.carryOver ?: 0.0,
                 )
             }
 

@@ -3,6 +3,7 @@ package mx.budget.ui.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +28,10 @@ import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.local.entity.QuincenaEntity
 import mx.budget.data.local.result.ExpenseWithDetails
+import mx.budget.data.local.result.PlannedBreakdownRow
 import mx.budget.data.local.result.SpendByMember
+import mx.budget.data.quincena.QuincenaFigures
+import mx.budget.data.quincena.QuincenaFiguresSource
 import mx.budget.data.repository.ExpenseRepository
 import mx.budget.data.repository.IncomeRepository
 import mx.budget.data.repository.MemberRepository
@@ -80,8 +84,26 @@ sealed class DashboardUiState {
         /** Hay una quincena más reciente a la que navegar (chevron ›). */
         val canViewNewer: Boolean = false,
         /** La quincena mostrada es la ACTIVA (no se está viendo una histórica). */
-        val viewingActive: Boolean = true
-    ) : DashboardUiState()
+        val viewingActive: Boolean = true,
+        /** Topes por gastar y arrastre de la quincena anterior (Fase 7b). */
+        val extras: QuincenaFiguresSource.Extras = QuincenaFiguresSource.Extras(),
+    ) : DashboardUiState() {
+        /**
+         * Cifras de la quincena con la convención compartida ([QuincenaFigures]):
+         * el héroe, la resta escrita y Ritmo leen de aquí, como el resumen de
+         * Analíticas, el asistente y el reloj.
+         */
+        val figures: QuincenaFigures
+            get() = QuincenaFigures(
+                projectedIncome = quincena?.projectedIncomeMxn ?: 0.0,
+                receivedIncome = actualIncome,
+                spent = postedTotal,
+                reserved = proratedPlannedTotal,
+                projectedExpenses = quincena?.projectedExpensesMxn ?: 0.0,
+                capsPending = extras.capsPending,
+                carryOver = extras.carryOver,
+            )
+    }
 
     /** Estado de error con mensaje recuperable. */
     data class Error(val message: String) : DashboardUiState()
@@ -128,6 +150,7 @@ class DashboardViewModel(
     private val categoryDao: CategoryDao,
     private val proactiveReasoner: ProactiveReasoner,
     private val walletRepository: mx.budget.data.repository.WalletRepository,
+    private val quincenaFiguresSource: QuincenaFiguresSource? = null,
 ) : ViewModel() {
 
     // ── Primeros pasos (journey guiado) ──────────────────────────────────────────
@@ -419,7 +442,13 @@ class DashboardViewModel(
                     // mensual entera hunda el "Disponible" de una sola quincena.
                     expenseRepository.observeProratedPlannedTotal(quincena.id)
                 ) { success, prorated ->
-                    success.copy(proratedPlannedTotal = prorated) as DashboardUiState
+                    success.copy(proratedPlannedTotal = prorated)
+                }.combine(
+                    // Fase 7b: topes por gastar y arrastre de la quincena anterior.
+                    quincenaFiguresSource?.observeExtras(quincena)
+                        ?: flowOf(QuincenaFiguresSource.Extras())
+                ) { success, extras ->
+                    success.copy(extras = extras) as DashboardUiState
                 }
             }
         }
@@ -452,4 +481,8 @@ class DashboardViewModel(
     fun resetToActiveQuincena() {
         selectedQuincenaId.value = null
     }
+
+    /** Cargos planeados de [quincenaId] con su peso, para la hoja "Lo reservado". */
+    fun observePlannedBreakdown(quincenaId: String): Flow<List<PlannedBreakdownRow>> =
+        expenseDao.observePlannedBreakdown(quincenaId)
 }

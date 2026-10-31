@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import mx.budget.data.local.entity.QuincenaEntity
+import mx.budget.data.quincena.QuincenaFigures
 import mx.budget.data.quincena.quincenaFigures
 import mx.budget.ui.common.MemberPeriod
 import mx.budget.ui.common.MemberPeriodPills
@@ -102,6 +103,7 @@ fun AnalyticsScreen(
     val rawPostedIncome by viewModel.postedIncome.collectAsState()
     val rawPostedExpenses by viewModel.postedExpenses.collectAsState()
     val rawReservedPlanned by viewModel.reservedPlanned.collectAsState()
+    val rawExtras by viewModel.quincenaExtras.collectAsState()
     val trend by viewModel.trend.collectAsState()
     val rawTopConcepts by viewModel.topConcepts.collectAsState()
     val debt by viewModel.debtConcentration.collectAsState()
@@ -121,6 +123,20 @@ fun AnalyticsScreen(
     // desde sus categorias y no hay reserva prorrateada que mostrar.
     val postedExpenses = if (demo) D.spendByCategory.sumOf { it.actual } else rawPostedExpenses
     val reservedPlanned = if (demo) 0.0 else rawReservedPlanned
+    val extras = if (demo) mx.budget.data.quincena.QuincenaFiguresSource.Extras() else rawExtras
+    // Misma convencion que el dashboard (Fase 7b: con topes y arrastre), en un
+    // solo sitio, para que resumen y flujo no cuenten otra historia.
+    val figures = quincena?.let { q ->
+        quincenaFigures(
+            quincena = q,
+            receivedIncome = postedIncome,
+            spent = postedExpenses,
+            reserved = reservedPlanned,
+            projectedExpensesFallback = byCategory.sumOf { it.projected },
+            capsPending = extras.capsPending,
+            carryOver = extras.carryOver,
+        )
+    }
     val topConcepts = if (demo) D.topConcepts else rawTopConcepts
     val totalSavings = if (demo) D.totalSavings else rawTotalSavings
     val totalCommitment = if (demo) D.totalCommitment else rawTotalCommitment
@@ -167,11 +183,8 @@ fun AnalyticsScreen(
                 // TUTORIAL: ANA_SUMMARY, ver TUTORIAL.md
                 Box(Modifier.tutorialTarget(TutorialKey.ANA_SUMMARY, tutorialController)) {
                     SmartSummaryCard(
-                        quincena = quincena,
+                        figures = figures,
                         byCategory = byCategory,
-                        postedIncome = postedIncome,
-                        postedExpenses = postedExpenses,
-                        reservedPlanned = reservedPlanned,
                         money = money,
                         onAsk = if (aiViewModel != null) ({ chatOpen = true }) else null,
                     )
@@ -265,6 +278,7 @@ fun AnalyticsScreen(
                             receivedIncome = postedIncome,
                             projectedIncome = q.projectedIncomeMxn,
                             actualExpenses = maxOf(q.actualExpensesMxn, byCategory.sumOf { it.actual }),
+                            available = figures?.available ?: (q.projectedIncomeMxn - postedExpenses),
                             money = money,
                         )
                     }
@@ -481,11 +495,8 @@ private fun EmptyHint(text: String) {
  */
 @Composable
 private fun SmartSummaryCard(
-    quincena: QuincenaEntity?,
+    figures: QuincenaFigures?,
     byCategory: List<SpendByCategory>,
-    postedIncome: Double,
-    postedExpenses: Double,
-    reservedPlanned: Double,
     money: NumberFormat,
     onAsk: (() -> Unit)?,
 ) {
@@ -511,9 +522,7 @@ private fun SmartSummaryCard(
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                buildSmartSummary(
-                    quincena, byCategory, postedIncome, postedExpenses, reservedPlanned, money,
-                ),
+                buildSmartSummary(figures, byCategory, money),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
@@ -532,32 +541,28 @@ private fun SmartSummaryCard(
 }
 
 private fun buildSmartSummary(
-    quincena: QuincenaEntity?,
+    f: QuincenaFigures?,
     byCategory: List<SpendByCategory>,
-    postedIncome: Double,
-    postedExpenses: Double,
-    reservedPlanned: Double,
     money: NumberFormat,
 ): String {
-    if (quincena == null) return "Sin quincena activa."
+    if (f == null) return "Sin quincena activa."
     val sb = StringBuilder()
 
-    // Misma convencion que el dashboard, en un solo sitio, para que las dos
-    // pantallas no cuenten historias distintas del mismo dia.
-    val f = quincenaFigures(
-        quincena = quincena,
-        receivedIncome = postedIncome,
-        spent = postedExpenses,
-        reserved = reservedPlanned,
-        projectedExpensesFallback = byCategory.sumOf { it.projected },
-    )
     sb.append(
         "Llevas ${money.format(f.spent)} pagados. " +
             "Ingreso: ${money.format(f.receivedIncome)} recibido de " +
             "${money.format(f.projectedIncome)} proyectado. "
     )
+    if (f.carryOver > 0) {
+        sb.append("De la quincena anterior sobraron ${money.format(f.carryOver)}. ")
+    } else if (f.carryOver < 0) {
+        sb.append("La quincena anterior cerró ${money.format(-f.carryOver)} por debajo. ")
+    }
     if (f.reserved > 0) {
         sb.append("Tienes ${money.format(f.reserved)} reservados para lo que falta por pagar. ")
+    }
+    if (f.capsPending > 0) {
+        sb.append("Apartas ${money.format(f.capsPending)} para lo que falta de tus topes por categoría. ")
     }
     sb.append(
         if (f.available >= 0) "Disponible: ${money.format(f.available)}."
@@ -722,12 +727,13 @@ private fun CashflowBars(
     receivedIncome: Double,
     projectedIncome: Double,
     actualExpenses: Double,
+    available: Double,
     money: NumberFormat,
 ) {
     val maxRef = maxOf(projectedIncome, receivedIncome, actualExpenses, 1.0)
-    // "Disponible" se ancla al ingreso PROYECTADO (número accionable de la
-    // quincena); la barra de ingreso muestra lo RECIBIDO (POSTED en vivo).
-    val available = projectedIncome - actualExpenses
+    // Fase 7b: "Disponible" es la cifra del dashboard ([available], de la
+    // convencion compartida); antes se anclaba solo al ingreso proyectado menos
+    // lo gastado y contradecia al heroe. La barra de ingreso muestra lo RECIBIDO.
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         LabeledBar(
             label = "Ingreso recibido",
@@ -747,8 +753,8 @@ private fun CashflowBars(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            if (available >= 0) "Disponible (proyectado): ${money.format(available)}"
-            else "Déficit (proyectado): ${money.format(-available)}",
+            if (available >= 0) "Disponible: ${money.format(available)}"
+            else "Sobregiro: ${money.format(-available)}",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color = if (available >= 0) MaterialTheme.financeColors.income
             else MaterialTheme.financeColors.expense,

@@ -28,11 +28,17 @@
     <string name="cd_previous_quincena">Quincena anterior</string>
     <string name="cd_next_quincena">Quincena siguiente</string>
     <string name="cd_edit_quincena_budget">Editar el presupuesto de %1$s</string>
+    <string name="action_rhythm_switch">Cambiar entre por día, por semana y en la quincena</string>
 
     <!-- Estados que se anuncian al guardar un movimiento. -->
     <string name="state_saving">Guardando el movimiento</string>
     <string name="state_saved">Movimiento guardado</string>
     <string name="state_missing_fields">Faltan datos para guardar</string>
+
+    <!-- Vista de la tarjeta Ritmo, que se anuncia como estado al alternarla (Fase 7b). -->
+    <string name="state_rhythm_day">Por día</string>
+    <string name="state_rhythm_week">Por semana</string>
+    <string name="state_rhythm_quincena">En la quincena</string>
 
     <!-- Errores compartidos. -->
     <string name="error_quincena_closed">La quincena %1$s está cerrada. Reábrela desde Inicio para modificar sus movimientos.</string>

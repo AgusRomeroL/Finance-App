@@ -82,6 +82,10 @@ sealed class DispatchResult {
          * en "Disponible", asi que sin ella el chat daba otra cifra distinta.
          */
         val reservedMxn: Double = 0.0,
+        /** Lo que falta por gastar de los topes por categoria (Fase 7b). */
+        val capsPendingMxn: Double = 0.0,
+        /** Arrastre de la quincena anterior cerrada, con su signo (Fase 7b). */
+        val carryOverMxn: Double = 0.0,
     ) : DispatchResult()
 
     /**

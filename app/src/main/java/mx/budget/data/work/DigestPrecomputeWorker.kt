@@ -39,6 +39,7 @@ class DigestPrecomputeWorker(
                 incomeRepository = app.incomeRepository,
                 installmentRepository = app.installmentRepository,
                 settings = app.settingsRepository,
+                quincenaFiguresSource = app.quincenaFiguresSource,
             )
             answerer.precomputeDigest(app.householdId)
             Result.success()
