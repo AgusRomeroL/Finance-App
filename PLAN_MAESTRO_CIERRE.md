@@ -454,11 +454,34 @@ fast-forward a main y norma y actualiza la sección 3 del plan.
 
 **Prompt de arranque.**
 ```text
-Lee CLAUDE.md y la Fase 8 de PLAN_MAESTRO_CIERRE.md. El keystore lo crea el usuario; pídele la ruta y
-los nombres de las propiedades, nunca las contraseñas. Configura release en app y wear, las reglas de
-ProGuard y el versionado compartido, y ejecuta el smoke test completo en los dispositivos reales.
-Despliega la web con el script nuevo. Cierra con fast-forward a main y norma y actualiza la sección 3
-del plan.
+Lee CLAUDE.md, la Fase 8 y la sección 7 de PLAN_MAESTRO_CIERRE.md. Antes de tocar nada, pregúntale al
+usuario por las tres decisiones abiertas que esta fase no puede esquivar: la 5 (canal de distribución:
+APK firmado por Drive o pista interna de Play); la 12 (guard de quincena cerrada en la web, que se
+decide ahora porque la fase vuelve a desplegarla); y la 4 (origen de descarga del modelo Gemma: el
+proyecto no tiene bucket de Storage y en el teléfono de Norma no habrá adb).
+
+El keystore lo crea el usuario con keytool fuera del repositorio; pídele la ruta y los nombres de las
+propiedades de secrets.local.properties, nunca las contraseñas. Configura release en app y wear
+(minificación, reducción de recursos, reglas de ProGuard para Room, Firestore, OkHttp,
+kotlinx.serialization, pdfbox-android, ML Kit y LiteRT-LM) con el versionado compartido, y sube los
+símbolos a Crashlytics (decisión 7). Registra el SHA-1 de release en Firebase, regenera
+google-services.json y verifica Google Sign-In con el build firmado. Revisa las páginas de 16 KB con
+zipalign -c -P 16.
+
+Haz el smoke test del build de release en el Pixel 7, el Pixel 10 y el reloj: todos los flujos de §2.1
+más los de la Fase 7b, que la minificación puede romper. Eso incluye el aviso de presupuesto como
+notificación real y su enlace a Analíticas, el deshacer al guardar y al borrar, el editor del
+presupuesto de la quincena, la hoja de lo reservado, Ritmo y el Disponible del reloj igual al del
+héroe.
+
+Web: npm solo corre en la copia NTFS C:\dev\finance-web (en G: falla), esa copia no tiene .env y la
+máquina no tiene la CLI de Firebase (el login lo hace el usuario). Escribe scripts/web/deploy.ps1 para
+que sincronice la copia, compile y despliegue de forma reproducible. Fija VITE_FIREBASE_APP_ID
+definitivo, despliega y verifica la PWA instalada: el Disponible del Panel tiene que coincidir con el
+héroe de la app para el mismo hogar.
+
+Documenta en CLAUDE.md la sección "Cómo se publica". Cierra con fast-forward a main y norma y actualiza
+la sección 3 del plan.
 ```
 
 ---
@@ -647,7 +670,7 @@ Consume mucho contexto porque genera varios *artboards* a la vez; la herencia au
 
 11. **Alcance de lectura del Colaborador.** Resuelta el 2026-09-07: lee `members`, `categories`, `wallets` y `proposals`, que es justo lo que necesita para proponer y lo que su web consume. Se descartó el documento agregado `summary/{quincenaId}`: obligaba a decidir quién lo escribe y cuándo, con riesgo de quedar rancio si nadie abre la app, añadía una escritura más al push y exigía adaptar la web, a cambio de un panorama que el Colaborador no ha pedido.
 
-13. **Reservar lo que falta de los topes por categoría.** Resuelta el 2026-10-31 **a favor** e implementada en la Fase 7b, con una regla añadida el mismo día: una categoría con plantilla recurrente activa no aparta su tope ni avisa, porque su cargo ya lo aparta "Reservado". el Disponible aparta `max(0, tope - gastado - planeado prorrateado)` de cada categoría con tope (`data/quincena/CategoryCaps.kt`); el planeado de la categoría se descuenta porque ya lo aparta "Reservado". La resta del héroe lo escribe como "Topes por gastar".
+13. **Reservar lo que falta de los topes por categoría.** Resuelta el 2026-10-31 **a favor** e implementada en la Fase 7b, con una regla añadida el mismo día: una categoría con plantilla recurrente activa no aparta su tope ni avisa, porque su cargo ya lo aparta "Reservado". El Disponible aparta `max(0, tope - gastado - planeado prorrateado)` de cada categoría con tope (`data/quincena/CategoryCaps.kt`); el planeado de la categoría se descuenta porque ya lo aparta "Reservado". La resta del héroe lo escribe como "Topes por gastar".
 14. **Arrastre del sobrante a la quincena siguiente.** Resuelta el 2026-10-31 **a favor** e implementada en la Fase 7b (`data/quincena/CarryOver.kt`), con dos reglas de Agustín: solo arrastra la quincena **inmediata** anterior y solo cuando ya está cerrada (sus cifras congeladas viajan por sync y los dos teléfonos calculan lo mismo; mientras siga pendiente de cierre, el héroe dice que el sobrante llegará al cerrarla), sin encadenar; y el **déficit también se arrastra**.
 
 ---
