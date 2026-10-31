@@ -27,6 +27,7 @@
     <string name="cd_capture_expense">Capturar gasto</string>
     <string name="cd_previous_quincena">Quincena anterior</string>
     <string name="cd_next_quincena">Quincena siguiente</string>
+    <string name="cd_edit_quincena_budget">Editar el presupuesto de %1$s</string>
 
     <!-- Estados que se anuncian al guardar un movimiento. -->
     <string name="state_saving">Guardando el movimiento</string>

@@ -137,6 +137,8 @@ fun BudgetNavGraph(
     aiAssistant: mx.budget.ui.profile.AiAssistantSettings? = null,
     /** Cierre manual de quincena (Fase 5). `null` oculta las rutas. */
     quincenaCloseViewModel: mx.budget.ui.quincena.QuincenaCloseViewModel? = null,
+    /** Presupuesto declarado de la quincena (Fase 7b). `null` oculta el lápiz. */
+    quincenaBudgetViewModel: mx.budget.ui.quincena.QuincenaBudgetViewModel? = null,
     /** Exportaciones y respaldo (Fase 5). `null` oculta la sección de Perfil. */
     exportViewModel: mx.budget.ui.profile.ExportViewModel? = null,
     onRestoreBackup: ((mx.budget.data.backup.BackupInspection) -> Unit)? = null,
@@ -557,10 +559,22 @@ fun BudgetNavGraph(
             popEnterTransition = slideEnter, popExitTransition = slideExit,
         ) {
             val quincenas by dashboardViewModel.allQuincenas.collectAsState()
+            // Mismo criterio que el cierre: Dueño y Administrador, o cualquiera
+            // en un hogar solo local.
+            val rol = householdViewModel?.uiState?.collectAsState()?.value?.myRole
+            val puedeGestionar = rol == null ||
+                rol == mx.budget.data.remote.MembershipRepository.ROLE_OWNER ||
+                rol == mx.budget.data.remote.MembershipRepository.ROLE_PAYER
+            val budgetState = quincenaBudgetViewModel?.state?.collectAsState()?.value
+                ?: mx.budget.ui.quincena.QuincenaBudgetState()
             mx.budget.ui.quincena.QuincenasScreen(
                 quincenas = quincenas,
                 onOpen = { id -> onNavigate("${BudgetDestinations.QUINCENA_CLOSE}?quincenaId=$id") },
                 onBack = { onNavigate(BudgetDestinations.PROFILE) },
+                canEdit = quincenaBudgetViewModel != null && puedeGestionar,
+                budgetState = budgetState,
+                onSaveBudget = { id, income, expenses -> quincenaBudgetViewModel?.save(id, income, expenses) },
+                onBudgetConsumed = { quincenaBudgetViewModel?.consume() },
             )
         }
 

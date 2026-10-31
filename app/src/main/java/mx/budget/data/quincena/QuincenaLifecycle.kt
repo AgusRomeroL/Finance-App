@@ -56,6 +56,31 @@ class QuincenaLifecycle(
         enqueue(quincena.id)
     }
 
+    /**
+     * Presupuesto declarado de la quincena (Fase 7b): ingreso y gasto proyectados.
+     *
+     * Relee la quincena dentro de la transaccion en vez de confiar en la copia de
+     * la pantalla, porque guardar una copia rancia podria regresar su estado. Una
+     * quincena `CLOSED` no se edita: sus cifras ya estan congeladas. Devuelve
+     * false si no existe o esta cerrada.
+     */
+    suspend fun saveBudget(
+        quincenaId: String,
+        projectedIncome: Double,
+        projectedExpenses: Double,
+        now: Long = System.currentTimeMillis(),
+    ): Boolean {
+        var saved = false
+        inTransaction {
+            val current = dao.getById(quincenaId)
+            if (current != null && current.status != CLOSED) {
+                save(current.copy(projectedIncomeMxn = projectedIncome, projectedExpensesMxn = projectedExpenses), now)
+                saved = true
+            }
+        }
+        return saved
+    }
+
     /** PROVISIONED o CLOSING_REVIEW a ACTIVE. */
     suspend fun activate(quincena: QuincenaEntity, now: Long = System.currentTimeMillis()) {
         save(quincena.copy(status = ACTIVE, closedAt = null), now)

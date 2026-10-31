@@ -262,6 +262,11 @@ class MainActivity : ComponentActivity() {
         ViewModelProvider(this, QuincenaCloseViewModelFactory(app))[mx.budget.ui.quincena.QuincenaCloseViewModel::class.java]
     }
 
+    private val quincenaBudgetViewModel: mx.budget.ui.quincena.QuincenaBudgetViewModel by lazy {
+        val app = application as BudgetApplication
+        ViewModelProvider(this, QuincenaBudgetViewModelFactory(app))[mx.budget.ui.quincena.QuincenaBudgetViewModel::class.java]
+    }
+
     private val exportViewModel: mx.budget.ui.profile.ExportViewModel by lazy {
         val app = application as BudgetApplication
         ViewModelProvider(this, ExportViewModelFactory(app))[mx.budget.ui.profile.ExportViewModel::class.java]
@@ -486,6 +491,7 @@ class MainActivity : ComponentActivity() {
                     statementImportViewModel = statementImportViewModel,
                     statementsChecklistViewModel = statementsChecklistViewModel,
                     quincenaCloseViewModel = quincenaCloseViewModel,
+                    quincenaBudgetViewModel = quincenaBudgetViewModel,
                     exportViewModel = exportViewModel,
                     onRestoreBackup = { inspeccion ->
                         // La restauración mata el proceso, así que corre en el
@@ -578,6 +584,16 @@ class QuincenaCloseViewModelFactory(
             walletRepository = app.walletRepository,
             householdId = app.householdId,
         ) as T
+    }
+}
+
+/** Factory del presupuesto declarado de la quincena (Fase 7b). */
+class QuincenaBudgetViewModelFactory(
+    private val app: BudgetApplication,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return mx.budget.ui.quincena.QuincenaBudgetViewModel(app.quincenaLifecycle) as T
     }
 }
 
