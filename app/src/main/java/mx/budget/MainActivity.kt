@@ -202,7 +202,8 @@ class MainActivity : ComponentActivity() {
             app.memberRepository,
             app.householdId,
             app.membershipRepository,
-            app.quincenaFreezeGuard
+            app.quincenaFreezeGuard,
+            undoController,
         ))[mx.budget.ui.detail.ExpenseDetailViewModel::class.java]
     }
 
@@ -295,8 +296,13 @@ class MainActivity : ComponentActivity() {
             membershipRepository = app.membershipRepository,
             // Pagador default de sesión (roles v2): quién ES esta persona en el hogar.
             sessionMemberId = app.linkedMemberId,
+            undoController = undoController,
+            settingsRepository = app.settingsRepository,
         ))[CaptureViewModel::class.java]
     }
+
+    /** Deshacer a nivel de app (Fase 7b): captura y detalle publican, el grafo muestra. */
+    private val undoController by lazy { mx.budget.ui.common.UndoController(lifecycleScope) }
 
     /**
      * Destino pedido por una notificación (Fase 7b): el aviso de presupuesto abre
@@ -513,6 +519,7 @@ class MainActivity : ComponentActivity() {
                     },
                     onRequestNotifications = { requestNotificationPermission() },
                     pendingNavigation = pendingNavigation,
+                    undoController = undoController,
                     onNavigationConsumed = { pendingNavigation.value = null },
                     calendarMirrorEnabled = calendarMirrorEnabled,
                     onCalendarMirrorToggle = { enabled ->
@@ -1107,6 +1114,7 @@ class ExpenseDetailViewModelFactory(
     private val householdId: String,
     private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
     private val freezeGuard: mx.budget.data.quincena.QuincenaFreezeGuard? = null,
+    private val undoController: mx.budget.ui.common.UndoController? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -1119,6 +1127,7 @@ class ExpenseDetailViewModelFactory(
             householdId = householdId,
             membershipRepository = membershipRepository,
             freezeGuard = freezeGuard,
+            undoController = undoController,
         ) as T
     }
 }
@@ -1142,6 +1151,8 @@ class CaptureViewModelFactory(
     private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
     /** Pagador default de sesión (roles v2): `BudgetApplication.linkedMemberId`. */
     private val sessionMemberId: String? = null,
+    private val undoController: mx.budget.ui.common.UndoController? = null,
+    private val settingsRepository: SettingsRepository? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -1162,6 +1173,8 @@ class CaptureViewModelFactory(
             pendingCaptureDao = pendingCaptureDao,
             membershipRepository = membershipRepository,
             sessionMemberId = sessionMemberId,
+            undoController = undoController,
+            settingsRepository = settingsRepository,
         ) as T
     }
 }

@@ -43,6 +43,13 @@ interface SyncQueueDao {
     @Query("DELETE FROM sync_queue WHERE id = :id")
     suspend fun delete(id: Long)
 
+    /**
+     * Retira de la cola las filas de una entidad y operación que todavía no se
+     * empujaron (Fase 7b): deshacer un borrado cancela su DELETE pendiente.
+     */
+    @Query("DELETE FROM sync_queue WHERE entity_type = :entityType AND entity_id = :entityId AND operation = :operation")
+    suspend fun deletePending(entityType: String, entityId: String, operation: String)
+
     @Query("UPDATE sync_queue SET attempts = attempts + 1 WHERE id = :id")
     suspend fun incrementAttempts(id: Long)
 }

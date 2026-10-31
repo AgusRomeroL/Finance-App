@@ -46,4 +46,11 @@ interface StatementLineDao {
     /** Ids de gastos ya vinculados en este wallet (no ofrecer dos veces el mismo). */
     @Query("SELECT matched_expense_id FROM statement_line WHERE wallet_id = :walletId AND matched_expense_id IS NOT NULL")
     suspend fun getMatchedExpenseIds(walletId: String): List<String>
+
+    /** Líneas conciliadas con un gasto, para restaurar el enlace al deshacer su borrado (Fase 7b). */
+    @Query("SELECT id FROM statement_line WHERE matched_expense_id = :expenseId")
+    suspend fun getIdsMatchedTo(expenseId: String): List<String>
+
+    @Query("UPDATE statement_line SET matched_expense_id = :expenseId WHERE id IN (:ids)")
+    suspend fun relinkMatches(ids: List<String>, expenseId: String)
 }

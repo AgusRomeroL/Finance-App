@@ -221,7 +221,10 @@ class SyncManager(
                             // dispositivo offline prolongado cuyo cache ya no ve el
                             // REMOVED recibe la lápida como ADDED y borra localmente,
                             // en vez de resucitar el gasto.
-                            remoteExpenseRepository.deleteAndRevertBalance(row.entityId)
+                            // Fase 7b: la lápida lleva la hora del borrado local
+                            // (la de la fila), no la del push, para que deshacer
+                            // el borrado le gane en el LWW.
+                            remoteExpenseRepository.writeTombstone(row.entityId, row.createdAt)
                             syncQueueDao.delete(row.id)
                         }
 

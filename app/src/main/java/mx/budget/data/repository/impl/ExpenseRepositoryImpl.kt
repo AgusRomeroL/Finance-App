@@ -17,6 +17,7 @@ import mx.budget.data.local.result.PendingReimbursementExpense
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.local.result.TopExpense
 import mx.budget.data.quincena.QuincenaFreezeGuard
+import mx.budget.data.repository.DeletedExpense
 import mx.budget.data.repository.ExpenseRepository
 
 /**
@@ -192,14 +193,58 @@ class ExpenseRepositoryImpl(
     }
 
     override suspend fun deleteAndRevertBalance(expenseId: String) {
+        deleteWithSnapshot(expenseId)
+    }
+
+    override suspend fun deleteWithSnapshot(expenseId: String): DeletedExpense? {
+        var snapshot: DeletedExpense? = null
         db.withTransaction {
             val expense = dao.getById(expenseId) ?: return@withTransaction
             freezeGuard?.ensureEditable(expense.quincenaId)
+            val attributions = attributionDao.getByExpenseId(expenseId)
+            val matchedLines = db.statementLineDao().getIdsMatchedTo(expenseId)
             if (expense.status == "POSTED") {
                 applyToWallet(expense.paymentMethodId, expense.amountMxn, posting = false)
             }
             dao.delete(expense)
-            enqueueSync(expenseId, "DELETE")
+            val deletedAt = System.currentTimeMillis()
+            enqueueSync(expenseId, "DELETE", deletedAt)
+            snapshot = DeletedExpense(expense, attributions, matchedLines, deletedAt)
+        }
+        return snapshot
+    }
+
+    /**
+     * Deshacer un borrado (Fase 7b) tiene que convivir con la lápida, que puede
+     * estar en tres estados cuando llega el toque:
+     * - **El DELETE sigue en la cola** (sin red o dentro del debounce): se borra
+     *   de la cola y la nube nunca ve el borrado.
+     * - **El DELETE se está empujando o ya salió**: la lápida lleva la hora del
+     *   borrado local ([DeletedExpense.deletedAt], la sella `SyncManager` con la
+     *   fila de la cola) y el gasto restaurado lleva una marca posterior, así que
+     *   el eco de la lápida en el pull pierde contra la fila local y el UPSERT la
+     *   revive en la nube; los demás dispositivos borran y vuelven a recibirlo.
+     *   Antes la lápida se sellaba con la hora del push, le ganaba a la fila
+     *   restaurada, el pull la borraba y el UPSERT se descartaba por nulo: el
+     *   gasto desaparecía en todos lados con el saldo descuadrado.
+     * - **El gasto ya volvió** (por el pull): no se hace nada.
+     */
+    override suspend fun restoreDeleted(snapshot: DeletedExpense) {
+        db.withTransaction {
+            val expense = snapshot.expense
+            freezeGuard?.ensureEditable(expense.quincenaId)
+            if (dao.getById(expense.id) != null) return@withTransaction
+            syncQueueDao.deletePending("EXPENSE", expense.id, "DELETE")
+            val restoredAt = maxOf(System.currentTimeMillis(), snapshot.deletedAt + 1)
+            dao.insert(expense.copy(updatedAt = restoredAt))
+            attributionDao.insertAll(snapshot.attributions)
+            if (snapshot.matchedStatementLineIds.isNotEmpty()) {
+                db.statementLineDao().relinkMatches(snapshot.matchedStatementLineIds, expense.id)
+            }
+            if (expense.status == "POSTED") {
+                applyToWallet(expense.paymentMethodId, expense.amountMxn, posting = true)
+            }
+            enqueueSync(expense.id, "UPSERT")
         }
     }
 
@@ -255,13 +300,17 @@ class ExpenseRepositoryImpl(
         }
     }
 
-    private suspend fun enqueueSync(expenseId: String, operation: String) {
+    private suspend fun enqueueSync(
+        expenseId: String,
+        operation: String,
+        createdAt: Long = System.currentTimeMillis(),
+    ) {
         syncQueueDao.enqueue(
             SyncQueueEntity(
                 entityType = "EXPENSE",
                 entityId = expenseId,
                 operation = operation,
-                createdAt = System.currentTimeMillis()
+                createdAt = createdAt
             )
         )
     }

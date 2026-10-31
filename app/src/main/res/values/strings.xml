@@ -28,6 +28,7 @@
     <string name="cd_previous_quincena">Quincena anterior</string>
     <string name="cd_next_quincena">Quincena siguiente</string>
     <string name="cd_edit_quincena_budget">Editar el presupuesto de %1$s</string>
+    <string name="action_undo">Deshacer</string>
     <string name="action_rhythm_switch">Cambiar entre por día, por semana y en la quincena</string>
 
     <!-- Estados que se anuncian al guardar un movimiento. -->

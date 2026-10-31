@@ -193,6 +193,26 @@ interface ExpenseRepository {
     suspend fun deleteAndRevertBalance(expenseId: String)
 
     /**
+     * Borra como [deleteAndRevertBalance] y devuelve la foto que hace falta para
+     * deshacerlo (Fase 7b), o null si el gasto ya no existe. Solo la implementa
+     * el lado Room; el lado nube nunca borra desde la interfaz.
+     */
+    suspend fun deleteWithSnapshot(expenseId: String): DeletedExpense? = null
+
+    /**
+     * Deshace un borrado hecho con [deleteWithSnapshot]: cancela el DELETE si
+     * todavía no salió, reinserta el gasto con sus atribuciones y su efecto en
+     * el saldo, y encola el UPSERT que lo revive en la nube.
+     */
+    suspend fun restoreDeleted(snapshot: DeletedExpense) {}
+
+    /**
+     * Lado nube: escribe la lápida del gasto sellada con [deletedAt], la hora del
+     * borrado local, no la del push. Por defecto cae a [deleteAndRevertBalance].
+     */
+    suspend fun writeTombstone(expenseId: String, deletedAt: Long) = deleteAndRevertBalance(expenseId)
+
+    /**
      * Fija/actualiza la ubicación de un gasto (Apéndice G.4). Lo usa el detalle del
      * gasto al "añadir ubicación" (source=MANUAL) o para borrarla (pasar todo null
      * con [source]="NONE"). Encola push de sync. No-op si el gasto no existe.
@@ -258,3 +278,16 @@ interface ExpenseRepository {
      */
     suspend fun markAbsorbed(expenseId: String)
 }
+
+/**
+ * Lo que hace falta para deshacer el borrado de un gasto (Fase 7b): el gasto, sus
+ * atribuciones, las líneas de estado de cuenta que lo tenían conciliado (el
+ * borrado las deja en SET NULL) y la hora en que se encoló el DELETE, que es la
+ * misma con la que se sella su lápida.
+ */
+data class DeletedExpense(
+    val expense: ExpenseEntity,
+    val attributions: List<ExpenseAttributionEntity>,
+    val matchedStatementLineIds: List<String>,
+    val deletedAt: Long,
+)

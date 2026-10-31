@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import mx.budget.ai.proactive.AttributionSuggestion
 import mx.budget.ai.proactive.RetroAttributionEngine
@@ -164,6 +165,10 @@ class CaptureViewModel(
      * que paga él, no el titular de la cuenta). null = cadena default histórica.
      */
     private val sessionMemberId: String? = null,
+    /** Deshacer a nivel de app (Fase 7b). null en Quick Tap, que cierra su ventana. */
+    private val undoController: mx.budget.ui.common.UndoController? = null,
+    /** Última cuenta usada por miembro (Fase 7b). */
+    private val settingsRepository: mx.budget.data.settings.SettingsRepository? = null,
 ) : ViewModel() {
 
     /** [sessionMemberId] solo si corresponde a un member activo del hogar (si no, null). */
@@ -683,7 +688,10 @@ class CaptureViewModel(
      */
     fun applyMode(mode: CaptureSheetMode) {
         when (mode) {
-            CaptureSheetMode.New -> _captureKind.value = CaptureKind.EXPENSE
+            CaptureSheetMode.New -> {
+                _captureKind.value = CaptureKind.EXPENSE
+                seedLastWallet()
+            }
             CaptureSheetMode.Income -> _captureKind.value = CaptureKind.INCOME
             is CaptureSheetMode.Review -> {
                 _captureKind.value = CaptureKind.EXPENSE
@@ -968,6 +976,31 @@ class CaptureViewModel(
         }
     }
 
+    /** Clave de la última cuenta: el miembro de la sesión, o "_" sin vínculo. */
+    private val lastWalletKey: String get() = sessionMemberId ?: "_"
+
+    /**
+     * Siembra la última cuenta usada por este miembro al abrir la hoja en modo
+     * New (Fase 7b). Nunca en Review, que trae la suya, ni si ya hay una elegida.
+     * Espera a que lleguen las cuentas, porque el flujo arranca al suscribirse la
+     * hoja, y pasa por [onWalletSelected] para que corran los pagadores por defecto.
+     */
+    private fun seedLastWallet() {
+        val settings = settingsRepository ?: return
+        if (_selectedWalletId.value != null) return
+        viewModelScope.launch {
+            val id = settings.getLastWallet(lastWalletKey) ?: return@launch
+            val disponibles = kotlinx.coroutines.withTimeoutOrNull(3_000) {
+                wallets.first { lista -> lista.isNotEmpty() }
+            } ?: return@launch
+            if (_selectedWalletId.value == null && _captureKind.value == CaptureKind.EXPENSE &&
+                disponibles.any { it.id == id }
+            ) {
+                onWalletSelected(id)
+            }
+        }
+    }
+
     /** Selecciona una categoría. */
     fun onCategorySelected(categoryId: String) {
         _selectedCategoryId.value = categoryId
@@ -1162,6 +1195,13 @@ class CaptureViewModel(
                 // 7. Inserción atómica (valida bps internamente)
                 expenseRepository.insertWithAttributions(expense, attributions)
 
+                // Fase 7b: la cuenta queda recordada para la próxima captura, salvo
+                // la cartera virtual de terceros, que no es una cuenta de nadie.
+                if (thirdPartyId == null) {
+                    runCatching { settingsRepository?.setLastWallet(lastWalletKey, walletId) }
+                }
+                val origen = pendingCaptureId
+
                 // 8. Si la hoja nació de una captura pendiente (§G.3 / Review SP-A1),
                 // márcala CONFIRMED para sacarla de la bandeja. Con callback
                 // (BankCaptureManager cancela también la notificación) o, si no
@@ -1184,6 +1224,16 @@ class CaptureViewModel(
                         }
                     }
                     pendingCaptureId = null
+                }
+
+                // Fase 7b: deshacer el guardado. Una propuesta de colaborador ya se
+                // resolvió en la nube, así que no se ofrece; si venía de la bandeja,
+                // la captura vuelve a quedar pendiente.
+                if (origen?.startsWith("proposal:") != true) {
+                    undoController?.offer("Gasto guardado: ${expense.concept}") {
+                        expenseRepository.deleteAndRevertBalance(expenseId)
+                        if (origen != null) pendingCaptureDao?.updateStatus(origen, "PENDING")
+                    }
                 }
 
                 _operationState.value = CaptureOperationState.Success(expenseId)

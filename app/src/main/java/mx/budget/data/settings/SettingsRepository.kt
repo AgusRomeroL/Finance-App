@@ -45,6 +45,7 @@ class SettingsRepository(private val context: Context) {
     private val quincenaCloseNotifiedKey = stringSetPreferencesKey("quincena_close_notified")
     private val budgetAlertsEnabledKey = booleanPreferencesKey("budget_alerts_enabled")
     private val budgetAlertsSentKey = stringSetPreferencesKey("budget_alerts_sent")
+    private val lastWalletByMemberKey = stringPreferencesKey("last_wallet_by_member_json")
     private val calendarMirrorEnabledKey = booleanPreferencesKey("calendar_mirror_enabled")
     private val calendarMirrorIdKey = longPreferencesKey("calendar_mirror_id")
     private val calendarEventMapKey = stringPreferencesKey("calendar_event_map_json")
@@ -266,6 +267,22 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[budgetAlertsEnabledKey] = enabled }
     }
 
+    /**
+     * Última cuenta usada al guardar un gasto, por miembro de la sesión (Fase 7b).
+     * La captura la siembra al abrirse en modo New; [memberKey] es el miembro
+     * vinculado a la sesión, o "_" si el dispositivo no tiene uno.
+     */
+    suspend fun getLastWallet(memberKey: String): String? =
+        decodeStringMap(context.dataStore.data.first()[lastWalletByMemberKey])[memberKey]
+
+    suspend fun setLastWallet(memberKey: String, walletId: String) {
+        context.dataStore.edit { prefs ->
+            val actual = decodeStringMap(prefs[lastWalletByMemberKey]).toMutableMap()
+            actual[memberKey] = walletId
+            prefs[lastWalletByMemberKey] = Json.encodeToString(actual)
+        }
+    }
+
     /** Avisos ya publicados, como `quincenaId|categoryId|NIVEL`; el worker los poda. */
     suspend fun getBudgetAlertsSent(): Set<String> =
         context.dataStore.data.first()[budgetAlertsSentKey] ?: emptySet()
@@ -426,6 +443,11 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[openAnalysisDigestKey] = Json.encodeToString(cached)
         }
+    }
+
+    private fun decodeStringMap(raw: String?): Map<String, String> {
+        if (raw.isNullOrBlank()) return emptyMap()
+        return runCatching { Json.decodeFromString<Map<String, String>>(raw) }.getOrDefault(emptyMap())
     }
 
     private fun decodeLongMap(raw: String?): Map<String, Long> {

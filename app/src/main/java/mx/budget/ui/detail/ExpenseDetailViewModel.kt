@@ -99,6 +99,8 @@ class ExpenseDetailViewModel(
     private val membershipRepository: mx.budget.data.remote.MembershipRepository? = null,
     /** Fase 5: lectura de la congelación de la quincena del gasto. */
     private val freezeGuard: mx.budget.data.quincena.QuincenaFreezeGuard? = null,
+    /** Deshacer a nivel de app (Fase 7b). */
+    private val undoController: mx.budget.ui.common.UndoController? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ExpenseDetailState?>(null)
@@ -330,7 +332,9 @@ class ExpenseDetailViewModel(
 
     /**
      * Elimina el gasto revirtiendo su efecto en el saldo del wallet (si POSTED) y
-     * encolando el DELETE de sync. Cierra la hoja al terminar.
+     * encolando el DELETE de sync. Cierra la hoja al terminar y ofrece deshacer
+     * (Fase 7b): la foto del borrado basta para restaurarlo aunque el DELETE ya
+     * haya salido a la nube.
      */
     fun delete() {
         val current = _state.value ?: return
@@ -338,7 +342,12 @@ class ExpenseDetailViewModel(
         _state.update { it?.copy(saving = true) }
         viewModelScope.launch {
             try {
-                expenseRepository.deleteAndRevertBalance(current.row.expenseId)
+                val snapshot = expenseRepository.deleteWithSnapshot(current.row.expenseId)
+                if (snapshot != null) {
+                    undoController?.offer("Gasto borrado: ${snapshot.expense.concept}") {
+                        expenseRepository.restoreDeleted(snapshot)
+                    }
+                }
                 _state.value = null
             } catch (e: Exception) {
                 _state.update { it?.copy(saving = false, editError = e.message ?: "No se pudo eliminar") }

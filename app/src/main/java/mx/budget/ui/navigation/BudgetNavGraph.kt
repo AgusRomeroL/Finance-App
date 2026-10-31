@@ -20,6 +20,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -130,6 +135,8 @@ fun BudgetNavGraph(
     /** Destino pedido por una notificación (Fase 7b). */
     pendingNavigation: kotlinx.coroutines.flow.StateFlow<PendingNavigation?>? = null,
     onNavigationConsumed: () -> Unit = {},
+    /** Deshacer a nivel de app (Fase 7b): un solo snackbar sobre todas las rutas. */
+    undoController: mx.budget.ui.common.UndoController? = null,
     locationLevel: String = "NONE",
     onLocationLevelChange: (String) -> Unit = {},
     householdViewModel: mx.budget.ui.household.HouseholdViewModel? = null,
@@ -775,6 +782,36 @@ fun BudgetNavGraph(
             tutorialCurrentRoute = currentRoute,
         )
     }
+
+    // Deshacer (Fase 7b): la hoja de captura y la de detalle se cierran al guardar
+    // o borrar, así que el snackbar vive aquí, encima de la barra flotante. Un
+    // evento nuevo reemplaza al que se estaba mostrando.
+    val undoHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val undoLabel = androidx.compose.ui.res.stringResource(mx.budget.R.string.action_undo)
+    val undoScope = androidx.compose.runtime.rememberCoroutineScope()
+    LaunchedEffect(undoController) {
+        undoController?.events?.collectLatest { event ->
+            val result = undoHostState.showSnackbar(
+                message = event.message,
+                actionLabel = undoLabel,
+                withDismissAction = true,
+                duration = androidx.compose.material3.SnackbarDuration.Long,
+            )
+            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                undoController.runUndo(event) { motivo ->
+                    undoScope.launch { undoHostState.showSnackbar(motivo, withDismissAction = true) }
+                }
+            }
+        }
+    }
+    androidx.compose.material3.SnackbarHost(
+        hostState = undoHostState,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .navigationBarsPadding()
+            .padding(bottom = if (isExpanded || !isTopLevel) 16.dp else 96.dp)
+            .widthIn(max = 640.dp),
+    )
     } // Box
 }
 

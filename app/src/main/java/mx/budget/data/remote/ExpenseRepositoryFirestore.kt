@@ -293,7 +293,15 @@ class ExpenseRepositoryFirestore(
         // por-rol nunca se invoca aquí. Existe solo para cumplir el contrato.
     }
 
-    override suspend fun deleteAndRevertBalance(expenseId: String) {
+    override suspend fun deleteAndRevertBalance(expenseId: String) =
+        writeTombstone(expenseId, System.currentTimeMillis())
+
+    /**
+     * Lápida sellada con [deletedAt] (Fase 7b): `SyncManager` pasa la hora en que
+     * se encoló el borrado local, para que un deshacer posterior, que sella el
+     * gasto restaurado con una marca mayor, le gane en el LWW del pull.
+     */
+    override suspend fun writeTombstone(expenseId: String, deletedAt: Long) {
         // Delete remoto fiable con LÁPIDA (tombstone): en vez de borrar el doc
         // (cuyo REMOVED puede perderse para un dispositivo offline prolongado,
         // que al reconectar recibiría el doc como ADDED y "resucitaría" el
@@ -310,13 +318,12 @@ class ExpenseRepositoryFirestore(
                 .documents.firstOrNull()?.reference ?: return
         }
         val attribs = ref.collection("attributions").get().await()
-        val now = System.currentTimeMillis()
         val hh = householdId ?: ref.parent.parent?.id
         val tombstone = buildMap<String, Any> {
             put("id", expenseId)
             if (hh != null) put("householdId", hh)
-            put("deletedAt", now)
-            put("updatedAt", now)
+            put("deletedAt", deletedAt)
+            put("updatedAt", deletedAt)
         }
         val batch = firestore.batch()
         attribs.documents.forEach { batch.delete(it.reference) }
