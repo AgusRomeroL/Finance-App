@@ -142,7 +142,8 @@ class MainActivity : ComponentActivity() {
             app.savingsRepository,
             app.loanRepository,
             app.installmentRepository,
-            app.database.statementImportDao()
+            app.database.statementImportDao(),
+            app.database.categoryDao(),
         ))[WalletsViewModel::class.java]
     }
 
@@ -836,6 +837,7 @@ class WalletsViewModelFactory(
     private val loanRepository: mx.budget.data.repository.LoanRepository? = null,
     private val installmentRepository: mx.budget.data.repository.InstallmentRepository? = null,
     private val statementImportDao: mx.budget.data.local.dao.StatementImportDao? = null,
+    private val categoryDao: mx.budget.data.local.dao.CategoryDao? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -851,6 +853,7 @@ class WalletsViewModelFactory(
             loanRepository = loanRepository,
             installmentRepository = installmentRepository,
             statementImportDao = statementImportDao,
+            categoryDao = categoryDao,
         ) as T
     }
 }

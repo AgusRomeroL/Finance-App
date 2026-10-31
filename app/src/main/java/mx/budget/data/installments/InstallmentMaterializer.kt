@@ -1,5 +1,6 @@
 package mx.budget.data.installments
 
+import mx.budget.data.local.dao.CategoryDao
 import mx.budget.data.local.dao.ExpenseDao
 import mx.budget.data.local.dao.MemberDao
 import mx.budget.data.local.dao.QuincenaDao
@@ -22,6 +23,11 @@ import java.util.UUID
  * de esa cuota en CUALQUIER status no inserta otro. PLANNED no ajusta saldo. Al
  * confirmar la cuota real desde un estado de cuenta, el import convierte el PLANNED
  * en POSTED (dedupe por el mismo par).
+ *
+ * Un plan sin categoría (los dados de alta en Cuentas o creados al importar un
+ * estado de cuenta, hasta oct-2026) recibe aquí la de [InstallmentCategory] y se
+ * guarda por el repositorio, que sella `updated_at` y la sube a la nube; así se
+ * reparan solos en el primer arranque y no se vuelven a saltar.
  */
 class InstallmentMaterializer(
     private val householdId: String,
@@ -31,6 +37,7 @@ class InstallmentMaterializer(
     private val expenseDao: ExpenseDao,
     private val expenseRepository: ExpenseRepository,
     private val memberDao: MemberDao,
+    private val categoryDao: CategoryDao,
 ) {
     suspend fun materialize() {
         val active = quincenaDao.getActive(householdId) ?: return
@@ -44,11 +51,18 @@ class InstallmentMaterializer(
             ?: members.first().id
         val benBps = equalSplit(members.map { it.id })
 
-        val dueByWallet = walletRepository.getActive(householdId).associate { it.id to it.dueDay }
+        val wallets = walletRepository.getActive(householdId)
+        val dueByWallet = wallets.associate { it.id to it.dueDay }
+        val nameByWallet = wallets.associate { it.id to it.displayName }
         val plans = installmentRepository.getActive(householdId)
             .filter { it.status == "ACTIVE" && it.paymentMethodId != null }
+        val categories = if (plans.any { it.categoryId == null }) categoryDao.getAll(householdId) else emptyList()
 
         for (plan in plans) {
+            val categoryId = plan.categoryId
+                ?: InstallmentCategory.resolve(plan.displayName, nameByWallet[plan.paymentMethodId], categories)
+                    ?.also { runCatching { installmentRepository.update(plan.copy(categoryId = it)) } }
+                ?: continue
             val startDate = InstallmentSchedule.parseIso(plan.startDate) ?: continue
             val dueDay = dueByWallet[plan.paymentMethodId]
             val remaining = InstallmentSchedule.remaining(
@@ -67,7 +81,7 @@ class InstallmentMaterializer(
                     householdId = householdId,
                     occurredAt = cuota.date.atTime(12, 0).toInstant(ZoneOffset.UTC).toEpochMilli(),
                     quincenaId = active.id,
-                    categoryId = plan.categoryId ?: continue,
+                    categoryId = categoryId,
                     concept = "${plan.displayName} (cuota ${cuota.number}/${plan.totalInstallments})".take(64),
                     amountMxn = cuota.amountMxn,
                     paymentMethodId = plan.paymentMethodId!!,

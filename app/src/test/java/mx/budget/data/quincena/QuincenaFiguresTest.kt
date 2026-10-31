@@ -2,6 +2,7 @@ package mx.budget.data.quincena
 
 import mx.budget.testing.Fixtures
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -46,6 +47,27 @@ class QuincenaFiguresTest {
         assertEquals(12000.0, f.projectedExpenses, 0.0)
         assertEquals(18000.0, f.projectedIncome, 0.0)
         assertEquals(17850.0, f.available, 0.0)
+    }
+
+    @Test
+    fun `por dia parte del disponible neto, no de ingreso menos gastado`() {
+        // Entraron 20,000, se gastaron 8,000 y quedan 4,000 reservados: por dia
+        // tiene que repartir 8,000, no 12,000.
+        val f = QuincenaFigures(projectedIncome = 20000.0, receivedIncome = 0.0, spent = 8000.0, reserved = 4000.0, projectedExpenses = 0.0)
+        assertEquals(2000.0, disponiblePorDia(f.available, diasRestantesSinHoy = 3)!!, 0.0)
+    }
+
+    @Test
+    fun `por dia cuenta hoy`() {
+        // El 30 de una quincena que cierra el 31 quedan hoy y manana.
+        assertEquals(500.0, disponiblePorDia(1000.0, diasRestantesSinHoy = 1)!!, 0.0)
+        assertEquals(1000.0, disponiblePorDia(1000.0, diasRestantesSinHoy = 0)!!, 0.0)
+    }
+
+    @Test
+    fun `sin disponible no hay cifra por dia`() {
+        assertNull(disponiblePorDia(0.0, diasRestantesSinHoy = 5))
+        assertNull(disponiblePorDia(-1500.0, diasRestantesSinHoy = 5))
     }
 
     @Test

@@ -120,6 +120,7 @@ import mx.budget.ai.proactive.ProactiveSuggestion
 import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.local.entity.CategoryEntity
 import mx.budget.data.local.entity.QuincenaEntity
+import mx.budget.data.quincena.disponiblePorDia
 import mx.budget.data.local.result.ExpenseWithDetails
 import mx.budget.data.local.result.SpendByMember
 import mx.budget.data.capture.toReviewMode
@@ -1864,19 +1865,22 @@ private fun ProactiveSuggestionChip(
  * "% por debajo/encima del gasto previsto" = (gastado − presupuesto×fracción_tiempo)
  * / (presupuesto×fracción_tiempo). El presupuesto es `projectedExpensesMxn` (con
  * fallback al ingreso). Redundancia no-cromática: icono (flecha) + texto + color.
+ *
+ * [available] es la cifra que muestra el hero (neta o bruta según su selector),
+ * para que "Por día" y "Disponible" no se contradigan.
  */
 @Composable
 private fun RitmoCard(
     quincena: QuincenaEntity?,
     postedTotal: Double,
     actualIncome: Double,
+    available: Double,
     viewingActive: Boolean,
     modifier: Modifier = Modifier
 ) {
     val income = maxOf(quincena?.projectedIncomeMxn ?: 0.0, actualIncome)
     val budget = (quincena?.projectedExpensesMxn?.takeIf { it > 0.0 } ?: income)
     val progress = remember(quincena?.id) { computeProgress(quincena) }
-    val available = income - postedTotal
     val expectedByNow = budget * progress.fraction
     val hasPlan = expectedByNow > 0.0
     val deviation = if (hasPlan) (postedTotal - expectedByNow) / expectedByNow else 0.0
@@ -1884,8 +1888,20 @@ private fun RitmoCard(
     val onTrack = pct < 1
     val below = deviation < 0
     val overIncome = income > 0.0 && postedTotal > income
-    val showPerDay = viewingActive && progress.daysRemaining > 0
-    val perDay = if (progress.daysRemaining > 0) available / progress.daysRemaining else available
+    // Animada como la del hero: al cambiar Neto/Bruto la cifra viaja, no salta.
+    val animatedAvailable by animateFloatAsState(
+        targetValue = available.toFloat(),
+        animationSpec = BudgetMotion.standard(),
+        label = "ritmoAvailable",
+    )
+    // El último día "por día" y "disponible" son la misma cifra: se queda la segunda.
+    val showPerDay = viewingActive && progress.daysRemaining > 0 &&
+        disponiblePorDia(available, progress.daysRemaining) != null
+    val shownAmount = if (showPerDay) {
+        disponiblePorDia(animatedAvailable.toDouble(), progress.daysRemaining) ?: 0.0
+    } else {
+        animatedAvailable.toDouble()
+    }
 
     // Estado → tono + símbolo + frase (redundancia no-cromática: icono+texto+color).
     // Cada situación tiene su propio mensaje e icono, no siempre el mismo.
@@ -1950,7 +1966,7 @@ private fun RitmoCard(
         Spacer(Modifier.width(10.dp))
         Column(horizontalAlignment = Alignment.End) {
             AutoSizeAmountText(
-                text = if (showPerDay) perDay.toMxn() else available.toMxn(),
+                text = shownAmount.toMxn(),
                 baseStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Light),
                 maxFontSp = 22f,
                 minFontSp = 13f,
@@ -2621,6 +2637,7 @@ private fun ColumnScope.HeroRingContent(state: DashboardUiState.Success) {
             quincena = state.quincena,
             postedTotal = state.postedTotal,
             actualIncome = state.actualIncome,
+            available = shown,
             viewingActive = state.viewingActive
         )
 }

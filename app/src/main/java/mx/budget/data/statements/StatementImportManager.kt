@@ -19,6 +19,7 @@ import mx.budget.data.local.entity.AttributionReviewEntity
 import mx.budget.data.local.entity.ExpenseAttributionEntity
 import mx.budget.data.local.entity.ExpenseEntity
 import mx.budget.data.local.entity.InstallmentPlanEntity
+import mx.budget.data.installments.InstallmentCategory
 import mx.budget.data.local.entity.PaymentMethodEntity
 import mx.budget.data.local.entity.PendingCaptureEntity
 import mx.budget.data.local.entity.StatementImportEntity
@@ -907,12 +908,19 @@ class StatementImportManager(
                 false
             }
         } else {
+            // Sin categoría el materializador no proyectaba ninguna cuota del plan.
+            val categoryId = InstallmentCategory.resolve(
+                planName = concepto,
+                walletName = walletRepository.getById(walletId)?.displayName,
+                categories = categoryDao.getAll(householdId),
+            )
             installmentRepository.insert(
                 InstallmentPlanEntity(
                     id = UUID.randomUUID().toString(),
                     householdId = householdId,
                     displayName = displayName,
                     paymentMethodId = walletId,
+                    categoryId = categoryId,
                     principalMxn = monto * plazo,
                     totalInstallments = plazo,
                     installmentAmountMxn = monto,

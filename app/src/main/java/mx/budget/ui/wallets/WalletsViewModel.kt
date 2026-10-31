@@ -22,6 +22,7 @@ import mx.budget.data.local.result.TransferWithNames
 import mx.budget.data.local.result.WalletBalanceDrift
 import mx.budget.data.local.result.WalletBalanceInfo
 import mx.budget.data.local.entity.InstallmentPlanEntity
+import mx.budget.data.installments.InstallmentCategory
 import mx.budget.data.local.entity.LoanEntity
 import mx.budget.data.local.entity.SavingsGoalEntity
 import mx.budget.data.repository.IncomeRepository
@@ -69,6 +70,7 @@ class WalletsViewModel(
     private val loanRepository: LoanRepository? = null,
     private val installmentRepository: InstallmentRepository? = null,
     private val statementImportDao: mx.budget.data.local.dao.StatementImportDao? = null,
+    private val categoryDao: mx.budget.data.local.dao.CategoryDao? = null,
 ) : ViewModel() {
 
     /** Kinds líquidos (saldo disponible, no deuda). */
@@ -358,7 +360,17 @@ class WalletsViewModel(
 
     /** Alta/edición de plan de cuotas (insert es REPLACE). */
     fun saveInstallment(plan: InstallmentPlanEntity) {
-        viewModelScope.launch { installmentRepository?.insert(plan) }
+        viewModelScope.launch {
+            // El formulario no pide categoría y sin ella el plan no proyectaba cuotas.
+            val categoryId = plan.categoryId ?: categoryDao?.let { dao ->
+                InstallmentCategory.resolve(
+                    planName = plan.displayName,
+                    walletName = plan.paymentMethodId?.let { walletRepository.getById(it) }?.displayName,
+                    categories = dao.getAll(householdId),
+                )
+            }
+            installmentRepository?.insert(plan.copy(categoryId = categoryId))
+        }
     }
 
     /** Avanza la cuota; al llegar al total el repo lo marca PAID_OFF. */

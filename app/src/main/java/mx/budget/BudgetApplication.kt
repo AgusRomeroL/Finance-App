@@ -1259,6 +1259,7 @@ class BudgetApplication : Application() {
                     expenseDao = database.expenseDao(),
                     expenseRepository = expenseRepository,
                     memberDao = database.memberDao(),
+                    categoryDao = database.categoryDao(),
                 ).materialize()
             }
         }

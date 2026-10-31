@@ -40,6 +40,21 @@ data class QuincenaFigures(
 }
 
 /**
+ * Lo que toca gastar por dia para que [disponible] alcance hasta el cierre.
+ *
+ * [disponible] tiene que ser la misma cifra que muestra el hero: la tarjeta
+ * Ritmo partia de ingreso menos gastado y, con planeados pendientes, prometia
+ * por dia mas dinero del que habia. Cuenta hoy, porque lo que se gaste hoy sale
+ * del mismo dinero ([diasRestantesSinHoy] es lo que el hero escribe como "dias
+ * restantes"). Con el disponible en cero o negativo no hay cifra por dia que
+ * tenga sentido y devuelve null.
+ */
+fun disponiblePorDia(disponible: Double, diasRestantesSinHoy: Int): Double? {
+    if (disponible <= 0.0 || diasRestantesSinHoy < 0) return null
+    return disponible / (diasRestantesSinHoy + 1)
+}
+
+/**
  * Arma las cifras de [quincena] con la convencion del dashboard.
  *
  * [spent] y [reserved] deben venir de los totales en vivo. [projectedExpenses]
