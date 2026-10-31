@@ -6,17 +6,26 @@ import {
   listExpensesByQuincena,
   listIncomesByQuincena,
   listQuincenas,
+  listRecurrenceTemplates,
 } from '../lib/repository'
 import { formatMxn } from '../lib/format'
-import type { CategoryWithId, ExpenseWithId, IncomeSourceWithId, QuincenaWithId } from '../lib/types'
+import { previousQuincena, quincenaFigures } from '../lib/figures'
+import type {
+  CategoryWithId,
+  ExpenseWithId,
+  IncomeSourceWithId,
+  QuincenaWithId,
+  RecurrenceTemplate,
+} from '../lib/types'
 
 /* ---------------------------------------------------------------------------
  * Analíticas (/analiticas): OWNER | PAYER. CERO IA: todo es agregación
  * determinista en cliente sobre los mismos reads del repository.
  *
  *  - KPIs de la quincena seleccionada: gastado (POSTED), ingreso recibido
- *    (income_source POSTED de la quincena), reservado (PLANNED) y disponible
- *    (= ingreso recibido − gastado − reservado).
+ *    (income_source POSTED de la quincena), reservado (PLANNED prorrateado por
+ *    cadencia) y disponible con la convención de la app (`lib/figures.ts`:
+ *    ingreso + arrastre − gastado − reservado − topes por gastar).
  *  - Dona por categoría (SVG puro, sin libs) del gasto POSTED.
  *  - Presupuesto-vs-gasto por categoría (budgetDefaultMxn de categories).
  *  - Tendencia del gasto POSTED de las últimas 6 quincenas (hasta la
@@ -41,6 +50,7 @@ const FALLBACK_COLORS = [
 interface CatalogData {
   quincenas: QuincenaWithId[]
   categories: CategoryWithId[]
+  templates: RecurrenceTemplate[]
 }
 
 interface QuincenaData {
@@ -78,10 +88,10 @@ export default function AnalyticsPage() {
     setCatalog(null)
     setCatalogError(null)
     trendCache.current.clear()
-    Promise.all([listQuincenas(hid), listCategories(hid)])
-      .then(([quincenas, categories]) => {
+    Promise.all([listQuincenas(hid), listCategories(hid), listRecurrenceTemplates(hid)])
+      .then(([quincenas, categories, templates]) => {
         if (cancelled) return
-        setCatalog({ quincenas, categories })
+        setCatalog({ quincenas, categories, templates })
         const activeQ = quincenas.find((q) => q.status === 'ACTIVE') ?? quincenas[0]
         setQuincenaId((prev) => (prev && quincenas.some((q) => q.id === prev) ? prev : activeQ?.id ?? ''))
       })
@@ -149,12 +159,30 @@ export default function AnalyticsPage() {
     const posted = expenses.filter((e) => e.status === 'POSTED')
     const planned = expenses.filter((e) => e.status === 'PLANNED')
     const spent = posted.reduce((s, e) => s + (e.amountMxn ?? 0), 0)
-    const reserved = planned.reduce((s, e) => s + (e.amountMxn ?? 0), 0)
     const received = incomes
       .filter((i) => i.status === 'POSTED')
       .reduce((s, i) => s + (i.amountMxn ?? 0), 0)
-    return { posted, spent, reserved, received, available: received - spent - reserved }
-  }, [data])
+    // Misma convención que el teléfono: ingreso = el mayor entre proyectado y
+    // recibido, reservado prorrateado, arrastre y topes por gastar.
+    const quincena = catalog?.quincenas.find((q) => q.id === quincenaId)
+    const figures = quincena
+      ? quincenaFigures({
+          quincena,
+          receivedIncome: received,
+          expenses,
+          templates: catalog?.templates ?? [],
+          categories: catalog?.categories ?? [],
+          previous: previousQuincena(catalog?.quincenas ?? [], quincena),
+        })
+      : null
+    return {
+      posted,
+      spent,
+      reserved: figures?.reserved ?? planned.reduce((s, e) => s + (e.amountMxn ?? 0), 0),
+      received,
+      available: figures?.available ?? received - spent,
+    }
+  }, [data, catalog, quincenaId])
 
   /** Segmentos de la dona + filas presupuesto-vs-gasto, por categoría. */
   const byCategory = useMemo(() => {
@@ -254,7 +282,7 @@ export default function AnalyticsPage() {
               label={stats.available < 0 ? 'Sobregirado' : 'Disponible'}
               value={`${stats.available < 0 ? '−' : ''}${formatMxn(Math.abs(stats.available))}`}
               tone={stats.available < 0 ? 'expense' : 'neutral'}
-              hint="ingreso − gastado − reservado"
+              hint="entró + arrastre − gastado − reservado − topes"
             />
           </div>
 

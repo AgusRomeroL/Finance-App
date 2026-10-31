@@ -6,16 +6,22 @@ import {
   deleteExpense,
   getActiveQuincena,
   listCategories,
+  listExpensesByQuincena,
+  listIncomesByQuincena,
   listPendingProposals,
-  listPostedExpenses,
+  listQuincenas,
+  listRecurrenceTemplates,
   resolveProposal,
 } from '../lib/repository'
 import { formatDate, formatMxn } from '../lib/format'
+import { previousQuincena, quincenaFigures, writtenSubtraction, type QuincenaFigures } from '../lib/figures'
 import type { CategoryWithId, ExpenseWithId, ProposalWithId, QuincenaWithId } from '../lib/types'
 
 /* ---------------------------------------------------------------------------
  * Panel del TITULAR (OWNER): KPI "Disponible para gastar" de la quincena
- * ACTIVE, presupuesto-vs-gasto por categoría, últimos movimientos con
+ * ACTIVE con la convención de cifras de la app (`lib/figures.ts`: ingreso,
+ * arrastre, gastado, reservado prorrateado y topes por gastar, con la resta
+ * escrita debajo), presupuesto-vs-gasto por categoría, últimos movimientos con
  * eliminación, y bandeja de propuestas pendientes (Aceptar/Rechazar).
  *
  * Nota sobre las propuestas: aceptar desde la web SOLO marca la propuesta como
@@ -28,7 +34,10 @@ import type { CategoryWithId, ExpenseWithId, ProposalWithId, QuincenaWithId } fr
 interface PanelData {
   quincena: QuincenaWithId | null
   categories: CategoryWithId[]
+  /** Solo POSTED: lo que listan las barras y los últimos movimientos. */
   expenses: ExpenseWithId[]
+  /** Cifras con la convención de la app (Fase 7b); null sin quincena activa. */
+  figures: QuincenaFigures | null
 }
 
 export default function OwnerDashboardPage() {
@@ -57,14 +66,29 @@ export default function OwnerDashboardPage() {
     setError(null)
     ;(async () => {
       try {
-        const [quincena, categories, pending] = await Promise.all([
+        const [quincena, categories, pending, quincenas, templates] = await Promise.all([
           getActiveQuincena(hid),
           listCategories(hid),
           listPendingProposals(hid),
+          listQuincenas(hid),
+          listRecurrenceTemplates(hid),
         ])
-        const expenses = quincena ? await listPostedExpenses(hid, quincena.id) : []
+        const [all, incomes] = quincena
+          ? await Promise.all([listExpensesByQuincena(hid, quincena.id), listIncomesByQuincena(hid, quincena.id)])
+          : [[], []]
+        const figures = quincena
+          ? quincenaFigures({
+              quincena,
+              receivedIncome: incomes.filter((i) => i.status === 'POSTED').reduce((s, i) => s + (i.amountMxn ?? 0), 0),
+              expenses: all,
+              templates,
+              categories,
+              previous: previousQuincena(quincenas, quincena),
+            })
+          : null
+        const expenses = all.filter((e) => e.status === 'POSTED')
         if (!cancelled) {
-          setData({ quincena, categories, expenses })
+          setData({ quincena, categories, expenses, figures })
           setProposals(pending)
         }
       } catch (e) {
@@ -143,9 +167,10 @@ export default function OwnerDashboardPage() {
   if (error) return <ErrorState message={error} onRetry={() => setReloadKey((k) => k + 1)} />
   if (!data) return <EmptyState title="Sin datos" />
 
-  const { quincena, expenses, categories } = data
-  const totalSpent = expenses.reduce((s, e) => s + (e.amountMxn ?? 0), 0)
-  const available = (quincena?.projectedIncomeMxn ?? 0) - totalSpent
+  const { quincena, expenses, categories, figures } = data
+  // La cifra grande sale de la resta escrita: así las dos siempre cuadran.
+  const resta = figures ? writtenSubtraction(figures) : null
+  const available = resta?.disponible ?? 0
   const catMap = new Map(categories.map((c) => [c.id, c.displayName]))
 
   return (
@@ -161,10 +186,29 @@ export default function OwnerDashboardPage() {
           <p className="mt-1.5 text-sm opacity-80">
             {available < 0 ? 'Sobregirado esta quincena' : 'Disponible para gastar'}
           </p>
-          <div className="mt-5 grid grid-cols-2 gap-2">
-            <MiniKpi label="Ingreso proyectado" value={formatMxn(quincena.projectedIncomeMxn ?? 0)} />
-            <MiniKpi label="Gastado (registrado)" value={formatMxn(totalSpent)} />
-          </div>
+          {resta && figures && (
+            <>
+              {/* La resta que produce el disponible, como en el héroe del teléfono. */}
+              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <MiniKpi label="Entró" value={formatMxn(resta.entro)} />
+                {resta.arrastre !== 0 && (
+                  <MiniKpi
+                    label={resta.arrastre > 0 ? '+ Sobró la anterior' : '− Faltó la anterior'}
+                    value={formatMxn(Math.abs(resta.arrastre))}
+                  />
+                )}
+                <MiniKpi label="− Gastado" value={formatMxn(resta.gastado)} />
+                {resta.reservado !== 0 && <MiniKpi label="− Reservado" value={formatMxn(resta.reservado)} />}
+                {resta.topes !== 0 && <MiniKpi label="− Topes por gastar" value={formatMxn(resta.topes)} />}
+                <MiniKpi label="= Disponible" value={`${available < 0 ? '−' : ''}${formatMxn(Math.abs(available))}`} />
+              </div>
+              {figures.carry?.pendingClose && (
+                <p className="mt-3 text-xs opacity-80">
+                  Lo que sobre o falte de {figures.carry.fromLabel} se sumará aquí cuando se cierre.
+                </p>
+              )}
+            </>
+          )}
         </div>
       ) : (
         <EmptyState

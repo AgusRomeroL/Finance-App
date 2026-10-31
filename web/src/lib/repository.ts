@@ -36,6 +36,7 @@ import type {
   ProposalKind,
   ProposalWithId,
   QuincenaWithId,
+  RecurrenceTemplate,
   Role,
   SavingsGoalInput,
   SavingsGoalWithId,
@@ -515,6 +516,7 @@ export function normExpense(id: string, data: FirestoreData): ExpenseWithId {
     createdAt: pickNum(data, 'createdAt', 'created_at'),
     updatedAt: pickNum(data, 'updatedAt', 'updated_at') ?? 0,
     deletedAt: pickNum(data, 'deletedAt', 'deleted_at'),
+    recurrenceTemplateId: pickStr(data, 'recurrenceTemplateId', 'recurrence_template_id'),
   }
 }
 
@@ -559,6 +561,33 @@ export async function listExpensesByQuincena(hid: string, quincenaId: string): P
     .map((d) => normExpense(d.id, d.data() as FirestoreData))
     .filter((e) => e.quincenaId === quincenaId && !isTombstoned(e))
   return rows.sort((a, b) => (b.occurredAt ?? 0) - (a.occurredAt ?? 0))
+}
+
+/* -------------------------- Plantillas recurrentes ------------------------ */
+
+/** Normaliza una plantilla recurrente con fallback dual; null si es lápida. */
+export function normRecurrenceTemplate(id: string, data: FirestoreData): RecurrenceTemplate | null {
+  if ((pickNum(data, 'deletedAt', 'deleted_at') ?? 0) > 0) return null
+  const active = pick<unknown>(data, 'isActive', 'is_active')
+  return {
+    id,
+    categoryId: pickStr(data, 'categoryId', 'category_id') ?? '',
+    cadence: pickStr(data, 'cadence', 'cadence') ?? '',
+    // Room guarda booleanos como 0/1 en la semilla; Android sube true/false.
+    isActive: active === undefined ? true : active === true || active === 1,
+  }
+}
+
+/**
+ * Plantillas recurrentes del hogar, sin lápidas. Las pide la convención de
+ * cifras (Fase 7b): la cadencia prorratea lo planeado y una plantilla activa
+ * saca a su categoría de los topes por gastar.
+ */
+export async function listRecurrenceTemplates(hid: string): Promise<RecurrenceTemplate[]> {
+  const snap = await getDocs(collection(db, 'households', hid, 'recurrence_template'))
+  return snap.docs
+    .map((d) => normRecurrenceTemplate(d.id, d.data() as FirestoreData))
+    .filter((t): t is RecurrenceTemplate => t !== null)
 }
 
 /**

@@ -229,10 +229,25 @@ export interface Expense {
    * lectura debe filtrar los docs con deletedAt > 0.
    */
   deletedAt?: number
+  /**
+   * Plantilla recurrente que materializó el gasto, si viene de una. Su cadencia
+   * decide cuánto de un PLANNED carga la quincena (ver `lib/figures.ts`).
+   */
+  recurrenceTemplateId?: string
 }
 
 export interface ExpenseWithId extends Expense {
   id: string
+}
+
+// households/{hid}/recurrence_template/{id}
+// Solo lo que pide la convención de cifras: la web no edita plantillas.
+export interface RecurrenceTemplate {
+  id: string
+  categoryId: string
+  /** QUINCENAL_FIRST | QUINCENAL_SECOND | QUINCENAL_EVERY | MONTHLY_SPECIFIC_HALF | BIMONTHLY | CUSTOM_CRON */
+  cadence: string
+  isActive: boolean
 }
 
 // households/{hid}/expenses/{id}/attributions/{id}
