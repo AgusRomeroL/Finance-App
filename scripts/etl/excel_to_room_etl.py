@@ -16,7 +16,8 @@ Entidades pobladas
   2. member:                     Benjamín, Norma, Pau, David, Agustín, Santi, …
   3. category:                   árbol de categorías jerárquico
   4. payment_method:             Banamex, BBVA, Mercado Pago, Efectivo, …
-  5. quincena:                   33 períodos quincenales (Ene 2025 → Jun 2026)
+  5. quincena:                   una por hoja del Excel hasta la quincena activa
+                                 (las ausentes del Excel quedan como huecos)
   6. income_source:              ingresos quincenales de Benjamín y Norma
   7. expense:                    una fila por cada línea presupuestada > 0
   8. expense_attribution:        reparto BENEFICIARY / PAYER en basis points
@@ -1466,6 +1467,7 @@ class EtlStats:
     expenses_written: int = 0
     attributions_written: int = 0
     incomes_written: int = 0
+    quincenas_by_status: dict[str, int] = field(default_factory=dict)
     skipped_sheets: list[str] = field(default_factory=list)
 
 
@@ -1753,6 +1755,8 @@ class EtlPipeline:
             ),
         )
         self.stats.quincenas_written += 1
+        self.stats.quincenas_by_status[status] = (
+            self.stats.quincenas_by_status.get(status, 0) + 1)
 
         # 3.4 · Insertar fuentes de ingreso (Benjamín + Norma).
         self._insert_income(
@@ -2449,9 +2453,14 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     print()
     print("=" * 70)
     print(f"  Base generada: {args.output}")
+    print(f"  Fecha de corte:        {TODAY.isoformat()} "
+          f"({'BUDGET_TODAY' if _TODAY_OVERRIDE else 'hoy en CDMX'})")
     print("-" * 70)
     print(f"  Hojas procesadas:      {stats.sheets_parsed}")
     print(f"  Quincenas creadas:     {stats.quincenas_written}")
+    print("  Quincenas por estado:  " + ", ".join(
+        f"{s} {stats.quincenas_by_status.get(s, 0)}"
+        for s in ("CLOSED", "ACTIVE", "PROVISIONED")))
     print(f"  Ingresos creados:      {stats.incomes_written}")
     print(f"  Gastos creados:        {stats.expenses_written}")
     print(f"  Atribuciones creadas:  {stats.attributions_written}")
