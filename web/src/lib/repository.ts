@@ -497,6 +497,48 @@ async function findQuincenaForDate(hid: string, occurredAtMs: number): Promise<Q
   return match
 }
 
+/* ------------------------- Congelacion (decision 12) ----------------------- */
+
+/**
+ * Espejo de QuincenaClosedException del telefono. El texto dice que hacer,
+ * porque es lo que ve la persona; reabrir solo se puede desde la app.
+ */
+export class QuincenaClosedError extends Error {
+  constructor(readonly quincenaLabel: string) {
+    super(
+      `La quincena ${quincenaLabel} está cerrada. ` +
+        'Reábrela desde Inicio en la app del teléfono para modificar sus movimientos.',
+    )
+    this.name = 'QuincenaClosedError'
+  }
+}
+
+/**
+ * Mismo criterio que QuincenaFreezeGuard: mira `status`, nunca `closedAt`.
+ * Las paginas lo usan para ocultar editar y borrar en un periodo cerrado.
+ */
+export function isQuincenaClosed(q: Pick<QuincenaWithId, 'status'> | null | undefined): boolean {
+  return q?.status === 'CLOSED'
+}
+
+function assertQuincenaEditable(q: QuincenaWithId): void {
+  if (isQuincenaClosed(q)) throw new QuincenaClosedError(q.label || q.id)
+}
+
+/**
+ * Guardia de la congelacion para las escrituras de la web. La app rechaza
+ * dentro de su transaccion cualquier alta, edicion o borrado sobre una quincena
+ * CLOSED, pero el pull escribe por DAO directo: sin esta guardia, un cambio
+ * hecho aqui sobre un periodo cerrado llegaba al telefono sin pasar por ella.
+ * Un id vacio o una quincena que no existe no bloquean, igual que en la app.
+ */
+async function ensureQuincenaEditable(hid: string, quincenaId: string | undefined): Promise<void> {
+  if (!quincenaId) return
+  const snap = await getDoc(doc(db, 'households', hid, 'quincenas', quincenaId))
+  if (!snap.exists()) return
+  assertQuincenaEditable(normQuincena(snap.id, snap.data() as FirestoreData))
+}
+
 /* -------------------------------- Expenses -------------------------------- */
 
 export function normExpense(id: string, data: FirestoreData): ExpenseWithId {
@@ -718,6 +760,7 @@ export async function createExpense(
 
   // Quincena REAL consultada por fecha (nunca inventada).
   const quincena = await findQuincenaForDate(hid, input.occurredAt)
+  assertQuincenaEditable(quincena)
 
   // Wallet: read-before-batch (ver riesgo aceptado arriba). Se valida también
   // en modo planned (Android descarta expenses sin paymentMethodId válido).
@@ -782,8 +825,12 @@ export async function updateExpense(hid: string, expenseId: string, input: Expen
   if (!expenseSnap.exists()) throw new Error('El gasto ya no existe.')
   const prev = normExpense(expenseSnap.id, expenseSnap.data() as FirestoreData)
   if (isTombstoned(prev)) throw new Error('El gasto fue eliminado en otro dispositivo.')
+  // Las dos: la de origen (no se saca un gasto de un periodo cerrado) y la de
+  // destino (tampoco se mete en uno).
+  await ensureQuincenaEditable(hid, prev.quincenaId)
 
   const quincena = await findQuincenaForDate(hid, input.occurredAt)
+  assertQuincenaEditable(quincena)
 
   // Atribuciones previas: se leen para poder borrarlas dentro del batch.
   const prevAttribs = await getDocs(collection(expenseRef, 'attributions'))
@@ -861,6 +908,7 @@ export async function deleteExpense(hid: string, expenseId: string): Promise<voi
   const expense = normExpense(expenseSnap.id, expenseSnap.data() as FirestoreData)
   // Ya era lápida: no volver a revertir el saldo del wallet (doble reversión).
   if (isTombstoned(expense)) throw new Error('El gasto ya fue eliminado.')
+  await ensureQuincenaEditable(hid, expense.quincenaId)
 
   const attribs = await getDocs(collection(expenseRef, 'attributions'))
 
@@ -899,6 +947,7 @@ export async function confirmPlanned(hid: string, expenseId: string): Promise<vo
   if (expense.status !== 'PLANNED') {
     throw new Error(`Solo se puede confirmar un gasto PLANNED (este está ${expense.status}).`)
   }
+  await ensureQuincenaEditable(hid, expense.quincenaId)
 
   const batch = writeBatch(db)
   batch.update(expenseRef, { status: 'POSTED', updatedAt: Date.now() })
@@ -939,6 +988,7 @@ export async function createIncome(hid: string, input: IncomeInput): Promise<str
 
   // Quincena REAL por fecha de recepción (nunca inventada).
   const quincena = await findQuincenaForDate(hid, input.receivedAt)
+  assertQuincenaEditable(quincena)
 
   const walletRef = doc(db, 'households', hid, 'wallets', input.paymentMethodId)
   const walletSnap = await getDoc(walletRef)
@@ -1531,6 +1581,7 @@ export async function markExpenseReimbursed(hid: string, expenseId: string): Pro
   if (expense.settlementStatus !== 'PENDING_REIMBURSEMENT') {
     throw new Error('Este gasto ya no está pendiente de reembolso.')
   }
+  await ensureQuincenaEditable(hid, expense.quincenaId)
 
   const batch = writeBatch(db)
   batch.update(

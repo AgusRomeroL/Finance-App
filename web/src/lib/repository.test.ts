@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   camelToSnake,
   epochToMxDateStr,
+  isQuincenaClosed,
   isTombstoned,
   mirrorSnake,
   normCategory,
@@ -17,6 +18,7 @@ import {
   pick,
   pickNum,
   pickStr,
+  QuincenaClosedError,
   toDateStr,
 } from './repository'
 
@@ -170,5 +172,32 @@ describe('codigo de invitacion legacy', () => {
     expect(parseInviteCode('hid.corto')).toBeNull()
     expect(parseInviteCode('hid.')).toBeNull()
     expect(parseInviteCode('.7QX4K2AB')).toBeNull()
+  })
+})
+
+/**
+ * Decision 12: la web aplica la misma congelacion que QuincenaFreezeGuard. El
+ * criterio es el status y nada mas: closedAt puede venir en camelCase o en
+ * snake_case, o faltar, y no decide nada.
+ */
+describe('congelacion de la quincena cerrada', () => {
+  it('solo CLOSED congela, leyendo status con fallback dual', () => {
+    expect(isQuincenaClosed(normQuincena('q', { status: 'CLOSED' }))).toBe(true)
+    expect(isQuincenaClosed(normQuincena('q', { status: 'CLOSING_REVIEW' }))).toBe(false)
+    expect(isQuincenaClosed(normQuincena('q', { status: 'ACTIVE', closedAt: 1_700_000_000_000 }))).toBe(false)
+    expect(isQuincenaClosed(normQuincena('q', { status: 'PROVISIONED' }))).toBe(false)
+  })
+
+  it('sin quincena no bloquea, igual que la guardia del telefono', () => {
+    expect(isQuincenaClosed(null)).toBe(false)
+    expect(isQuincenaClosed(undefined)).toBe(false)
+  })
+
+  it('el rechazo dice que periodo es y que hacer', () => {
+    const err = new QuincenaClosedError('1 al 15 Sep 2026')
+    expect(err).toBeInstanceOf(Error)
+    expect(err.name).toBe('QuincenaClosedError')
+    expect(err.message).toContain('1 al 15 Sep 2026 está cerrada')
+    expect(err.message).toContain('Reábrela desde Inicio en la app del teléfono')
   })
 })

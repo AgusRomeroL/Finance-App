@@ -43,8 +43,8 @@ npm test           # Vitest: normalizacion dual camelCase/snake_case y rutas por
 ## Configuración de Firebase
 
 Los valores de cliente web de Firebase **no son secretos** (son config pública que el SDK
-expone en el bundle). Vienen embebidos por defecto en `src/lib/firebase.ts`, extraídos de
-`app/google-services.json`:
+expone en el bundle). Vienen embebidos en `src/lib/firebase.ts`, así que el build de
+producción no necesita ningún `.env`:
 
 | Dato | Valor |
 |------|-------|
@@ -53,26 +53,16 @@ expone en el bundle). Vienen embebidos por defecto en `src/lib/firebase.ts`, ext
 | authDomain | `finance-app-abdf9.firebaseapp.com` |
 | storageBucket | `finance-app-abdf9.firebasestorage.app` |
 | messagingSenderId | `318390629591` |
-| appId | ⚠️ **placeholder** (ver abajo) |
+| appId | `1:318390629591:web:860f1bcec6aff331c0ec92` (app web "Presupuesto Web") |
 
-### ⚠️ appId web pendiente
-
-`app/google-services.json` solo contiene el **appId de Android**
-(`1:318390629591:android:0c48524ea7923757c0ec92`). El SDK JS necesita el **appId de la app
-Web** (`1:318390629591:web:XXXX`), que **no existe todavía**.
-
-Para producción:
-1. Firebase Console → *Project settings* → *General* → *Your apps* → **Add app** → **Web (</>)**.
-2. Copia el `appId` que genera.
-3. Crea un `web/.env` (basado en `web/.env.example`) y define `VITE_FIREBASE_APP_ID` con ese valor.
-
-Mientras tanto, Auth por popup y Firestore funcionan con el placeholder; solo el registro de
-la app web / Analytics quedan incompletos.
+El `appId` es el de la app **Web** registrada el 2026-07-09 con
+`scripts/admin/firebase_setup.py` y confirmada activa el 2026-10-31 (Fase 8). Hasta entonces el
+código caía al appId de Android, que el SDK JS acepta pero registra mal.
 
 ### Variables de entorno (opcional)
 
-Copia `web/.env.example` a `web/.env` para sobrescribir cualquier valor. Todas son opcionales
-salvo, para prod, `VITE_FIREBASE_APP_ID`.
+Copia `web/.env.example` a `web/.env` solo para apuntar a otro proyecto: todas las variables
+son opcionales.
 
 ## Formato del código de invitación (DECISIÓN)
 
@@ -125,16 +115,20 @@ households/{hid}/proposals/{id} → { kind, concept, amountMxn, occurredAt, cate
 
 ## Despliegue (Firebase Hosting)
 
-La config de hosting vive **dentro de `web/`** (`web/firebase.json` + `web/.firebaserc`), para no
-tocar la raíz del repo. Desde `web/`:
+Se despliega **siempre** con el script de la Fase 8, desde la raíz del repo:
 
-```bash
-npm run build
-firebase deploy --only hosting            # requiere firebase-tools y `firebase login`
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\web\deploy.ps1
 ```
 
-`firebase.json` sirve `dist/` con rewrite SPA (`** → /index.html`). El proyecto por defecto es
-`finance-app-abdf9` (en `.firebaserc`).
+El script sincroniza `web/` a la copia NTFS `C:\dev\finance-web` (npm no funciona en `G:`),
+corre `npm ci` si cambió el lockfile, `npm test` y `npm run build`, escribe `dist/version.json`
+con el commit y despliega solo hosting con una versión fija de `firebase-tools` vía `npx`. No
+hace login: la primera vez hay que correr `npx --yes firebase-tools@15.34.0 login`. Para saber
+qué commit se sirve: `https://finance-app-abdf9.web.app/version.json`.
+
+La config de hosting vive **dentro de `web/`** (`web/firebase.json` + `web/.firebaserc`), para no
+tocar la raíz del repo. `firebase.json` sirve `dist/` con rewrite SPA (`** → /index.html`).
 
 > Si se integra al `firebase.json` de la raíz más adelante, mueve el bloque `hosting` allá con
 > `"public": "web/dist"` y ajusta rutas. Por ahora se ejecuta `firebase deploy` desde `web/`.
@@ -143,7 +137,7 @@ firebase deploy --only hosting            # requiere firebase-tools y `firebase 
 
 1. **Habilitar Authentication → proveedor Google** en la consola de Firebase (hoy el proyecto
    nunca inicializó Auth → `configuration-not-found`). Sin esto el login no funciona.
-2. **Registrar la app Web** y poner su `appId` en `web/.env` (`VITE_FIREBASE_APP_ID`).
+2. ~~Registrar la app Web~~: hecho el 2026-07-09; su `appId` va embebido desde la Fase 8.
 3. **Añadir el dominio de Hosting a los dominios autorizados de Auth** (Console → Auth → Settings
    → Authorized domains) para que `signInWithPopup` funcione en prod.
 4. **Reglas de Firestore** que cubran `proposals`, `roles`, `invites` y lecturas de colaborador

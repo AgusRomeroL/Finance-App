@@ -8,6 +8,7 @@ import {
   listExpenseAttributions,
   listExpensesByQuincena,
   listMembers,
+  isQuincenaClosed,
   listQuincenas,
   listWallets,
   updateExpense,
@@ -267,6 +268,10 @@ export default function LedgerPage() {
       />
     )
   }
+  // Decision 12: una quincena cerrada es de solo lectura, igual que en la app.
+  // El repositorio rechaza la escritura de todos modos; aqui solo se evita
+  // ofrecer una accion que va a fallar.
+  const frozen = isQuincenaClosed(catalog.quincenas.find((q) => q.id === quincenaId))
 
   return (
     <div className="space-y-5 pb-8">
@@ -297,6 +302,7 @@ export default function LedgerPage() {
               <option key={q.id} value={q.id}>
                 {q.label || q.id}
                 {q.status === 'ACTIVE' ? ' · activa' : ''}
+                {q.status === 'CLOSED' ? ' · cerrada' : ''}
               </option>
             ))}
           </select>
@@ -341,6 +347,13 @@ export default function LedgerPage() {
           />
         </label>
       </div>
+
+      {frozen && (
+        <p className="rounded-2xl bg-surface-2 px-4 py-3 text-sm text-on-surface-variant" role="status">
+          Esta quincena está cerrada: sus movimientos son de solo lectura. Para cambiarlos, reábrela
+          desde Inicio en la app del teléfono.
+        </p>
+      )}
 
       {actionError && (
         <p className="rounded-2xl bg-expense/10 px-4 py-3 text-sm text-expense" role="alert">
@@ -424,7 +437,7 @@ export default function LedgerPage() {
                               Cancelar
                             </button>
                           </span>
-                        ) : (
+                        ) : frozen ? null : (
                           <span className="inline-flex items-center gap-1.5">
                             {e.status === 'PLANNED' && (
                               <button
@@ -509,7 +522,7 @@ export default function LedgerPage() {
                         </button>
                       </div>
                     </div>
-                  ) : (
+                  ) : frozen ? null : (
                     <div className="mt-2.5 flex items-center justify-end gap-1.5">
                       {e.status === 'PLANNED' && (
                         <button
