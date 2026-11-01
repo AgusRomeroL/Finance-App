@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "318390629591-ut4v5ettilntomv3cdod9cfki9fg54rl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "mx.budget",
+            "certificate_hash": "fba87ad08a33d41497fb9bfaf667be4772d0bd8b"
+          }
+        },
+        {
           "client_id": "318390629591-rciqtqbdg4588vafmb25q1176iuic2od.apps.googleusercontent.com",
           "client_type": 3
         }
