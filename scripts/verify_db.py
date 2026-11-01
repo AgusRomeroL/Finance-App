@@ -1,6 +1,15 @@
+import argparse
 import sqlite3
+from pathlib import Path
 
-DB = r'G:\My Drive\Apps\Finance-App\app\src\main\assets\budget_database.db'
+# Por defecto, el asset del checkout desde el que se corre el script. Antes era
+# una ruta absoluta al checkout de G:, y desde otro worktree tocaba el asset
+# ajeno. Para una base temporal del ETL: --db <ruta>.
+_DEFAULT_DB = Path(__file__).resolve().parent.parent / 'app' / 'src' / 'main' / 'assets' / 'budget_database.db'
+_parser = argparse.ArgumentParser(description="Renombra household.id a 'default_household' propagando las FK.")
+_parser.add_argument('--db', type=Path, default=_DEFAULT_DB,
+                     help='Base a modificar (por defecto, el asset de este checkout).')
+DB = str(_parser.parse_args().db)
 OLD_ID = 'b9de10a8-9620-5d94-92bd-5ab4735ebd3b'
 NEW_ID = 'default_household'
 
