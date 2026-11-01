@@ -60,14 +60,26 @@ android {
 
     buildTypes {
         release {
-            // La reduccion de codigo es de la Fase 8 y necesita reglas de
-            // ProGuard verificadas para Room, Firestore, ProtoLayout y las libs
-            // de IA. Activarla sin ellas rompe reflexion y serializacion en
-            // silencio, asi que aqui queda el hueco y no la trampa.
-            isMinifyEnabled = false
+            // Reduccion de codigo y de recursos (Fase 8). Lo que R8 romperia sin
+            // reglas (Firestore serializando entidades por reflexion, las
+            // devoluciones de llamada nativas de LiteRT-LM, la capacidad del
+            // reloj que solo se lee por nombre) esta en proguard-rules.pro y en
+            // res/raw/keep.xml, cada regla con su porque.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             // findByName y no getByName: sin keystore devuelve null y el release
             // sale sin firmar, en vez de tumbar la configuracion del proyecto.
             signingConfig = signingConfigs.findByName("release")
+            // Decision 7: el mapping de R8 sube a Crashlytics para que las trazas
+            // se lean. Solo desde un build firmado: en CI (sin secretos) y en un
+            // release de prueba sin llave no se sube nada.
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
+                mappingFileUploadEnabled = hasReleaseKeystore
+            }
         }
         // OJO Fase 8: si algun dia se pone applicationIdSuffix en debug, hay que
         // ponerlo TAMBIEN en :wear. El reloj y el telefono comparten

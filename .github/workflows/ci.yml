@@ -5,7 +5,8 @@
 #
 #   em-dash   la regla "cero U+2014": el diff no introduce ninguna y el codigo
 #             sigue limpio (scripts/ci/check_em_dash.sh)
-#   android   compileDebugKotlin de :app y :wear y las pruebas JVM de :app
+#   android   compileDebugKotlin de :app y :wear, las pruebas JVM de :app y el
+#             release de los dos con R8 (sin firma: aqui no hay llave)
 #   seed      el asset sembrado es identico al golden y declara user_version 1
 #   web       type-check, pruebas Vitest y build de produccion de la PWA
 #   rules     firestore.rules contra el emulador de Firestore (scripts/rules)
@@ -84,6 +85,11 @@ jobs:
         run: gradle --no-daemon --console=plain :app:compileDebugKotlin :wear:compileDebugKotlin
       - name: testDebugUnitTest (:app)
         run: gradle --no-daemon --console=plain :app:testDebugUnitTest
+      # Fase 8: R8 rompe reflexion y serializacion sin avisar al compilar debug.
+      # Sin secrets.local.properties el release sale sin firmar y Crashlytics no
+      # sube el mapping, asi que este paso solo comprueba que R8 pasa.
+      - name: assembleRelease con R8 (:app y :wear, sin firma)
+        run: gradle --no-daemon --console=plain :app:assembleRelease :wear:assembleRelease
       - name: Publicar el reporte de pruebas
         if: always()
         uses: actions/upload-artifact@v4

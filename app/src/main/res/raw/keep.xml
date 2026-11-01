@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Recursos que el shrinker de release no puede borrar aunque ningun codigo los
+  nombre (Fase 8).
+
+  android_wear_capabilities (values/wear.xml) solo lo lee Play services por su
+  nombre al anunciar la capability del telefono. Sin esta marca el shrinker lo
+  quita, el reloj deja de ver al telefono como alcanzable y todo lo que envia se
+  queda en su cola, sin ningun error visible.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@array/android_wear_capabilities" />

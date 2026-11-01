@@ -48,10 +48,16 @@ android {
 
     buildTypes {
         release {
-            // Igual que en :app, la reduccion de codigo es de la Fase 8. En el
-            // reloj es aun mas delicada: ProtoLayout y los TileService se
-            // resuelven por nombre desde el sistema.
-            isMinifyEnabled = false
+            // Reduccion de codigo y de recursos (Fase 8). Los TileService y los
+            // servicios de complications los resuelve el sistema por nombre, pero
+            // estan en el manifest y R8 los conserva solo; ProtoLayout, Horologist
+            // y el Data Layer (org.json dentro de un DataMap) no usan reflexion.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             signingConfig = signingConfigs.findByName("release")
         }
     }
