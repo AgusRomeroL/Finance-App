@@ -80,7 +80,9 @@ def _fmt(value) -> str:
 
 
 def _money(amount: Optional[float]) -> str:
-    return "(vacía)" if amount is None else f"${amount:,.2f}"
+    if amount is None:
+        return "(vacía)"
+    return f"{'-' if amount < 0 else ''}${abs(amount):,.2f}"
 
 
 # ── Etiquetado de celdas ─────────────────────────────────────────────────────
