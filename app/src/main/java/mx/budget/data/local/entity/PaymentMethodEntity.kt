@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.google.firebase.firestore.PropertyName
 
 /**
  * Método de pago: cuentas bancarias, tarjetas, efectivo.
@@ -121,7 +122,11 @@ data class PaymentMethodEntity(
     @ColumnInfo(name = "owner_member_id")
     val ownerMemberId: String? = null,
 
+    // Firestore nombra el getter isActive() como "active" y el pull (FirestoreMappers)
+    // y la web leen "isActive": sin esta anotacion, desactivar en un dispositivo
+    // nunca llegaba a los demas. Room la ignora; no cambia el esquema.
     @ColumnInfo(name = "is_active")
+    @get:PropertyName("isActive")
     val isActive: Boolean = true,
 
     /** Última modificación local (epoch millis), para LWW del sync (v10→v11). */

@@ -174,7 +174,7 @@ fun DocumentSnapshot.toMemberEntity(): MemberEntity? {
         displayName = str("displayName", "display_name") ?: return null,
         shortAliases = str("shortAliases", "short_aliases") ?: "[]",
         role = str("role", "role") ?: return null,
-        isActive = bool("isActive", "is_active") ?: true,
+        isActive = bool("isActive", "is_active") ?: bool("active", "active") ?: true,
         defaultIncomeMxn = dbl("defaultIncomeMxn", "default_income_mxn"),
         meta = str("meta", "meta") ?: "{}",
         updatedAt = lng("updatedAt", "updated_at") ?: 0L,
@@ -197,7 +197,7 @@ fun DocumentSnapshot.toPaymentMethodEntity(): PaymentMethodEntity? {
         balanceAnchorAt = lng("balanceAnchorAt", "balance_anchor_at") ?: 0L,
         interestApr = dbl("interestApr", "interest_apr"),
         ownerMemberId = str("ownerMemberId", "owner_member_id"),
-        isActive = bool("isActive", "is_active") ?: true,
+        isActive = bool("isActive", "is_active") ?: bool("active", "active") ?: true,
         updatedAt = lng("updatedAt", "updated_at") ?: 0L,
     )
 }
