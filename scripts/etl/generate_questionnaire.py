@@ -569,6 +569,151 @@ def generate_questionnaire(registry: dict[str, ConceptRecord]) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# MODO --new-only: conceptos nuevos contra un Excel base
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# A diferencia del cuestionario exhaustivo (que replica heurísticas), este modo
+# importa el ETL y juzga cada línea con sus funciones reales, así que "sin
+# regla" significa exactamente que `match_rule` no encontró ninguna regla de
+# attribution_rules.json para ella y el ETL la clasifica por heurística.
+
+@dataclass
+class NewConcept:
+    """Un concepto (normalizado + sección) del Excel nuevo, agregado."""
+    concept: str
+    section_code: str
+    rule_id: Optional[str]
+    rule_match: Optional[str]
+    canonical: str
+    category_code: str
+    beneficiaries: str
+    wallet: str
+    is_new: bool
+    sheets: list[str] = field(default_factory=list)
+    amounts: list[float] = field(default_factory=list)
+
+
+_MESES = ("", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+          "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+
+
+def _plain_section(section_code: str) -> str:
+    """Nombre de la sección en español llano, sin emoji ni código."""
+    display = SECTION_DISPLAY.get(section_code, section_code)
+    name = display.split(" (")[0]
+    return name.split(" ", 1)[1] if " " in name and not name[0].isalnum() else name
+
+
+def build_new_concepts(excel_path: Path, baseline_path: Path, rules_path: Optional[Path]) -> list[NewConcept]:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import excel_to_room_etl as etl
+
+    rules = etl.load_attribution_rules(rules_path or Path(etl.__file__).parent / "attribution_rules.json")
+    etl._ATTRIBUTION_RULES = rules  # resolve_* leen esta global del ETL
+    members_by_id = {m.id: m.display_name for m in etl.MEMBERS}
+    wallets_by_id = {pm.id: pm.display_name for pm in etl.PAYMENT_METHODS}
+
+    wb_base = load_workbook(baseline_path, data_only=True)
+    baseline_keys = {
+        (etl._normalize(line.concept), line.section_code)
+        for name in wb_base.sheetnames
+        for line in etl.extract_budget_lines(wb_base[name])
+    }
+
+    wb = load_workbook(excel_path, data_only=True)
+    periods = etl.build_sheet_periods(wb.sheetnames)
+    registry: dict[tuple[str, str], NewConcept] = {}
+    for name in wb.sheetnames:
+        period = periods.get(name)
+        # Etiqueta en palabras ("16 al 31 de octubre de 2025"): la lee Norma.
+        sheet_label = (f"{period.start_date.day} al {period.end_date.day} de "
+                       f"{_MESES[period.month]} de {period.year}") if period else name.strip()
+        for line in etl.extract_budget_lines(wb[name]):
+            key = (etl._normalize(line.concept), line.section_code)
+            rec = registry.get(key)
+            if rec is None:
+                rule = etl.match_rule(line, rules)
+                category_code = etl.resolve_category_code(line)
+                canonical, _ = etl.canonicalize_concept(line.concept, line.section_code, category_code)
+                beneficiaries = [members_by_id.get(mid, mid) for mid, _ in etl.resolve_beneficiary_shares(line)]
+                rec = registry[key] = NewConcept(
+                    concept=line.concept.strip(),
+                    section_code=line.section_code,
+                    rule_id=rule.rule_id if rule else None,
+                    rule_match=rule.match_type if rule else None,
+                    canonical=canonical,
+                    category_code=category_code,
+                    beneficiaries=", ".join(beneficiaries),
+                    wallet=wallets_by_id.get(etl.resolve_payment_method(line), "?"),
+                    is_new=key not in baseline_keys,
+                )
+            rec.sheets.append(sheet_label)
+            rec.amounts.append(line.projected)
+    return sorted(registry.values(), key=lambda r: (r.section_code, _normalize(r.concept)))
+
+
+def _amount_range(amounts: list[float]) -> str:
+    lo, hi = min(amounts), max(amounts)
+    return format_mxn(lo) if lo == hi else f"{format_mxn(lo)} a {format_mxn(hi)}"
+
+
+def _cell(text: str) -> str:
+    return str(text).replace("|", "\\|")
+
+
+def render_anexo(records: list[NewConcept]) -> str:
+    """Lista en lenguaje llano para Norma: solo conceptos nuevos sin regla."""
+    pending = [r for r in records if r.is_new and r.rule_id is None]
+    if not pending:
+        return ("Revisamos tus quincenas nuevas línea por línea y no encontramos ningún concepto "
+                "que no conociéramos: todos ya tienen su clasificación. Si agregas conceptos nuevos "
+                "antes del cambio, te los mandaremos en otra lista igual a esta.\n")
+    out = ["| # | Cómo lo escribiste | Dónde lo pusiste | Quincenas | Monto | ¿De qué es y para quién? |",
+           "|---:|---|---|---|---:|---|"]
+    for i, r in enumerate(pending, 1):
+        out.append(f"| {i} | {_cell(r.concept)} | {_plain_section(r.section_code)} | "
+                   f"{', '.join(dict.fromkeys(r.sheets))} | {_amount_range(r.amounts)} | |")
+    return "\n".join(out) + "\n"
+
+
+def render_technical(records: list[NewConcept]) -> str:
+    out: list[str] = []
+    new = [r for r in records if r.is_new]
+    new_no_rule = [r for r in new if r.rule_id is None]
+    new_with_rule = [r for r in new if r.rule_id is not None]
+    heuristic = [r for r in records if not r.is_new and r.rule_id is None]
+
+    out.append(f"Conceptos (concepto normalizado + sección) en el Excel nuevo: {len(records)}; "
+               f"nuevos contra el Excel base: {len(new)}; nuevos sin regla: {len(new_no_rule)}; "
+               f"nuevos atrapados por una regla: {len(new_with_rule)}; ya conocidos que dependen "
+               f"solo de heurística: {len(heuristic)}.")
+    out.append("")
+
+    def table(title: str, rows: list[NewConcept], with_rule: bool) -> None:
+        out.append(f"**{title}**")
+        out.append("")
+        if not rows:
+            out.append("Ninguno.")
+            out.append("")
+            return
+        head = "| Concepto | Sección | Regla | Canónico | Categoría | Beneficiarios | Cartera | Veces | Monto |"
+        out.append(head if with_rule else head.replace("| Regla ", "").replace("Concepto |", "Concepto |", 1))
+        out.append("|---" * (9 if with_rule else 8) + "|")
+        for r in rows:
+            rule = f"`{r.rule_id}` ({r.rule_match})" if r.rule_id else ""
+            cells = [_cell(r.concept), r.section_code] + ([rule] if with_rule else []) + [
+                _cell(r.canonical), r.category_code, r.beneficiaries, r.wallet,
+                str(len(r.amounts)), _amount_range(r.amounts)]
+            out.append("| " + " | ".join(cells) + " |")
+        out.append("")
+
+    table("Nuevos sin regla explícita (van a la lista para Norma)", new_no_rule, with_rule=False)
+    table("Nuevos atrapados por una regla existente (confirmar que no es coincidencia)", new_with_rule, with_rule=True)
+    table("Ya conocidos que el ETL clasifica solo por heurística (los decide Agustín)", heuristic, with_rule=False)
+    return "\n".join(out)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # CLI
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -586,11 +731,39 @@ def main():
         default=Path("clasificacion_cuestionario.md"),
         help="Ruta del Markdown de salida."
     )
+    parser.add_argument(
+        "--new-only", action="store_true",
+        help="Solo conceptos nuevos contra --baseline, juzgados con las reglas reales del ETL."
+    )
+    parser.add_argument(
+        "--baseline", type=Path,
+        help="Excel anterior contra el que se decide qué concepto es nuevo (requerido con --new-only)."
+    )
+    parser.add_argument(
+        "--rules", type=Path,
+        help="attribution_rules.json (por defecto, el que está junto al ETL)."
+    )
+    parser.add_argument(
+        "--anexo", type=Path,
+        help="Con --new-only: Markdown en lenguaje llano para Norma (solo nuevos sin regla)."
+    )
     args = parser.parse_args()
 
     if not args.excel.exists():
         print(f"ERROR: No se encontró el Excel: {args.excel}", file=sys.stderr)
         sys.exit(2)
+
+    if args.new_only:
+        if not args.baseline or not args.baseline.exists():
+            print("ERROR: --new-only requiere --baseline con un Excel existente", file=sys.stderr)
+            sys.exit(2)
+        records = build_new_concepts(args.excel, args.baseline, args.rules)
+        args.output.write_text(render_technical(records), encoding="utf-8")
+        print(f"[OK] Tabla técnica guardada en: {args.output}")
+        if args.anexo:
+            args.anexo.write_text(render_anexo(records), encoding="utf-8")
+            print(f"[OK] Anexo para Norma guardado en: {args.anexo}")
+        return
 
     print(f"[INFO] Leyendo Excel: {args.excel}")
     registry = build_concept_registry(args.excel)
