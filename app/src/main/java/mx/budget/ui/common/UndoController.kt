@@ -14,8 +14,13 @@ import kotlinx.coroutines.launch
  * lo que se puede deshacer y el grafo de navegación muestra un único
  * `SnackbarHost` sobre todas las pantallas. Un evento nuevo reemplaza al anterior.
  *
- * El deshacer corre en [scope] (el de la actividad), no en el del composable que
- * lo pidió, para que termine aunque la pantalla cambie.
+ * Vive en `BudgetApplication`, no en la actividad (Fase 8). Los ViewModels que
+ * publican aquí sobreviven a que la actividad se recree, y eso pasa en el primer
+ * arranque (fijar el idioma de la app la recrea), al cambiar de hogar y al
+ * cambiar el tema del sistema. Con un controlador por actividad, el ViewModel
+ * seguía publicando en el de la actividad muerta y el snackbar de la nueva nunca
+ * aparecía, hasta reiniciar el proceso. Por lo mismo el deshacer corre en
+ * [scope], el de la aplicación, y termina aunque la pantalla cambie.
  */
 class UndoController(private val scope: CoroutineScope) {
 

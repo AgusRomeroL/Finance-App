@@ -361,6 +361,9 @@ class BudgetApplication : Application() {
     /** Scope de larga vida para tareas de sincronización en background. */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** Deshacer a nivel de app: sobrevive a que la actividad se recree (Fase 8). */
+    val undoController by lazy { mx.budget.ui.common.UndoController(appScope) }
+
     /** Instancia Firestore compartida (guardada para re-anclar el sync, Fase B). */
     private lateinit var firestore: com.google.firebase.firestore.FirebaseFirestore
 

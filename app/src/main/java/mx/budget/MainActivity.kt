@@ -301,8 +301,11 @@ class MainActivity : ComponentActivity() {
         ))[CaptureViewModel::class.java]
     }
 
-    /** Deshacer a nivel de app (Fase 7b): captura y detalle publican, el grafo muestra. */
-    private val undoController by lazy { mx.budget.ui.common.UndoController(lifecycleScope) }
+    /**
+     * Deshacer a nivel de app (Fase 7b): captura y detalle publican, el grafo muestra.
+     * Es el de la aplicación, no uno por actividad (ver [mx.budget.ui.common.UndoController]).
+     */
+    private val undoController get() = (application as BudgetApplication).undoController
 
     /**
      * Destino pedido por una notificación (Fase 7b): el aviso de presupuesto abre
