@@ -1,39 +1,32 @@
 package mx.budget.ai.download
 
-import com.google.firebase.FirebaseApp
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import mx.budget.ai.service.LlmModelVariant
 import mx.budget.ai.service.ModelStorage
-import mx.budget.ai.service.RemoteModelInfo
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 /**
- * Descarga el modelo `.litertlm` desde el Firebase Storage del proyecto.
+ * Descarga el modelo `.litertlm` desde Hugging Face (decisión 4 del plan, Fase 8).
  *
- * **Por qué a mano y no con el SDK de Storage:** el `getDownloadUrl()` del SDK
- * devuelve una URL con token que se salta las reglas, y su `getFile()` no expone
- * `Range`. Aquí se pega al endpoint REST con el `Authorization: Firebase <idToken>`
- * de la sesión, así que la regla de "solo autenticado" de `storage.rules` se aplica
- * de verdad y la descarga reanuda desde donde se quedó.
+ * **Por qué de ahí:** el proyecto Firebase no tiene bucket de Storage y crearlo
+ * exige el plan Blaze, mientras que los repos `litert-community` son públicos y no
+ * piden token. La URL de cada variante apunta a un commit, así que el contenido no
+ * puede cambiar por debajo; aun así, nada llega al engine sin que el SHA-256
+ * completo cuadre con el fijado en [mx.budget.ai.service.ModelCatalog]. Hugging
+ * Face responde con un redirect a su CDN y OkHttp lo sigue conservando `Range`, así
+ * que la descarga reanuda desde donde se quedó.
  *
  * El archivo crece en `<nombre>.part` y solo se renombra al destino final cuando el
- * SHA-256 completo cuadra con el del manifiesto: un `.part` truncado nunca llega a
- * manos del engine.
+ * SHA-256 completo cuadra: un `.part` truncado nunca llega a manos del engine.
  */
 class ModelDownloader(
     private val client: OkHttpClient = defaultClient(),
@@ -46,41 +39,8 @@ class ModelDownloader(
         /** Fallo de red o del servidor: tiene sentido reintentar más tarde. */
         data class Retryable(val message: String) : Outcome
 
-        /** Fallo que no se arregla solo (sin sesión, sin publicar, hash que no cuadra). */
+        /** Fallo que no se arregla solo (archivo retirado, hash que no cuadra). */
         data class Fatal(val message: String) : Outcome
-    }
-
-    @Serializable
-    private data class ManifestEntry(
-        val id: String,
-        @SerialName("file_name") val fileName: String = "",
-        @SerialName("size_bytes") val sizeBytes: Long = 0L,
-        val sha256: String = "",
-    )
-
-    @Serializable
-    private data class Manifest(val models: List<ManifestEntry> = emptyList())
-
-    /**
-     * Lee `models/manifest.json`, que dice cuánto pesa cada variante y qué huella
-     * debe tener. Es lo que permite cambiar el archivo del modelo sin publicar una
-     * versión nueva de la app.
-     */
-    suspend fun fetchManifest(): Result<Map<String, RemoteModelInfo>> = withContext(Dispatchers.IO) {
-        runCatching {
-            val token = idToken() ?: error("La sesión no está iniciada.")
-            val request = Request.Builder()
-                .url(objectUrl(LlmModelVariant.MODELS_PREFIX + MANIFEST_FILE))
-                .header("Authorization", "Firebase $token")
-                .build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) error("El manifiesto respondió ${response.code}.")
-                val body = response.body?.string().orEmpty()
-                json.decodeFromString<Manifest>(body).models
-                    .filter { it.sha256.isNotBlank() && it.sizeBytes > 0 }
-                    .associate { it.id to RemoteModelInfo(it.id, it.sizeBytes, it.sha256.lowercase()) }
-            }
-        }
     }
 
     /**
@@ -89,26 +49,22 @@ class ModelDownloader(
      */
     suspend fun download(
         variant: LlmModelVariant,
-        expected: RemoteModelInfo,
         target: File,
         onProgress: suspend (Long, Long) -> Unit,
     ): Outcome = withContext(Dispatchers.IO) {
         val part = File(target.parentFile, target.name + ModelStorage.PART_SUFFIX)
         part.parentFile?.mkdirs()
 
-        if (target.exists() && target.length() == expected.sizeBytes) {
+        if (target.exists() && target.length() == variant.sizeBytes) {
             return@withContext Outcome.Success
         }
-        if (part.exists() && part.length() > expected.sizeBytes) part.delete()
-
-        val token = idToken()
-            ?: return@withContext Outcome.Fatal("Inicia sesión en Perfil antes de descargar el modelo.")
+        if (part.exists() && part.length() > variant.sizeBytes) part.delete()
 
         var written = if (part.exists()) part.length() else 0L
-        if (written < expected.sizeBytes) {
-            val builder = Request.Builder()
-                .url(objectUrl(variant.storagePath))
-                .header("Authorization", "Firebase $token")
+        if (written < variant.sizeBytes) {
+            // Sin Authorization: el repo es público, y mandar una credencial a un
+            // tercero que no la necesita solo la expondría.
+            val builder = Request.Builder().url(variant.downloadUrl)
             if (written > 0) builder.header("Range", "bytes=$written-")
 
             try {
@@ -120,11 +76,9 @@ class ModelDownloader(
                             written = 0L
                         }
                         206 -> Unit
-                        401, 403 -> return@withContext Outcome.Fatal(
-                            "El servidor rechazó la descarga (${response.code}). Vuelve a iniciar sesión."
-                        )
-                        404 -> return@withContext Outcome.Fatal(
-                            "El modelo ${variant.displayName} todavía no está publicado."
+                        401, 403, 404, 410 -> return@withContext Outcome.Fatal(
+                            "Hugging Face ya no ofrece ${variant.displayName} (${response.code}). " +
+                                "Hace falta una versión nueva de la app."
                         )
                         416 -> {
                             part.delete()
@@ -146,7 +100,7 @@ class ModelDownloader(
                             written += read
                             if (written - lastReport >= REPORT_EVERY_BYTES) {
                                 lastReport = written
-                                onProgress(written, expected.sizeBytes)
+                                onProgress(written, variant.sizeBytes)
                             }
                         }
                         sink.flush()
@@ -157,12 +111,12 @@ class ModelDownloader(
             }
         }
 
-        onProgress(written, expected.sizeBytes)
+        onProgress(written, variant.sizeBytes)
 
-        if (part.length() != expected.sizeBytes) {
+        if (part.length() != variant.sizeBytes) {
             return@withContext Outcome.Retryable("La descarga quedó incompleta.")
         }
-        if (!sha256(part).equals(expected.sha256, ignoreCase = true)) {
+        if (!sha256(part).equals(variant.sha256, ignoreCase = true)) {
             part.delete()
             return@withContext Outcome.Fatal(
                 "El archivo descargado no coincide con el original. Se borró; vuelve a intentar."
@@ -189,23 +143,9 @@ class ModelDownloader(
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private suspend fun idToken(): String? = runCatching {
-        FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
-    }.getOrNull()
-
-    private fun objectUrl(path: String): String {
-        val bucket = FirebaseApp.getInstance().options.storageBucket
-            ?: error("El proyecto no declara bucket de Storage.")
-        return "https://firebasestorage.googleapis.com/v0/b/$bucket/o/${URLEncoder.encode(path, "UTF-8")}?alt=media"
-    }
-
     companion object {
-        const val MANIFEST_FILE = "manifest.json"
-
         private const val BUFFER_BYTES = 256 * 1024
         private const val REPORT_EVERY_BYTES = 2L * 1024 * 1024
-
-        private val json = Json { ignoreUnknownKeys = true }
 
         /**
          * Cliente propio: el de [mx.budget.data.statements.NvidiaNimClient] lee el

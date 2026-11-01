@@ -6,9 +6,12 @@ import java.io.File
 /**
  * Una variante del modelo Gemma `.litertlm` que la app sabe descargar y cargar.
  *
- * El tamaño y el SHA-256 NO viven aquí: llegan del manifiesto remoto
- * (`models/manifest.json` en Firebase Storage) que sube `scripts/admin/upload_model.py`.
- * Así, cambiar de archivo de modelo no obliga a publicar una versión de la app.
+ * Origen (decisión 4 del plan, resuelta en la Fase 8): el repo público de
+ * `litert-community` en Hugging Face, sin token. La URL apunta a un **commit**, no
+ * a `main`, así que el archivo es inmutable: si el repo cambia, esta variante sigue
+ * bajando exactamente los bytes cuya huella está aquí. Cambiar de modelo es
+ * publicar una versión de la app con valores nuevos, que
+ * `scripts/admin/pin_model.py` imprime listos para pegar.
  */
 data class LlmModelVariant(
     /** Id estable que se persiste en DataStore. */
@@ -17,16 +20,18 @@ data class LlmModelVariant(
     val displayName: String,
     /** Una línea que explica el compromiso entre velocidad y calidad. */
     val description: String,
-    /** Nombre del archivo en `getExternalFilesDir()` y en el bucket. */
+    /**
+     * Nombre del archivo en `getExternalFilesDir()`. No cambia con el origen, para
+     * que un modelo provisionado antes por `adb` siga sirviendo.
+     */
     val fileName: String,
-) {
-    /** Ruta del objeto dentro del bucket de Firebase Storage. */
-    val storagePath: String get() = "$MODELS_PREFIX$fileName"
-
-    companion object {
-        const val MODELS_PREFIX = "models/"
-    }
-}
+    /** `https://huggingface.co/<repo>/resolve/<commit>/<archivo>`. */
+    val downloadUrl: String,
+    /** Tamaño exacto del archivo terminado. */
+    val sizeBytes: Long,
+    /** SHA-256 del archivo terminado (el oid LFS que publica Hugging Face). */
+    val sha256: String,
+)
 
 /**
  * Catálogo de variantes ofrecidas en Perfil, "Asistente IA".
@@ -44,6 +49,10 @@ object ModelCatalog {
         displayName = "Gemma E2B",
         description = "Más ligera y rápida. Recomendada.",
         fileName = "gemma-4-e2b-it.litertlm",
+        downloadUrl = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/" +
+            "resolve/1caa527c1e88b55f046fcd8d2b4265606680663d/gemma-4-E2B-it.litertlm",
+        sizeBytes = 2_588_147_712L,
+        sha256 = "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c",
     )
 
     val E4B = LlmModelVariant(
@@ -51,6 +60,10 @@ object ModelCatalog {
         displayName = "Gemma E4B",
         description = "Redacta mejor, pesa más y tarda más en responder.",
         fileName = "gemma-4-e4b-it.litertlm",
+        downloadUrl = "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/" +
+            "resolve/e6a3892a8c22cf87ff99583996149cf3cb32452b/gemma-4-E4B-it.litertlm",
+        sizeBytes = 3_659_530_240L,
+        sha256 = "0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0",
     )
 
     /** Orden de presentación en Perfil. */
@@ -63,17 +76,6 @@ object ModelCatalog {
 
     fun byFileName(fileName: String): LlmModelVariant? = all.firstOrNull { it.fileName == fileName }
 }
-
-/**
- * Lo que el manifiesto remoto dice de una variante: cuánto pesa y qué huella debe
- * tener el archivo terminado. Sin estos dos datos no se descarga nada, porque no
- * habría forma de saber si lo que quedó en disco es el modelo o basura.
- */
-data class RemoteModelInfo(
-    val id: String,
-    val sizeBytes: Long,
-    val sha256: String,
-)
 
 /**
  * Dónde vive el modelo en el dispositivo. Carpeta propia de la app

@@ -21,9 +21,14 @@ import mx.budget.ai.service.ModelStorage
  * Descarga el modelo Gemma en segundo plano.
  *
  * Primer worker del repo con [Constraints], con servicio en primer plano y con
- * `setProgress`: son gigabytes, así que corre solo con Wi-Fi y con el teléfono
- * cargando, sobrevive a que el usuario salga de la app y publica su avance para que
- * Perfil lo pinte. Reanuda solo, porque el estado vive en el `.part` del disco.
+ * `setProgress`: son gigabytes, así que corre solo con Wi-Fi y con batería
+ * suficiente, sobrevive a que el usuario salga de la app y publica su avance para
+ * que Perfil lo pinte. Reanuda solo, porque el estado vive en el `.part` del disco.
+ *
+ * No exige que el teléfono esté cargando (Fase 8): con el límite de carga de los
+ * Pixel, un teléfono enchufado al 80 % reporta "no está cargando", WorkManager
+ * detenía el trabajo apenas arrancaba y la descarga se quedaba para siempre en
+ * "Preparando la descarga".
  */
 class ModelDownloadWorker(
     appContext: Context,
@@ -39,16 +44,10 @@ class ModelDownloadWorker(
         setForeground(foregroundInfo(variant, 0L, 0L))
 
         val downloader = ModelDownloader()
-        val manifest = downloader.fetchManifest().getOrElse {
-            return fatal("No se pudo leer el catálogo de modelos: ${it.message ?: "sin detalle"}")
-        }
-        val expected = manifest[variant.id]
-            ?: return fatal("${variant.displayName} todavía no está publicado.")
-
         val target = ModelStorage.file(applicationContext, variant)
-        setProgress(progressData(ModelStorage.partialBytes(applicationContext, variant), expected.sizeBytes))
+        setProgress(progressData(ModelStorage.partialBytes(applicationContext, variant), variant.sizeBytes))
 
-        val outcome = downloader.download(variant, expected, target) { written, total ->
+        val outcome = downloader.download(variant, target) { written, total ->
             setProgress(progressData(written, total))
             runCatching { setForeground(foregroundInfo(variant, written, total)) }
         }
@@ -106,7 +105,7 @@ class ModelDownloadWorker(
         fun enqueue(context: Context, variant: LlmModelVariant) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.UNMETERED)
-                .setRequiresCharging(true)
+                .setRequiresBatteryNotLow(true)
                 .setRequiresStorageNotLow(true)
                 .build()
             val request = OneTimeWorkRequestBuilder<ModelDownloadWorker>()

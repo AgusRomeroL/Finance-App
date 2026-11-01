@@ -65,7 +65,7 @@ data class AiAssistantSettings(
  * y el control de la descarga.
  *
  * El texto es deliberadamente literal sobre lo que cuesta: son gigabytes, pide Wi-Fi
- * y cargador, y sin modelo el asistente sigue respondiendo, solo que con cifras
+ * y batería suficiente, y sin modelo el asistente sigue respondiendo, solo que con cifras
  * calculadas en vez de redacción.
  */
 @Composable
@@ -184,7 +184,7 @@ fun AiAssistantCard(settings: AiAssistantSettings) {
                 SettingRow(
                     icon = Icons.Filled.CloudDownload,
                     title = "Reintentar la descarga",
-                    subtitle = "Con Wi-Fi y el teléfono cargando",
+                    subtitle = "Con Wi-Fi y batería suficiente",
                     trailingBadge = null,
                     onClick = { settings.onDownload(settings.selectedVariant) },
                 )
@@ -196,9 +196,9 @@ fun AiAssistantCard(settings: AiAssistantSettings) {
                     icon = Icons.Filled.CloudDownload,
                     title = "Descargar el modelo",
                     subtitle = if (state.partialBytes > 0L) {
-                        "Se reanuda desde ${megabytes(state.partialBytes)} MB. Pide Wi-Fi y cargador"
+                        "Se reanuda desde ${megabytes(state.partialBytes)} MB. Pide Wi-Fi y batería suficiente"
                     } else {
-                        "Pide Wi-Fi y el teléfono cargando"
+                        "Pide Wi-Fi y batería suficiente"
                     },
                     trailingBadge = null,
                     onClick = { settings.onDownload(settings.selectedVariant) },
