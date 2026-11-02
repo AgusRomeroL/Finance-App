@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -61,7 +62,10 @@ class AiCoreManager(@Suppress("unused") private val context: Context) {
         val m = runCatching { client() }.getOrNull()
             ?: return@withContext setReadiness(Readiness.UnsupportedDevice)
 
-        val status = runCatching { m.checkStatus() }.getOrElse { FeatureStatus.UNAVAILABLE }
+        val status = runCatching { m.checkStatus() }.getOrElse {
+            android.util.Log.w(TAG, "checkStatus falló", it)
+            FeatureStatus.UNAVAILABLE
+        }
         val readiness = when (status) {
             FeatureStatus.AVAILABLE -> Readiness.Available
             FeatureStatus.DOWNLOADABLE, FeatureStatus.DOWNLOADING -> {
@@ -93,7 +97,7 @@ class AiCoreManager(@Suppress("unused") private val context: Context) {
                 }
             )
             response.candidates.firstOrNull()?.text.orEmpty()
-        }
+        }.onFailure { android.util.Log.w(TAG, "generateContent falló", it) }
     }
 
     suspend fun generateStream(prompt: String): Flow<String> {
@@ -105,7 +109,11 @@ class AiCoreManager(@Suppress("unused") private val context: Context) {
                 maxOutputTokens = MAX_OUTPUT_TOKENS
                 candidateCount = 1
             }
-        ).map { it.candidates.firstOrNull()?.text.orEmpty() }.flowOn(Dispatchers.IO)
+        ).map { it.candidates.firstOrNull()?.text.orEmpty() }
+            // Quien colecta se traga el error y cae a la ruta determinista: sin esta
+            // línea, que Gemini Nano no responda no deja ningún rastro (Fase 8).
+            .catch { android.util.Log.w(TAG, "generateContentStream falló", it); throw it }
+            .flowOn(Dispatchers.IO)
     }
 
     fun close() {
@@ -120,10 +128,17 @@ class AiCoreManager(@Suppress("unused") private val context: Context) {
     }
 
     private companion object {
+        const val TAG = "AiCoreManager"
+
         /**
-         * Tope de salida. Los 240 originales bastaban para el intent JSON pero
-         * cortaban el análisis abierto a media frase, que es texto que sí se lee.
+         * Tope de salida: 256 es el MÁXIMO que acepta ML Kit GenAI Prompt
+         * ("maxOutputTokens must be between 1 and 256"). El 2026-09-07 se subió a
+         * 512 para que el análisis abierto no se cortara a media frase, y desde
+         * entonces cada llamada a Gemini Nano fallaba antes de salir del teléfono:
+         * el asistente y el razonador proactivo caían a la ruta determinista en
+         * el Pixel 10 sin dejar rastro (destapado en la Fase 8). LiteRT-LM tiene
+         * su propio tope y no depende de este.
          */
-        const val MAX_OUTPUT_TOKENS = 512
+        const val MAX_OUTPUT_TOKENS = 256
     }
 }
