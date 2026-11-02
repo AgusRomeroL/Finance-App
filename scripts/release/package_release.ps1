@@ -102,12 +102,14 @@ foreach ($apk in @($appApk, $wearApk)) {
 
 # 4. Verificaciones.
 function Get-CertSha256([string]$Apk) {
-    $out = & $Apksigner verify --print-certs $Apk
+    $out = & $Apksigner verify --print-certs $Apk 2>$null
     if ($LASTEXITCODE -ne 0) { throw "apksigner rechazo $Apk." }
-    $signers = @($out | Select-String -Pattern 'Signer #(\d+) certificate DN' ).Count
-    if ($signers -ne 1) { throw "$Apk tiene $signers firmantes; se esperaba uno." }
-    $line = $out | Select-String -Pattern 'Signer #1 certificate SHA-256 digest: ([0-9a-f]+)'
-    return $line.Matches[0].Groups[1].Value
+    # build-tools 36 escribe "Signer #1 certificate ..." y la 37 "V2 Signer: certificate ...":
+    # se cuentan huellas distintas, que vale para los dos formatos y para varios esquemas.
+    $digests = @($out | Select-String -Pattern 'certificate SHA-256 digest: ([0-9a-f]+)' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique)
+    if ($digests.Count -ne 1) { throw "$Apk tiene $($digests.Count) certificados de firma; se esperaba uno." }
+    return $digests[0]
 }
 $appCert = Get-CertSha256 $appApk
 $wearCert = Get-CertSha256 $wearApk
