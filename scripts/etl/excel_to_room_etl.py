@@ -77,7 +77,7 @@ import sys
 import unicodedata
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 from zoneinfo import ZoneInfo
@@ -1454,6 +1454,19 @@ RECURRENCE_TEMPLATE_CONCEPTS: tuple[str, ...] = (
     "Escuela David", "Escuela Santiago", "Escuela Normita",
 )
 
+# Ventana reciente de las plantillas (decisión de Agustín, 2026-11-02): el monto
+# es el del último pago, así que la cadencia y el día también tienen que ser los
+# de hoy y no los de todo el histórico. Una plantilla sin pagos en los últimos
+# TEMPLATE_DORMANT_DAYS nace pausada: su obligación ya no aparece en el Excel.
+TEMPLATE_RECENT_DAYS = 183
+TEMPLATE_DORMANT_DAYS = 90
+
+# Planes MSI que el Excel deja a medias pero que se liquidaron fuera de él
+# (decisión de Agustín, 2026-11-02): Mercado Libre se queda en 8 de 12 con el
+# último pago en diciembre de 2025 y Buró en 2 de 3 en octubre de 2025. Con
+# ACTIVE, InstallmentMaterializer proyectaría cuotas que ya no existen.
+INSTALLMENTS_SETTLED_OUTSIDE_EXCEL: frozenset[str] = frozenset({"mercado_libre", "buro"})
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  BLOQUE 7 · ORQUESTADOR ETL
@@ -2215,9 +2228,21 @@ class EtlPipeline:
     def _seed_recurrence_templates(self, conn: sqlite3.Connection) -> None:
         """
         Puebla `recurrence_template` con UNA plantilla por obligación fija
-        recurrente (RECURRENCE_TEMPLATE_CONCEPTS). Deriva monto (mediana),
-        categoría/wallet/beneficiarios/pagador (del gasto más reciente) y
-        cadencia (del patrón de mitades). Solo lee gastos POSTED ya sembrados.
+        recurrente (RECURRENCE_TEMPLATE_CONCEPTS). Solo lee gastos POSTED ya
+        sembrados. Decisión de Agustín del 2026-11-02: la plantilla dice lo que
+        se paga HOY, no el promedio de 18 meses.
+          * monto, categoría, wallet, beneficiarios y pagador: del gasto más
+            reciente (antes el monto era la mediana: hipoteca $4,000 cuando ya
+            se pagaban $4,500).
+          * cadencia: la del patrón de mitades de todo el histórico, salvo que
+            en la ventana reciente (TEMPLATE_RECENT_DAYS) haya dejado de pagarse
+            en las dos mitades; entonces es mensual (DiDi era quincenal y hoy es
+            un pago en la primera mitad). Nunca sube de mensual a quincenal: las
+            plantillas de escuela mezclan colegiatura y mesada en mitades
+            distintas y con el monto vigente apartarían el doble.
+          * día: la mediana de la ventana dentro de la mitad del último pago,
+            para que monto y fecha sean del mismo cargo.
+          * is_active = 0 si el último pago es anterior a TEMPLATE_DORMANT_DAYS.
 
         Contrato JSON (verificado contra RecurrenceMaterializer.kt):
           * cadence: "QUINCENAL_EVERY" (≈2/mes, ambas mitades) |
@@ -2230,6 +2255,7 @@ class EtlPipeline:
         """
         cur = conn.cursor()
         created = 0
+        paused = 0
         for concept in RECURRENCE_TEMPLATE_CONCEPTS:
             rows = cur.execute(
                 """SELECT id, occurred_at, amount_mxn, category_id, payment_method_id
@@ -2242,24 +2268,35 @@ class EtlPipeline:
                 LOG.warning("Plantilla omitida: sin gastos POSTED para %r", concept)
                 continue
 
-            amounts = sorted(r[2] for r in rows)
-            median_amount = amounts[len(amounts) // 2]
+            dates = [datetime.fromtimestamp(r[1] / 1000, tz=timezone.utc).date()
+                     for r in rows]
+            current_amount = rows[-1][2]
+            last_date = dates[-1]
+            is_active = 0 if (TODAY - last_date).days > TEMPLATE_DORMANT_DAYS else 1
 
-            # Patrón de mitades por mes → cadencia.
-            months: dict[tuple[int, int], set[str]] = {}
-            days: list[int] = []
-            quincenas: set[str] = set()
-            for _id, oa, _amt, _cat, _pm in rows:
-                d = datetime.fromtimestamp(oa / 1000, tz=timezone.utc).date()
-                days.append(d.day)
-                months.setdefault((d.year, d.month), set()).add(
-                    "F" if d.day <= 15 else "S"
-                )
-            both = sum(1 for hs in months.values() if len(hs) == 2)
-            both_ratio = both / len(months) if months else 0.0
-            cadence = ("QUINCENAL_EVERY" if both_ratio >= 0.5
+            def both_halves_ratio(ds: list[date]) -> tuple[float, int]:
+                months: dict[tuple[int, int], set[str]] = {}
+                for d in ds:
+                    months.setdefault((d.year, d.month), set()).add(
+                        "F" if d.day <= 15 else "S"
+                    )
+                both = sum(1 for hs in months.values() if len(hs) == 2)
+                return (both / len(months) if months else 0.0), len(months)
+
+            # Patrón de mitades por mes → cadencia; la ventana solo la baja.
+            recent_dates = [d for d in dates
+                            if (TODAY - d).days <= TEMPLATE_RECENT_DAYS]
+            full_ratio, _ = both_halves_ratio(dates)
+            recent_ratio, recent_months = both_halves_ratio(recent_dates)
+            cadence = ("QUINCENAL_EVERY" if full_ratio >= 0.5
                        else "MONTHLY_SPECIFIC_HALF")
-            days.sort()
+            if cadence == "QUINCENAL_EVERY" and recent_months >= 2 and recent_ratio < 0.5:
+                cadence = "MONTHLY_SPECIFIC_HALF"
+
+            # Día: mediana de la mitad del último pago, en la ventana si alcanza.
+            pool = recent_dates if recent_months >= 2 else dates
+            first_half = last_date.day <= 15
+            days = sorted(d.day for d in pool if (d.day <= 15) == first_half)
             median_day = days[len(days) // 2]
 
             # Distintas quincenas → confidence.
@@ -2301,19 +2338,21 @@ class EtlPipeline:
                         cadence, cadence_detail, next_expected_date,
                         default_beneficiary_ids, default_payer_split,
                         is_active, confidence_score, learned_from_expense_ids)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     tpl_id, HOUSEHOLD_ID, concept, category_id,
-                    median_amount, payment_method_id,
+                    current_amount, payment_method_id,
                     cadence, cadence_detail, next_date,
                     json.dumps(beneficiary_ids),
                     json.dumps(payer_split),
-                    confidence, learned,
+                    is_active, confidence, learned,
                 ),
             )
             created += 1
+            paused += 1 - is_active
         conn.commit()
-        LOG.info("Plantillas de recurrencia sembradas: %d", created)
+        LOG.info("Plantillas de recurrencia sembradas: %d (%d pausadas por no "
+                 "tener pagos en %d días)", created, paused, TEMPLATE_DORMANT_DAYS)
 
     # ── paso 3.9: planes MSI reales (installment_plan) ──────────────────────
 
@@ -2324,8 +2363,9 @@ class EtlPipeline:
           * "Mercado Libre MSI" → 1 plan de 12 pagos (LOANS.MERCADO_LIBRE).
           * "Buró de Crédito"   → 1 plan de 3 pagos (LOANS.BURO).
         Deriva monto de cuota (mediana), principal (cuota × total),
-        current_installment (pagos POSTED ≤ hoy), status (ACTIVE/PAID),
-        start_date (primer pago) y la tarjeta real (card_key). El
+        current_installment (pagos POSTED ≤ hoy), status (ACTIVE/PAID_OFF),
+        start_date (primer pago) y la tarjeta real (card_key). Los planes de
+        INSTALLMENTS_SETTLED_OUTSIDE_EXCEL nacen liquidados. El
         funding_payment_method_id (cuenta que liquida la tarjeta) NO se siembra:
         es columna nueva de v17 y el asset queda en schema v1; Norma lo fija
         desde el editor de MSI.
@@ -2362,6 +2402,8 @@ class EtlPipeline:
             installment_amount = amounts[len(amounts) // 2]  # mediana
             principal = round(installment_amount * total, 2)
             current = min(len(rows), total)  # pagos ya ocurridos (todos POSTED)
+            if key in INSTALLMENTS_SETTLED_OUTSIDE_EXCEL:
+                current = total
             # PAID_OFF es el valor que usa el runtime (InstallmentStatus); escribir
             # "PAID" dejaba el plan invisible para la app y reventaba el converter.
             status = "PAID_OFF" if current >= total else "ACTIVE"

@@ -3,7 +3,7 @@
 **Fase 10, trabajo previo que no requiere a Norma.**
 **Fuente nueva:** `Copy of presupuesto 2.5 (2).xlsx` (38 hojas, descifrado por Agustín el 2026-09-05, en la raíz del checkout e ignorado por git).
 **Comparada contra:** `Copy of presupuesto 2.5 (1).xlsx`, la fuente de la semilla vigente.
-**Fecha del análisis:** 2026-11-01, en la rama `fase-10`.
+**Fecha del análisis:** 2026-11-01, en la rama `fase-10`; integrada a develop el 2026-11-02 con las decisiones de Agustín sobre plantillas, MSI, sueldo y pagador (§4.6 y §6).
 **Estado:** no se generó la base definitiva ni se promovió la golden. Toda corrida del ETL de este reporte escribió en una ruta temporal fuera del repositorio; `app/src/main/assets/budget_database.db` y `seed/budget_database.golden.db` siguen intactos (`f1c541e3...`).
 
 Resumen de una línea por punto:
@@ -12,6 +12,7 @@ Resumen de una línea por punto:
 2. **Ingresos:** la quincena del 16 al 31 de agosto bajó el sueldo de Norma de $85,000 a **$75,000**; agosto 1 al 15 y septiembre siguen en $85,000. Benjamín no tiene ingreso en ninguna hoja desde octubre de 2025, pero aparece pagando partes de algunos renglones.
 3. **ETL:** cubre las quincenas nuevas sin cambios de lógica. Con `BUDGET_TODAY=2026-09-15`: 38 quincenas, **942 gastos**, 55 ingresos, todos los invariantes en verde. Con el Excel nuevo y la fecha de la golden reproduce la golden fila por fila.
 4. **Conceptos:** 94 conceptos en el Excel nuevo, **ninguno nuevo** contra el (1) y **ninguno sin regla explícita**. La lista para Norma sale vacía; lo que sí hay que preguntarle son montos, hojas y reglas de baja confianza.
+5. **Decisiones de Agustín (2026-11-02):** las plantillas toman el monto del último pago, las cinco dormidas nacen pausadas y los dos planes MSI nacen liquidados; el sueldo se queda fiel al Excel final y la regla del pagador sigue igual hasta que Norma responda. La solicitud sigue sin enviarse.
 
 ---
 
@@ -463,11 +464,36 @@ Todos los clasifica una regla explícita de `attribution_rules.json` (§5). Agru
 
 ### 4.6 Plantillas y planes MSI
 
-**Las plantillas siguen la mediana del histórico, no el monto vigente.** Con la historia nueva, 12 de las 32 tienen un monto distinto del último gasto real: Hipoteca $4,000 (el vigente es $4,500), Netflix $329 ($369), Escuela David $16,262 ($18,300), Electricidad $1,000 ($1,300), HBO $99 ($167.30), Escuela Normita $7,780 ($8,580), Liverpool $2,964 ($2,000), Mercado Pago $3,746.08 ($1,300), Sears $1,483 ($1,000), Agua $214 ($220), Suscripción Nivel 6 $129 ($129.90), y DiDi, que es quincenal de $1,046.96 en la plantilla cuando hoy es un pago de $4,000 en la primera mitad. Esto ya pasaba en la golden; no se cambió para no mover la regresión. **Decisión para Agustín** antes de la base definitiva: monto de la plantilla = el del gasto más reciente (igual que ya se toma de ahí la categoría, la cartera y los beneficiarios) o mantener la mediana.
+**Monto de las plantillas: el vigente (decisión de Agustín, 2026-11-02).** Hasta la golden, el monto era la mediana del histórico y 12 de las 32 plantillas no cuadraban con el último gasto real. Desde esta integración `_seed_recurrence_templates` toma del gasto más reciente el monto, igual que ya tomaba la categoría, la cartera y los beneficiarios. Con el monto vigente, la cadencia y el día también tienen que ser los de hoy, con dos reglas:
 
-**Plantillas dormidas.** Cinco siguen activas aunque su concepto dejó de aparecer en el Excel: Spotify y Teléfono Benji (último en septiembre de 2025), Psicóloga (febrero de 2026), Préstamo Omar y Coursera (mayo de 2026). La app materializaría cargos PLANNED que ya no existen. Pregunta 13 de la solicitud; si Norma confirma, se sacan de `RECURRENCE_TEMPLATE_CONCEPTS` o se siembran inactivas.
+- **Cadencia:** la del histórico completo, pero una quincenal que en los últimos seis meses dejó de pagarse en las dos mitades pasa a mensual. Solo baja, nunca sube: con una ventana de seis meses, Escuela Normita y Escuela Santiago pasarían a quincenales (mezclan colegiatura y mesada en mitades distintas) y con el monto vigente apartarían el doble. El único cambio de cadencia es DiDi.
+- **Día:** la mediana de la ventana dentro de la mitad del último pago, para que monto y fecha sean del mismo cargo. La hipoteca pasa del día 16 al 1 (antes se materializaba el 15 y el 16; se paga el 1 y el 16).
 
-**Planes MSI abiertos.** "Mercado Libre 12 MSI" queda en 8 de 12 (último pago en diciembre de 2025) y "Buró de Crédito 3 pagos" en 2 de 3 (los dos en octubre de 2025), ambos ACTIVE. El Excel no trae pagos posteriores, así que `InstallmentMaterializer` proyectaría las cuotas restantes como PLANNED. Pregunta 12.
+Corrida principal (`BUDGET_TODAY=2026-09-15`), plantillas que cambian:
+
+| Plantilla | Antes | Ahora |
+|---|---|---|
+| Hipoteca | $4,000, quincenal, día 16 | **$4,500**, quincenal, día 1 |
+| DiDi | $1,046.96, quincenal, día 10 | **$4,000, mensual**, día 6 |
+| Escuela David | $16,262, día 10 | **$18,300**, día 24 |
+| Escuela Normita | $7,780, día 23 | **$8,580**, día 10 |
+| Netflix | $329 | **$369** |
+| Electricidad | $1,000 | **$1,300** |
+| HBO | $99 | **$167.30** |
+| Liverpool | $2,964, día 22 | **$2,000**, día 23 |
+| Mercado Pago | $3,746.08 | **$1,300** |
+| Sears | $1,483 | **$1,000** |
+| Agua | $214 | **$220** |
+| Suscripción Nivel 6 | $129 | **$129.90** |
+| Spotify, Teléfono Benji, Psicóloga, Préstamo Omar, Coursera | activas | **pausadas** |
+
+Las 15 restantes no cambian. Dos avisos para la curación de la Fase 11: las tres plantillas de escuela unifican colegiatura, inscripción y mesada, así que una sola plantilla no las describe bien (Escuela David toma los $18,300 de la inscripción de julio, el último cargo que aparece); y en el Excel (1) con la fecha de la golden el último teléfono de Norma era de $310 y no de $498, así que el monto vigente depende de qué tan representativo sea el último pago del Excel final.
+
+**Plantillas dormidas: nacen pausadas (decisión de Agustín, 2026-11-02).** `is_active = 0` cuando el último pago tiene más de 90 días antes de `BUDGET_TODAY` (`TEMPLATE_DORMANT_DAYS`). Con el Excel (2) caen exactamente las cinco: Spotify y Teléfono Benji (último en septiembre de 2025), Psicóloga (febrero de 2026), Préstamo Omar y Coursera (mayo de 2026). No materializan cargos, conservan su historia, Norma las reactiva en un toque desde Plantillas, y "Sugeridas" no las vuelve a proponer porque cuenta como cubiertas también las pausadas (`RecurrenceViewModel.suggestions` lee `observeAll`). La pregunta 13 queda como confirmación.
+
+**Planes MSI: nacen liquidados (decisión de Agustín, 2026-11-02).** "Mercado Libre 12 MSI" (8 de 12, último pago en diciembre de 2025) y "Buró de Crédito 3 pagos" (2 de 3, los dos en octubre de 2025) están en `INSTALLMENTS_SETTLED_OUTSIDE_EXCEL`: nacen `PAID_OFF` con la cuota igual al total, que es lo que el runtime espera de un plan liquidado. Con ACTIVE, `InstallmentMaterializer` proyectaba cuotas que no existen. La pregunta 12 queda como confirmación.
+
+**Regresión con estas decisiones.** El ETL con el Excel (1) y `BUDGET_TODAY=2026-07-07` sigue idéntico a la golden en gastos, atribuciones, ingresos y quincenas; las diferencias se limitan a `recurrence_template` (21 filas: monto, día, la cadencia de DiDi y tres pausadas, porque a esa fecha Préstamo Omar y Coursera aún no llevaban 90 días sin pago), `installment_plan` (los dos planes) y la nota del préstamo "Deben".
 
 **Candidatos a plantilla nueva:** ninguno, porque no hay conceptos nuevos.
 
@@ -506,12 +532,12 @@ Cada fila dice qué decide hoy el código, quién lo decidió y qué pregunta de
 | 5 | `changan_gifts` ($5,000 en GIFTS, 1 al 15 jul 2026) | TRANSPORTATION raíz, Norma 100 % | Ronda 2 de Agustín | 5 | Si fue regalo, GIFTS; si fue enganche o servicio, una subcategoría de transporte. |
 | 6 | Préstamo por cobrar "Deben" ($3,600, saldo $1,900) | Deudor "Por identificar" (`deudor_pendiente`) | Ronda 3 de Agustín | 6 | Se renombra el miembro externo en el ETL (`MEMBERS`). |
 | 7 | Dudas de los estados de cuenta (`app/src/main/assets/seed_statements.json`) | CENEVAL $3,245 en CUSTOM.EXAMENES para Agustín y Santiago; CirculoDerm $1,730 en OTHER.SALUD para los 6; Ropa Universitarios (3 cargos) en CUSTOM.ROPA para David; MerPago*WIM $249 (dos meses) en OTHER para los 6; Google CR $59 en OTHER.GOOGLE_ONE para Agustín (choca con la regla "el software lo paga Norma"); unas 20 líneas (~$7,830) de Amazon, Temu y Mercado Libre repartidas al hogar | Auditoría 2026-07-08 | 7 | Se corrigen las líneas de la versión 3 de `seed_statements.json` (punto 4 de la fase). |
-| 8 | Regla de pagador (`PAYER_RULE_CUTOVER`, 2025-10-01) | Norma 100 % en todo, salvo Spotify (Benjamín) | Agustín, 2026-07-07 | 8 | El Excel muestra pagos de Benjamín después del corte (§3). Si siguen siendo reales, la regla necesita excepciones (Mercado Pago, por ejemplo). |
-| 9 | Sueldo de Norma | Se lee E5 de cada hoja: $75,000 el 16 al 31 de agosto | Excel | 9 | Si el bueno es $85,000, se corrige el ingreso de esa quincena en el ETL o Norma corrige la celda en su Excel final. |
+| 8 | Regla de pagador (`PAYER_RULE_CUTOVER`, 2025-10-01) | Norma 100 % en todo, salvo Spotify (Benjamín); Agustín la mantiene el 2026-11-02 hasta que Norma responda | Agustín, 2026-07-07 y 2026-11-02 | 8 | El Excel muestra pagos de Benjamín después del corte (§3). Si siguen siendo reales, la regla necesita excepciones (Mercado Pago, por ejemplo). |
+| 9 | Sueldo de Norma | Se lee E5 de cada hoja: $75,000 el 16 al 31 de agosto. Agustín decidió el 2026-11-02 no corregirlo en código: manda el Excel final | Excel y Agustín | 9 | Si el bueno es $85,000, Norma corrige la celda en su Excel final. |
 | 10 | Hoja del 1 al 15 de julio | Se siembran sus 31 líneas como ejercidas | Excel | 10 | Si cambió algo, entra con el Excel final. |
 | 11 | Hoja del 1 al 15 de septiembre | Se siembran sus 25 líneas como ejercidas (copia de agosto) | Excel | 11 | Si es plantilla, el corte define qué entra; nada de esa hoja debe nacer POSTED sin confirmarse. |
-| 12 | Planes MSI de Mercado Libre (8 de 12) y Buró (2 de 3) | ACTIVE | ETL | 12 | Si están liquidados, `PAID_OFF` (el ETL ya escribe ese valor cuando cuenta todos los pagos). |
-| 13 | Plantillas dormidas (Spotify, Teléfono Benji, Psicóloga, Préstamo Omar, Coursera) | Activas | ETL | 13 | Se quitan o se siembran inactivas. |
+| 12 | Planes MSI de Mercado Libre (8 de 12) y Buró (2 de 3) | `PAID_OFF` (`INSTALLMENTS_SETTLED_OUTSIDE_EXCEL`) | Agustín, 2026-11-02 | 12 | Si alguno sigue abierto, sale de esa lista y nace ACTIVE con sus pagos reales. |
+| 13 | Plantillas dormidas (Spotify, Teléfono Benji, Psicóloga, Préstamo Omar, Coursera) | Pausadas por no tener pagos en 90 días | Agustín, 2026-11-02 | 13 | Si alguna sigue vigente, Norma la reactiva desde Plantillas; si hay que sembrarla activa, se excluye de la regla. |
 
 Cambios a la solicitud que salen de este reporte: la pregunta 1 decía "2025" y el cargo es de julio de 2026; la 2 ya no presupone que Bernardo da un servicio; la 8 y la 9 citan la evidencia de §3; la tabla de estados de cuenta pide desde el mes siguiente al último que tenemos de cada emisor; las preguntas 10 a 13 son nuevas; el anexo dice que no hay conceptos nuevos; y la fecha queda en blanco (`2026-__-__`) para que Agustín la anote al enviarla.
 
@@ -519,13 +545,14 @@ Las reglas que la Ronda 2 cerró por decisión de Agustín (Contador, Caja Chica
 
 ---
 
-## 7. Lo que queda para cuando respondan (y la Fase 8 esté cerrada)
+## 7. Lo que queda para cuando respondan
 
-1. Incorporar las respuestas a `attribution_rules.json` y a `CANONICAL_CONCEPT_RULES`; borrar los dos comentarios "BAJA CONFIANZA"; renombrar al deudor (punto 3 de la fase).
+La Fase 8 ya cerró (2026-11-02) y las decisiones de Agustín ya están en el ETL (§4.6). Falta que Agustín envíe la solicitud y anote la fecha. Con las respuestas:
+
+1. Incorporar las respuestas a `attribution_rules.json` y a `CANONICAL_CONCEPT_RULES`; borrar los dos comentarios "BAJA CONFIANZA"; renombrar al deudor (punto 3 de la fase). Si Norma contradice las preguntas 8, 12 o 13, ajustar la regla del pagador, `INSTALLMENTS_SETTLED_OUTSIDE_EXCEL` o la pausa de plantillas.
 2. Correr `diff_excel.py` del (2) contra el Excel final y `generate_questionnaire.py --new-only` con el (2) como base; si sale algún concepto, una segunda ronda corta con Norma.
-3. Extraer y clasificar los estados de cuenta nuevos y llevar `seed_statements.json` a la versión 3 (punto 4).
-4. Decidir el monto de las plantillas (mediana o el último) y las plantillas dormidas (§4.6).
-5. Regenerar con `BUDGET_TODAY` = día del corte, `verify_db.py --db`, `seed_report.py --golden` en verde, promover la golden con su `.sha256` y `check_seed_integrity.sh` (punto 5); instalación fresca en FinanceFold (punto 6); documentos y memoria (punto 7).
+3. Extraer y clasificar los estados de cuenta nuevos y llevar `seed_statements.json` a la versión 3 (punto 4). Hoy no hay ningún PDF de julio en adelante en `Estados de Cuenta/`.
+4. Regenerar con `BUDGET_TODAY` = día del corte, `verify_db.py --db`, `seed_report.py --golden` en verde, promover la golden con su `.sha256` y `check_seed_integrity.sh` (punto 5); instalación fresca en FinanceFold (punto 6); documentos y memoria (punto 7).
 
 ---
 

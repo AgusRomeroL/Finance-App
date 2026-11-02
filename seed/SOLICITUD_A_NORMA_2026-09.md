@@ -46,8 +46,8 @@ Norma: la app ya tiene cargado tu Excel hasta el 7 de julio de 2026 (834 gastos,
 9. ¿Tu sueldo es de $85,000 desde agosto de 2026 y te lo pagan por quincena? Te preguntamos porque en tu Excel la quincena del 16 al 31 de agosto dice $75,000, mientras que la del 1 al 15 de agosto y la de septiembre dicen $85,000.
 10. La hoja del 1 al 15 de julio es la única que no cambió desde el 7 de julio, y es la única de este año sin el ahorro de la empresa. ¿Quedó como la planeaste, o hubo cambios que no anotaste?
 11. La hoja del 1 al 15 de septiembre tiene exactamente los mismos montos que la del 1 al 15 de agosto. ¿Ya la llenaste con lo que de verdad gastaste, o es la copia para planear?
-12. Las compras a 12 meses de Mercado Libre (el último pago que vemos es de diciembre de 2025, el 8 de 12) y los pagos del Buró de Crédito (vemos 2 de 3, en octubre de 2025): ¿ya están liquidados?
-13. Estos pagos fijos dejaron de aparecer en tu Excel: Spotify y el teléfono de Benjamín (desde septiembre de 2025), la psicóloga (desde febrero de 2026), el préstamo de Omar y Coursera (desde mayo de 2026). ¿Ya terminaron?
+12. Las compras a 12 meses de Mercado Libre (el último pago que vemos es de diciembre de 2025, el 8 de 12) y los pagos del Buró de Crédito (vemos 2 de 3, en octubre de 2025) las vamos a dejar como liquidadas. Si alguna todavía la estás pagando, dinos cuántos pagos te faltan.
+13. Estos pagos fijos dejaron de aparecer en tu Excel y los vamos a dejar en pausa: Spotify y el teléfono de Benjamín (desde septiembre de 2025), la psicóloga (desde febrero de 2026), el préstamo de Omar y Coursera (desde mayo de 2026). Si alguno sigue, avísanos; también puedes reactivarlo tú misma en la app con un toque.
 14. Al final de este mensaje va la lista de conceptos de tus meses nuevos que no reconocemos, para que nos digas de qué son y para quién.
 
 ## 5. Quién más va a usar la app
