@@ -42,9 +42,13 @@ bash scripts/check_seed_integrity.sh --restore
 Solo cuando el Excel o las reglas de atribución cambien de verdad:
 
 ```bash
-python scripts/etl/excel_to_room_etl.py --excel "<ruta.xlsx>" --output app/src/main/assets/budget_database.db
-python scripts/verify_db.py            # renombra household.id -> "default_household"
-# fija user_version=1 ANTES de promover (CLAUDE.md §Room):
+# BUDGET_TODAY = día del corte: fija qué quincena nace ACTIVE y qué gastos ya ocurrieron.
+PYTHONUTF8=1 BUDGET_TODAY=<yyyy-mm-dd> python scripts/etl/excel_to_room_etl.py --excel "<ruta.xlsx>" --output app/src/main/assets/budget_database.db
+# renombra household.id -> "default_household"; SIEMPRE con --db (sin él toca el asset del checkout)
+python scripts/verify_db.py --db app/src/main/assets/budget_database.db
+# conteos, invariantes y diff contra la golden anterior; todo en verde antes de promover
+PYTHONUTF8=1 python scripts/etl/seed_report.py --db app/src/main/assets/budget_database.db --golden seed/budget_database.golden.db --today <yyyy-mm-dd>
+# el ETL ya fija user_version=1; si no tienes sqlite3, compruébalo con Python (CLAUDE.md §Room):
 sqlite3 app/src/main/assets/budget_database.db 'PRAGMA user_version = 1;'
 # promueve el nuevo asset a golden y actualiza el checksum:
 cp app/src/main/assets/budget_database.db seed/budget_database.golden.db
