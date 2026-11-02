@@ -58,13 +58,13 @@ class NvidiaNimClient(
             )
         }
 
-        // Cuantos caracteres se le mandan al modelo y como empiezan: si la extraccion
-        // local devuelve poco o nada, la respuesta sale vacia y sin esta linea parece
-        // culpa del modelo.
+        // Cuantos caracteres se le mandan al modelo: si la extraccion local devuelve
+        // poco o nada, la respuesta sale vacia y sin esta linea parece culpa del
+        // modelo. Solo conteos: logcat tambien se lee en release y el texto es un
+        // estado de cuenta.
         android.util.Log.i(
             "NvidiaNim",
-            "texto enviado (${kind}): ${statementText.length} caracteres; inicio: " +
-                statementText.take(200).lines().joinToString(" "),
+            "texto enviado (${kind}): ${statementText.length} caracteres",
         )
         val bodyJson = buildRequestBody(statementText, context, kind)
         val request = Request.Builder()
@@ -237,17 +237,17 @@ class NvidiaNimClient(
             val parsed = json.decodeFromString(ParsedStatement.serializer(), repaired)
             android.util.Log.i(
                 "NvidiaNim",
-                "respuesta leida: emisor=${parsed.emisor} corte=${parsed.fechaCorte} " +
-                    "saldo=${parsed.saldoTotal} movimientos=${parsed.movimientos.size} " +
-                    "(${content.length} caracteres del modelo); inicio: ${repaired.take(300)}",
+                "respuesta leida: ${parsed.movimientos.size} movimientos " +
+                    "(${content.length} caracteres del modelo)",
             )
             Result.Success(parsed, repaired)
         }.getOrElse {
-            // Sin esto no hay forma de saber QUE devolvio el modelo cuando no se pudo
-            // leer: el texto crudo no se guarda en ningun lado si la importacion falla.
+            // Solo el tipo de error y el tamano: el mensaje de kotlinx.serialization
+            // cita un trozo del JSON, que trae montos y conceptos del estado.
             android.util.Log.w(
                 "NvidiaNim",
-                "respuesta no interpretable (${it.message?.take(120)}): ${content.take(600)}",
+                "respuesta no interpretable (${it::class.simpleName}): " +
+                    "${content.length} caracteres del modelo",
             )
             Result.Failure("El modelo devolvió un formato que no se pudo interpretar.")
         }
