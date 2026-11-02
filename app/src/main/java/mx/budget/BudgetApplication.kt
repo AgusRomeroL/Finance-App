@@ -1283,6 +1283,12 @@ class BudgetApplication : Application() {
                     expenseRepository = systemExpenseRepository,
                 ).curateOnce()
             }
+            // Después de curarlas: las plantillas de la semilla nunca subían a la
+            // nube y la web no podía prorratear con ellas (Fase 8).
+            runCatching {
+                (recurrenceRepository as? mx.budget.data.repository.impl.RecurrenceRepositoryImpl)
+                    ?.publishNeverSynced(householdId)
+            }
             val active = runCatching {
                 mx.budget.data.quincena.QuincenaRollover(
                     dao = database.quincenaDao(),

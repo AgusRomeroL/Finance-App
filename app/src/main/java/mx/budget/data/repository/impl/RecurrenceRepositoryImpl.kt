@@ -78,6 +78,24 @@ class RecurrenceRepositoryImpl(
         }
     }
 
+    /**
+     * Sube las plantillas que solo existen en este teléfono (Fase 8). Las de la
+     * semilla nacen con `updated_at = 0` y solo una edición las encolaba, así
+     * que la nube tenía 4 de 32 y la web, que prorratea lo reservado y descarta
+     * topes según la cadencia de cada plantilla, sacaba otro Disponible que el
+     * héroe. Estampa la hora y encola cada una; al quedar con `updated_at > 0`
+     * ya no vuelven a salir, así que llamarla en cada arranque es idempotente.
+     */
+    suspend fun publishNeverSynced(householdId: String): Int = db.withTransaction {
+        val pending = dao.getNeverSynced(householdId)
+        val now = System.currentTimeMillis()
+        pending.forEach { template ->
+            dao.update(template.copy(updatedAt = now))
+            enqueue(template.id, "UPSERT")
+        }
+        pending.size
+    }
+
     private suspend fun enqueue(templateId: String, operation: String) {
         syncQueueDao.enqueue(
             SyncQueueEntity(

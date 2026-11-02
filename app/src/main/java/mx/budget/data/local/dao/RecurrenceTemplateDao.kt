@@ -37,6 +37,10 @@ interface RecurrenceTemplateDao {
     @Query("SELECT * FROM recurrence_template WHERE id = :id")
     suspend fun getById(id: String): RecurrenceTemplateEntity?
 
+    /** Plantillas que nunca se han editado ni subido (las de la semilla, `updated_at = 0`). */
+    @Query("SELECT * FROM recurrence_template WHERE household_id = :householdId AND updated_at = 0")
+    suspend fun getNeverSynced(householdId: String): List<RecurrenceTemplateEntity>
+
     /**
      * Plantillas (activas o pausadas) cuyo `concept` está en [concepts]: match
      * exacto y case-sensitive (comparación TEXT default de SQLite). Usado por la
