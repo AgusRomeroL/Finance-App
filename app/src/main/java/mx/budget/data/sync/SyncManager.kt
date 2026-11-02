@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestoreException
 import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
@@ -389,6 +390,16 @@ class SyncManager(
                         }
                     }
                 } catch (e: Exception) {
+                    if (isPermissionDenied(e) && !hasCloudIdentity()) {
+                        // Sesión anónima (reinstalación, restauración, primer
+                        // arranque): las reglas la rechazan porque todavía no
+                        // tiene rol, no porque la fila sea mala. Se corta sin
+                        // castigar a nadie y la cola espera a que inicie sesión
+                        // (authListener). Antes cada fila gastaba sus 8 intentos
+                        // en menos de un minuto y quedaba descartada para siempre.
+                        Log.w(TAG, "Sin identidad en la nube: el outbox espera a que inicie sesión (${row.entityType}/${row.entityId})")
+                        break
+                    }
                     if (isConnectivityError(e)) {
                         // Sin red no tiene caso seguir: se corta el drenado sin
                         // castigar a la fila (attempts intacto). Además del
@@ -421,6 +432,53 @@ class SyncManager(
                 }
             }
         }
+    }
+
+    /** ¿Las reglas de Firestore rechazaron la escritura (sin rol o sin sesión)? */
+    private fun isPermissionDenied(e: Throwable): Boolean {
+        var cause: Throwable? = e
+        while (cause != null) {
+            if (cause is FirebaseFirestoreException &&
+                (cause.code == FirebaseFirestoreException.Code.PERMISSION_DENIED ||
+                    cause.code == FirebaseFirestoreException.Code.UNAUTHENTICATED)
+            ) {
+                return true
+            }
+            cause = cause.cause
+        }
+        return false
+    }
+
+    /** ¿Hay una sesión que pueda tener rol? Una anónima nueva nunca lo tiene. */
+    private fun hasCloudIdentity(): Boolean {
+        val user = runCatching { FirebaseAuth.getInstance().currentUser }.getOrNull()
+        return user != null && !user.isAnonymous
+    }
+
+    /**
+     * Al aparecer una sesión con Google (y al arrancar con una), revive UNA vez
+     * por cuenta las filas fallidas definitivas y drena (Fase 8). Cubre las
+     * filas que murieron antes de esta corrección y cualquier caso en que la
+     * identidad llegue después de las escrituras locales. Las que vuelvan a
+     * fallar ya con sesión siguen el criterio normal de 8 intentos.
+     */
+    private val authListener = FirebaseAuth.AuthStateListener { auth ->
+        val user = auth.currentUser ?: return@AuthStateListener
+        if (user.isAnonymous) return@AuthStateListener
+        scope.launch {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            if (prefs.getString(KEY_REVIVED_FOR_UID, null) != user.uid) {
+                val revived = syncQueueDao.reviveDeadLetters(MAX_ATTEMPTS)
+                prefs.edit().putString(KEY_REVIVED_FOR_UID, user.uid).apply()
+                if (revived > 0) Log.i(TAG, "Sesión con Google: $revived filas fallidas vuelven a la cola")
+            }
+            drain()
+        }
+    }
+
+    // Va después de declarar authListener: los init corren en orden de aparición.
+    init {
+        runCatching { FirebaseAuth.getInstance().addAuthStateListener(authListener) }
     }
 
     /**
@@ -457,5 +515,9 @@ class SyncManager(
 
         /** Espera antes del reintento tras un corte por conectividad. */
         private const val RETRY_BACKOFF_MS = 30_000L
+
+        /** Marca de la cuenta para la que ya se revivieron las filas fallidas. */
+        private const val PREFS = "sync_manager"
+        private const val KEY_REVIVED_FOR_UID = "dead_letters_revived_for_uid"
     }
 }

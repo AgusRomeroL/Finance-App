@@ -52,4 +52,13 @@ interface SyncQueueDao {
 
     @Query("UPDATE sync_queue SET attempts = attempts + 1 WHERE id = :id")
     suspend fun incrementAttempts(id: Long)
+
+    /**
+     * Devuelve a la cola las filas fallidas definitivas (Fase 8). Lo llama el
+     * [mx.budget.data.sync.SyncManager] una vez por cuenta, al iniciar sesión
+     * con Google: las filas que murieron mientras la sesión era anónima y sin
+     * rol no eran venenosas, solo llegaron antes que la identidad.
+     */
+    @Query("UPDATE sync_queue SET attempts = 0 WHERE attempts >= :maxAttempts")
+    suspend fun reviveDeadLetters(maxAttempts: Int): Int
 }
