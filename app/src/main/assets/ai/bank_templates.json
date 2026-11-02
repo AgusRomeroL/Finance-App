@@ -7,7 +7,8 @@
       "codigo", "código", "otp", "token", "clave", "nip",
       "deposito", "depósito", "abono", "recibido", "recibiste", "te depositaron",
       "spei recibido", "transferencia recibida", "bienvenid", "estado de cuenta",
-      "factura", "domiciliaci", "recordatorio", "vencimiento"
+      "factura", "domiciliaci", "recordatorio", "vencimiento",
+      "cancelad", "devolvimos", "devoluci", "reembols", "te regresamos", "revers", "bonificaci"
     ],
     "amount": [
       "por\\s+\\$?\\s?([\\d.,]+)",
